@@ -16,6 +16,7 @@ import { decompressFromBase64 } from "lz-string";
 import {
     API_Connector,
     API_Message,
+    makeDoorRegion,
     MapRegion,
     API_Character,
     AssetGet,
@@ -27,13 +28,13 @@ import { remainingTimeString } from "../utils";
 import { wait } from "../hub/utils";
 
 const RECEPTION_AREA: MapRegion = {
-    TopLeft: { X: 18, Y: 15 },
-    BottomRight: { X: 19, Y: 16 },
+    TopLeft: { X: 13, Y: 11 },
+    BottomRight: { X: 33, Y: 15 },
 };
 
-const RECEPTIONIST_POSITION = { X: 18, Y: 15 };
+const RECEPTIONIST_POSITION = { X: 22, Y: 11 };
 
-/* const EXHIBIT_1: ChatRoomMapPos = { X: 26, Y: 12 };
+const EXHIBIT_1: ChatRoomMapPos = { X: 26, Y: 12 };
 const EXHIBIT_2: ChatRoomMapPos = { X: 28, Y: 12 };
 const EXHIBIT_3: ChatRoomMapPos = { X: 30, Y: 12 };
 const EXHIBIT_4: ChatRoomMapPos = { X: 32, Y: 12 };
@@ -42,14 +43,11 @@ const HALLWAY_TO_PET_AREA_DOOR: ChatRoomMapPos = { X: 18, Y: 2 };
 const COMMON_AREA_TO_RECEPTION_DOOR: ChatRoomMapPos = { X: 14, Y: 10 };
 const REDRESSING_PAD: ChatRoomMapPos = { X: 18, Y: 8 };
 
-const DRESSING_PAD: ChatRoomMapPos = { X: 23, Y: 5 }; */
-const CAGE_1: ChatRoomMapPos = { X: 12, Y: 39 };
-const CAGE_2: ChatRoomMapPos = { X: 14, Y: 39 };
-const CAGE_3: ChatRoomMapPos = { X: 16, Y: 39 };
+const DRESSING_PAD: ChatRoomMapPos = { X: 23, Y: 5 };
+
 const MAP =
-//    "N4IgKgngDgpiBcICCAbA7gQwgZxAGnAEsUZdEAgyq6m8wH+AAPJ5hugEw86+9t6sZZN23EZz586kyc2GiR4hfRlzRi8QNYr5a3gIDBsrRyknTZqcqNWjGw9fsc9bWw9dcXbroAXwHz/NnPb18vO25/EytgkJsAEL04hPjQkSjkrhiMzKy0oN8c4yzC/I5U2MLMu0An4Grq8hr6hsam+oB1tvaOzrbKroAz/q6unsGRluGO/t7R9vHpjtm2ybmx5c6FlqW59a29Xb39g8PKg+Xjw/Pzs73Ti9v9q92bu7uHvSfni9f3j6OTnZ/Ln8Wr4hgDAft2iC1mDfhC2lD5jCDl94T5QUi9ijpq8YVjRjiwXiRgSAUTBiSfmT0Ri9FToTTaUD8QzGXDsSzXvgQAB5ABGACsYABjAAuZBAgUlHEo2hlUu00vIRkANfDyrhytWarXayWAKvgdQbPIAxoCNhocgC4gS2Wg3ULSAavgRA6zdZAEPQbDdHsNACXnb63IABQD9QZUTuDYZ1gA/wDiAIAhwyIo1psHGzYBV8F9CeToljmaD2edgAYgDiALfAc8G0/GM37KwbC3Jq8766Wq2HGy2462DR2G5wu54uQAxAD2AHMEAAzDAobAwAC+QA";
-// const MAP=
-    "N4IgKgngDgpiBcICCAbA7gQwgZxAGnAEsUZdFAEEEqupqoC+G7bmbG32POvufe/+BgocJ6AhEFGAZECnSZswE/AbAOvKVqtYoBLGgB6iAJlsNHjCxmq3rlG5br0HjWgDUAYx1vJL11xYBgIP35VxfQcQ0wZLDX8o/21Y+xCjMLpLXx9AE/AMzLSfWO14jQACouLipO8rVPTAIAgamuzc/ILABfAW1qaCpM1rCz8M2rqfcQlGttaOz3LUtP7MnP0R0fbO9V7p2Z9FW2NmxfGzcymM/2UWU499lXLoqw0RO/uHx6fn/kASEHf3iUBWkC/ADhB/34SD6vc4MQBgIBDIVDoZDyCUJAA7L7OFHOCSxIqgpgAENxRTBuOx+MJmPhCIA46i0RiCljyCSCgS8YyGXDioi/gD0bk6YTcUzCQLcT8RRyqSKfhI2PTsbkmXLcbkIMrsRBEZTUV8IKqILzZbF5QbFbFldqICLxWbddLjdpDXbbabVVrTcqtTq6TCvVCndivnzhbjlXS7KGw+HQ66IOSVaaY6aQxGk6GzixpanaC8s9mc7mXuRAFggReLJdLRelgB/gKvVmu1iuURyNpvNluOAvS5MVpOUAG/MsFlvtxjkTt6AN6ShUgfN/sdpPksd8ifkKeDtvrocMEdJrvj8j4EAAeQARgArGAAYwALmQQMn73pAPfgz8fD8AQ/BviOAUghQ4AAoEAq+APnY8xAUmX4/qBkGgeBUGwfeMF6IAVBARsh4aoXoojoaGWF2KhEGAC3wgCnMIAATChoAB9B6BRdjEYREaAM/gDGAA/gzEsaxgAf4KxdgAFWAFvggBjQHxcF0YA6+BscJwl2IAfMA8XobHhoAbkDJoAXECAAxAoaAFtAmlJnR4aSUB+F2DJ4ZKUBOmAFFAegWXBdgmaGamgYARkChhJ97FjJ9nWVJnmgThllQQZehGXotmgYAv+DhoAK+DWR5oEMZ5vGeXRoU6UZLn0XRgAgMBl+EZYAwDD5Vlei5YAOKCAAMggD9IOVgA9IIA0zA1WGDFxXYaUNQxEGAAQQsHFYAVMCIaxjF2P1Q3YJ5CLedgEHedZE1we1qEgZ5gAMMHYgBr0HogBNMGGgAz0HYgALMHonVhotgB9MFtgBbMHYi2AL0w52XYAQ9C3YAQYB0GGgDt8HoXZ2IAToBhlxf1cXYzh6D9gPA6GQMgw+gDiIKGgBoELDej/QDABldjw3oqN6OjmPo0mm1TQ+gBnMIA5zArYAHfChu9n12GTa3JoAoYCPYAIIChozLN2GzQEw2hYbdXogBwgOGgt2IALMAC3YBQAEUFKGtPw7jkEFuGSthgW9Pq1NgDV8OG2uhoAmcia1VgCNIEbgBDIOGAVhpb1mAEhAYaACJABP3nb975bli1u4tgAj8IAOcju57+XhoAA/BB3opuVYAvSCAMMgEYh3ok0YXYgBYoMVRtR4AkyBVYAoyAR8Vif53ogARgJBCFO1BCGANigdjFVHgAjIOVptG4A7SBfHnZcwYA4YCwfMoiAGMgXyN0mxdhpNXv3mtJMRitgA9MHoK2ADXwc92EHE/E0vei/ATgBsgHYO+PYAfoCAP6AQFvnTZErZ+UGAAtAV/hovegAKUP4/EZyHYXZv3on7fw+I1hg/gAToCAQA0MYIJx2FeKGSBgAJED0LA2B4EYKAAFAQAIYAoL0PTJMz9n56BAAAXyAA@EgBpADgCQQa/fw119y//foBV"
+    "N4IgKgngDgpiBcICCAbA7gQwgZxAGnAEsUZdEAgyq6m8wH+AAPJ5hugEw86+9t6sZZN23EZz586kyc2GiR4hfRlzRi8QNYr5a3gIDBsrRyknTZqcqNWjGw9fsc9bWw9dcXbroAXwHz/NnPb18vO25/EytgkJsAEL04hPjQkSjkrhiMzKy0oN8c4yzC/I5U2MLMu0An4Grq8hr6hsam+oB1tvaOzrbKroAz/q6unsGRluGO/t7R9vHpjtm2ybmx5c6FlqW59a29Xb39g8PKg+Xjw/Pzs73Ti9v9q92bu7uHvSfni9f3j6OTnZ/Ln8Wr4hgDAft2iC1mDfhC2lD5jCDl94T5QUi9ijpq8YVjRjiwXiRgSAUTBiSfmT0Ri9FToTTaUD8QzGXDsSzXvgQAB5ABGACsYABjAAuZBAgUlHEo2hlUu00vIRkANfDyrhytWarXayWAKvgdQbPIAxoCNhocgC4gS2Wg3ULSAavgRA6zdZAEPQbDdHsNACXnb63IABQD9QZUTuDYZ1gA/wDiAIAhwyIo1psHGzYBV8F9CeToljmaD2edgAYgDiALfAc8G0/GM37KwbC3Jq8766Wq2HGy2462DR2G5wu54uQAxAD2AHMEAAzDAobAwAC+QA";
+
 const PERMITTED_WORDS = new Set([
     "meow",
     "mew",
@@ -101,18 +99,54 @@ export class PetSpa {
 
         conn.on("Message", this.onMessage);
 
+        this.conn.chatRoom.map.addTileTrigger(
+            EXHIBIT_1,
+            this.onCharacterViewExhibit1,
+        );
+        this.conn.chatRoom.map.addTileTrigger(
+            EXHIBIT_2,
+            this.onCharacterViewExhibit2,
+        );
+        this.conn.chatRoom.map.addTileTrigger(
+            EXHIBIT_3,
+            this.onCharacterViewExhibit3,
+        );
+        this.conn.chatRoom.map.addTileTrigger(
+            EXHIBIT_4,
+            this.onCharacterViewExhibit4,
+        );
+
+        this.conn.chatRoom.map.addTileTrigger(
+            DRESSING_PAD,
+            this.onCharacterEnterDressingPad,
+        );
+        this.conn.chatRoom.map.addTileTrigger(
+            REDRESSING_PAD,
+            this.onCharacterEnterRedressingPad,
+        );
+
         this.conn.chatRoom.map.addEnterRegionTrigger(
             RECEPTION_AREA,
             this.onCharacterEnterReception,
         );
 
-        this.conn.chatRoom.map.addTileTrigger(CAGE_1, this.onCharacterEnterCage);
-        this.conn.chatRoom.map.addTileTrigger(CAGE_2, this.onCharacterEnterCage);
-        this.conn.chatRoom.map.addTileTrigger(CAGE_3, this.onCharacterEnterCage);
+        this.conn.chatRoom.map.addEnterRegionTrigger(
+            makeDoorRegion(HALLWAY_TO_PET_AREA_DOOR, true, false),
+            this.onCharacterApproachHallwayToPetAreaDoor,
+        );
+        this.conn.chatRoom.map.addLeaveRegionTrigger(
+            makeDoorRegion(HALLWAY_TO_PET_AREA_DOOR, true, false),
+            this.onCharacterLeaveHallwayToPetAreaDoor,
+        );
 
-        // TODO: exhibit tile triggers, dressing/redressing pads, and the
-        // hallway/common area doors are disabled until their coordinates
-        // are updated to match the new map layout.
+        this.conn.chatRoom.map.addEnterRegionTrigger(
+            makeDoorRegion(COMMON_AREA_TO_RECEPTION_DOOR, true, false),
+            this.onCharacterApproachCommonAreaToReceptionDoor,
+        );
+        this.conn.chatRoom.map.addLeaveRegionTrigger(
+            makeDoorRegion(COMMON_AREA_TO_RECEPTION_DOOR, true, false),
+            this.onCharacterLeaveCommonAreaToReceptionDoor,
+        );
 
         this.commandParser.register("residents", this.onCommandResidents);
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
@@ -134,9 +168,18 @@ export class PetSpa {
 
     private setupRoom = async () => {
         try {
-            console.log(JSON.parse(decompressFromBase64(MAP)));
             this.conn.chatRoom.map.setMapFromData(
                 JSON.parse(decompressFromBase64(MAP)),
+            );
+
+            // Reset all the doors to the state they should be in normally at start
+            this.conn.chatRoom.map.setObject(
+                HALLWAY_TO_PET_AREA_DOOR,
+                "WoodLocked",
+            );
+            this.conn.chatRoom.map.setObject(
+                COMMON_AREA_TO_RECEPTION_DOOR,
+                "WoodClosed",
             );
         } catch (e) {
             console.log("Map data not loaded", e);
@@ -178,79 +221,102 @@ export class PetSpa {
         }
     };
 
+    private onCharacterViewExhibit1 = async (char: API_Character) => {
+        char.Tell(
+            "Whisper",
+            "(This is a painting of a large, very happy looking dog having its belly rubbed by an excited looking blonde lady." +
+                `The plaque below reads: "Here at the Pet Spa, our pets can truly relax as we take care of their every need. "`,
+        );
+    };
+
+    private onCharacterViewExhibit2 = async (char: API_Character) => {
+        char.Tell(
+            "Whisper",
+            "(This painting is of a cat eating tasty looking chunks of food from a bowl." +
+                `The plaque below reads: "Our chefs prepare the finest meals daily for our residents. Nothing but the best will do."`,
+        );
+    };
+
+    private onCharacterViewExhibit3 = async (char: API_Character) => {
+        char.Tell(
+            "Whisper",
+            "(This painting is of a very cute rabbit having its fur brushed by a cheerful lady in uniform." +
+                `The plaque below reads: "Grooming is part of our standard service here at the Pet Spa. We believe our pets should look and feel their best."`,
+        );
+    };
+
+    private onCharacterViewExhibit4 = async (character: API_Character) => {
+        character.Tell(
+            "Whisper",
+            "(This painting is of a fluffy fox with deep red fur, sitting on an examination table while a nurse holds a stethoscope to its chest." +
+                `The plaque below reads: "Here at the Pet Spa, the health of our pets is our top priority. Our highly trained vets will ensure every pet's health needs are tended to."`,
+        );
+    };
+
     private onCharacterEnterReception = async (character: API_Character) => {
         this.exitTime.delete(character.MemberNumber);
-/*         this.conn.SendMessage(
+        this.conn.SendMessage(
             "Chat",
-            `Welcome to the Veratown, ${character}.` +
-            `This is a place to explore, enjoy and has some surprises.` +
-            `... Don't get trapped.` +
-            `If you want to leave, please use the /bot freeandleave command.`,
+            `Welcome to the Pet Spa, ${character}. Is life getting you down? Why not come and unwind with us? We offer a relaxation experience ` +
+                `like no other, where you can be pampered and have your every need taken care of. If you'd like to join, please proceed through ` +
+                `the door behind me into the dressing area and use the blue dressing pad to be permitted into the spa. ` +
+                `Please note that there is a minimum stay of 30 minutes and human speech is strictly prohibited for spa users. ` +
+                `If you're not sure, you can take a look at our promotional gallery to the right. If you're here to play with the pets, head ` +
+                `right on in through the door to the left! To see our current residents, use /bot residents.`,
         );
- */    };
+    };
 
-    private onCharacterEnterCage = async (character: API_Character) => {
-        const cagePos = { ...character.MapPos };
-        const stillInCage = () =>
-            character.MapPos.X === cagePos.X &&
-            character.MapPos.Y === cagePos.Y;
-
-        character.Tell(
-            "Whisper",
-            "(If you stay still, you will be locked in the Futuristic Crate...",
+    private onCharacterApproachHallwayToPetAreaDoor = async (
+        character: API_Character,
+    ) => {
+        const currentArmItem = character.Appearance.InventoryGet("ItemArms");
+        console.log(
+            `${character} current arm item name: ${currentArmItem?.Name}`,
         );
+        if (
+            currentArmItem?.Name === "ShinyPetSuit" ||
+            this.exitTime.has(character.MemberNumber)
+        ) {
+            character.Tell("Whisper", "(You may now enter the spa!");
+            this.conn.chatRoom.map.setObject(
+                HALLWAY_TO_PET_AREA_DOOR,
+                "WoodOpen",
+            );
+        } else {
+            character.Tell(
+                "Whisper",
+                "(You need to be wearing a spa suit to enter the spa. Please use the dressing pad to get one.",
+            );
+        }
+    };
 
-        await wait(1500);
-        if (!stillInCage()) return;
-
-        character.Tell(
-            "Whisper",
-            "(Stay still! You will be locked in the Futuristic Crate...",
+    private onCharacterLeaveHallwayToPetAreaDoor = async (
+        character: API_Character,
+    ) => {
+        this.conn.chatRoom.map.setObject(
+            HALLWAY_TO_PET_AREA_DOOR,
+            "WoodLocked",
         );
+    };
 
-        await wait(1500);
-        if (!stillInCage()) return;
+    private onCharacterApproachCommonAreaToReceptionDoor = async (
+        character: API_Character,
+    ) => {
+        const currentArmItem = character.Appearance.InventoryGet("ItemArms");
+        if (currentArmItem) {
+            character.Tell(
+                "Whisper",
+                "(If you'd like to leave the spa, please use the blue redressing pad to do so.",
+            );
+        }
+    };
 
-        character.Tell(
-            "Whisper",
-            "(Last chance! Move now or you will be locked in the Futuristic Crate...",
-        );
-
-        await wait(1000);
-        if (!stillInCage()) return;
-        character.Tell(
-            "Whisper",
-            "(Too late! You are now locked up...  ",
-        );
-        await wait(100);
-        if (!stillInCage()) return;
-
-        const CRATE_LOCK_DURATION_MS = 30 * 60 * 1000;
-
-        const crate = character.Appearance.AddItem(
-            AssetGet("ItemDevices", "FuturisticCrate"),
-        );
-        crate.setProperty("TypeRecord", {
-            w: 3, // Small window
-            l: 0,
-            a: 0,
-            d: 0,
-            t: 0,
-            h: 0,
-        });
-        crate.lock("TimerPadlock", character.MemberNumber, {
-            RemoveItem: true,
-            RemoveTimer: Date.now() + CRATE_LOCK_DURATION_MS,
-            ShowTimer: true,
-            LockSet: true,
-        });
-
-        await wait(CRATE_LOCK_DURATION_MS);
-
-        character.Appearance.RemoveItem("ItemDevices");
-        character.Tell(
-            "Whisper",
-            "(The Futuristic Crate unlocks and releases you.",
+    private onCharacterLeaveCommonAreaToReceptionDoor = async (
+        character: API_Character,
+    ) => {
+        this.conn.chatRoom.map.setObject(
+            COMMON_AREA_TO_RECEPTION_DOOR,
+            "WoodClosed",
         );
     };
 

@@ -1,0 +1,15 @@
+services:
+  ropeybot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ropeybot
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/bot/cfg/config.json:ro
+      # Optional: Uncomment to map logs to host directory
+      # - ./logs:/bot/logs
+    environment:
+      NODE_ENV: production
+    stdin_open: true
+    tty: true

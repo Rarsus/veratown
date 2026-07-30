@@ -1,0 +1,16 @@
+.git
+.github
+.gitignore
+.editorconfig
+.prettierignore
+.prettierrc
+node_modules
+dist
+src/dist
+*.md
+.vscode
+.DS_Store
+logs
+*.log
+config.json
+.env
