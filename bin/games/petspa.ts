@@ -15,7 +15,6 @@
 import { decompressFromBase64 } from "lz-string";
 import {
     API_Connector,
-    API_Message,
     MapRegion,
     API_Character,
     AssetGet,
@@ -26,42 +25,55 @@ import {
 import { remainingTimeString } from "../utils";
 import { wait } from "../hub/utils";
 
-const RECEPTION_AREA: MapRegion = {
-    TopLeft: { X: 18, Y: 15 },
-    BottomRight: { X: 19, Y: 16 },
-};
-
 const RECEPTIONIST_POSITION = { X: 18, Y: 15 };
 
-/* const EXHIBIT_1: ChatRoomMapPos = { X: 26, Y: 12 };
-const EXHIBIT_2: ChatRoomMapPos = { X: 28, Y: 12 };
-const EXHIBIT_3: ChatRoomMapPos = { X: 30, Y: 12 };
-const EXHIBIT_4: ChatRoomMapPos = { X: 32, Y: 12 };
-
-const HALLWAY_TO_PET_AREA_DOOR: ChatRoomMapPos = { X: 18, Y: 2 };
-const COMMON_AREA_TO_RECEPTION_DOOR: ChatRoomMapPos = { X: 14, Y: 10 };
-const REDRESSING_PAD: ChatRoomMapPos = { X: 18, Y: 8 };
-
-const DRESSING_PAD: ChatRoomMapPos = { X: 23, Y: 5 }; */
+const CAGE_INFORMATION_SCREEN: MapRegion = {TopLeft:{X: 15, Y: 36},BottomRight:{X:16,Y:36}};
+const CAGE_1_ENTRY: ChatRoomMapPos = { X: 12, Y: 38 };
+const CAGE_2_ENTRY: ChatRoomMapPos = { X: 14, Y: 38 };
+const CAGE_3_ENTRY: ChatRoomMapPos = { X: 16, Y: 38 };
 const CAGE_1: ChatRoomMapPos = { X: 12, Y: 39 };
 const CAGE_2: ChatRoomMapPos = { X: 14, Y: 39 };
 const CAGE_3: ChatRoomMapPos = { X: 16, Y: 39 };
+
+const CRATE_LOCK_PASSWORD = "LOVEVERA";
+
+function randomBetweenMinutesMs(minMinutes: number, maxMinutes: number): number {
+    const minutes =
+        minMinutes + Math.random() * (maxMinutes - minMinutes);
+    return Math.round(minutes * 60 * 1000);
+}
+
+const CAGES: {
+    pos: ChatRoomMapPos;
+    entryPos: ChatRoomMapPos;
+    name: string;
+    lockDurationMs: () => number;
+    durationDescription: string;
+}[] = [
+    {
+        pos: CAGE_1,
+        entryPos: CAGE_1_ENTRY,
+        name: "Cage 1",
+        lockDurationMs: () => 5 * 60 * 1000,
+        durationDescription: "approximately 5 minutes",
+    },
+    {
+        pos: CAGE_2,
+        entryPos: CAGE_2_ENTRY,
+        name: "Cage 2",
+        lockDurationMs: () => 10 * 60 * 1000,
+        durationDescription: "approximately 10 minutes",
+    },
+    {
+        pos: CAGE_3,
+        entryPos: CAGE_3_ENTRY,
+        name: "Cage 3",
+        lockDurationMs: () => randomBetweenMinutesMs(5, 15),
+        durationDescription: "somewhere between 5 and 15 minutes, randomly determined by the facility's containment algorithm",
+    },
+];
 const MAP =
-//    "N4IgKgngDgpiBcICCAbA7gQwgZxAGnAEsUZdEAgyq6m8wH+AAPJ5hugEw86+9t6sZZN23EZz586kyc2GiR4hfRlzRi8QNYr5a3gIDBsrRyknTZqcqNWjGw9fsc9bWw9dcXbroAXwHz/NnPb18vO25/EytgkJsAEL04hPjQkSjkrhiMzKy0oN8c4yzC/I5U2MLMu0An4Grq8hr6hsam+oB1tvaOzrbKroAz/q6unsGRluGO/t7R9vHpjtm2ybmx5c6FlqW59a29Xb39g8PKg+Xjw/Pzs73Ti9v9q92bu7uHvSfni9f3j6OTnZ/Ln8Wr4hgDAft2iC1mDfhC2lD5jCDl94T5QUi9ijpq8YVjRjiwXiRgSAUTBiSfmT0Ri9FToTTaUD8QzGXDsSzXvgQAB5ABGACsYABjAAuZBAgUlHEo2hlUu00vIRkANfDyrhytWarXayWAKvgdQbPIAxoCNhocgC4gS2Wg3ULSAavgRA6zdZAEPQbDdHsNACXnb63IABQD9QZUTuDYZ1gA/wDiAIAhwyIo1psHGzYBV8F9CeToljmaD2edgAYgDiALfAc8G0/GM37KwbC3Jq8766Wq2HGy2462DR2G5wu54uQAxAD2AHMEAAzDAobAwAC+QA";
-// const MAP=
     "N4IgKgngDgpiBcICCAbA7gQwgZxAGnAEsUZdFAEEEqupqoC+G7bmbG32POvufe/+BgocJ6AhEFGAZECnSZswE/AbAOvKVqtYoBLGgB6iAJlsNHjCxmq3rlG5br0HjWgDUAYx1vJL11xYBgIP35VxfQcQ0wZLDX8o/21Y+xCjMLpLXx9AE/AMzLSfWO14jQACouLipO8rVPTAIAgamuzc/ILABfAW1qaCpM1rCz8M2rqfcQlGttaOz3LUtP7MnP0R0fbO9V7p2Z9FW2NmxfGzcymM/2UWU499lXLoqw0RO/uHx6fn/kASEHf3iUBWkC/ADhB/34SD6vc4MQBgIBDIVDoZDyCUJAA7L7OFHOCSxIqgpgAENxRTBuOx+MJmPhCIA46i0RiCljyCSCgS8YyGXDioi/gD0bk6YTcUzCQLcT8RRyqSKfhI2PTsbkmXLcbkIMrsRBEZTUV8IKqILzZbF5QbFbFldqICLxWbddLjdpDXbbabVVrTcqtTq6TCvVCndivnzhbjlXS7KGw+HQ66IOSVaaY6aQxGk6GzixpanaC8s9mc7mXuRAFggReLJdLRelgB/gKvVmu1iuURyNpvNluOAvS5MVpOUAG/MsFlvtxjkTt6AN6ShUgfN/sdpPksd8ifkKeDtvrocMEdJrvj8j4EAAeQARgArGAAYwALmQQMn73pAPfgz8fD8AQ/BviOAUghQ4AAoEAq+APnY8xAUmX4/qBkGgeBUGwfeMF6IAVBARsh4aoXoojoaGWF2KhEGAC3wgCnMIAATChoAB9B6BRdjEYREaAM/gDGAA/gzEsaxgAf4KxdgAFWAFvggBjQHxcF0YA6+BscJwl2IAfMA8XobHhoAbkDJoAXECAAxAoaAFtAmlJnR4aSUB+F2DJ4ZKUBOmAFFAegWXBdgmaGamgYARkChhJ97FjJ9nWVJnmgThllQQZehGXotmgYAv+DhoAK+DWR5oEMZ5vGeXRoU6UZLn0XRgAgMBl+EZYAwDD5Vlei5YAOKCAAMggD9IOVgA9IIA0zA1WGDFxXYaUNQxEGAAQQsHFYAVMCIaxjF2P1Q3YJ5CLedgEHedZE1we1qEgZ5gAMMHYgBr0HogBNMGGgAz0HYgALMHonVhotgB9MFtgBbMHYi2AL0w52XYAQ9C3YAQYB0GGgDt8HoXZ2IAToBhlxf1cXYzh6D9gPA6GQMgw+gDiIKGgBoELDej/QDABldjw3oqN6OjmPo0mm1TQ+gBnMIA5zArYAHfChu9n12GTa3JoAoYCPYAIIChozLN2GzQEw2hYbdXogBwgOGgt2IALMAC3YBQAEUFKGtPw7jkEFuGSthgW9Pq1NgDV8OG2uhoAmcia1VgCNIEbgBDIOGAVhpb1mAEhAYaACJABP3nb975bli1u4tgAj8IAOcju57+XhoAA/BB3opuVYAvSCAMMgEYh3ok0YXYgBYoMVRtR4AkyBVYAoyAR8Vif53ogARgJBCFO1BCGANigdjFVHgAjIOVptG4A7SBfHnZcwYA4YCwfMoiAGMgXyN0mxdhpNXv3mtJMRitgA9MHoK2ADXwc92EHE/E0vei/ATgBsgHYO+PYAfoCAP6AQFvnTZErZ+UGAAtAV/hovegAKUP4/EZyHYXZv3on7fw+I1hg/gAToCAQA0MYIJx2FeKGSBgAJED0LA2B4EYKAAFAQAIYAoL0PTJMz9n56BAAAXyAA@EgBpADgCQQa/fw119y//foBV"
-const PERMITTED_WORDS = new Set([
-    "meow",
-    "mew",
-    "nya",
-    "purr",
-    "hiss",
-    "woof",
-    "bark",
-    "growl",
-    "grrr",
-    "awoo",
-]);
 
 export const PET_EARS: BC_AppearanceItem = {
     Name: "HarnessCatMask",
@@ -82,14 +94,14 @@ export class PetSpa {
         "This is an example to show how to use the ropeybot API to create a simple game.",
         "Commands:",
         "",
-        "/bot residents - List the current residents of the spa",
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
         "Code at https://github.com/FriendsOfBC/ropeybot",
     ].join("\n");
 
-    private exitTime = new Map<number, number>();
-    private earsAdded = new Set<number>();
-    private tailAdded = new Set<number>();
+    private cagedCharacters = new Map<
+        number,
+        { character: API_Character; cageName: string }
+    >();
 
     private commandParser: CommandParser;
 
@@ -99,22 +111,25 @@ export class PetSpa {
         this.conn.on("RoomCreate", this.onChatRoomCreated);
         this.conn.on("RoomJoin", this.onChatRoomJoined);
 
-        conn.on("Message", this.onMessage);
-
-        this.conn.chatRoom.map.addEnterRegionTrigger(
-            RECEPTION_AREA,
-            this.onCharacterEnterReception,
-        );
-
         this.conn.chatRoom.map.addTileTrigger(CAGE_1, this.onCharacterEnterCage);
         this.conn.chatRoom.map.addTileTrigger(CAGE_2, this.onCharacterEnterCage);
         this.conn.chatRoom.map.addTileTrigger(CAGE_3, this.onCharacterEnterCage);
+        this.conn.chatRoom.map.addEnterRegionTrigger(
+            CAGE_INFORMATION_SCREEN,
+            this.onCharacterViewCageInformation,
+        );
+
+        for (const cage of CAGES) {
+            this.conn.chatRoom.map.addTileTrigger(
+                cage.entryPos,
+                this.onCharacterEnterCageEntry,
+            );
+        }
 
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
         // are updated to match the new map layout.
 
-        this.commandParser.register("residents", this.onCommandResidents);
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
     }
 
@@ -148,46 +163,38 @@ export class PetSpa {
         this.conn.Player.SetActivePose(["Kneel"]);
     };
 
-    private onMessage = async (msg: API_Message) => {
-        if (
-            msg.message.Type === "Chat" &&
-            !msg.message.Content.startsWith("(")
-        ) {
-            const exitTime = this.exitTime.get(msg.sender.MemberNumber);
-            if (exitTime === undefined) return;
-
-            const words = msg.message.Content.toLowerCase()
-                .split(/^a-z/)
-                .filter((word) => word.length > 3)
-                // replace duplicate end letters to allow "awoooooo" etc
-                .map((w) => w.replace(/(.)\1+$/, "$1"));
-
-            for (const w of words) {
-                if (!PERMITTED_WORDS.has(w)) {
-                    this.exitTime.set(
-                        msg.sender.MemberNumber,
-                        exitTime + 2 * 60 * 1000,
-                    );
-                    msg.sender.Tell(
-                        "Whisper",
-                        "(BAD PET! Human speech is strictly prohibited in the spa! 2 minutes has been added to your minimum stay.",
-                    );
-                    return;
-                }
-            }
-        }
-    };
-
-    private onCharacterEnterReception = async (character: API_Character) => {
-        this.exitTime.delete(character.MemberNumber);
-/*         this.conn.SendMessage(
-            "Chat",
-            `Welcome to the Veratown, ${character}.` +
-            `This is a place to explore, enjoy and has some surprises.` +
-            `... Don't get trapped.` +
-            `If you want to leave, please use the /bot freeandleave command.`,
+    private onCharacterEnterCageEntry = async (character: API_Character) => {
+        const cage = CAGES.find(
+            (c) =>
+                c.entryPos.X === character.X && c.entryPos.Y === character.Y,
         );
- */    };
+        const cageName = cage?.name ?? "the containment cage";
+        const durationDescription =
+            cage?.durationDescription ?? "an undetermined length of time";
+
+        character.Tell(
+            "Whisper",
+            `(NOTICE: You are approaching the entrance to ${cageName}. ` +
+                `Veratown Facility Containment Protocol 7-Alpha requires that all visitors be informed of ` +
+                `the following before proceeding beyond this point: ` +
+                `(1) The floor beyond this threshold is fitted with motion-dampening sensors linked directly ` +
+                `to the facility's Futuristic Crate containment units; standing still for any length of time ` +
+                `while inside the cage area will be interpreted as consent to containment. ` +
+                `(2) Once containment is initiated, a Futuristic Crate will be fitted and secured with a ` +
+                `TimerPasswordPadlock; the lock will not release before its timer elapses regardless of ` +
+                `struggling, safewords directed at facility staff, or appeals to management. ` +
+                `(3) The crate's internal systems (restraints, vibration module, and comfort padding) are ` +
+                `regularly inspected and are not expected to cause harm, but prolonged stillness, ` +
+                `overheating, or discomfort should be reported to reception immediately upon release. ` +
+                `(4) Estimated containment duration for ${cageName} is ${durationDescription}; this ` +
+                `estimate is provided for planning purposes only and is not a guarantee. ` +
+                `(5) Facility staff are not obligated to release occupants early, and the crate's lock ` +
+                `password is known only to Veratown management. ` +
+                `By proceeding past this point and remaining stationary, you acknowledge that you have read, ` +
+                `understood, and voluntarily accept these terms. Proceed with caution, or step back now if ` +
+                `you do not consent.`,
+        );
+    };
 
     private onCharacterEnterCage = async (character: API_Character) => {
         const cagePos = { ...character.MapPos };
@@ -225,27 +232,57 @@ export class PetSpa {
         await wait(100);
         if (!stillInCage()) return;
 
-        const CRATE_LOCK_DURATION_MS = 30 * 60 * 1000;
+        const cage = CAGES.find(
+            (c) => c.pos.X === cagePos.X && c.pos.Y === cagePos.Y,
+        );
+        const cageName = cage?.name ?? "Unknown cage";
+        const lockExpiry = Date.now() + (cage?.lockDurationMs() ?? 30 * 60 * 1000);
 
         const crate = character.Appearance.AddItem(
             AssetGet("ItemDevices", "FuturisticCrate"),
         );
-        crate.setProperty("TypeRecord", {
-            w: 3, // Small window
-            l: 0,
-            a: 0,
-            d: 0,
-            t: 0,
-            h: 0,
+        crate.SetCraft({
+            Name: `Veratown Futuristic Crate`,
+            Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
         });
-        crate.lock("TimerPadlock", character.MemberNumber, {
+        crate.setProperty("TypeRecord", {
+            w: 2, // Big window
+            l: 3,
+            a: 3,
+            d: 1,
+            t: 1,
+            h: 4,
+        });
+        crate.setProperty("Mode", "Edge");
+
+        crate.lock("TimerPasswordPadlock", character.MemberNumber, {
+            Password: CRATE_LOCK_PASSWORD,
             RemoveItem: true,
-            RemoveTimer: Date.now() + CRATE_LOCK_DURATION_MS,
+            RemoveTimer: lockExpiry,
             ShowTimer: true,
             LockSet: true,
         });
+        this.cagedCharacters.set(character.MemberNumber, {
+            character,
+            cageName,
+        });
 
-        await wait(CRATE_LOCK_DURATION_MS);
+        character.Tell(
+            "Whisper",
+            `(You are locked in the Futuristic Crate for ${remainingTimeString(lockExpiry)}.`,
+        );
+
+        // Wait for the lock to actually expire, re-reading the crate's lock
+        // data each time in case it has been extended (or shortened) since
+        // it was first applied.
+        let expiry = this.getCageLockExpiry(character);
+        while (expiry !== undefined && Date.now() < expiry) {
+            await wait(Math.min(expiry - Date.now(), 10 * 1000));
+            if (!this.cagedCharacters.has(character.MemberNumber)) return;
+            expiry = this.getCageLockExpiry(character);
+        }
+
+        if (!this.cagedCharacters.delete(character.MemberNumber)) return;
 
         character.Appearance.RemoveItem("ItemDevices");
         character.Tell(
@@ -254,127 +291,41 @@ export class PetSpa {
         );
     };
 
-    private onCharacterEnterDressingPad = async (character: API_Character) => {
-        character.Tell(
-            "Whisper",
-            "(Please remain still while the scanner determines exact measurements for your spa suit...",
-        );
+    /**
+     * Reads the actual RemoveTimer from the character's currently worn
+     * ItemDevices item (the Futuristic Crate), so that any extensions or
+     * reductions applied to the lock after it was first set are reflected.
+     * Returns undefined if the character is no longer wearing a locked crate.
+     */
+    private getCageLockExpiry(character: API_Character): number | undefined {
+        return character.Appearance.InventoryGet("ItemDevices")?.getData()
+            .Property?.RemoveTimer;
+    }
 
-        await wait(2000);
-
-        character.Tell("Whisper", "(Scan complete. Preparing spa suit...");
-
-        await wait(2000);
-
-        character.Tell(
-            "Whisper",
-            "(Preparation complete. Please remain still while your suit is fitted...",
-        );
-
-        await wait(1000);
-
-        const characterHairColor =
-            character.Appearance.InventoryGet("HairFront").GetColor();
-        const characterHairSingleColor =
-            typeof characterHairColor === "object"
-                ? characterHairColor[0]
-                : characterHairColor;
-
-        const petSuitItem = character.Appearance.AddItem(
-            AssetGet("ItemArms", "ShinyPetSuit"),
-        );
-        petSuitItem.SetCraft({
-            Name: `Pet Spa Suit`,
-            Description: `A very comfy suit, specially made for ${character} to ensure the wearer complete, uninterrupted relaxation.`,
-        });
-        petSuitItem.SetColor(characterHairColor);
-        petSuitItem.Extended.SetType("Classic");
-
-        if (character.Appearance.InventoryGet("HairAccessory2") === null) {
-            await wait(1000);
-
-            character.Tell("Whisper", `(Adding ears...`);
-
-            const ears = character.Appearance.AddItem(PET_EARS);
-            ears.SetColor(
-                character.Appearance.InventoryGet("HairFront").GetColor(),
-            );
-
-            this.earsAdded.add(character.MemberNumber);
-        }
-
-        if (character.Appearance.InventoryGet("TailStraps") === null) {
-            await wait(1000);
-
-            character.Tell("Whisper", `(Attaching tail...`);
-
-            const tail = character.Appearance.AddItem(
-                AssetGet("TailStraps", "TailStrap"),
-            );
-            tail.SetColor(
-                character.Appearance.InventoryGet("HairFront").GetColor(),
-            );
-
-            this.tailAdded.add(character.MemberNumber);
-        }
-
-        character.Tell(
-            "Whisper",
-            "(Thank you, you are now ready to enter the spa! Please approach the door above and it will open for you.",
-        );
-
-        this.conn.SendMessage(
-            "Emote",
-            `*A voice speaks over the tannoy: Please welcome our newest resident: ${character}!`,
-        );
-
-        this.exitTime.set(character.MemberNumber, Date.now() + 30 * 60 * 1000);
-    };
-
-    private onCharacterEnterRedressingPad = async (
+    private onCharacterViewCageInformation = async (
         character: API_Character,
     ) => {
-        const exitTime = this.exitTime.get(character.MemberNumber);
-        if (exitTime === undefined) return;
-        if (exitTime < Date.now()) {
-            this.exitTime.delete(character.MemberNumber);
-
-            character.Tell(
-                "Whisper",
-                "(Thank you for visiting the Pet Spa! We hope you enjoyed your time with us.",
-            );
-            this.freeCharacter(character);
-        } else {
-            character.Tell(
-                "Whisper",
-                `(I'm sorry, ${character}, you may leave the spa in another ${remainingTimeString(exitTime)}.`,
-            );
+        // Drop anyone who is no longer actually locked in a crate (e.g. they
+        // were freed by other means) before reporting on cage occupancy.
+        for (const [memberNumber, occupant] of this.cagedCharacters) {
+            if (this.getCageLockExpiry(occupant.character) === undefined) {
+                this.cagedCharacters.delete(memberNumber);
+            }
         }
-    };
 
-    private onCommandResidents = async (
-        sender: API_Character,
-        msg: BC_Server_ChatRoomMessage,
-        args: string[],
-    ) => {
-        const residents = this.conn.chatRoom.characters.filter((c) =>
-            this.exitTime.has(c.MemberNumber),
-        );
+        if (this.cagedCharacters.size === 0) {
+            character.Tell("Whisper", "(All cages are currently empty.");
+            return;
+        }
 
-        const residentsList = residents
-            .map(
-                (c) =>
-                    `${c} - ${remainingTimeString(this.exitTime.get(c.MemberNumber))} remaining`,
-            )
+        const info = Array.from(this.cagedCharacters.values())
+            .map((c) => {
+                const expiry = this.getCageLockExpiry(c.character)!;
+                return `${c.cageName}: ${c.character} - ${remainingTimeString(expiry)} remaining`;
+            })
             .join("\n");
-        if (residentsList.length === 0) {
-            this.conn.reply(
-                msg,
-                "There are no residents in the spa right now.",
-            );
-        } else {
-            this.conn.reply(msg, `Current residents:\n${residentsList}`);
-        }
+
+        character.Tell("Whisper", `(Cage occupancy:\n${info}`);
     };
 
     private onCommandFreeAndLeave = async (
@@ -382,7 +333,6 @@ export class PetSpa {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        this.exitTime.delete(sender.MemberNumber);
         this.freeCharacter(sender);
         await wait(500);
         sender.Kick();
@@ -391,11 +341,8 @@ export class PetSpa {
     private freeCharacter(character: API_Character): void {
         character.Appearance.RemoveItem("ItemArms");
 
-        if (this.earsAdded.delete(character.MemberNumber)) {
-            character.Appearance.RemoveItem("ItemHood");
-        }
-        if (this.tailAdded.delete(character.MemberNumber)) {
-            character.Appearance.RemoveItem("TailStraps");
+        if (this.cagedCharacters.delete(character.MemberNumber)) {
+            character.Appearance.RemoveItem("ItemDevices");
         }
     }
 }
