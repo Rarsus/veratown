@@ -236,23 +236,16 @@ export class API_Map extends EventEmitter<MapEvents> {
             character.MapPos.X === prevPos.X &&
             character.MapPos.Y === prevPos.Y
         ) {
-            console.log(`Discarding duplicate move event for ${character}`);
             return;
         }
 
         const tilePos = character.X + character.Y * 40;
         const tileTriggers = this.tileTriggers.get(tilePos);
-        console.log(
-            `[map debug] ${character} moved to (${character.X}, ${character.Y}) [tile ${tilePos}] from (${prevPos.X}, ${prevPos.Y}); ${tileTriggers?.length ?? 0} tile trigger(s) registered here`,
-        );
         if (tileTriggers) {
             for (const trigger of tileTriggers) {
                 const matches =
                     trigger.prevPos === undefined ||
                     positionEquals(prevPos, trigger.prevPos);
-                console.log(
-                    `[map debug] evaluating tile trigger at ${tilePos}: requiredPrevPos=${trigger.prevPos ? `(${trigger.prevPos.X}, ${trigger.prevPos.Y})` : "any"}, matches=${matches}`,
-                );
                 if (matches) {
                     trigger.callback(character, prevPos);
                 }

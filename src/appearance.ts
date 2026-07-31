@@ -205,6 +205,8 @@ export class AppearanceType {
             return true;
         });
 
+        this.character.sendAppearanceUpdate();
+
         return capped;
     }
 

@@ -123,7 +123,21 @@ export async function startBot(): Promise<RopeyBot> {
             break;
         case "petspa":
             console.log("Starting game: Pet Spa");
-            const petSpaGame = new PetSpa(connector);
+            let petSpaConn2: API_Connector | undefined;
+            if (config.user2 && config.password2) {
+                petSpaConn2 = new API_Connector(
+                    serverUrl,
+                    config.user2,
+                    config.password2,
+                    config.env,
+                );
+                await petSpaConn2.joinOrCreateRoom(config.room);
+            } else {
+                console.log(
+                    "No user2/password2 configured; Pet Spa will narrate the shower using the main bot instead of a second bot.",
+                );
+            }
+            const petSpaGame = new PetSpa(connector, petSpaConn2);
             await petSpaGame.init();
             connector.setBotDescription(PetSpa.description);
             break;

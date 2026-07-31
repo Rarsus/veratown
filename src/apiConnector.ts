@@ -229,8 +229,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
             msg = msg.substring(0, ServerChatMessageMaxLength);
         }
 
-        console.log(`Sending ${type}`, msg);
-
         const payload = { Type: type, Content: msg } as Record<string, any>;
         if (target) payload.Target = target;
         if (dict) payload.Dictionary = dict;
@@ -346,7 +344,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     };
 
     private onServerInfo = (info: ServerInfoMessage) => {
-        console.log("Server info: ", info);
+        // Fires frequently as a heartbeat; intentionally not logged.
     };
 
     private onLoginResponse = (resp: ServerLoginResponse) => {

@@ -15,12 +15,14 @@
 import { decompressFromBase64 } from "lz-string";
 import {
     API_Connector,
+    API_Message,
     MapRegion,
     API_Character,
     AssetGet,
     BC_AppearanceItem,
     CommandParser,
     BC_Server_ChatRoomMessage,
+    isClothing,
 } from "bc-bot";
 import { remainingTimeString } from "../utils";
 import { wait } from "../hub/utils";
@@ -36,6 +38,95 @@ const CAGE_2: ChatRoomMapPos = { X: 14, Y: 39 };
 const CAGE_3: ChatRoomMapPos = { X: 16, Y: 39 };
 
 const CRATE_LOCK_PASSWORD = "LOVEVERA";
+
+const PARK: MapRegion = {
+    TopLeft: { X: 22, Y: 5 },
+    BottomRight: { X: 39, Y: 15 },
+};
+
+// Positions of the RabbitBrownStand decorative objects within the park,
+// found by scanning the map's Objects data for object ID 830.
+const BUNNY_POSITIONS: ChatRoomMapPos[] = [
+    { X: 29, Y: 6 },
+    { X: 28, Y: 7 },
+    { X: 27, Y: 10 },
+];
+
+const KENNEL_POSITIONS: ChatRoomMapPos[] = [
+    { X: 4, Y: 38 },
+    { X: 9, Y: 38 },
+];
+
+const SHOWER_POSITIONS: ChatRoomMapPos[] = [
+    { X: 16, Y: 21 },
+    { X: 27, Y: 21 },
+    { X: 33, Y: 21 },
+    { X: 39, Y: 21 },
+];
+
+// Tile the bot should stand on while narrating a shower. The bot can't move
+// onto the shower tile itself since the showering character is already
+// standing there, so it narrates from one tile north (Y-1) of the shower
+// tile instead.
+function showerBroadcastPos(showerPos: ChatRoomMapPos): ChatRoomMapPos {
+    return { X: showerPos.X, Y: showerPos.Y - 1 };
+}
+
+// Home/parking position for the dedicated second "shower narrator" bot
+// (conn2), when one is configured via user2/password2. Update this to move
+// where the second bot sits when it isn't actively narrating a shower.
+const SHOWER_BOT2_HOME_POSITION: ChatRoomMapPos = { X: 9, Y: 24 };
+
+
+const KENNEL_DOOR_CLOSE_DELAY_MS = 5 * 1000;
+
+// Positions of windows characters can peep through. Populate as needed.
+const WINDOW_LOCATIONS: ChatRoomMapPos[] = [
+        { X: 8, Y: 27 },
+            { X: 9, Y: 27},
+                { X: 10, Y: 27 },
+                    { X: 11, Y: 27 }
+];
+
+const TRASHCAN_SEARCH_LOCATIONS: ChatRoomMapPos[] = [
+    { X: 18, Y: 21  },
+    { X: 19, Y: 20  },
+    { X: 17, Y: 18 },
+    { X: 16, Y: 19 }
+];
+
+
+const WINDOW_PEEP_DELAY_MS = 5 * 1000;
+
+const SHOWER_STEP_DELAY_MS = 2 * 1000;
+const SHOWER_SING_DELAY_MS = 5 * 1000;
+
+const SHOWER_SONGS: string[] = [
+    '"Row, row, row your boat, gently down the stream, merrily, merrily, merrily, merrily, life is but a dream!"',
+    '"Rubber ducky, you\'re the one, you make bathtime lots of fun!"',
+    '"Twinkle, twinkle, little star, how I wonder what you are!"',
+    '"I\'m singing in the shower, just singing in the shower, what a glorious feeling, I\'m happy again!"',
+    '"Splish splash, I was taking a bath, long about a Saturday night!"',
+    '"Head, shoulders, knees and toes, knees and toes, head, shoulders, knees and toes, knees and toes!"',
+    '"Oh Susanna, oh don\'t you cry for me, for I come from Alabama with a banjo on my knee!"',
+    '"La la la, la-la la la, washing all my cares away, la la la, la-la la la!"',
+    '"You are my sunshine, my only sunshine, you make me happy when skies are grey!"',
+    '"Bibbidi-bobbidi-boo, it\'ll do magic believe it or not, bibbidi-bobbidi-boo!"',
+    '"Yo ho, yo ho, a shower life for me, scrubbing away all the grime of the day!"',
+    '"Happy birthday to me, happy birthday to me, happy shower time to me!"',
+    '"Doe, a deer, a female deer, ray, a drop of golden sun!"',
+];
+
+const TRASHCAN_FOUND_ITEMS: string[] = [
+    "a half-eaten sandwich",
+    "a suspiciously sticky lollipop",
+    "a single well-worn sock",
+    "a rusty bent spoon",
+    "a mysterious key that doesn't seem to fit anything",
+    "a crumpled love letter addressed to someone else",
+    "a surprisingly intact rubber duck",
+    "a handful of glittery confetti",
+];
 
 function randomBetweenMinutesMs(minMinutes: number, maxMinutes: number): number {
     const minutes =
@@ -95,7 +186,8 @@ export class PetSpa {
         "Commands:",
         "",
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
-        "Code at https://github.com/FriendsOfBC/ropeybot",
+        "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
+        "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
     ].join("\n");
 
     private cagedCharacters = new Map<
@@ -103,13 +195,19 @@ export class PetSpa {
         { character: API_Character; cageName: string }
     >();
 
+    private showeringCharacters = new Set<number>();
+
     private commandParser: CommandParser;
 
-    public constructor(private conn: API_Connector) {
+    public constructor(
+        private conn: API_Connector,
+        private conn2?: API_Connector,
+    ) {
         this.commandParser = new CommandParser(this.conn);
 
         this.conn.on("RoomCreate", this.onChatRoomCreated);
         this.conn.on("RoomJoin", this.onChatRoomJoined);
+        this.conn.on("Message", this.onMessage);
 
         this.conn.chatRoom.map.addTileTrigger(CAGE_1, this.onCharacterEnterCage);
         this.conn.chatRoom.map.addTileTrigger(CAGE_2, this.onCharacterEnterCage);
@@ -126,11 +224,45 @@ export class PetSpa {
             );
         }
 
+        this.conn.chatRoom.map.addEnterRegionTrigger(
+            PARK,
+            this.onCharacterEnterPark,
+        );
+
+        for (const bunnyPos of BUNNY_POSITIONS) {
+            this.conn.chatRoom.map.addTileTrigger(
+                bunnyPos,
+                this.onCharacterStepOnBunny,
+            );
+        }
+
+        for (const kennelPos of KENNEL_POSITIONS) {
+            this.conn.chatRoom.map.addTileTrigger(
+                kennelPos,
+                this.onCharacterEnterKennel,
+            );
+        }
+
+        for (const windowPos of WINDOW_LOCATIONS) {
+            this.conn.chatRoom.map.addTileTrigger(
+                windowPos,
+                this.onCharacterPeepThroughWindow,
+            );
+        }
+
+        for (const showerPos of SHOWER_POSITIONS) {
+            this.conn.chatRoom.map.addTileTrigger(
+                showerPos,
+                this.onCharacterEnterShower,
+            );
+        }
+
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
         // are updated to match the new map layout.
 
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
+        this.commandParser.register("strip", this.onCommandStrip);
     }
 
     public async init(): Promise<void> {
@@ -147,9 +279,192 @@ export class PetSpa {
         await this.setupCharacter();
     };
 
+    private onCharacterEnterPark = async (character: API_Character) => {
+        character.Tell(
+            "Whisper",
+            "(NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
+                "it is forbidden to step on the bunnies. Anyone caught doing so will be bound with " +
+                "hemp rope on the spot as punishment. Please watch your step.",
+        );
+    };
+
+    private onCharacterStepOnBunny = async (character: API_Character) => {
+        character.Tell(
+            "Whisper",
+            "(You step on one of the park's bunnies! Rope seems to shoot out from nowhere, quickly " +
+                "binding you as punishment for your carelessness...",
+        );
+
+        const rope = character.Appearance.AddItem(
+            AssetGet("ItemArms", "HempRope"),
+        );
+        rope?.Extended?.SetType("BoxTie");
+        rope?.SetDifficulty(20);
+
+        const legRope = character.Appearance.AddItem(
+            AssetGet("ItemLegs", "HempRope"),
+        );
+        legRope?.Extended?.SetType("Frogtie");
+        legRope?.SetDifficulty(20);
+    };
+
+    private onCharacterEnterKennel = async (character: API_Character) => {
+        const kennel = character.Appearance.AddItem(
+            AssetGet("ItemDevices", "Kennel"),
+        );
+        kennel.SetCraft({
+            Name: "Kennel",
+            Description: `${character} is relaxing in their Kennel`,
+        });
+        // d: 0 = door open, p: 1 = padding enabled
+        kennel.setProperty("TypeRecord", { d: 0, p: 1 });
+
+        await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
+        if (character.Appearance.InventoryGet("ItemDevices")?.Name !== "Kennel")
+            return;
+
+        // d: 1 = door closed
+        kennel.setProperty("TypeRecord", { d: 1, p: 1 });
+    };
+
+    private onCharacterPeepThroughWindow = async (character: API_Character) => {
+        const pos = { ...character.MapPos };
+        const stillThere = () =>
+            character.MapPos.X === pos.X && character.MapPos.Y === pos.Y;
+
+        await wait(WINDOW_PEEP_DELAY_MS);
+        if (!stillThere()) return;
+
+
+
+        this.conn.SendMessage(
+            "Emote",
+            `*Peeping Tom detected: ${character}`,
+        );
+    };
+
+    private onCharacterEnterShower = async (character: API_Character) => {
+        if (this.showeringCharacters.has(character.MemberNumber)) return;
+        this.showeringCharacters.add(character.MemberNumber);
+
+        const isInShower = () =>
+            SHOWER_POSITIONS.some(
+                (pos) =>
+                    pos.X === character.MapPos.X &&
+                    pos.Y === character.MapPos.Y,
+            );
+
+        // The bot can't stand on the shower tile itself (the showering
+        // character is already occupying it), and staying away from its
+        // usual post for the whole sequence isn't practical either. Instead,
+        // briefly hop over to a tile next to the shower just long enough to
+        // send each narrated line, then immediately hop back.
+        const broadcastPos = showerBroadcastPos(character.MapPos);
+
+        // Prefer a dedicated second bot (conn2) for narration, parked at
+        // SHOWER_BOT2_HOME_POSITION between lines, so the main bot never has
+        // to leave its post. Falls back to blipping the main bot if no
+        // second bot is configured.
+        const narratorConn = this.conn2 ?? this.conn;
+        const homePos = this.conn2
+            ? SHOWER_BOT2_HOME_POSITION
+            : { ...this.conn.Player.MapPos };
+
+        const sayNear = (type: "Emote" | "Chat", msg: string) => {
+            narratorConn.moveOnMap(broadcastPos.X, broadcastPos.Y);
+            narratorConn.SendMessage(type, msg);
+            narratorConn.moveOnMap(homePos.X, homePos.Y);
+        };
+
+        const abortShower = () => {
+            this.showeringCharacters.delete(character.MemberNumber);
+            character.Tell(
+                "Whisper",
+                "(You left the shower before finishing! Your clothes will not be returned to you.",
+            );
+        };
+
+        const savedOutfit = character.Appearance.MakeAppearanceBundle();
+        const savedClothingItems = savedOutfit.filter(isClothing);
+
+        character.Tell(
+            "Whisper",
+            "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
+        );
+
+        sayNear("Emote", `*${character} is taking a shower*`);
+
+        const clothingItems = character.Appearance
+            .getAppearanceData()
+            .filter(isClothing);
+        for (const item of clothingItems) {
+            if (!isInShower()) return abortShower();
+            character.Appearance.RemoveItem(item.Group);
+            await wait(SHOWER_STEP_DELAY_MS);
+        }
+
+        if (!isInShower()) return abortShower();
+        sayNear("Emote", `*${character} turns on the shower*`);
+
+        await wait(SHOWER_STEP_DELAY_MS);
+        if (!isInShower()) return abortShower();
+
+        const song =
+            SHOWER_SONGS[Math.floor(Math.random() * SHOWER_SONGS.length)];
+        sayNear("Chat", `${character} sings: ${song}`);
+
+        await wait(SHOWER_SING_DELAY_MS);
+        if (!isInShower()) return abortShower();
+
+        sayNear("Emote", `*${character} dries off with a towel*`);
+
+        await wait(SHOWER_STEP_DELAY_MS);
+        if (!isInShower()) return abortShower();
+
+        for (const item of savedClothingItems) {
+            if (!isInShower()) return abortShower();
+            character.Appearance.AddItem(item);
+            await wait(SHOWER_STEP_DELAY_MS);
+        }
+
+        this.showeringCharacters.delete(character.MemberNumber);
+        character.Tell(
+            "Whisper",
+            "(You finish your shower and get dressed again, feeling refreshed.",
+        );
+    };
+
+    private onCharacterSearchTrash = async (character: API_Character) => {
+        await wait(1500);
+
+        const item =
+            TRASHCAN_FOUND_ITEMS[
+                Math.floor(Math.random() * TRASHCAN_FOUND_ITEMS.length)
+            ];
+
+        this.conn.SendMessage(
+            "Emote",
+            `*${character} found ${item} while digging through the trash!*`,
+        );
+    };
+
+    private onMessage = async (msg: API_Message) => {
+        if (msg.message.Type !== "Emote") return;
+
+        const content = msg.message.Content.toLowerCase();
+        if (!content.includes("search") || !content.includes("trash")) return;
+
+        const onTrashcanTile = TRASHCAN_SEARCH_LOCATIONS.some(
+            (pos) =>
+                pos.X === msg.sender.MapPos.X && pos.Y === msg.sender.MapPos.Y,
+        );
+        if (!onTrashcanTile) return;
+
+        await this.onCharacterSearchTrash(msg.sender);
+    };
+
     private setupRoom = async () => {
         try {
-            console.log(JSON.parse(decompressFromBase64(MAP)));
             this.conn.chatRoom.map.setMapFromData(
                 JSON.parse(decompressFromBase64(MAP)),
             );
@@ -161,6 +476,13 @@ export class PetSpa {
     private setupCharacter = async () => {
         this.conn.moveOnMap(RECEPTIONIST_POSITION.X, RECEPTIONIST_POSITION.Y);
         this.conn.Player.SetActivePose(["Kneel"]);
+
+        if (this.conn2) {
+            this.conn2.moveOnMap(
+                SHOWER_BOT2_HOME_POSITION.X,
+                SHOWER_BOT2_HOME_POSITION.Y,
+            );
+        }
     };
 
     private onCharacterEnterCageEntry = async (character: API_Character) => {
@@ -177,18 +499,18 @@ export class PetSpa {
             `(NOTICE: You are approaching the entrance to ${cageName}. ` +
                 `Veratown Facility Containment Protocol 7-Alpha requires that all visitors be informed of ` +
                 `the following before proceeding beyond this point: ` +
-                `(1) The floor beyond this threshold is fitted with motion-dampening sensors linked directly ` +
+                `\n1: The floor beyond this threshold is fitted with motion-dampening sensors linked directly ` +
                 `to the facility's Futuristic Crate containment units; standing still for any length of time ` +
                 `while inside the cage area will be interpreted as consent to containment. ` +
-                `(2) Once containment is initiated, a Futuristic Crate will be fitted and secured with a ` +
+                `\n2:  Once containment is initiated, a Futuristic Crate will be fitted and secured with a ` +
                 `TimerPasswordPadlock; the lock will not release before its timer elapses regardless of ` +
                 `struggling, safewords directed at facility staff, or appeals to management. ` +
-                `(3) The crate's internal systems (restraints, vibration module, and comfort padding) are ` +
+                `\n3: The crate's internal systems, including restraints, vibration module, and comfort padding, are ` +
                 `regularly inspected and are not expected to cause harm, but prolonged stillness, ` +
                 `overheating, or discomfort should be reported to reception immediately upon release. ` +
-                `(4) Estimated containment duration for ${cageName} is ${durationDescription}; this ` +
+                `\n4: Estimated containment duration for ${cageName} is ${durationDescription}; this ` +
                 `estimate is provided for planning purposes only and is not a guarantee. ` +
-                `(5) Facility staff are not obligated to release occupants early, and the crate's lock ` +
+                `\n5: Facility staff are not obligated to release occupants early, and the crate's lock ` +
                 `password is known only to Veratown management. ` +
                 `By proceeding past this point and remaining stationary, you acknowledge that you have read, ` +
                 `understood, and voluntarily accept these terms. Proceed with caution, or step back now if ` +
@@ -202,7 +524,7 @@ export class PetSpa {
             character.MapPos.X === cagePos.X &&
             character.MapPos.Y === cagePos.Y;
 
-        character.Tell(
+/*         character.Tell(
             "Whisper",
             "(If you stay still, you will be locked in the Futuristic Crate...",
         );
@@ -228,7 +550,7 @@ export class PetSpa {
         character.Tell(
             "Whisper",
             "(Too late! You are now locked up...  ",
-        );
+        ); */
         await wait(100);
         if (!stillInCage()) return;
 
@@ -253,7 +575,7 @@ export class PetSpa {
             t: 1,
             h: 4,
         });
-        crate.setProperty("Mode", "Edge");
+        crate.setProperty("Mode", "Deny");
 
         crate.lock("TimerPasswordPadlock", character.MemberNumber, {
             Password: CRATE_LOCK_PASSWORD,
@@ -336,6 +658,31 @@ export class PetSpa {
         this.freeCharacter(sender);
         await wait(500);
         sender.Kick();
+    };
+
+    private onCommandStrip = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!sender.IsRoomAdmin()) {
+            this.conn.reply(msg, "Only admins can use this command.");
+            return;
+        }
+
+        if (args.length === 0) {
+            this.conn.reply(msg, "Usage: strip <name or member number>");
+            return;
+        }
+
+        const target = this.conn.chatRoom.findCharacter(args[0]);
+        if (!target) {
+            this.conn.reply(msg, "I can't find that person.");
+            return;
+        }
+
+        target.Appearance.stripBulk({ clothing: true });
+        this.conn.reply(msg, `${target} has been stripped of their clothing.`);
     };
 
     private freeCharacter(character: API_Character): void {
