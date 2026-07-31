@@ -165,6 +165,8 @@ const TRASHCAN_SEARCH_LOCATIONS: ChatRoomMapPos[] = [
 // condition stops being true. Populate with the real tile coordinates.
 const BED_POSITIONS: ChatRoomMapPos[] = [
     { X: 23, Y: 22 },
+    { X: 29, Y: 22 },
+    { X: 35, Y: 22 },
 ];
 
 // How often to re-check a bed occupant's expression/position while they
@@ -208,6 +210,17 @@ function randomBetweenMinutesMs(minMinutes: number, maxMinutes: number): number 
     const minutes =
         minMinutes + Math.random() * (maxMinutes - minMinutes);
     return Math.round(minutes * 60 * 1000);
+}
+
+// Shared by every tile-group polling loop (shower/bed/trashcan) instead of
+// each defining its own near-identical position-scanning closure.
+function isCharacterAtAnyPosition(
+    character: API_Character,
+    positions: readonly ChatRoomMapPos[],
+): boolean {
+    return positions.some(
+        (pos) => pos.X === character.MapPos.X && pos.Y === character.MapPos.Y,
+    );
 }
 
 const CAGES: {
@@ -432,7 +445,7 @@ export class PetSpa {
         kennel.setProperty("TypeRecord", { d: 0, p: 1 });
 
         await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
-        if (character.Appearance.InventoryGet("ItemDevices")?.Name !== "Kennel")
+        if (character.Appearance.getItemData("ItemDevices")?.Name !== "Kennel")
             return;
 
         // d: 1 = door closed
@@ -460,11 +473,7 @@ export class PetSpa {
         this.showeringCharacters.add(character.MemberNumber);
 
         const isInShower = () =>
-            SHOWER_POSITIONS.some(
-                (pos) =>
-                    pos.X === character.MapPos.X &&
-                    pos.Y === character.MapPos.Y,
-            );
+            isCharacterAtAnyPosition(character, SHOWER_POSITIONS);
 
         // The bot can't stand on the shower tile itself (the showering
         // character is already occupying it), and staying away from its
@@ -559,21 +568,17 @@ export class PetSpa {
             if (!this.conn.chatRoom.getCharacter(character.MemberNumber))
                 return false;
 
-            return BED_POSITIONS.some(
-                (pos) =>
-                    pos.X === character.MapPos.X &&
-                    pos.Y === character.MapPos.Y,
-            );
+            return isCharacterAtAnyPosition(character, BED_POSITIONS);
         };
 
         try {
             while (isOnBed()) {
                 const isAsleep =
-                    character.Appearance.InventoryGet("Emoticon")
-                        ?.GetExpression() === "Sleep";
+                    character.Appearance.getItemData("Emoticon")?.Property
+                        ?.Expression === "Sleep";
                 const hasBed =
-                    character.Appearance.InventoryGet("ItemDevices")
-                        ?.Name === "Bed";
+                    character.Appearance.getItemData("ItemDevices")?.Name ===
+                    "Bed";
 
                 if (isAsleep && !hasBed) {
                     const bed = character.Appearance.AddItem(
@@ -583,17 +588,23 @@ export class PetSpa {
                         Name: "Bed",
                         Description: `${character} is fast asleep`,
                     });
+
+                    // The blanket ("Covers") requires the Bed to already be
+                    // equipped (Prerequisite: "OnBed"), so it's added right
+                    // after the Bed itself.
+                    character.Appearance.AddItem(
+                        AssetGet("ItemAddon", "Covers"),
+                    );
                 } else if (!isAsleep && hasBed) {
+                    character.Appearance.RemoveItem("ItemAddon");
                     character.Appearance.RemoveItem("ItemDevices");
                 }
 
                 await wait(BED_CHECK_INTERVAL_MS);
             }
         } finally {
-            if (
-                character.Appearance.InventoryGet("ItemDevices")?.Name ===
-                "Bed"
-            ) {
+            if (character.Appearance.getItemData("ItemDevices")?.Name === "Bed") {
+                character.Appearance.RemoveItem("ItemAddon");
                 character.Appearance.RemoveItem("ItemDevices");
             }
             this.sleepingCharacters.delete(character.MemberNumber);
@@ -620,11 +631,8 @@ export class PetSpa {
         const content = msg.message.Content.toLowerCase();
         if (!content.includes("search") || !content.includes("trash")) return;
 
-        const onTrashcanTile = TRASHCAN_SEARCH_LOCATIONS.some(
-            (pos) =>
-                pos.X === msg.sender.MapPos.X && pos.Y === msg.sender.MapPos.Y,
-        );
-        if (!onTrashcanTile) return;
+        if (!isCharacterAtAnyPosition(msg.sender, TRASHCAN_SEARCH_LOCATIONS))
+            return;
 
         await this.onCharacterSearchTrash(msg.sender);
     };
@@ -786,8 +794,8 @@ export class PetSpa {
      * Returns undefined if the character is no longer wearing a locked crate.
      */
     private getCageLockExpiry(character: API_Character): number | undefined {
-        return character.Appearance.InventoryGet("ItemDevices")?.getData()
-            .Property?.RemoveTimer;
+        return character.Appearance.getItemData("ItemDevices")?.Property
+            ?.RemoveTimer;
     }
 
     private onCharacterViewCageInformation = async (

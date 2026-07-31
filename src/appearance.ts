@@ -177,6 +177,20 @@ export class AppearanceType {
         return new API_AppearanceItem(this.character, item);
     }
 
+    /**
+     * Lightweight alternative to InventoryGet() for callers that only need
+     * to read raw item data (e.g. Name/Property) and don't need an
+     * API_AppearanceItem wrapper. Avoids allocating a wrapper object, which
+     * matters for code that polls this repeatedly (e.g. a timed loop
+     * checking someone's current expression or equipped device every few
+     * seconds).
+     */
+    public getItemData(
+        groupName: AssetGroupName | ExpressionGroupName,
+    ): BC_AppearanceItem | undefined {
+        return this.data.find((i) => i.Group === groupName);
+    }
+
     public stripBulk(
         cfg: BundleApplyConfig,
         stripLocked = false,
