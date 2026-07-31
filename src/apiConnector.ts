@@ -401,8 +401,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomSyncMemberJoin = (
         resp: ServerChatRoomSyncMemberJoinResponse,
     ) => {
-        console.log("Chat room member joined", resp.Character?.Name);
-
         this.leaveReasons.delete(resp.Character.MemberNumber);
 
         this._chatRoom!.memberJoined(transformToCharacterData(resp.Character));
@@ -420,10 +418,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     };
 
     private onChatRoomSyncMemberLeave = (resp: ServerChatRoomLeaveResponse) => {
-        console.log(
-            `chat room member left with reason ${this.leaveReasons.get(resp.SourceMemberNumber)}`,
-            resp,
-        );
         const leftMember = this._chatRoom!.getCharacter(
             resp.SourceMemberNumber,
         );
@@ -509,6 +503,25 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         //console.log("sync expression", resp);
         const char = this.chatRoom!.getCharacter(resp.MemberNumber);
         if (!char) return;
+
+        // Persist the new expression into the character's live appearance
+        // data so that later reads (e.g. `Appearance.InventoryGet(group)
+        // ?.GetExpression()`) reflect this update, not just the one-off
+        // event fired below.
+        const existing = char.Appearance.InventoryGet(
+            resp.Group as AssetGroupName,
+        );
+        char.Appearance.updateItemData({
+            ...(existing?.getData() ?? {
+                Group: resp.Group as AssetGroupName,
+                Name: resp.Name,
+            }),
+            Property: {
+                ...existing?.getData().Property,
+                Expression: resp.Name as ExpressionName,
+            },
+        });
+
         const item = new API_AppearanceItem(char, {
             Group: resp.Group as AssetGroupName,
             Name: resp.Name,
@@ -555,32 +568,10 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     };
 
     private onChatRoomSyncMapData = (update: ServerMapDataResponse) => {
-        console.log("chat room map data", update);
         this._chatRoom?.mapPositionUpdate(update.MemberNumber, update.MapData);
     };
 
-    private ignoreMsgs = [
-        "BCXMsg",
-        "BCEMsg",
-        "LSCGMsg",
-        "bctMsg",
-        "MPA",
-        "dogsMsg",
-        "bccMsg",
-        "ECHO_INFO2",
-        "MoonCEBC",
-    ];
-
     private onChatRoomMessage = (msg: ServerChatRoomMessage) => {
-        // Don't log *.* spam
-        if (
-            msg.Type !== "Hidden" &&
-            !this.ignoreMsgs.includes(msg.Content) &&
-            msg.Sender !== this.Player.MemberNumber
-        ) {
-            console.log("chat room message", msg);
-        }
-
         if (!msg.Sender) return;
         const char = this._chatRoom?.getCharacter(msg.Sender);
         if (!char) return;
@@ -620,7 +611,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomCharacterItemUpdate = (
         update: ServerCharacterItemUpdate,
     ) => {
-        console.log("Chat room character item update", update);
         this._chatRoom?.characterItemUpdate(update);
         /*if (update.Target === this._player.MemberNumber) {
             const payload = {

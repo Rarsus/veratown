@@ -52,6 +52,70 @@ const BUNNY_POSITIONS: ChatRoomMapPos[] = [
     { X: 27, Y: 10 },
 ];
 
+// --- Bunny punishment restraints ---
+//
+// Every rope used to punish someone for stepping on a bunny is forced to
+// this color and carries this crafted description. Change these two
+// constants to alter the look/flavour text of every bunny rope at once.
+const BUNNY_ROPE_COLOR = "#FF69B4"; // bright pink
+const BUNNY_ROPE_CRAFT_DESCRIPTION = "Created by a Bunny hater";
+
+// A single rope/restraint item to add to a punished character.
+interface BunnyRestraintPiece {
+    group: AssetGroupName;
+    asset: string;
+    // Optional Extended item "type" to select a specific tie (e.g.
+    // "BoxTie", "Frogtie"). Leave undefined for items that don't have one.
+    extendedType?: string;
+}
+
+// A full restraint "outfit": a named set of pieces applied together.
+interface BunnyRestraintConfig {
+    name: string;
+    pieces: BunnyRestraintPiece[];
+}
+
+// The possible punishments for stepping on a bunny. One of these is picked
+// at random each time someone steps on a bunny. Add, remove, or edit entries
+// here to change what restraints are used and how they're combined - see
+// bunny.md for the full list of asset/group/type options available.
+const BUNNY_RESTRAINT_CONFIGS: BunnyRestraintConfig[] = [
+    {
+        name: "Classic Boxtie",
+        pieces: [
+            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
+            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
+        ],
+    },
+    {
+        name: "Full Bunny Bind",
+        pieces: [
+            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
+            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
+            { group: "ItemFeet", asset: "HempRope" },
+            { group: "ItemPelvis", asset: "HempRope" },
+            { group: "ItemTorso", asset: "HempRopeHarness" },
+            { group: "ItemNeck", asset: "NeckRope" },
+        ],
+    },
+    {
+        name: "Collared and Hopping",
+        pieces: [
+            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
+            { group: "ItemFeet", asset: "HempRope" },
+            { group: "ItemNeck", asset: "NeckRope" },
+        ],
+    },
+    {
+        name: "Harnessed Thighs",
+        pieces: [
+            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
+            { group: "ItemPelvis", asset: "HempRope" },
+            { group: "ItemTorso", asset: "HempRopeHarness" },
+        ],
+    },
+];
+
 const KENNEL_POSITIONS: ChatRoomMapPos[] = [
     { X: 4, Y: 38 },
     { X: 9, Y: 38 },
@@ -94,6 +158,18 @@ const TRASHCAN_SEARCH_LOCATIONS: ChatRoomMapPos[] = [
     { X: 17, Y: 18 },
     { X: 16, Y: 19 }
 ];
+
+// Positions of bed tiles. While a character stands on one of these tiles
+// and has the "Sleep" facial expression (Emoticon) active, they are
+// equipped with a Bed device; the Bed is removed again as soon as either
+// condition stops being true. Populate with the real tile coordinates.
+const BED_POSITIONS: ChatRoomMapPos[] = [
+    { X: 23, Y: 22 },
+];
+
+// How often to re-check a bed occupant's expression/position while they
+// remain on a bed tile.
+const BED_CHECK_INTERVAL_MS = 2 * 1000;
 
 
 const WINDOW_PEEP_DELAY_MS = 5 * 1000;
@@ -197,6 +273,8 @@ export class PetSpa {
 
     private showeringCharacters = new Set<number>();
 
+    private sleepingCharacters = new Set<number>();
+
     private commandParser: CommandParser;
 
     public constructor(
@@ -257,6 +335,13 @@ export class PetSpa {
             );
         }
 
+        for (const bedPos of BED_POSITIONS) {
+            this.conn.chatRoom.map.addTileTrigger(
+                bedPos,
+                this.onCharacterEnterBed,
+            );
+        }
+
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
         // are updated to match the new map layout.
@@ -295,17 +380,44 @@ export class PetSpa {
                 "binding you as punishment for your carelessness...",
         );
 
-        const rope = character.Appearance.AddItem(
-            AssetGet("ItemArms", "HempRope"),
-        );
-        rope?.Extended?.SetType("BoxTie");
-        rope?.SetDifficulty(20);
+        // Add the sign first so it's never skipped if adding one of the
+        // restraint pieces below happens to fail.
+        try {
+            const sign = character.Appearance.AddItem(
+                AssetGet("ItemMisc", "WoodenSign"),
+            );
+            sign.setProperty("Text", "I step on");
+            sign.setProperty("Text2", "Bunnies");
+        } catch (e) {
+            console.error("Failed to add bunny-punishment sign", e);
+        }
 
-        const legRope = character.Appearance.AddItem(
-            AssetGet("ItemLegs", "HempRope"),
-        );
-        legRope?.Extended?.SetType("Frogtie");
-        legRope?.SetDifficulty(20);
+        const config =
+            BUNNY_RESTRAINT_CONFIGS[
+                Math.floor(Math.random() * BUNNY_RESTRAINT_CONFIGS.length)
+            ];
+
+        for (const piece of config.pieces) {
+            try {
+                const item = character.Appearance.AddItem(
+                    AssetGet(piece.group, piece.asset),
+                );
+                if (piece.extendedType) {
+                    item?.Extended?.SetType(piece.extendedType);
+                }
+                item?.SetDifficulty(20);
+                item?.SetColor(BUNNY_ROPE_COLOR);
+                item?.SetCraft({
+                    Name: piece.asset,
+                    Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
+                });
+            } catch (e) {
+                console.error(
+                    `Failed to add bunny-punishment piece ${piece.group}/${piece.asset}`,
+                    e,
+                );
+            }
+        }
     };
 
     private onCharacterEnterKennel = async (character: API_Character) => {
@@ -432,6 +544,60 @@ export class PetSpa {
             "Whisper",
             "(You finish your shower and get dressed again, feeling refreshed.",
         );
+    };
+
+    // While a character remains on a bed tile, keep checking whether they
+    // have the "Sleep" Emoticon expression active: equip a Bed device while
+    // both are true, and remove it as soon as either stops being true (they
+    // wake up or leave the bed). Handles the expression being activated
+    // either before or after stepping onto the bed.
+    private onCharacterEnterBed = async (character: API_Character) => {
+        if (this.sleepingCharacters.has(character.MemberNumber)) return;
+        this.sleepingCharacters.add(character.MemberNumber);
+
+        const isOnBed = () => {
+            if (!this.conn.chatRoom.getCharacter(character.MemberNumber))
+                return false;
+
+            return BED_POSITIONS.some(
+                (pos) =>
+                    pos.X === character.MapPos.X &&
+                    pos.Y === character.MapPos.Y,
+            );
+        };
+
+        try {
+            while (isOnBed()) {
+                const isAsleep =
+                    character.Appearance.InventoryGet("Emoticon")
+                        ?.GetExpression() === "Sleep";
+                const hasBed =
+                    character.Appearance.InventoryGet("ItemDevices")
+                        ?.Name === "Bed";
+
+                if (isAsleep && !hasBed) {
+                    const bed = character.Appearance.AddItem(
+                        AssetGet("ItemDevices", "Bed"),
+                    );
+                    bed.SetCraft({
+                        Name: "Bed",
+                        Description: `${character} is fast asleep`,
+                    });
+                } else if (!isAsleep && hasBed) {
+                    character.Appearance.RemoveItem("ItemDevices");
+                }
+
+                await wait(BED_CHECK_INTERVAL_MS);
+            }
+        } finally {
+            if (
+                character.Appearance.InventoryGet("ItemDevices")?.Name ===
+                "Bed"
+            ) {
+                character.Appearance.RemoveItem("ItemDevices");
+            }
+            this.sleepingCharacters.delete(character.MemberNumber);
+        }
     };
 
     private onCharacterSearchTrash = async (character: API_Character) => {
