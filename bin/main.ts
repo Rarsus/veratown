@@ -140,6 +140,30 @@ export async function startBot(): Promise<RopeyBot> {
             const petSpaGame = new PetSpa(connector, petSpaConn2);
             await petSpaGame.init();
             connector.setBotDescription(PetSpa.description);
+
+            if (config.user3 && config.password3) {
+                if (!db) {
+                    console.log(
+                        "mongo_uri/mongo_db must be configured to run the pool roulette table; skipping.",
+                    );
+                } else {
+                    const poolRouletteConn = new API_Connector(
+                        serverUrl,
+                        config.user3,
+                        config.password3,
+                        config.env,
+                    );
+                    await poolRouletteConn.joinOrCreateRoom(config.room);
+                    new Casino(poolRouletteConn, db, {
+                        ...config.casino,
+                        game: "roulette",
+                    });
+                }
+            } else {
+                console.log(
+                    "No user3/password3 configured; skipping the pool roulette table.",
+                );
+            }
             break;
         case "casino":
             console.log("Starting game: Casino");

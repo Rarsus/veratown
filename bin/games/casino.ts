@@ -93,7 +93,8 @@ https://github.com/FriendsOfBC/ropeybot
 `;
 
 export interface CasinoConfig {
-    cocktail: string;
+    cocktail?: string;
+    game?: "roulette" | "blackjack";
 }
 
 export class Casino {
@@ -109,10 +110,12 @@ export class Casino {
         db: Db,
         config?: CasinoConfig,
     ) {
-        // The default game is roulette
         this.store = new CasinoStore(db);
         this.commandParser = new CommandParser(conn);
-        this.game = new BlackjackGame(conn, this);
+        this.game =
+            config?.game === "roulette"
+                ? new RouletteGame(conn, this)
+                : new BlackjackGame(conn, this);
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
