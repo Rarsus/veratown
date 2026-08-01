@@ -149,6 +149,7 @@ export class Casino {
         this.commandParser.register("buy", this.onCommandBuy);
         this.commandParser.register("vouchers", this.onCommandVouchers);
         this.commandParser.register("give", this.onCommandGive);
+        this.commandParser.register("grant", this.onCommandGrant);
         this.commandParser.register("bonus", this.onCommandBonusRound);
         this.commandParser.register("game", this.onCommandGame);
 
@@ -618,6 +619,44 @@ ${forfeitsString()}
         this.conn.SendMessage(
             "Chat",
             `${sender} gave ${amount} chips to ${target}`,
+        );
+    };
+
+    private onCommandGrant = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!sender.IsRoomAdmin()) {
+            this.conn.reply(msg, "Sorry, you need to be an admin");
+            return;
+        }
+
+        if (args.length < 2) {
+            this.conn.reply(
+                msg,
+                "Usage: grant <name or member number> <amount>",
+            );
+            return;
+        }
+
+        const amount = parseInt(args[1], 10);
+        if (isNaN(amount) || amount < 1) {
+            this.conn.reply(msg, "Invalid amount.");
+            return;
+        }
+
+        const target = this.conn.chatRoom.findCharacter(args[0]);
+        if (!target) {
+            this.conn.reply(msg, "I can't find that person.");
+            return;
+        }
+
+        await this.store.addCredits(target.MemberNumber, amount);
+
+        this.conn.reply(
+            msg,
+            `Granted ${amount} chips to ${target}.`,
         );
     };
 

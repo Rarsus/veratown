@@ -102,6 +102,24 @@ export class CasinoStore {
     }
 
     /**
+     * Atomically adds (or removes, with a negative amount) credits for a
+     * player, creating their record if it doesn't exist yet. Uses $inc
+     * rather than getPlayer()/savePlayer() so it can't race with other
+     * concurrent balance changes.
+     */
+    public async addCredits(
+        memberNumber: number,
+        amount: number,
+    ): Promise<void> {
+        await this.init();
+        await this.players.updateOne(
+            { memberNumber },
+            { $inc: { credits: amount } },
+            { upsert: true },
+        );
+    }
+
+    /**
      * Atomically moves `amount` credits from one player to another.
      *
      * Unlike the getPlayer()-mutate-savePlayer() pattern, this can't be
@@ -127,11 +145,7 @@ export class CasinoStore {
             return false;
         }
 
-        await this.players.updateOne(
-            { memberNumber: toMemberNumber },
-            { $inc: { credits: amount }, $setOnInsert: { name: "" } },
-            { upsert: true },
-        );
+        await this.addCredits(toMemberNumber, amount);
         return true;
     }
 
