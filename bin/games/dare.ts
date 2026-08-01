@@ -41,49 +41,51 @@ export class Dare {
     public static description = `Dares
  =====
 
-Collects dare / forfeit cards privately & anonymously that can then be drawn.
+A structured bondage/strip dare game for a group, played over 10 rounds
+with turn order - or just casual free-for-all drawing if nobody starts a
+game. Whisper !dare help any time for the full rundown.
 
-!dare join
-Joins the dare game as a participant. Some dares apply their effect to a
-randomly chosen participant instead of the person who drew the card - you
-need to have joined to be eligible (or targetable!).
+Game Overview
+=====
+1. Everyone who wants to play whispers !dare join to sign up.
+2. Once at least 2 people have joined, anyone can start the game with
+   !dare start. This locks in a random turn order and begins round 1 of 10.
+3. On your turn, !dare draw draws a random card. Strip, bondage and reward
+   dares are applied automatically - to yourself, or to a random other
+   joined participant if the dare calls for it.
+4. Don't want to do your dare? !dare pass - you'll be forfeited into a
+   random piece of bondage instead (and it still counts against you).
+5. The bot announces whose turn is next after every draw. Once everyone's
+   gone, the round advances - 10 rounds total.
+6. Win condition: when round 10 finishes, whoever picked up the FEWEST
+   binds over the whole game wins, and is automatically freed from all
+   their bondage. Everyone else stays locked up until their timers run out!
 
-!dare leave
-Leaves the dare game; you won't be picked as a target for other players'
-dares any more.
-
-!dare add <dare>
-eg. !dare add take off one item of clothing
-(This should be whispered to the bot so your dare stays secret!)
-
-!dare draw
-Draws a dare card (you can do this in the public room). Strip, bondage and
-reward dares are applied automatically - to yourself, or to a random other
-joined participant if the dare calls for it.
-
-!dare pass
-Chickens out of the dare you just drew. You'll be locked into a random piece
-of bondage as a forfeit instead.
-
-!dare list <page>
-Lists dares stored in the database, 10 per page (admin only, whisper this to
-the bot). <page> is optional and defaults to 1.
-
-!pick
-Chooses someone in the room who isn't the bot or yourself (for dares that involve someone else)
+Commands
+=====
+!dare join          - Join the game as a participant.
+!dare leave         - Leave the game (you won't be targeted or turned to).
+!dare start         - Start a fresh 10-round game with everyone joined.
+!dare turn          - Show whose turn it currently is.
+!dare draw          - Draw a dare card (on your turn, if a game's running).
+!dare pass          - Chicken out of your last drawn dare - forfeit instead.
+!dare add <dare>    - Whisper a new dare card to add to the deck.
+!dare list <page>   - (admin only) List dares in the database.
+!dare reset         - (admin only) Reset the deck / mark all dares unused.
+!dare help          - Show this message.
+!pick               - Randomly pick a room member (not you, not the bot).
 
 Rules
 =====
-1. !dare join before you start, so you can be picked as a dare's target.
-2. Everyone rolls a d100 (/dice 100) to start and placed in the room from lowest to highest.
-3. Players take turns to draw a dare, from left to right.
-4. Dares last 10 minutes unless the dare says otherwise.
-5. For dares involving someone else, spin the wheel to decide who. Re-spin if they're already a
-   target for a dare.
-6. If you're writing a dare that involves someone else, you can let the person doing the dare pick
-   someone or have them spin the bot wheel to choose. Your dare can't involve another specific,
-   named person (eg. you can say, "tie a random person", you can't say, "tie Deya").
-7. Don't want to do your dare? !dare pass - but you'll be forfeited into bondage instead!
+1. !dare join before you start, so you can be picked as a dare's target and
+   take your turn in a structured game.
+2. For dares involving someone else, the dare is applied to a random other
+   joined participant automatically - no need to spin anything yourself.
+3. Dares last 10 minutes unless the dare says otherwise.
+4. Don't want to do your dare? !dare pass - but you'll be forfeited into
+   bondage instead, and it still counts against you for the win condition.
+5. At the end of round 10, the player with the fewest binds wins and is
+   freed from all their bondage.
 `;
 
     private commandParser: CommandParser;
@@ -95,6 +97,18 @@ Rules
     // Members who've opted into the dare game via "!dare join", and so can
     // be picked as the target of a dare drawn by someone else.
     private joinedPlayers = new Set<number>();
+
+    // Structured 10-round game state. turnOrder/currentTurnIndex/round are
+    // only meaningful while gameActive is true.
+    private readonly totalRounds = 10;
+    private gameActive = false;
+    private turnOrder: number[] = [];
+    private currentTurnIndex = 0;
+    private round = 1;
+
+    // How many bondage items each member has been forfeited into over the
+    // course of the current game, used to decide the round-10 winner.
+    private bindCounts = new Map<number, number>();
 
     public constructor(
         private conn: API_Connector,
@@ -133,6 +147,47 @@ Rules
                     `*${senderCharacter} leaves the dare game.`,
                 );
                 break;
+            case "start": {
+                if (this.joinedPlayers.size < 2) {
+                    this.conn.reply(
+                        msg,
+                        "Need at least 2 joined players (!dare join) to start a game.",
+                    );
+                    return;
+                }
+
+                this.turnOrder = [...this.joinedPlayers].sort(
+                    () => Math.random() - 0.5,
+                );
+                this.currentTurnIndex = 0;
+                this.round = 1;
+                this.gameActive = true;
+                this.bindCounts.clear();
+                this.pendingDraws.clear();
+
+                const order = this.turnOrder
+                    .map((m) => this.describeMember(m))
+                    .join(" -> ");
+                this.conn.SendMessage(
+                    "Emote",
+                    `*The dare game begins! ${this.totalRounds} rounds, turn order: ${order}.`,
+                );
+                this.announceTurn();
+                break;
+            }
+            case "turn":
+                if (!this.gameActive) {
+                    this.conn.reply(
+                        msg,
+                        "No game is running - use !dare start to begin one.",
+                    );
+                    return;
+                }
+                this.announceTurn();
+                break;
+            case "help":
+                this.conn.reply(msg, Dare.description);
+                break;
             case "add":
                 if (args.length < 2) {
                     this.conn.SendMessage("Emote", "*Usage: !dare add <dare>");
@@ -150,6 +205,17 @@ Rules
 
                 break;
             case "draw": {
+                if (this.gameActive) {
+                    const currentTurn = this.turnOrder[this.currentTurnIndex];
+                    if (senderCharacter.MemberNumber !== currentTurn) {
+                        this.conn.reply(
+                            msg,
+                            `It's not your turn! Waiting on ${this.describeMember(currentTurn)}.`,
+                        );
+                        return;
+                    }
+                }
+
                 this.conn.SendMessage(
                     "Emote",
                     `*${senderCharacter} draws a dare card...`,
@@ -168,6 +234,8 @@ Rules
 
                 this.pendingDraws.set(senderCharacter.MemberNumber, dare);
                 await this.applyDareEffect(senderCharacter, dare);
+
+                if (this.gameActive) this.advanceTurn();
                 break;
             }
             case "pass": {
@@ -193,6 +261,7 @@ Rules
                     forfeitKey,
                     PASS_FORFEIT_DURATION_MS,
                 );
+                this.addBinds(senderCharacter.MemberNumber, 1);
                 this.conn.SendMessage(
                     "Emote",
                     `*${senderCharacter} chickens out of their dare and gets locked into a forfeit instead!`,
@@ -256,10 +325,82 @@ Rules
             default:
                 this.conn.SendMessage(
                     "Emote",
-                    "*Usage: !dare <join|leave|add|draw|pass|reset|list>",
+                    "*Usage: !dare <join|leave|start|turn|add|draw|pass|reset|list|help>",
                 );
                 return;
         }
+    };
+
+    private describeMember = (memberNumber: number): string => {
+        const character = this.conn.chatRoom.findMember(memberNumber);
+        return character ? `${character}` : `#${memberNumber}`;
+    };
+
+    private addBinds = (memberNumber: number, count: number): void => {
+        if (count <= 0) return;
+        this.bindCounts.set(
+            memberNumber,
+            (this.bindCounts.get(memberNumber) ?? 0) + count,
+        );
+    };
+
+    private announceTurn = (): void => {
+        const memberNumber = this.turnOrder[this.currentTurnIndex];
+        this.conn.SendMessage(
+            "Emote",
+            `*Round ${this.round}/${this.totalRounds}: it's ${this.describeMember(memberNumber)}'s turn to !dare draw.`,
+        );
+    };
+
+    // Moves to the next player's turn, advancing the round (and ending the
+    // game at the end of round 10) once everyone's gone.
+    private advanceTurn = (): void => {
+        this.currentTurnIndex++;
+        if (this.currentTurnIndex >= this.turnOrder.length) {
+            this.currentTurnIndex = 0;
+            this.round++;
+            if (this.round > this.totalRounds) {
+                this.endGame();
+                return;
+            }
+        }
+        this.announceTurn();
+    };
+
+    // Ends the current game: whoever has the fewest binds wins and is
+    // stripped of all their bondage (including locked items).
+    private endGame = (): void => {
+        let winner: number | undefined;
+        let lowestBinds = Infinity;
+        for (const memberNumber of this.turnOrder) {
+            const binds = this.bindCounts.get(memberNumber) ?? 0;
+            if (binds < lowestBinds) {
+                lowestBinds = binds;
+                winner = memberNumber;
+            }
+        }
+
+        this.gameActive = false;
+        this.turnOrder = [];
+        this.currentTurnIndex = 0;
+        this.round = 1;
+        this.bindCounts.clear();
+
+        if (winner === undefined) {
+            this.conn.SendMessage(
+                "Emote",
+                "*The dare game has ended with no participants!",
+            );
+            return;
+        }
+
+        const winnerCharacter = this.conn.chatRoom.findMember(winner);
+        winnerCharacter?.Appearance.stripBulk({ item: true }, true);
+
+        this.conn.SendMessage(
+            "Emote",
+            `*The dare game is over! ${this.describeMember(winner)} wins with only ${lowestBinds} bind(s) and is freed from all bondage!`,
+        );
     };
 
     // Picks who a drawn dare's effect actually applies to: the drawer
@@ -318,8 +459,9 @@ Rules
                     );
                 }
                 break;
-            case "bondage":
-                for (const forfeitKey of dare.forfeitKeys ?? []) {
+            case "bondage": {
+                const forfeitKeys = dare.forfeitKeys ?? [];
+                for (const forfeitKey of forfeitKeys) {
                     applyForfeitForDare(
                         target,
                         this.conn.Player.MemberNumber,
@@ -327,6 +469,7 @@ Rules
                         dare.durationMs,
                     );
                 }
+                this.addBinds(target.MemberNumber, forfeitKeys.length);
                 if (dare.noRedress) {
                     this.conn.SendMessage(
                         "Emote",
@@ -334,6 +477,7 @@ Rules
                     );
                 }
                 break;
+            }
             case "reward":
                 // Reward dares always benefit the drawer, regardless of the
                 // dare's "target" field.
