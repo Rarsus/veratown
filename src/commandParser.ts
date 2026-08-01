@@ -15,6 +15,7 @@
 import { API_Character } from "./apiCharacter.ts";
 import { API_Connector, API_Message } from "./apiConnector.ts";
 import { BC_Server_ChatRoomMessage } from "./logicEvent.ts";
+import { MapRegion, positionIsInRegion } from "./apiMap.ts";
 
 type CommandCallback = (
     sender: API_Character,
@@ -27,7 +28,14 @@ const SLASH_BOT_PREFIX = "ChatRoomBot ";
 export class CommandParser {
     private commands = new Map<string, CommandCallback>();
 
-    public constructor(private conn: API_Connector) {
+    /**
+     * @param region If set, commands are only processed when the sender is
+     * standing within this map region; otherwise they're ignored.
+     */
+    public constructor(
+        private conn: API_Connector,
+        private region?: MapRegion,
+    ) {
         conn.on("Message", this.onMessage);
     }
 
@@ -47,23 +55,27 @@ export class CommandParser {
         // trim any leading or trailing parentheses from the message
         const msg = ev.message.Content.replace(/^\(+/, "").replace(/\)+$/, "");
 
+        let cmdString: string | undefined;
         if (
             ["Whisper", "Chat"].includes(ev.message.Type) &&
             msg.startsWith("!") &&
             msg.length > 1
         ) {
-            const cmdString = msg.substring(1);
-
-            this.processCmdString(ev, cmdString);
+            cmdString = msg.substring(1);
         } else if (
             ev.message.Type === "Hidden" &&
             ev.message.Content.startsWith(SLASH_BOT_PREFIX)
         ) {
-            const cmdString = msg
-                .substring(SLASH_BOT_PREFIX.length)
-                .trimStart();
-            this.processCmdString(ev, cmdString);
+            cmdString = msg.substring(SLASH_BOT_PREFIX.length).trimStart();
         }
+
+        if (cmdString === undefined) return;
+
+        if (this.region && !positionIsInRegion(ev.sender.MapPos, this.region)) {
+            return;
+        }
+
+        this.processCmdString(ev, cmdString);
     };
 
     private processCmdString(ev: API_Message, cmdString: string): void {

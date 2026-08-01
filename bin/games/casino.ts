@@ -18,6 +18,7 @@ import {
     CommandParser,
     API_Character,
     ItemPermissionLevel,
+    MapRegion,
     BC_Server_ChatRoomMessage,
     API_AppearanceItem,
     AssetGet,
@@ -95,6 +96,11 @@ https://github.com/FriendsOfBC/ropeybot
 export interface CasinoConfig {
     cocktail?: string;
     game?: "roulette" | "blackjack";
+
+    // If set, commands are only processed while the sender is standing
+    // within this map region, and entering characters are told that
+    // gambling is available here and given a quick rules explanation.
+    region?: MapRegion;
 }
 
 export class Casino {
@@ -111,11 +117,18 @@ export class Casino {
         config?: CasinoConfig,
     ) {
         this.store = new CasinoStore(db);
-        this.commandParser = new CommandParser(conn);
+        this.commandParser = new CommandParser(conn, config?.region);
         this.game =
             config?.game === "roulette"
                 ? new RouletteGame(conn, this)
                 : new BlackjackGame(conn, this);
+
+        if (config?.region) {
+            conn.chatRoom.map.addEnterRegionTrigger(
+                config.region,
+                this.onCharacterEnterCasinoRegion,
+            );
+        }
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
@@ -161,6 +174,13 @@ export class Casino {
                 `Welcome back, ${character}. ${remainingTimeString(nextFreeCreditsAt)} until your next free chips. See my bio for how to play.`,
             );
         }
+    };
+
+    private onCharacterEnterCasinoRegion = async (character: API_Character) => {
+        character.Tell(
+            "Whisper",
+            `(Gambling is allowed in this part of town! ${this.game.HELPMESSAGE}\n\n${this.game.COMMANDSMESSAGE}`,
+        );
     };
 
     private onBeep = (beep: ServerAccountBeepResponse) => {
