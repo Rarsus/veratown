@@ -50,6 +50,19 @@ const CAGE_3: ChatRoomMapPos = { X: 16, Y: 39 };
 
 const CRATE_LOCK_PASSWORD = "LOVEVERA";
 
+// User-friendly summary of recent functional additions to the map, newest
+// first. Shown to players via the "/bot changelog" command.
+const CHANGELOG: string[] = [
+    "Casino functionality added (gambling table hosted in its own area)",
+    "Sleep in Bed functionality added",
+    "Futuristic Crate containment functionality added",
+    "Kennel functionality added",
+    "Shower functionality added",
+    "Window peeping functionality added",
+    "Pet cage functionality added",
+    "Park with protected bunnies added",
+];
+
 const PARK: MapRegion = {
     TopLeft: { X: 22, Y: 5 },
     BottomRight: { X: 39, Y: 15 },
@@ -287,6 +300,7 @@ export class PetSpa {
         "",
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
         "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
+        "/bot changelog - Shows a summary of recent functional changes to the map",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
     ].join("\n");
 
@@ -374,6 +388,7 @@ export class PetSpa {
 
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
         this.commandParser.register("strip", this.onCommandStrip);
+        this.commandParser.register("changelog", this.onCommandChangelog);
     }
 
     public async init(): Promise<void> {
@@ -870,6 +885,17 @@ export class PetSpa {
 
         target.Appearance.stripBulk({ clothing: true });
         this.conn.reply(msg, `${target} has been stripped of their clothing.`);
+    };
+
+    private onCommandChangelog = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        this.conn.reply(
+            msg,
+            `Recent changes to the map:\n${CHANGELOG.map((entry) => `- ${entry}`).join("\n")}`,
+        );
     };
 
     private freeCharacter(character: API_Character): void {
