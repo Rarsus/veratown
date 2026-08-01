@@ -396,9 +396,10 @@ const config = JSON.parse(await readFile("config.json", "utf-8"));
 ### 1. Dare Game (`dare`)
 - **Type**: Simple turn-based party game
 - **Mechanic**: Players add dares, then draw anonymously
-- **Persistence**: Stored in `dares.json` and `unuseddares.json`
-- **Reset**: Delete both files to clear
+- **Persistence**: Stored in a MongoDB `dares` collection (`mongo_uri`/`mongo_db` required)
+- **Reset**: `/bot dare reset` marks all dares unused again
 - **Map Room**: No
+- Also embedded directly into Veratown's own commands when MongoDB is configured
 
 ### 2. Veratown (`veratown`)
 - **Type**: Interactive map-based roleplay

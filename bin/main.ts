@@ -16,6 +16,7 @@ import { API_Connector } from "bc-bot";
 import { KidnappersGameRoom } from "./hub/logic/kidnappersGameRoom";
 import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom";
 import { Dare } from "./games/dare";
+import { DareStore } from "./games/dareStore";
 import { readFile } from "fs/promises";
 import { ConfigFile } from "./config";
 import { Db, MongoClient } from "mongodb";
@@ -122,8 +123,14 @@ export async function startBot(): Promise<RopeyBot> {
             break;
         case "dare":
             console.log("Starting game: dare");
+            if (!db) {
+                console.log(
+                    "mongo_uri/mongo_db must be configured to run the dare game; exiting.",
+                );
+                process.exit(1);
+            }
             connector.accountUpdate({ Nickname: "Dare Bot" });
-            new Dare(connector);
+            new Dare(connector, new DareStore(db));
             connector.setBotDescription(Dare.description);
             break;
         case "veratown":
@@ -142,7 +149,7 @@ export async function startBot(): Promise<RopeyBot> {
                     "No user2/password2 configured; Veratown will narrate the shower using the main bot instead of a second bot.",
                 );
             }
-            const veratownGame = new Veratown(connector, veratownConn2);
+            const veratownGame = new Veratown(connector, veratownConn2, db);
             await veratownGame.init();
             connector.setBotDescription(Veratown.description);
 

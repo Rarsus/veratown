@@ -12,7 +12,6 @@
  * limitations under the License.
  */
 
-import { readFile, writeFile } from "fs/promises";
 import {
     API_Connector,
     CommandParser,
@@ -20,6 +19,7 @@ import {
     BC_Server_ChatRoomMessage,
 } from "bc-bot";
 import { wait } from "../hub/utils";
+import { DareStore } from "./dareStore";
 
 export class Dare {
     public static description = `Dares
@@ -52,48 +52,15 @@ Rules
 
     private commandParser: CommandParser;
 
-    private allDares: string[];
-    private unusedDares: string[];
-
-    public constructor(private conn: API_Connector) {
-        this.commandParser = new CommandParser(conn);
+    public constructor(
+        private conn: API_Connector,
+        private store: DareStore,
+        commandParser?: CommandParser,
+    ) {
+        this.commandParser = commandParser ?? new CommandParser(conn);
 
         this.commandParser.register("pick", this.onPick);
         this.commandParser.register("dare", this.onDare);
-        this.loadDares();
-    }
-
-    private async loadDares(): Promise<void> {
-        let result;
-
-        try {
-            result = await readFile("dares.json", "utf-8");
-            this.allDares = JSON.parse(result);
-        } catch (e) {
-            this.allDares = [];
-        }
-
-        try {
-            result = await readFile("unuseddares.json", "utf-8");
-            this.unusedDares = JSON.parse(result);
-        } catch (e) {
-            this.unusedDares = [];
-        }
-    }
-
-    private addDare(dare: string) {
-        this.allDares.push(dare);
-        this.unusedDares.push(dare);
-        this.saveDares();
-    }
-
-    private async saveDares(): Promise<void> {
-        await writeFile(`dares.json`, JSON.stringify(this.allDares));
-        await writeFile(`unuseddares.json`, JSON.stringify(this.unusedDares));
-    }
-
-    private dareSummary(): string {
-        return `${this.unusedDares.length} dares remain out of ${this.allDares.length} total.`;
     }
 
     onDare = async (
@@ -102,7 +69,7 @@ Rules
         args: string[],
     ) => {
         if (args.length < 1) {
-            this.conn.SendMessage("Emote", "*" + this.dareSummary());
+            this.conn.SendMessage("Emote", "*" + (await this.store.getSummary()));
             return;
         }
 
@@ -112,37 +79,40 @@ Rules
                     this.conn.SendMessage("Emote", "*Usage: !dare add <dare>");
                     return;
                 }
-                this.addDare(args.slice(1).join(" "));
+                await this.store.addDare(
+                    args.slice(1).join(" "),
+                    senderCharacter.MemberNumber,
+                    senderCharacter.Name,
+                );
                 this.conn.SendMessage(
                     "Emote",
-                    `*Dare saved, thanks ${senderCharacter}! ${this.dareSummary()}`,
+                    `*Dare saved, thanks ${senderCharacter}! ${await this.store.getSummary()}`,
                 );
 
                 break;
             case "draw":
-                if (this.unusedDares.length === 0) {
-                    this.conn.SendMessage("Emote", `*No more dares left!`);
-                    return;
-                }
                 this.conn.SendMessage(
                     "Emote",
                     `*${senderCharacter} draws a dare card...`,
                 );
                 await wait(2000);
 
-                const n = Math.floor(Math.random() * this.unusedDares.length);
-                const dare = this.unusedDares[n];
-                this.unusedDares.splice(n, 1);
-                this.saveDares();
+                const dare = await this.store.drawDare();
+                if (dare === undefined) {
+                    this.conn.SendMessage("Emote", `*No more dares left!`);
+                    return;
+                }
                 this.conn.SendMessage(
                     "Emote",
-                    `*${senderCharacter} draws: ${dare}\n${this.dareSummary()}`,
+                    `*${senderCharacter} draws: ${dare}\n${await this.store.getSummary()}`,
                 );
                 break;
             case "reset":
-                this.unusedDares = Array.from(this.allDares);
-                this.saveDares();
-                this.conn.SendMessage("Emote", "*" + this.dareSummary());
+                await this.store.resetDares();
+                this.conn.SendMessage(
+                    "Emote",
+                    "*" + (await this.store.getSummary()),
+                );
                 break;
             default:
                 this.conn.SendMessage(

@@ -13,6 +13,7 @@
  */
 
 import { decompressFromBase64 } from "lz-string";
+import { Db } from "mongodb";
 import {
     API_Connector,
     API_Message,
@@ -26,6 +27,8 @@ import {
 } from "bc-bot";
 import { remainingTimeString } from "../utils";
 import { wait } from "../hub/utils";
+import { Dare } from "./dare";
+import { DareStore } from "./dareStore";
 
 const RECEPTIONIST_POSITION = { X: 18, Y: 15 };
 
@@ -301,6 +304,8 @@ export class Veratown {
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
         "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
         "/bot changelog - Shows a summary of recent functional changes to the map",
+        "/bot dare <add|draw|reset> - Add, draw or reset dare/forfeit cards (if configured)",
+        "/bot pick - Randomly selects a room member other than the bot or yourself",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
     ].join("\n");
 
@@ -315,13 +320,28 @@ export class Veratown {
 
     private commandParser: CommandParser;
 
+    private dare?: Dare;
+
     public constructor(
         private conn: API_Connector,
         private conn2?: API_Connector,
+        db?: Db,
     ) {
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
         ]);
+
+        if (db) {
+            this.dare = new Dare(
+                this.conn,
+                new DareStore(db),
+                this.commandParser,
+            );
+        } else {
+            console.log(
+                "mongo_uri/mongo_db must be configured to enable the dare/pick commands in Veratown; skipping.",
+            );
+        }
 
         this.conn.on("RoomCreate", this.onChatRoomCreated);
         this.conn.on("RoomJoin", this.onChatRoomJoined);

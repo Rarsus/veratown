@@ -95,9 +95,11 @@ file to run that game.
 ### Dare Game ('dare')
 
 A very simple game where players add dares and then draw them without knowing who added
-each dare.
-The dares added by players are stored in two files in the bot's working directory:
-dares.json and unuseddares.json: delete both of these files to reset the dares.
+each dare. Dares are stored in a `dares` collection in MongoDB (`mongo_uri`/`mongo_db` must
+be configured, see `config.sample.json`); use `/bot dare reset` to mark all dares unused again.
+
+The same `/bot dare` and `/bot pick` commands are also available inside the Veratown game
+(see below) whenever MongoDB is configured, so a separate dedicated dare bot isn't required.
 
 ### Veratown ('veratown')
 
@@ -109,6 +111,9 @@ and reacting to messages.
 This version of Veratown also hosts a Casino gambling table in a separate part of the map
 (a dedicated `user3`/`password3` bot account, see `config.sample.json`), and has a
 `/bot changelog` command listing recent functional changes to the map.
+
+If MongoDB is configured (`mongo_uri`/`mongo_db`), Veratown also makes the Dare game's
+`/bot dare` and `/bot pick` commands available directly - see the Dare Game section above.
 
 ### Kidnappers ('kidnappers')
 
