@@ -29,6 +29,14 @@ import { wait } from "../hub/utils";
 
 const RECEPTIONIST_POSITION = { X: 18, Y: 15 };
 
+// The gambling area hosted by a separate Casino bot (see main.ts); PetSpa's
+// own CommandParser ignores commands from senders standing here so the two
+// bots don't both try to handle the same message.
+export const POOL_AREA: MapRegion = {
+    TopLeft: { X: 0, Y: 6 },
+    BottomRight: { X: 16, Y: 14 },
+};
+
 const CAGE_INFORMATION_SCREEN: MapRegion = {TopLeft:{X: 15, Y: 36},BottomRight:{X:16,Y:36}};
 const CAGE_1_ENTRY: ChatRoomMapPos = { X: 12, Y: 38 };
 const CAGE_2_ENTRY: ChatRoomMapPos = { X: 14, Y: 38 };
@@ -294,7 +302,9 @@ export class PetSpa {
         private conn: API_Connector,
         private conn2?: API_Connector,
     ) {
-        this.commandParser = new CommandParser(this.conn);
+        this.commandParser = new CommandParser(this.conn, undefined, [
+            POOL_AREA,
+        ]);
 
         this.conn.on("RoomCreate", this.onChatRoomCreated);
         this.conn.on("RoomJoin", this.onChatRoomJoined);

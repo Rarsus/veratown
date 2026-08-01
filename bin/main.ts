@@ -12,14 +12,14 @@
  * limitations under the License.
  */
 
-import { API_Connector, MapRegion } from "bc-bot";
+import { API_Connector } from "bc-bot";
 import { KidnappersGameRoom } from "./hub/logic/kidnappersGameRoom";
 import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom";
 import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
 import { ConfigFile } from "./config";
 import { Db, MongoClient } from "mongodb";
-import { PetSpa } from "./games/petspa";
+import { PetSpa, POOL_AREA } from "./games/petspa";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { Casino } from "./games/casino";
 
@@ -160,19 +160,15 @@ export async function startBot(): Promise<RopeyBot> {
                     );
                     await poolRouletteConn.joinOrCreateRoom(config.room);
 
-                    const poolRegion: MapRegion = {
-                        TopLeft: { X: 0, Y: 6 },
-                        BottomRight: { X: 16, Y: 14 },
-                    };
                     poolRouletteConn.moveOnMap(
-                        poolRegion.TopLeft.X,
-                        poolRegion.TopLeft.Y,
+                        POOL_AREA.TopLeft.X,
+                        POOL_AREA.TopLeft.Y,
                     );
 
                     new Casino(poolRouletteConn, db, {
                         ...config.casino,
                         game: "roulette",
-                        region: poolRegion,
+                        region: POOL_AREA,
                     });
                 }
             } else {

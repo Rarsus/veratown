@@ -31,10 +31,15 @@ export class CommandParser {
     /**
      * @param region If set, commands are only processed when the sender is
      * standing within this map region; otherwise they're ignored.
+     * @param excludeRegions If set, commands are ignored when the sender is
+     * standing within any of these map regions. Useful so that a bot doesn't
+     * respond to commands meant for another bot occupying its own region of
+     * the same room.
      */
     public constructor(
         private conn: API_Connector,
         private region?: MapRegion,
+        private excludeRegions?: MapRegion[],
     ) {
         conn.on("Message", this.onMessage);
     }
@@ -72,6 +77,14 @@ export class CommandParser {
         if (cmdString === undefined) return;
 
         if (this.region && !positionIsInRegion(ev.sender.MapPos, this.region)) {
+            return;
+        }
+
+        if (
+            this.excludeRegions?.some((region) =>
+                positionIsInRegion(ev.sender.MapPos, region),
+            )
+        ) {
             return;
         }
 
