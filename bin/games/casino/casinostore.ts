@@ -102,6 +102,57 @@ export class CasinoStore {
     }
 
     /**
+     * Updates just a player's display name, without touching their credits
+     * or other fields (safe to call from a getPlayer()-less path).
+     */
+    public async setPlayerName(
+        memberNumber: number,
+        name: string,
+    ): Promise<void> {
+        await this.init();
+        await this.players.updateOne(
+            { memberNumber },
+            { $set: { name } },
+            { upsert: true },
+        );
+    }
+
+    /**
+     * Atomically grants `amount` credits as the player's daily free chips,
+     * but only if they haven't already claimed them within `cooldownMs`.
+     * Uses a single conditional update (rather than
+     * getPlayer()-mutate-savePlayer()) so two concurrent grants (eg. two
+     * rapid room rejoins) can't both succeed and double the free chips.
+     *
+     * Returns whether the grant was made.
+     */
+    public async claimDailyFreeChips(
+        memberNumber: number,
+        amount: number,
+        cooldownMs: number,
+    ): Promise<boolean> {
+        await this.init();
+
+        const cutoff = Date.now() - cooldownMs;
+        const result = await this.players.updateOne(
+            {
+                memberNumber,
+                $or: [
+                    { lastFreeCredits: { $lt: cutoff } },
+                    { lastFreeCredits: { $exists: false } },
+                ],
+            },
+            {
+                $inc: { credits: amount },
+                $set: { lastFreeCredits: Date.now() },
+            },
+            { upsert: true },
+        );
+
+        return result.modifiedCount === 1 || result.upsertedCount === 1;
+    }
+
+    /**
      * Atomically adds (or removes, with a negative amount) credits for a
      * player, creating their record if it doesn't exist yet. Uses $inc
      * rather than getPlayer()/savePlayer() so it can't race with other

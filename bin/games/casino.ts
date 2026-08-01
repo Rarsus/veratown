@@ -157,19 +157,26 @@ export class Casino {
     }
 
     private onCharacterEntered = async (character: API_Character) => {
-        const player = await this.store.getPlayer(character.MemberNumber);
-        player.name = character.toString();
+        await this.store.setPlayerName(
+            character.MemberNumber,
+            character.toString(),
+        );
 
-        const nextFreeCreditsAt = player.lastFreeCredits + 20 * 60 * 60 * 1000;
-        if (nextFreeCreditsAt < Date.now()) {
-            player.credits += FREE_CHIPS;
-            player.lastFreeCredits = Date.now();
-            await this.store.savePlayer(player);
+        const cooldownMs = 20 * 60 * 60 * 1000;
+        const granted = await this.store.claimDailyFreeChips(
+            character.MemberNumber,
+            FREE_CHIPS,
+            cooldownMs,
+        );
+
+        if (granted) {
             character.Tell(
                 "Whisper",
                 `Welcome to the Casino, ${character}! Here are your ${FREE_CHIPS} free chips for today. See my bio for how to play. Good luck!`,
             );
         } else {
+            const player = await this.store.getPlayer(character.MemberNumber);
+            const nextFreeCreditsAt = player.lastFreeCredits + cooldownMs;
             character.Tell(
                 "Whisper",
                 `Welcome back, ${character}. ${remainingTimeString(nextFreeCreditsAt)} until your next free chips. See my bio for how to play.`,
@@ -571,7 +578,7 @@ ${forfeitsString()}
                     if (SERVICES[p.service] === undefined) {
                         return `${p.memberName} (${p.memberNumber}): Unknown service ${p.service}`;
                     }
-                    `${p.memberName} (${p.memberNumber}): ${SERVICES[p.service].name}`;
+                    return `${p.memberName} (${p.memberNumber}): ${SERVICES[p.service].name}`;
                 })
                 .join("\n"),
         );
