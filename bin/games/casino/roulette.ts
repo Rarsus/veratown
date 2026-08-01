@@ -62,6 +62,10 @@ const ROULETTEEXAMPLES = `
 const TIME_UNTIL_SPIN_MS = 60000;
 // const TIME_UNTIL_SPIN_MS = 6000;
 const BET_CANCEL_THRESHOLD_MS = 3000;
+// How long before the spin the table calls "Rien ne va plus!" and stops
+// accepting new bets (cancellations are already blocked earlier, at
+// BET_CANCEL_THRESHOLD_MS).
+const LAST_CALL_THRESHOLD_MS = 10000;
 
 type RouletteBetKind =
     | "single"
@@ -132,6 +136,7 @@ export class RouletteGame implements Game {
     private willSpinAt: number | undefined;
     private spinTimeout: NodeJS.Timeout | undefined;
     private resetTimeout: NodeJS.Timeout | undefined;
+    private lastCallAnnounced = false;
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -349,6 +354,17 @@ export class RouletteGame implements Game {
             return;
         }
 
+        if (
+            this.willSpinAt !== undefined &&
+            this.willSpinAt - Date.now() <= LAST_CALL_THRESHOLD_MS
+        ) {
+            this.conn.reply(
+                msg,
+                "Rien ne va plus! No more bets for this round.",
+            );
+            return;
+        }
+
         const bet = this.parseBetCommand(sender, msg, args);
         if (bet === undefined) {
             return;
@@ -435,6 +451,7 @@ export class RouletteGame implements Game {
                 this.resetTimeout = undefined;
             }
 
+            this.lastCallAnnounced = false;
             this.willSpinAt = Date.now() + TIME_UNTIL_SPIN_MS;
             this.spinTimeout = setInterval(() => {
                 this.onSpinTimeout();
@@ -562,6 +579,14 @@ export class RouletteGame implements Game {
                 console.error("Failed to spin wheel.", e);
             });
         } else {
+            if (timeLeft <= LAST_CALL_THRESHOLD_MS && !this.lastCallAnnounced) {
+                this.lastCallAnnounced = true;
+                this.conn.SendMessage(
+                    "Chat",
+                    "Rien ne va plus! No more bets.",
+                );
+            }
+
             this.casino.setTextColor("#ffffff");
             sign.setProperty("Text2", `${Math.ceil(timeLeft / 1000)}`);
         }
