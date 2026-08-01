@@ -85,4 +85,9 @@ export class DareStore {
         const unused = await this.dares.countDocuments({ used: false });
         return `${unused} dares remain out of ${total} total.`;
     }
+
+    public async listDares(): Promise<DareDoc[]> {
+        await this.init();
+        return this.dares.find({}).sort({ createdAt: 1 }).toArray();
+    }
 }
