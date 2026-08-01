@@ -10,7 +10,7 @@ We hope that this will be useful for people to make fun and interesting bots
 for the club! You're also welcome to run the bots included yourself.
 
 To make a new game, you can copy the 'petspa' game file and use that as a base, and add
-your new file into bot.ts.
+your new file into main.ts.
 
 Usual club ettiquette applies, eg:
 
@@ -20,13 +20,26 @@ Usual club ettiquette applies, eg:
   sending messages will affect the server.
 - Make bots fun / interesting / useful, rather than to just sit in rooms.
 
+See [CREDITS.md](CREDITS.md) for who's contributed to the project, and
+[IMPROVEMENTS.md](IMPROVEMENTS.md) for the results of an in-depth code review
+(fixes made and proposals for further work).
+
 ## Code layout
 
-Anything in src/hub is from the original bot hub. This includes the 'kidnappers' game and the
-roleplay challenge bot. These are copied in as they were, but with additions since.
+This is a two-package repo:
 
-Things in src/games use a newer, more event-based API. If you write new bots, they should
-probably look like the ones in here.
+- `src/` is the `bc-bot` library: the low-level API for talking to the BC server
+  (chat rooms, characters, appearance, the map, etc). It's linked into the root
+  package as the `bc-bot` dependency and compiled to `src/dist` - run
+  `cd src && npx tsc -p tsconfig.json` after changing anything in `src/` before your
+  changes will be visible to code in `bin/`.
+- `bin/` is where the actual bots/games live, built on top of `bc-bot`:
+  - `bin/hub/` is from the original bot hub. This includes the 'kidnappers' game, the
+    roleplay challenge bot, Maid's Party Night, and gameroom matchmaking/administration
+    logic. These are copied in as they were, but with additions since.
+  - `bin/games/` uses a newer, more event-based API on top of `bc-bot` (map region/tile
+    triggers, a `CommandParser` for `/bot`/`!` commands, etc). If you write new bots,
+    they should probably look like the ones in here.
 
 Some things are unfinished and imperfect, but there should be enough here to make working and
 fun bots! Improvements and fixes are always welcome.
@@ -60,6 +73,20 @@ The bot can either be run locally or via the Docker image.
 - And then run said container with the config file mapped in
   `docker run --rm -it -v ${PWD}/config.json:/bot/cfg/config.json ropeybot`
 
+### Running with Docker Compose (bot + MongoDB)
+
+The Casino game (see below) needs a MongoDB database to store player chip
+balances. `docker-compose.yml` bundles the bot together with a local `mongo`
+container:
+
+- Create `config.json` as above. To use the bundled Mongo container, set
+  `mongo_uri` to `mongodb://mongo:27017`, pick a `mongo_db` name, and set
+  `mongo_tls` to `false` (the local container doesn't have TLS enabled; leave
+  `mongo_tls` unset/`true` if you're pointing at a hosted/managed Mongo
+  instead).
+- Run `docker compose up -d --build`
+- Check logs with `docker compose logs ropeybot`
+
 ## Games
 
 The bot comes with some built games. In brackets is the value to use for 'game' in the config
@@ -79,6 +106,10 @@ applies to non map rooms. You can use this file as a base for things like how to
 when players enter areas on a map, adding restraints and setting their properties, sending
 and reacting to messages.
 
+This version of Pet Spa also hosts a Casino gambling table in a separate part of the map
+(a dedicated `user3`/`password3` bot account, see `config.sample.json`), and has a
+`/bot changelog` command listing recent functional changes to the map.
+
 ### Kidnappers ('kidnappers')
 
 From the original bot hub. Code is mostly unmodified from its original state.
@@ -91,3 +122,11 @@ Also from the original bot hub.
 
 Also from the original bot hub, a single player adventure. Needs a second bot account
 (user2 and password2 in the config). Probably buggy!
+
+### Casino ('casino')
+
+A gambling room with Roulette and Blackjack (`casino.game` in the config picks which one
+to start with; admins can switch with `/bot game <roulette|blackjack>`). Chip balances are
+stored in MongoDB, so `mongo_uri`/`mongo_db` must be configured (see "Running with Docker
+ Compose" above). Players get a daily allowance of free chips, can bet chips or forfeits,
+and can `/bot give`/admins can `/bot grant` chips to other players.
