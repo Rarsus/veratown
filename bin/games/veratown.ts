@@ -173,17 +173,17 @@ const KENNEL_DOOR_CLOSE_DELAY_MS = 5 * 1000;
 
 // Positions of windows characters can peep through. Populate as needed.
 const WINDOW_LOCATIONS: ChatRoomMapPos[] = [
-        { X: 8, Y: 27 },
-            { X: 9, Y: 27},
-                { X: 10, Y: 27 },
-                    { X: 11, Y: 27 }
+    { X: 8, Y: 27  },
+    { X: 9, Y: 27  },
+    { X: 10, Y: 27 },
+    { X: 11, Y: 27 }
 ];
 
 const TRASHCAN_SEARCH_LOCATIONS: ChatRoomMapPos[] = [
     { X: 18, Y: 21  },
     { X: 19, Y: 20  },
-    { X: 17, Y: 18 },
-    { X: 16, Y: 19 }
+    { X: 17, Y: 18  },
+    { X: 16, Y: 19  }
 ];
 
 // Positions of bed tiles. While a character stands on one of these tiles
