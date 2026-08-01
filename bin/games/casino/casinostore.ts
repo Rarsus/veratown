@@ -133,6 +133,29 @@ export class CasinoStore {
     ): Promise<boolean> {
         await this.init();
 
+        // Ensure the player's document exists first, via an upsert whose
+        // filter is just the unique memberNumber field. Doing this
+        // separately (rather than combining it with the conditional update
+        // below) avoids a duplicate-key error: if the conditional filter
+        // below doesn't match an *existing* document (eg. because they're
+        // still on cooldown), upsert:true would otherwise try to insert a
+        // new document with the same memberNumber and collide with the
+        // unique index.
+        await this.players.updateOne(
+            { memberNumber },
+            {
+                $setOnInsert: {
+                    memberNumber,
+                    credits: 0,
+                    score: 0,
+                    lastFreeCredits: 0,
+                    name: "",
+                    cheatStrikes: 0,
+                },
+            },
+            { upsert: true },
+        );
+
         const cutoff = Date.now() - cooldownMs;
         const result = await this.players.updateOne(
             {
@@ -146,10 +169,9 @@ export class CasinoStore {
                 $inc: { credits: amount },
                 $set: { lastFreeCredits: Date.now() },
             },
-            { upsert: true },
         );
 
-        return result.modifiedCount === 1 || result.upsertedCount === 1;
+        return result.modifiedCount === 1;
     }
 
     /**
