@@ -19,7 +19,23 @@ import {
     BC_Server_ChatRoomMessage,
 } from "bc-bot";
 import { wait } from "../hub/utils";
-import { DareStore } from "./dareStore";
+import { DareStore, DareDoc } from "./dareStore";
+import { CasinoStore } from "./casino/casinostore";
+import { applyForfeitForDare } from "./casino/forfeits";
+
+// Forfeit items a player can be lumbered with if they pass on a drawn dare.
+const PASS_FORFEIT_KEYS = [
+    "boots",
+    "legbinder",
+    "frogtie",
+    "gag",
+    "blindfold",
+    "mittens",
+    "paws",
+    "armbinder",
+    "yoke",
+];
+const PASS_FORFEIT_DURATION_MS = 30 * 60 * 1000;
 
 export class Dare {
     public static description = `Dares
@@ -32,7 +48,12 @@ eg. !dare add take off one item of clothing
 (This should be whispered to the bot so your dare stays secret!)
 
 !dare draw
-Draws a dare card (you can do this in the public room)
+Draws a dare card (you can do this in the public room). Strip, bondage and
+reward dares are applied automatically.
+
+!dare pass
+Chickens out of the dare you just drew. You'll be locked into a random piece
+of bondage as a forfeit instead.
 
 !dare list <page>
 Lists dares stored in the database, 10 per page (admin only, whisper this to
@@ -51,15 +72,20 @@ Rules
 5. If you're writing a dare that involves someone else, you can let the person doing the dare pick
    someone or have them spin the bot wheel to choose. Your dare can't involve another specific,
    named person (eg. you can say, "tie a random person", you can't say, "tie Deya").
-6. No "free pass" cards: 'cos skipping a turn is boring!
+6. Don't want to do your dare? !dare pass - but you'll be forfeited into bondage instead!
 `;
 
     private commandParser: CommandParser;
+
+    // Tracks the dare each player most recently drew but hasn't resolved
+    // yet, so "!dare pass" knows what to forfeit against.
+    private pendingDraws = new Map<number, DareDoc>();
 
     public constructor(
         private conn: API_Connector,
         private store: DareStore,
         commandParser?: CommandParser,
+        private casinoStore?: CasinoStore,
     ) {
         this.commandParser = commandParser ?? new CommandParser(conn);
 
@@ -94,7 +120,7 @@ Rules
                 );
 
                 break;
-            case "draw":
+            case "draw": {
                 this.conn.SendMessage(
                     "Emote",
                     `*${senderCharacter} draws a dare card...`,
@@ -108,9 +134,42 @@ Rules
                 }
                 this.conn.SendMessage(
                     "Emote",
-                    `*${senderCharacter} draws: ${dare}\n${await this.store.getSummary()}`,
+                    `*${senderCharacter} draws: ${dare.text}\n${await this.store.getSummary()}`,
+                );
+
+                this.pendingDraws.set(senderCharacter.MemberNumber, dare);
+                await this.applyDareEffect(senderCharacter, dare);
+                break;
+            }
+            case "pass": {
+                const pending = this.pendingDraws.get(
+                    senderCharacter.MemberNumber,
+                );
+                if (!pending) {
+                    this.conn.reply(
+                        msg,
+                        "You haven't drawn a dare to pass on!",
+                    );
+                    return;
+                }
+                this.pendingDraws.delete(senderCharacter.MemberNumber);
+
+                const forfeitKey =
+                    PASS_FORFEIT_KEYS[
+                        Math.floor(Math.random() * PASS_FORFEIT_KEYS.length)
+                    ];
+                applyForfeitForDare(
+                    senderCharacter,
+                    this.conn.Player.MemberNumber,
+                    forfeitKey,
+                    PASS_FORFEIT_DURATION_MS,
+                );
+                this.conn.SendMessage(
+                    "Emote",
+                    `*${senderCharacter} chickens out of their dare and gets locked into a forfeit instead!`,
                 );
                 break;
+            }
             case "reset":
                 await this.store.resetDares();
                 this.conn.SendMessage(
@@ -155,9 +214,62 @@ Rules
             default:
                 this.conn.SendMessage(
                     "Emote",
-                    "*Usage: !dare <add|draw|reset|list>",
+                    "*Usage: !dare <add|draw|pass|reset|list>",
                 );
                 return;
+        }
+    };
+
+    private applyDareEffect = async (
+        senderCharacter: API_Character,
+        dare: DareDoc,
+    ): Promise<void> => {
+        switch (dare.category) {
+            case "strip":
+                senderCharacter.Appearance.stripBulk(
+                    { clothing: true },
+                    false,
+                    dare.stripCount,
+                );
+                if (dare.noRedress) {
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${senderCharacter} must stay undressed for this dare - no getting dressed until it's done!`,
+                    );
+                }
+                break;
+            case "bondage":
+                for (const forfeitKey of dare.forfeitKeys ?? []) {
+                    applyForfeitForDare(
+                        senderCharacter,
+                        this.conn.Player.MemberNumber,
+                        forfeitKey,
+                        dare.durationMs,
+                    );
+                }
+                if (dare.noRedress) {
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${senderCharacter} isn't allowed to get dressed again until the timer runs out!`,
+                    );
+                }
+                break;
+            case "reward":
+                if (this.casinoStore && dare.chips) {
+                    await this.casinoStore.addCredits(
+                        senderCharacter.MemberNumber,
+                        dare.chips,
+                    );
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${senderCharacter} wins ${dare.chips} casino chips!`,
+                    );
+                } else if (dare.chips) {
+                    console.log(
+                        "CasinoStore not configured; skipping chip reward for dare.",
+                    );
+                }
+                break;
         }
     };
 

@@ -14,12 +14,29 @@
 
 import { Collection, Db } from "mongodb";
 
-interface DareDoc {
+export interface DareDoc {
     text: string;
     addedBy: number;
     addedByName: string;
     used: boolean;
     createdAt: number;
+    // Optional metadata used to automatically apply an effect when a dare
+    // is drawn. Dares added manually via "!dare add" won't have these set,
+    // and are just announced as plain text.
+    category?: "strip" | "bondage" | "reward";
+    // "strip" dares: number of clothing items to remove. Omitted = strip
+    // everything.
+    stripCount?: number;
+    // "bondage" dares: FORFEITS keys (see forfeits.ts) to equip.
+    forfeitKeys?: string[];
+    // "bondage" dares: how long (ms) the equipped item(s) stay locked on.
+    durationMs?: number;
+    // "bondage"/"strip" dares: the dare additionally forbids getting
+    // dressed again until the duration is up (enforced by the dare text
+    // only; not technically monitored).
+    noRedress?: boolean;
+    // "reward" dares: casino chips granted to the player.
+    chips?: number;
 }
 
 export class DareStore {
@@ -52,11 +69,11 @@ export class DareStore {
         });
     }
 
-    // Atomically claims and returns a random unused dare's text, or
-    // undefined if there are none left. A handful of retries covers the
-    // rare case where two players draw at (almost) the same instant and
-    // both pick the same dare from their snapshot of the unused list.
-    public async drawDare(): Promise<string | undefined> {
+    // Atomically claims and returns a random unused dare, or undefined if
+    // there are none left. A handful of retries covers the rare case where
+    // two players draw at (almost) the same instant and both pick the same
+    // dare from their snapshot of the unused list.
+    public async drawDare(): Promise<DareDoc | undefined> {
         await this.init();
 
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -68,7 +85,7 @@ export class DareStore {
                 { _id: chosen._id, used: false },
                 { $set: { used: true } },
             );
-            if (result) return result.text;
+            if (result) return result;
         }
 
         return undefined;

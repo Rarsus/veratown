@@ -23,6 +23,7 @@ import { Db, MongoClient } from "mongodb";
 import { Veratown, GAME_LOCATION, GAME_MISTRESS_POSITION } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { Casino } from "./games/casino";
+import { CasinoStore } from "./games/casino/casinostore";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -130,7 +131,7 @@ export async function startBot(): Promise<RopeyBot> {
                 process.exit(1);
             }
             connector.accountUpdate({ Nickname: "Dare Bot" });
-            new Dare(connector, new DareStore(db));
+            new Dare(connector, new DareStore(db), undefined, new CasinoStore(db));
             connector.setBotDescription(Dare.description);
             break;
         case "veratown":

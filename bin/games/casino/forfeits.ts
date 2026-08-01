@@ -310,6 +310,70 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
     }
 }
 
+/**
+ * Equips a single forfeit item (by FORFEITS key) on a character, optionally
+ * overriding its default lock duration. Used by the dare game so dare cards
+ * can vary how long a piece of bondage stays locked on.
+ *
+ * Forfeits with a custom `applyItems` (cage/pet/chastity) always use their
+ * own baked-in duration, since overriding those isn't supported.
+ */
+export function applyForfeitForDare(
+    character: API_Character,
+    lockMemberNumber: number,
+    forfeitKey: string,
+    durationMsOverride?: number,
+): void {
+    const forfeit = FORFEITS[forfeitKey];
+    if (!forfeit) return;
+
+    if (forfeit.applyItems) {
+        forfeit.applyItems(character, lockMemberNumber);
+        return;
+    }
+
+    const items = forfeit.items(character);
+    if (items.length !== 1) return;
+
+    const hairColor = character.Appearance.InventoryGet("HairFront").GetColor();
+    const added = character.Appearance.AddItem(items[0]);
+    try {
+        const base = (
+            Array.isArray(hairColor) ? hairColor[0] : hairColor
+        ) as BCColor;
+        if (forfeit.colourLayers) {
+            const colors: BCColor[] = [];
+            for (let i = 0; i <= Math.max(...forfeit.colourLayers); i++) {
+                colors.push(forfeit.colourLayers.includes(i) ? base : "Default");
+            }
+            added.SetColor(colors);
+        } else {
+            added.SetColor(base);
+        }
+    } catch (e) {
+        console.error(`Failed to set color for dare item ${items[0].Name}`, e);
+        added.SetColor("Default");
+    }
+
+    added.SetDifficulty(20);
+    added.SetCraft({
+        Name: `Dare: ${forfeit.name}`,
+        Description: "Equipped as part of a dare. Better luck next time!",
+    });
+
+    const lockTime = durationMsOverride ?? forfeit.lockTimeMs;
+    if (lockTime) {
+        added.lock("TimerPasswordPadlock", lockMemberNumber, {
+            Password: generatePassword(),
+            Hint: "Dare in progress!",
+            RemoveItem: true,
+            RemoveTimer: Date.now() + lockTime,
+            ShowTimer: true,
+            LockSet: true,
+        });
+    }
+}
+
 function makePet(
     hours: number,
     character: API_Character,

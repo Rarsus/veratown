@@ -29,6 +29,7 @@ import { remainingTimeString } from "../utils";
 import { wait } from "../hub/utils";
 import { Dare } from "./dare";
 import { DareStore } from "./dareStore";
+import { CasinoStore } from "./casino/casinostore";
 
 const RECEPTIONIST_POSITION = { X: 18, Y: 15 };
 
@@ -304,7 +305,7 @@ export class Veratown {
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
         "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
         "/bot changelog - Shows a summary of recent functional changes to the map",
-        "/bot dare <add|draw|reset|list> - Add, draw, reset or (admin only) list dare/forfeit cards (if configured)",
+        "/bot dare <add|draw|pass|reset|list> - Add, draw, pass, reset or (admin only) list dare/forfeit cards (if configured)",
         "/bot pick - Randomly selects a room member other than the bot or yourself",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
     ].join("\n");
@@ -336,6 +337,7 @@ export class Veratown {
                 this.conn,
                 new DareStore(db),
                 this.commandParser,
+                new CasinoStore(db),
             );
         } else {
             console.log(
