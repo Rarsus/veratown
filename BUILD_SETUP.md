@@ -37,7 +37,7 @@ Edit `config.json` and replace:
 
 **Available games:**
 - `dare` — Simple dare drawing game
-- `petspa` — Interactive pet spa (map-based example)
+- `veratown` — Interactive Veratown map room (map-based example)
 - `kidnappers` — Capture/escape game
 - `roleplay` — Roleplay challenge
 - `casino` — Casino games

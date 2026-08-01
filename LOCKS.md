@@ -2,7 +2,7 @@
 
 This document covers the lock types available in Bondage Club and how to
 apply/read/remove them from scripting code in this repo (`bin/games/*`),
-using the same API surface as `PetSpa` (see [bin/games/petspa.ts](bin/games/petspa.ts)).
+using the same API surface as `Veratown` (see [bin/games/veratown.ts](bin/games/veratown.ts)).
 
 ## Available lock types (`AssetLockType`)
 
@@ -77,7 +77,7 @@ Internally this:
 | `MemberNumberList` | `number[]` | timer locks | Tracks who has publicly modified the timer. |
 | `RemoveOnUnlock` | `boolean` | `PasswordPadlock` | Removes item once correctly unlocked. |
 
-### Example: Timer lock, no password (as used in `PetSpa`)
+### Example: Timer lock, no password (as used in `Veratown`)
 
 ```ts
 const lockExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes from now
@@ -90,7 +90,7 @@ crate.lock("TimerPadlock", character.MemberNumber, {
 });
 ```
 
-See [bin/games/petspa.ts](bin/games/petspa.ts) (`onCharacterEnterCage`) for the
+See [bin/games/veratown.ts](bin/games/veratown.ts) (`onCharacterEnterCage`) for the
 full context, including per-cage lock durations and reading back the live
 timer (below).
 
@@ -138,7 +138,7 @@ const expiry = crate?.getData().Property?.RemoveTimer; // epoch ms, timer locks 
 This is important for anything that might *extend* or *shorten* a lock after
 it was first applied (e.g. an admin command, or another game system) — always
 re-read `Property.RemoveTimer` rather than caching the value you originally
-computed, so your code reflects the live state. `PetSpa.getCageLockExpiry()`
+computed, so your code reflects the live state. `Veratown.getCageLockExpiry()`
 does exactly this to keep its cage-occupancy info and auto-release timing in
 sync with the actual lock data.
 
@@ -156,7 +156,7 @@ character.Appearance.RemoveItem("ItemDevices");
 ```
 
 This bypasses the lock entirely (no password/timer check needed), which is
-what `PetSpa`'s auto-release logic and the `/bot freeandleave` command do.
+what `Veratown`'s auto-release logic and the `/bot freeandleave` command do.
 
 ## Summary checklist for adding a new locked restraint
 

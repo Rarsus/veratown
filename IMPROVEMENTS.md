@@ -48,12 +48,11 @@ should be a deliberate choice rather than a silent bugfix:
   onto the same atomic-`$inc`-with-a-`$gte`-guard pattern used for
   `transferCredits`, which touches the betting flow of both games and is
   worth testing carefully rather than doing as a "safe" drive-by fix.
-- **`bin/games/veratown.ts` appears to be dead code.** It also exports a
-  `PetSpa` class and a lot of overlapping logic with
-  [bin/games/petspa.ts](bin/games/petspa.ts), but nothing in `bin/main.ts`
-  imports it — it looks like an earlier version of the Pet Spa game that
-  was superseded. Left in place in case it's kept intentionally as a
-  reference/backup; worth confirming with whoever added it before deleting.
+- **`bin/games/veratown.ts` was, until recently, a stray earlier/abandoned
+  version of the Pet Spa game** (different map layout, no import from
+  `bin/main.ts`) left over in the working tree. It has since been removed:
+  the live Pet Spa game (renamed to Veratown) now lives at that path
+  instead - see [bin/games/veratown.ts](bin/games/veratown.ts).
 - **`README.md` described a directory layout (`src/hub`, `src/games`) that
   no longer matches the repo** (game code now lives under `bin/`, and
   `src/` is just the `bc-bot` library). This has been fixed as part of this

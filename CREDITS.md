@@ -6,7 +6,7 @@ code, ideas, and testing over the years.
 ## Original creators
 
 - **EllieThePink** — created the project, the original `bc-bot` API, and the
-  Pet Spa example game.
+  Veratown (originally "Pet Spa") example game.
 - **LillyBlueHair** — Lillypad Room and other early contributions.
 - **Jean-Baptiste Emmanuel Zorg**
 - **天上の狐 (Celestial Fox)**
@@ -20,11 +20,10 @@ its authors, then adapted for this codebase.
 ## Recent contributions
 
 - **Emcha**
-- **Lara**
-- **Rarsus (Olav)**
+- **Vera**
 
-for the Casino pool table, the MongoDB-backed persistence layer, map
-region/command routing improvements, the changelog command, and the
+for extentions on the Map based bot, creation of Veratown for the Casino
+pool table, the MongoDB-backed persistence layer, map region/command routing improvements, the changelog command, and the
 security/reliability fixes described in
 [IMPROVEMENTS.md](IMPROVEMENTS.md).
 

@@ -14,7 +14,7 @@
 
 import { API_Character, AssetGet, BC_AppearanceItem } from "bc-bot";
 import { generatePassword } from "../../utils";
-import { PET_EARS } from "../petspa";
+import { PET_EARS } from "../veratown";
 
 interface Forfeit {
     name: string;

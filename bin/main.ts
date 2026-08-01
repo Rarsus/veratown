@@ -19,7 +19,7 @@ import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
 import { ConfigFile } from "./config";
 import { Db, MongoClient } from "mongodb";
-import { PetSpa, GAME_LOCATION, GAME_MISTRESS_POSITION } from "./games/petspa";
+import { Veratown, GAME_LOCATION, GAME_MISTRESS_POSITION } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { Casino } from "./games/casino";
 
@@ -126,25 +126,25 @@ export async function startBot(): Promise<RopeyBot> {
             new Dare(connector);
             connector.setBotDescription(Dare.description);
             break;
-        case "petspa":
-            console.log("Starting game: Pet Spa");
-            let petSpaConn2: API_Connector | undefined;
+        case "veratown":
+            console.log("Starting game: Veratown");
+            let veratownConn2: API_Connector | undefined;
             if (config.user2 && config.password2) {
-                petSpaConn2 = new API_Connector(
+                veratownConn2 = new API_Connector(
                     serverUrl,
                     config.user2,
                     config.password2,
                     config.env,
                 );
-                await petSpaConn2.joinOrCreateRoom(config.room);
+                await veratownConn2.joinOrCreateRoom(config.room);
             } else {
                 console.log(
-                    "No user2/password2 configured; Pet Spa will narrate the shower using the main bot instead of a second bot.",
+                    "No user2/password2 configured; Veratown will narrate the shower using the main bot instead of a second bot.",
                 );
             }
-            const petSpaGame = new PetSpa(connector, petSpaConn2);
-            await petSpaGame.init();
-            connector.setBotDescription(PetSpa.description);
+            const veratownGame = new Veratown(connector, veratownConn2);
+            await veratownGame.init();
+            connector.setBotDescription(Veratown.description);
 
             if (config.user3 && config.password3) {
                 if (!db) {

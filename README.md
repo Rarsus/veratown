@@ -9,7 +9,7 @@ permission from the original bot hub (eg. kidnappers game, roleplay challenge).
 We hope that this will be useful for people to make fun and interesting bots
 for the club! You're also welcome to run the bots included yourself.
 
-To make a new game, you can copy the 'petspa' game file and use that as a base, and add
+To make a new game, you can copy the 'veratown' game file and use that as a base, and add
 your new file into main.ts.
 
 Usual club ettiquette applies, eg:
@@ -99,14 +99,14 @@ each dare.
 The dares added by players are stored in two files in the bot's working directory:
 dares.json and unuseddares.json: delete both of these files to reset the dares.
 
-### Pet Spa ('petspa')
+### Veratown ('veratown')
 
 This is an example of how to use the API to make an interactive map room, but also
 applies to non map rooms. You can use this file as a base for things like how to react
 when players enter areas on a map, adding restraints and setting their properties, sending
 and reacting to messages.
 
-This version of Pet Spa also hosts a Casino gambling table in a separate part of the map
+This version of Veratown also hosts a Casino gambling table in a separate part of the map
 (a dedicated `user3`/`password3` bot account, see `config.sample.json`), and has a
 `/bot changelog` command listing recent functional changes to the map.
 

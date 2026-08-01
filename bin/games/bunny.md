@@ -1,10 +1,10 @@
-# Bunny punishment (Pet Spa park)
+# Bunny punishment (Veratown park)
 
 When a character steps on one of the park's bunnies (`BUNNY_POSITIONS` in
-[`petspa.ts`](petspa.ts)), the bot punishes them by force-adding a random
+[`veratown.ts`](veratown.ts)), the bot punishes them by force-adding a random
 rope restraint "outfit" plus a wooden sign, then whispers an explanation.
 This file documents every setting that controls that punishment and how to
-change it. All settings live in `bin/games/petspa.ts`.
+change it. All settings live in `bin/games/veratown.ts`.
 
 ## Where a bunny can be stepped on
 
@@ -73,7 +73,7 @@ A "piece" is:
 - **Change a body part's tie style**: edit the `extendedType` of a piece.
 - **Change difficulty**: all pieces are currently added with
   `SetDifficulty(20)`; edit the call in `onCharacterStepOnBunny` in
-  `petspa.ts` to change this for all pieces.
+  `veratown.ts` to change this for all pieces.
 
 ### Available rope assets by body part
 

@@ -33,7 +33,7 @@ export interface ConfigFile {
     password2: string;
 
     // Dedicated account for a roulette table hosted outside the casino room
-    // (eg. the PetSpa pool area), so its sign/wheel appearance doesn't clash
+    // (eg. the Veratown pool area), so its sign/wheel appearance doesn't clash
     // with the main bot's appearance.
     user3?: string;
     password3?: string;

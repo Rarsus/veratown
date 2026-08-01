@@ -25,7 +25,7 @@ ropeybot/
 │   ├── utils.ts             # Utility functions
 │   ├── games/               # Game implementations
 │   │   ├── dare.ts          # Dare game
-│   │   ├── petspa.ts        # Pet Spa (map-based example)
+│   │   ├── veratown.ts      # Veratown (map-based example)
 │   │   ├── casino.ts        # Casino games
 │   │   └── casino/          # Casino sub-games
 │   │       ├── blackjack.ts
@@ -350,7 +350,7 @@ const currentObject = conn.chatRoom.map.getObject({ X: 18, Y: 2 });
     "user": "bot_username",           // Account username
     "password": "bot_password",       // Account password
     "env": "live" | "test",           // Server environment
-    "game": "dare" | "petspa" | ...,  // Active game/bot mode
+    "game": "dare" | "veratown" | ...,  // Active game/bot mode
 }
 ```
 
@@ -400,7 +400,7 @@ const config = JSON.parse(await readFile("config.json", "utf-8"));
 - **Reset**: Delete both files to clear
 - **Map Room**: No
 
-### 2. Pet Spa (`petspa`)
+### 2. Veratown (`veratown`)
 - **Type**: Interactive map-based roleplay
 - **Mechanic**: Players enter as "pets", must wear outfit, speak only via animal sounds
 - **Features**:
@@ -501,7 +501,7 @@ docker run --rm -it \
 ### Creating New Games
 
 **Pattern:**
-1. Copy `petspa.ts` as template
+1. Copy `veratown.ts` as template
 2. Implement game logic in `bin/games/yourgame.ts`
 3. Create class with:
    - Constructor taking `API_Connector`
@@ -640,7 +640,7 @@ docker run --rm -it \
 - Map triggers are async functions
 - `await wait(ms)` for delays
 - Bot pauses execution until completion
-- Enables timed sequences (e.g., dressing process in PetSpa)
+- Enables timed sequences (e.g., dressing process in Veratown)
 
 ---
 
@@ -663,7 +663,7 @@ Ropeybot is a well-structured, TypeScript-based bot framework for Bondage Club f
 - Event-driven, modular architecture
 - Comprehensive map room support with flexible trigger system
 - Clean API wrappers for BC objects
-- Good example (PetSpa) for learning
+- Good example (Veratown) for learning
 - Docker-ready
 - Simple build pipeline
 
