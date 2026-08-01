@@ -60,9 +60,14 @@ export async function startBot(): Promise<RopeyBot> {
 
     let db;
     if (config.mongo_uri && config.mongo_db) {
+        // Defaults to true for managed/hosted Mongo (eg. Atlas), which
+        // requires TLS. Set to false for a plain local mongo container
+        // (eg. the "mongo" service in docker-compose.yml) that doesn't have
+        // TLS enabled.
+        const useTls = config.mongo_tls ?? true;
         const mongoClient = new MongoClient(config.mongo_uri, {
-            ssl: true,
-            tls: true,
+            ssl: useTls,
+            tls: useTls,
         });
         console.log("Connecting to mongo...");
         await mongoClient.connect();

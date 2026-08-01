@@ -25,6 +25,8 @@ export interface ConfigFile {
     room: RoomDefinition;
     mongo_uri?: string;
     mongo_db?: string;
+    // Defaults to true; set to false for a local mongo container without TLS.
+    mongo_tls?: boolean;
     members: number[];
 
     user2: string;
