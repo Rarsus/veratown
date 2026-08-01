@@ -187,9 +187,12 @@ export class Casino {
     };
 
     private onCharacterEnterCasinoRegion = async (character: API_Character) => {
+        // this.game.HELPMESSAGE already includes the commands list (see
+        // ROULETTEHELP/FULLBLACKJACKHELP), so don't also append
+        // COMMANDSMESSAGE here or the commands get printed twice.
         character.Tell(
             "Whisper",
-            `(Gambling is allowed in this part of town! ${this.game.HELPMESSAGE}\n\n${this.game.COMMANDSMESSAGE}`,
+            `(Gambling is allowed in this part of town! ${this.game.HELPMESSAGE}`,
         );
     };
 
