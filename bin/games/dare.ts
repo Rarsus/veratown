@@ -34,9 +34,9 @@ eg. !dare add take off one item of clothing
 !dare draw
 Draws a dare card (you can do this in the public room)
 
-!dare list
-Lists all dares stored in the database, including who added them and whether
-they've been drawn already (admin only, whisper this to the bot).
+!dare list <page>
+Lists dares stored in the database, 10 per page (admin only, whisper this to
+the bot). <page> is optional and defaults to 1.
 
 !pick
 Chooses someone in the room who isn't the bot or yourself (for dares that involve someone else)
@@ -118,7 +118,7 @@ Rules
                     "*" + (await this.store.getSummary()),
                 );
                 break;
-            case "list":
+            case "list": {
                 if (!senderCharacter.IsRoomAdmin()) {
                     this.conn.reply(msg, "Only admins can use this command.");
                     return;
@@ -128,16 +128,30 @@ Rules
                     this.conn.reply(msg, "No dares in the database.");
                     return;
                 }
-                this.conn.reply(
-                    msg,
-                    dares
-                        .map(
-                            (d, i) =>
-                                `${i + 1}. [${d.used ? "used" : "unused"}] ${d.text} (added by ${d.addedByName})`,
-                        )
-                        .join("\n"),
+
+                const pageSize = 10;
+                const pageCount = Math.ceil(dares.length / pageSize);
+                let page = parseInt(args[1], 10);
+                if (!Number.isInteger(page) || page < 1) page = 1;
+                if (page > pageCount) page = pageCount;
+
+                const start = (page - 1) * pageSize;
+                const pageDares = dares.slice(start, start + pageSize);
+
+                const lines = pageDares.map(
+                    (d, i) => `${start + i + 1}. ${d.text.replace(/[()]/g, "")}`,
+                );
+                lines.push(
+                    `Page ${page} of ${pageCount} - !dare list <page> for more`,
+                );
+
+                this.conn.SendMessage(
+                    "Whisper",
+                    lines.join("\n"),
+                    senderCharacter.MemberNumber,
                 );
                 break;
+            }
             default:
                 this.conn.SendMessage(
                     "Emote",
