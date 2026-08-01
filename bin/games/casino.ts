@@ -605,18 +605,15 @@ ${forfeitsString()}
             return;
         }
 
-        const sourcePlayer = await this.store.getPlayer(sender.MemberNumber);
-        if (sourcePlayer.credits < amount) {
+        const transferred = await this.store.transferCredits(
+            sender.MemberNumber,
+            target.MemberNumber,
+            amount,
+        );
+        if (!transferred) {
             this.conn.reply(msg, "You don't have enough chips.");
             return;
         }
-
-        const targetPlayer = await this.store.getPlayer(target.MemberNumber);
-
-        sourcePlayer.credits -= amount;
-        await this.store.savePlayer(sourcePlayer);
-        targetPlayer.credits += amount;
-        await this.store.savePlayer(targetPlayer);
 
         this.conn.SendMessage(
             "Chat",

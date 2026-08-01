@@ -81,7 +81,7 @@ export class CasinoStore {
         return this.players
             .find({
                 score: { $gt: 0 },
-                memberNumber: { $ne: 35982 },
+                memberNumber: { $ne: 250927 },
                 $or: [
                     { cheatStrikes: { $lt: 3 } },
                     { cheatStrikes: { $exists: false } },
@@ -94,11 +94,45 @@ export class CasinoStore {
 
     public async savePlayer(memberData: Player): Promise<void> {
         await this.init();
-        this.players.updateOne(
+        await this.players.updateOne(
             { memberNumber: memberData.memberNumber },
             { $set: memberData },
             { upsert: true },
         );
+    }
+
+    /**
+     * Atomically moves `amount` credits from one player to another.
+     *
+     * Unlike the getPlayer()-mutate-savePlayer() pattern, this can't be
+     * raced: the debit only happens if the DB still shows at least `amount`
+     * credits at the moment of the update, so two concurrent transfers can't
+     * both succeed against the same balance and duplicate chips.
+     *
+     * Returns false (and leaves both players untouched) if the source didn't
+     * have enough credits.
+     */
+    public async transferCredits(
+        fromMemberNumber: number,
+        toMemberNumber: number,
+        amount: number,
+    ): Promise<boolean> {
+        await this.init();
+
+        const debited = await this.players.updateOne(
+            { memberNumber: fromMemberNumber, credits: { $gte: amount } },
+            { $inc: { credits: -amount } },
+        );
+        if (debited.modifiedCount !== 1) {
+            return false;
+        }
+
+        await this.players.updateOne(
+            { memberNumber: toMemberNumber },
+            { $inc: { credits: amount }, $setOnInsert: { name: "" } },
+            { upsert: true },
+        );
+        return true;
     }
 
     public async getOutfit(name: string): Promise<Outfit> {
@@ -108,7 +142,7 @@ export class CasinoStore {
 
     public async saveOutfit(outfit: Outfit): Promise<void> {
         await this.init();
-        this.outfits.updateOne(
+        await this.outfits.updateOne(
             { name: outfit.name },
             { $set: outfit },
             { upsert: true },
