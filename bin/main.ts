@@ -19,7 +19,7 @@ import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
 import { ConfigFile } from "./config";
 import { Db, MongoClient } from "mongodb";
-import { PetSpa, POOL_AREA } from "./games/petspa";
+import { PetSpa, GAME_LOCATION } from "./games/petspa";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { Casino } from "./games/casino";
 
@@ -161,14 +161,14 @@ export async function startBot(): Promise<RopeyBot> {
                     await poolRouletteConn.joinOrCreateRoom(config.room);
 
                     poolRouletteConn.moveOnMap(
-                        POOL_AREA.TopLeft.X,
-                        POOL_AREA.TopLeft.Y,
+                        GAME_LOCATION.TopLeft.X,
+                        GAME_LOCATION.TopLeft.Y,
                     );
 
                     new Casino(poolRouletteConn, db, {
                         ...config.casino,
-                        game: "roulette",
-                        region: POOL_AREA,
+                        game: config.casino?.game ?? "roulette",
+                        region: GAME_LOCATION,
                     });
                 }
             } else {
