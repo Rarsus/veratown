@@ -33,9 +33,12 @@ const RECEPTIONIST_POSITION = { X: 18, Y: 15 };
 // own CommandParser ignores commands from senders standing here so the two
 // bots don't both try to handle the same message.
 export const GAME_LOCATION: MapRegion = {
-    TopLeft: { X: 0, Y: 6 },
-    BottomRight: { X: 16, Y: 14 },
+    TopLeft: { X: 32, Y: 36 },
+    BottomRight: { X: 38, Y: 39 },
 };
+
+// Where the Casino bot hosting the gambling table stands within GAME_LOCATION.
+export const GAME_MISTRESS_POSITION: ChatRoomMapPos = { X: 38, Y: 38 };
 
 const CAGE_INFORMATION_SCREEN: MapRegion = {TopLeft:{X: 15, Y: 36},BottomRight:{X:16,Y:36}};
 const CAGE_1_ENTRY: ChatRoomMapPos = { X: 12, Y: 38 };
