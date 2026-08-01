@@ -98,6 +98,7 @@ export class BlackjackGame implements Game {
     private resetTimeout: NodeJS.Timeout | undefined; // after finishing a game
     private dealTimeout: NodeJS.Timeout | undefined; // after first bet until the deal
     private autoStandTimeout: NodeJS.Timeout; // after the deal until all players stand
+    private bettingOpen = true;
 
     public HELPMESSAGE = FULLBLACKJACKHELP;
     public EXAMPLES = BLACKJACKEXAMPLES;
@@ -212,6 +213,34 @@ export class BlackjackGame implements Game {
         this.casino.commandParser.unregister("sign");
         this.clear();
         resolve();
+    }
+
+    public isBettingOpen(): boolean {
+        return this.bettingOpen;
+    }
+
+    public reopenBetting(): void {
+        this.bettingOpen = true;
+    }
+
+    public async closeBetting(): Promise<void> {
+        // If a round just finished, wait for its post-round cooldown to
+        // clear before deciding whether we need to force one final round.
+        await waitForCondition(() => this.resetTimeout === undefined);
+
+        if (this.willDealAt === undefined) {
+            // No round in progress: run one final round so there's a genuine
+            // last round to bet on rather than closing immediately.
+            this.willDealAt = Date.now() + TIME_UNTIL_DEAL_MS;
+            this.dealTimeout = setInterval(() => {
+                this.onDealTimeout();
+            }, 1000);
+        }
+
+        await waitForCondition(() => this.willDealAt === undefined);
+        await waitForCondition(() => this.resetTimeout === undefined);
+
+        this.bettingOpen = false;
     }
 
     parseBetCommand(
@@ -718,6 +747,14 @@ export class BlackjackGame implements Game {
             this.conn.SendMessage(
                 "Whisper",
                 "The next game hasn't started yet",
+                sender.MemberNumber,
+            );
+            return;
+        }
+        if (!this.bettingOpen) {
+            this.conn.SendMessage(
+                "Whisper",
+                "The casino is currently closed. Please check back later!",
                 sender.MemberNumber,
             );
             return;

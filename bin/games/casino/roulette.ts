@@ -59,7 +59,7 @@ const ROULETTEEXAMPLES = `
     bets the 'leg binder' forfeit (worth 7 chips) on number 15
 `;
 
-const TIME_UNTIL_SPIN_MS = 60000;
+const TIME_UNTIL_SPIN_MS = 40000;
 // const TIME_UNTIL_SPIN_MS = 6000;
 const BET_CANCEL_THRESHOLD_MS = 3000;
 // How long before the spin the table calls "Rien ne va plus!" and stops
@@ -137,6 +137,7 @@ export class RouletteGame implements Game {
     private spinTimeout: NodeJS.Timeout | undefined;
     private resetTimeout: NodeJS.Timeout | undefined;
     private lastCallAnnounced = false;
+    private bettingOpen = true;
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -351,6 +352,14 @@ export class RouletteGame implements Game {
     ) => {
         if (this.resetTimeout !== undefined) {
             this.conn.reply(msg, "The next game hasn't started yet");
+            return;
+        }
+
+        if (!this.bettingOpen) {
+            this.conn.reply(
+                msg,
+                "The casino is currently closed. Please check back later!",
+            );
             return;
         }
 
@@ -674,6 +683,35 @@ export class RouletteGame implements Game {
         const wheel = this.conn.Player.Appearance.InventoryGet("ItemDevices");
         this.conn.Player.Appearance.applyBundle(ROULETTE_WHEEL);
         return this.conn.Player.Appearance.InventoryGet("ItemDevices");
+    }
+
+    public isBettingOpen(): boolean {
+        return this.bettingOpen;
+    }
+
+    public reopenBetting(): void {
+        this.bettingOpen = true;
+    }
+
+    public async closeBetting(): Promise<void> {
+        // If a round just finished, wait for its post-round cooldown to
+        // clear before deciding whether we need to force one final round.
+        await waitForCondition(() => this.resetTimeout === undefined);
+
+        if (this.willSpinAt === undefined) {
+            // No round in progress: run one final round so there's a genuine
+            // last round to bet on rather than closing immediately.
+            this.lastCallAnnounced = false;
+            this.willSpinAt = Date.now() + TIME_UNTIL_SPIN_MS;
+            this.spinTimeout = setInterval(() => {
+                this.onSpinTimeout();
+            }, 1000);
+        }
+
+        await waitForCondition(() => this.willSpinAt === undefined);
+        await waitForCondition(() => this.resetTimeout === undefined);
+
+        this.bettingOpen = false;
     }
 
     async endGame(): Promise<void> {

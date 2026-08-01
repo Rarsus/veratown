@@ -150,6 +150,8 @@ export class Casino {
         this.commandParser.register("vouchers", this.onCommandVouchers);
         this.commandParser.register("give", this.onCommandGive);
         this.commandParser.register("grant", this.onCommandGrant);
+        this.commandParser.register("close", this.onCommandClose);
+        this.commandParser.register("open", this.onCommandOpen);
         this.commandParser.register("bonus", this.onCommandBonusRound);
         this.commandParser.register("game", this.onCommandGame);
 
@@ -664,6 +666,71 @@ ${forfeitsString()}
         this.conn.reply(
             msg,
             `Granted ${amount} chips to ${target}.`,
+        );
+    };
+
+    private closingInProgress = false;
+
+    private onCommandClose = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!sender.IsRoomAdmin()) {
+            this.conn.reply(msg, "Sorry, you need to be an admin");
+            return;
+        }
+
+        if (this.closingInProgress) {
+            this.conn.reply(msg, "The casino is already closing.");
+            return;
+        }
+
+        if (!this.game.isBettingOpen()) {
+            this.conn.reply(msg, "The casino is already closed.");
+            return;
+        }
+
+        this.closingInProgress = true;
+        this.conn.reply(
+            msg,
+            "Closing the casino after this round. Chips already in play will still be paid out.",
+        );
+        this.conn.SendMessage(
+            "Chat",
+            "🚨 Last round! The casino is closing after this round, place your final bets now!",
+        );
+
+        try {
+            await this.game.closeBetting();
+            this.conn.SendMessage(
+                "Chat",
+                "🎰 The casino is now closed. Thanks for playing! An admin can reopen it with /bot open.",
+            );
+        } finally {
+            this.closingInProgress = false;
+        }
+    };
+
+    private onCommandOpen = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!sender.IsRoomAdmin()) {
+            this.conn.reply(msg, "Sorry, you need to be an admin");
+            return;
+        }
+
+        if (this.game.isBettingOpen()) {
+            this.conn.reply(msg, "The casino is already open.");
+            return;
+        }
+
+        this.game.reopenBetting();
+        this.conn.SendMessage(
+            "Chat",
+            "🎰 The casino is open again! Place your bets.",
         );
     };
 
