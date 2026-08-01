@@ -178,37 +178,50 @@ Rules
                 );
                 break;
             case "list": {
-                if (!senderCharacter.IsRoomAdmin()) {
-                    this.conn.reply(msg, "Only admins can use this command.");
-                    return;
+                try {
+                    console.log(
+                        `!dare list from ${senderCharacter} (${senderCharacter.MemberNumber}), admin=${senderCharacter.IsRoomAdmin()}, args=${JSON.stringify(args)}`,
+                    );
+
+                    if (!senderCharacter.IsRoomAdmin()) {
+                        this.conn.reply(
+                            msg,
+                            "Only admins can use this command.",
+                        );
+                        return;
+                    }
+                    const dares = await this.store.listDares();
+                    console.log(`!dare list found ${dares.length} dares`);
+                    if (dares.length === 0) {
+                        this.conn.reply(msg, "No dares in the database.");
+                        return;
+                    }
+
+                    const pageSize = 10;
+                    const pageCount = Math.ceil(dares.length / pageSize);
+                    let page = parseInt(args[1], 10);
+                    if (!Number.isInteger(page) || page < 1) page = 1;
+                    if (page > pageCount) page = pageCount;
+
+                    const start = (page - 1) * pageSize;
+                    const pageDares = dares.slice(start, start + pageSize);
+
+                    const lines = pageDares.map(
+                        (d, i) =>
+                            `${start + i + 1}. ${d.text.replace(/[()]/g, "")}`,
+                    );
+                    lines.push(
+                        `Page ${page} of ${pageCount} - !dare list <page> for more`,
+                    );
+
+                    this.conn.reply(msg, lines.join("\n"));
+                } catch (e) {
+                    console.error("!dare list failed", e);
+                    this.conn.reply(
+                        msg,
+                        "Something went wrong listing dares, sorry!",
+                    );
                 }
-                const dares = await this.store.listDares();
-                if (dares.length === 0) {
-                    this.conn.reply(msg, "No dares in the database.");
-                    return;
-                }
-
-                const pageSize = 10;
-                const pageCount = Math.ceil(dares.length / pageSize);
-                let page = parseInt(args[1], 10);
-                if (!Number.isInteger(page) || page < 1) page = 1;
-                if (page > pageCount) page = pageCount;
-
-                const start = (page - 1) * pageSize;
-                const pageDares = dares.slice(start, start + pageSize);
-
-                const lines = pageDares.map(
-                    (d, i) => `${start + i + 1}. ${d.text.replace(/[()]/g, "")}`,
-                );
-                lines.push(
-                    `Page ${page} of ${pageCount} - !dare list <page> for more`,
-                );
-
-                this.conn.SendMessage(
-                    "Whisper",
-                    lines.join("\n"),
-                    senderCharacter.MemberNumber,
-                );
                 break;
             }
             default:
