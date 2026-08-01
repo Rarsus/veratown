@@ -333,11 +333,19 @@ export function AssetGet(
     };
 }
 
+// Some modded clients send appearance data with item groups that aren't real
+// clothing/asset groups (eg. "Luzi" echo slots, or the "\u5916\u89c2\u5de5\u5177"
+// ("appearance tool") pseudo-group). We don't support these, but there's no
+// need to spam the logs about them since they're expected and harmless.
+function isIgnorableUnknownGroup(groupName: string): boolean {
+    return groupName.includes("Luzi") || groupName === "\u5916\u89c2\u5de5\u5177";
+}
+
 export function getAssetDef(desc: BC_AppearanceItem): AssetDefinition | null {
     const grp = AssetFemale3DCG.find((g) => g.Group === desc.Group);
     if (!grp) {
         // We could add support for the echo slots, but until then, don't spam about them
-        if (!desc.Group.includes("Luzi"))
+        if (!isIgnorableUnknownGroup(desc.Group))
             console.warn("Invalid item group: " + desc.Group);
         return null;
     }
@@ -357,7 +365,8 @@ export function getExtendedAssetDef(
 ): AssetArchetypeConfig | null {
     const grp = AssetFemale3DCGExtended[desc.Group];
     if (!grp) {
-        console.warn("Invalid item group: " + desc.Group);
+        if (!isIgnorableUnknownGroup(desc.Group))
+            console.warn("Invalid item group: " + desc.Group);
         return null;
     }
 
