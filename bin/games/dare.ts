@@ -43,13 +43,23 @@ export class Dare {
 
 Collects dare / forfeit cards privately & anonymously that can then be drawn.
 
+!dare join
+Joins the dare game as a participant. Some dares apply their effect to a
+randomly chosen participant instead of the person who drew the card - you
+need to have joined to be eligible (or targetable!).
+
+!dare leave
+Leaves the dare game; you won't be picked as a target for other players'
+dares any more.
+
 !dare add <dare>
 eg. !dare add take off one item of clothing
 (This should be whispered to the bot so your dare stays secret!)
 
 !dare draw
 Draws a dare card (you can do this in the public room). Strip, bondage and
-reward dares are applied automatically.
+reward dares are applied automatically - to yourself, or to a random other
+joined participant if the dare calls for it.
 
 !dare pass
 Chickens out of the dare you just drew. You'll be locked into a random piece
@@ -64,15 +74,16 @@ Chooses someone in the room who isn't the bot or yourself (for dares that involv
 
 Rules
 =====
-1. Everyone rolls a d100 (/dice 100) to start and placed in the room from lowest to highest.
-2. Players take turns to draw a dare, from left to right.
-3. Dares last 10 minutes unless the dare says otherwise.
-4. For dares involving someone else, spin the wheel to decide who. Re-spin if they're already a
+1. !dare join before you start, so you can be picked as a dare's target.
+2. Everyone rolls a d100 (/dice 100) to start and placed in the room from lowest to highest.
+3. Players take turns to draw a dare, from left to right.
+4. Dares last 10 minutes unless the dare says otherwise.
+5. For dares involving someone else, spin the wheel to decide who. Re-spin if they're already a
    target for a dare.
-5. If you're writing a dare that involves someone else, you can let the person doing the dare pick
+6. If you're writing a dare that involves someone else, you can let the person doing the dare pick
    someone or have them spin the bot wheel to choose. Your dare can't involve another specific,
    named person (eg. you can say, "tie a random person", you can't say, "tie Deya").
-6. Don't want to do your dare? !dare pass - but you'll be forfeited into bondage instead!
+7. Don't want to do your dare? !dare pass - but you'll be forfeited into bondage instead!
 `;
 
     private commandParser: CommandParser;
@@ -80,6 +91,10 @@ Rules
     // Tracks the dare each player most recently drew but hasn't resolved
     // yet, so "!dare pass" knows what to forfeit against.
     private pendingDraws = new Map<number, DareDoc>();
+
+    // Members who've opted into the dare game via "!dare join", and so can
+    // be picked as the target of a dare drawn by someone else.
+    private joinedPlayers = new Set<number>();
 
     public constructor(
         private conn: API_Connector,
@@ -104,6 +119,20 @@ Rules
         }
 
         switch (args[0]) {
+            case "join":
+                this.joinedPlayers.add(senderCharacter.MemberNumber);
+                this.conn.SendMessage(
+                    "Emote",
+                    `*${senderCharacter} joins the dare game! (${this.joinedPlayers.size} participant(s))`,
+                );
+                break;
+            case "leave":
+                this.joinedPlayers.delete(senderCharacter.MemberNumber);
+                this.conn.SendMessage(
+                    "Emote",
+                    `*${senderCharacter} leaves the dare game.`,
+                );
+                break;
             case "add":
                 if (args.length < 2) {
                     this.conn.SendMessage("Emote", "*Usage: !dare add <dare>");
@@ -227,19 +256,57 @@ Rules
             default:
                 this.conn.SendMessage(
                     "Emote",
-                    "*Usage: !dare <add|draw|pass|reset|list>",
+                    "*Usage: !dare <join|leave|add|draw|pass|reset|list>",
                 );
                 return;
         }
     };
 
+    // Picks who a drawn dare's effect actually applies to: the drawer
+    // themselves, unless the dare calls for a random other joined
+    // participant (falling back to the drawer if nobody else has joined).
+    private resolveDareTarget = (
+        drawer: API_Character,
+        dare: DareDoc,
+    ): API_Character => {
+        if (dare.target !== "other") return drawer;
+
+        const candidates = [...this.joinedPlayers]
+            .filter((memberNumber) => memberNumber !== drawer.MemberNumber)
+            .map((memberNumber) => this.conn.chatRoom.findMember(memberNumber))
+            .filter((character): character is API_Character => !!character);
+
+        if (candidates.length === 0) {
+            this.conn.SendMessage(
+                "Emote",
+                `*No other dare participants have joined (!dare join) - applying to ${drawer} instead.`,
+            );
+            return drawer;
+        }
+
+        const target =
+            candidates[Math.floor(Math.random() * candidates.length)];
+        this.conn.SendMessage(
+            "Emote",
+            `*This dare targets ${target} instead of ${drawer}!`,
+        );
+        return target;
+    };
+
     private applyDareEffect = async (
-        senderCharacter: API_Character,
+        drawer: API_Character,
         dare: DareDoc,
     ): Promise<void> => {
+        // Reward dares always benefit the drawer; only strip/bondage dares
+        // can be redirected to another joined participant.
+        const target =
+            dare.category === "reward"
+                ? drawer
+                : this.resolveDareTarget(drawer, dare);
+
         switch (dare.category) {
             case "strip":
-                senderCharacter.Appearance.stripBulk(
+                target.Appearance.stripBulk(
                     { clothing: true },
                     false,
                     dare.stripCount,
@@ -247,14 +314,14 @@ Rules
                 if (dare.noRedress) {
                     this.conn.SendMessage(
                         "Emote",
-                        `*${senderCharacter} must stay undressed for this dare - no getting dressed until it's done!`,
+                        `*${target} must stay undressed for this dare - no getting dressed until it's done!`,
                     );
                 }
                 break;
             case "bondage":
                 for (const forfeitKey of dare.forfeitKeys ?? []) {
                     applyForfeitForDare(
-                        senderCharacter,
+                        target,
                         this.conn.Player.MemberNumber,
                         forfeitKey,
                         dare.durationMs,
@@ -263,19 +330,21 @@ Rules
                 if (dare.noRedress) {
                     this.conn.SendMessage(
                         "Emote",
-                        `*${senderCharacter} isn't allowed to get dressed again until the timer runs out!`,
+                        `*${target} isn't allowed to get dressed again until the timer runs out!`,
                     );
                 }
                 break;
             case "reward":
+                // Reward dares always benefit the drawer, regardless of the
+                // dare's "target" field.
                 if (this.casinoStore && dare.chips) {
                     await this.casinoStore.addCredits(
-                        senderCharacter.MemberNumber,
+                        drawer.MemberNumber,
                         dare.chips,
                     );
                     this.conn.SendMessage(
                         "Emote",
-                        `*${senderCharacter} wins ${dare.chips} casino chips!`,
+                        `*${drawer} wins ${dare.chips} casino chips!`,
                     );
                 } else if (dare.chips) {
                     console.log(

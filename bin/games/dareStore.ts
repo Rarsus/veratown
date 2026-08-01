@@ -37,6 +37,12 @@ export interface DareDoc {
     noRedress?: boolean;
     // "reward" dares: casino chips granted to the player.
     chips?: number;
+    // Who the dare's effect is applied to when drawn. "other" picks a
+    // random joined participant (see Dare.joinedPlayers) other than the
+    // drawer; falls back to the drawer if nobody else has joined. Only
+    // meaningful for "strip"/"bondage" categories - reward dares always
+    // go to the drawer. Omitted/"self" applies to the drawer as before.
+    target?: "self" | "other";
 }
 
 export class DareStore {
