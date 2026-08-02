@@ -14,6 +14,7 @@
 
 import { API_Connector, API_Character, isClothing } from "bc-bot";
 import { wait } from "../../hub/utils";
+import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     SHOWER_POSITIONS,
     SHOWER_BOT2_HOME_POSITION,
@@ -28,7 +29,11 @@ import {
 // (optionally via a dedicated second "narrator" bot), and redresses them in
 // their original clothing at the end - unless they leave the shower tile
 // early, in which case their clothes are not returned.
-export class ShowerSystem {
+export class ShowerSystem implements VeratownFeatureSystem {
+    public readonly key = "shower";
+    public readonly label = "Showers";
+    public enabled = true;
+
     private showeringCharacters = new Set<number>();
 
     public constructor(
@@ -40,12 +45,13 @@ export class ShowerSystem {
         for (const showerPos of SHOWER_POSITIONS) {
             this.conn.chatRoom.map.addTileTrigger(
                 showerPos,
-                this.onCharacterEnterShower,
+                guardHandler(this.key, this.onCharacterEnterShower),
             );
         }
     }
 
     private onCharacterEnterShower = async (character: API_Character) => {
+        if (!this.enabled) return;
         if (this.showeringCharacters.has(character.MemberNumber)) return;
         this.showeringCharacters.add(character.MemberNumber);
 

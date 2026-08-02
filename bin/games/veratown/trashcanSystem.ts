@@ -14,6 +14,7 @@
 
 import { API_Connector, API_Character, API_Message } from "bc-bot";
 import { wait } from "../../hub/utils";
+import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     TRASHCAN_SEARCH_LOCATIONS,
     TRASHCAN_FOUND_ITEMS,
@@ -25,14 +26,19 @@ import {
 // random flavour item. Unlike the tile-trigger-based systems, this is
 // wired off the room's generic "Message" event since it's driven by emote
 // text rather than a tile-entry trigger.
-export class TrashcanSystem {
+export class TrashcanSystem implements VeratownFeatureSystem {
+    public readonly key = "trashcan";
+    public readonly label = "Trashcan search";
+    public enabled = true;
+
     public constructor(private conn: API_Connector) {}
 
-    public register(): void {
-        this.conn.on("Message", this.onMessage);
+    public registerTriggers(): void {
+        this.conn.on("Message", guardHandler(this.key, this.onMessage));
     }
 
     private onMessage = async (msg: API_Message) => {
+        if (!this.enabled) return;
         if (msg.message.Type !== "Emote") return;
 
         const content = msg.message.Content.toLowerCase();

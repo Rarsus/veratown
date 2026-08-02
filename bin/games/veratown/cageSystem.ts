@@ -15,6 +15,7 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { remainingTimeString } from "../../utils";
+import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     CAGES,
     CAGE_1,
@@ -27,7 +28,11 @@ import {
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
 // information screen showing current occupancy.
-export class CageSystem {
+export class CageSystem implements VeratownFeatureSystem {
+    public readonly key = "cage";
+    public readonly label = "Containment cages";
+    public enabled = true;
+
     private cagedCharacters = new Map<
         number,
         { character: API_Character; cageName: string }
@@ -36,18 +41,22 @@ export class CageSystem {
     public constructor(private conn: API_Connector) {}
 
     public registerTriggers(): void {
-        this.conn.chatRoom.map.addTileTrigger(CAGE_1, this.onCharacterEnterCage);
-        this.conn.chatRoom.map.addTileTrigger(CAGE_2, this.onCharacterEnterCage);
-        this.conn.chatRoom.map.addTileTrigger(CAGE_3, this.onCharacterEnterCage);
+        const onCharacterEnterCage = guardHandler(
+            this.key,
+            this.onCharacterEnterCage,
+        );
+        this.conn.chatRoom.map.addTileTrigger(CAGE_1, onCharacterEnterCage);
+        this.conn.chatRoom.map.addTileTrigger(CAGE_2, onCharacterEnterCage);
+        this.conn.chatRoom.map.addTileTrigger(CAGE_3, onCharacterEnterCage);
         this.conn.chatRoom.map.addEnterRegionTrigger(
             CAGE_INFORMATION_SCREEN,
-            this.onCharacterViewCageInformation,
+            guardHandler(this.key, this.onCharacterViewCageInformation),
         );
 
         for (const cage of CAGES) {
             this.conn.chatRoom.map.addTileTrigger(
                 cage.entryPos,
-                this.onCharacterEnterCageEntry,
+                guardHandler(this.key, this.onCharacterEnterCageEntry),
             );
         }
     }
@@ -62,6 +71,8 @@ export class CageSystem {
     }
 
     private onCharacterEnterCageEntry = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         const cage = CAGES.find(
             (c) =>
                 c.entryPos.X === character.X && c.entryPos.Y === character.Y,
@@ -95,6 +106,8 @@ export class CageSystem {
     };
 
     private onCharacterEnterCage = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         const cagePos = { ...character.MapPos };
         const stillInCage = () =>
             character.MapPos.X === cagePos.X &&

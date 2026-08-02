@@ -31,6 +31,7 @@ import { BedSystem } from "./veratown/bedSystem";
 import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
+import { VeratownFeatureSystem } from "./veratown/featureSystem";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -55,6 +56,7 @@ export class Veratown {
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
         "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
         "/bot changelog - Shows a summary of recent functional changes to the map",
+        "/bot feature <list|enable|disable> <name> - Show, or (admin only) enable/disable, individual room features (cage, kennel, shower, bed, bunnyPark, window, trashcan)",
         "/bot dare <join|leave|start|turn|add|draw|pass|forfeit|reset|list|help> - Join/leave, start/check turn, add, draw, pass (pillory!), forfeit into a kennel, reset or (admin only) list dare/forfeit cards (if configured)",
         "/bot pick - Randomly selects a room member other than the bot or yourself",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
@@ -64,13 +66,19 @@ export class Veratown {
 
     private dare?: Dare;
 
-    private cageSystem: CageSystem;
-    private kennelSystem: KennelSystem;
-    private showerSystem: ShowerSystem;
-    private bedSystem: BedSystem;
-    private bunnyParkSystem: BunnyParkSystem;
-    private windowSystem: WindowSystem;
-    private trashcanSystem: TrashcanSystem;
+    private cageSystem?: CageSystem;
+    private kennelSystem?: KennelSystem;
+    private showerSystem?: ShowerSystem;
+    private bedSystem?: BedSystem;
+    private bunnyParkSystem?: BunnyParkSystem;
+    private windowSystem?: WindowSystem;
+    private trashcanSystem?: TrashcanSystem;
+
+    // Every successfully-initialized room feature, in registration order.
+    // Backs the "/bot feature list|enable|disable" command; systems that
+    // failed to construct or register (see initFeature()) are simply
+    // absent from this list rather than crashing Veratown's startup.
+    private features: VeratownFeatureSystem[] = [];
 
     public constructor(
         private conn: API_Connector,
@@ -94,24 +102,25 @@ export class Veratown {
             );
         }
 
-        this.cageSystem = new CageSystem(this.conn);
-        this.kennelSystem = new KennelSystem(this.conn);
-        this.showerSystem = new ShowerSystem(this.conn, this.conn2);
-        this.bedSystem = new BedSystem(this.conn);
-        this.bunnyParkSystem = new BunnyParkSystem(this.conn);
-        this.windowSystem = new WindowSystem(this.conn);
-        this.trashcanSystem = new TrashcanSystem(this.conn);
-
         this.conn.on("RoomCreate", this.onChatRoomCreated);
         this.conn.on("RoomJoin", this.onChatRoomJoined);
 
-        this.cageSystem.registerTriggers();
-        this.bunnyParkSystem.registerTriggers();
-        this.kennelSystem.registerTriggers();
-        this.windowSystem.registerTriggers();
-        this.showerSystem.registerTriggers();
-        this.bedSystem.registerTriggers();
-        this.trashcanSystem.register();
+        // Each system is constructed and registered independently: if one
+        // fails (eg. a bug in a single feature), the others are unaffected
+        // and Veratown still starts up with everything else working.
+        this.cageSystem = this.initFeature(() => new CageSystem(this.conn));
+        this.kennelSystem = this.initFeature(() => new KennelSystem(this.conn));
+        this.showerSystem = this.initFeature(
+            () => new ShowerSystem(this.conn, this.conn2),
+        );
+        this.bedSystem = this.initFeature(() => new BedSystem(this.conn));
+        this.bunnyParkSystem = this.initFeature(
+            () => new BunnyParkSystem(this.conn),
+        );
+        this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
+        this.trashcanSystem = this.initFeature(
+            () => new TrashcanSystem(this.conn),
+        );
 
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
@@ -120,6 +129,32 @@ export class Veratown {
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
         this.commandParser.register("strip", this.onCommandStrip);
         this.commandParser.register("changelog", this.onCommandChangelog);
+        this.commandParser.register("feature", this.onCommandFeature);
+    }
+
+    // Constructs and registers a single room feature system, isolating any
+    // failure (constructor throwing, or registerTriggers() throwing) to
+    // that one feature: it's logged and left out of `features`/unavailable,
+    // but doesn't prevent the rest of Veratown (or other features) from
+    // starting up. Runtime errors *after* startup are handled separately by
+    // guardHandler() wrapping each individual trigger callback.
+    private initFeature<T extends VeratownFeatureSystem>(
+        factory: () => T,
+    ): T | undefined {
+        let system: T | undefined;
+        try {
+            system = factory();
+            system.registerTriggers();
+            this.features.push(system);
+            return system;
+        } catch (e) {
+            console.error(
+                `[Veratown] Failed to start feature${system ? ` "${system.label}"` : ""}; ` +
+                    "it will be unavailable, but the rest of the bot is unaffected.",
+                e,
+            );
+            return undefined;
+        }
     }
 
     public async init(): Promise<void> {
@@ -204,6 +239,62 @@ export class Veratown {
         );
     };
 
+    private onCommandFeature = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        const sub = args[0];
+
+        if (!sub || sub === "list") {
+            if (this.features.length === 0) {
+                this.conn.reply(
+                    msg,
+                    "No room features are currently available.",
+                );
+                return;
+            }
+            const lines = this.features.map(
+                (f) =>
+                    `${f.key} - ${f.label}: ${f.enabled ? "enabled" : "disabled"}`,
+            );
+            this.conn.reply(msg, `Room features:\n${lines.join("\n")}`);
+            return;
+        }
+
+        if (sub !== "enable" && sub !== "disable") {
+            this.conn.reply(
+                msg,
+                "Usage: /bot feature <list|enable|disable> [name]",
+            );
+            return;
+        }
+
+        if (!sender.IsRoomAdmin()) {
+            this.conn.reply(
+                msg,
+                "Only admins can enable or disable features.",
+            );
+            return;
+        }
+
+        const key = args[1];
+        const feature = this.features.find((f) => f.key === key);
+        if (!feature) {
+            this.conn.reply(
+                msg,
+                `Unknown feature "${key}". Use "/bot feature list" to see available features.`,
+            );
+            return;
+        }
+
+        feature.enabled = sub === "enable";
+        this.conn.reply(
+            msg,
+            `${feature.label} is now ${feature.enabled ? "enabled" : "disabled"}.`,
+        );
+    };
+
     private freeCharacter(character: API_Character): void {
         // Strip every bind item (locked or not) regardless of which bot
         // system placed it - dare game bondage/pillory/kennel, casino
@@ -211,6 +302,6 @@ export class Veratown {
         // ItemNeckAccessories) are intentionally left alone by stripBulk.
         character.Appearance.stripBulk({ item: true }, true);
 
-        this.cageSystem.freeCharacterIfCaged(character);
+        this.cageSystem?.freeCharacterIfCaged(character);
     }
 }

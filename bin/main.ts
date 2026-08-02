@@ -48,6 +48,21 @@ export async function startBot(): Promise<RopeyBot> {
         process.exit(0);
     });
 
+    // Last-resort safety net: an uncaught error or unhandled promise
+    // rejection from anywhere (a map trigger, an event listener, etc. that
+    // isn't already individually guarded - see guardHandler() in
+    // bin/games/veratown/featureSystem.ts for the Veratown-specific version
+    // of this) would otherwise crash the whole bot process by default in
+    // modern Node. Logging and continuing means one buggy feature/game
+    // can't take the entire bot offline.
+    process.on("unhandledRejection", (reason) => {
+        console.error("Unhandled promise rejection", reason);
+    });
+
+    process.on("uncaughtException", (err) => {
+        console.error("Uncaught exception", err);
+    });
+
     const cfgFile = process.argv[2] ?? "./config.json";
 
     const configString = await readFile(cfgFile, "utf-8");

@@ -13,6 +13,7 @@
  */
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     PARK,
     BUNNY_POSITIONS,
@@ -24,24 +25,30 @@ import {
 // Owns the bunny park: warns visitors on entry, then punishes anyone who
 // steps on one of the protected bunnies with a randomly-chosen rope
 // restraint outfit.
-export class BunnyParkSystem {
+export class BunnyParkSystem implements VeratownFeatureSystem {
+    public readonly key = "bunnyPark";
+    public readonly label = "Bunny park";
+    public enabled = true;
+
     public constructor(private conn: API_Connector) {}
 
     public registerTriggers(): void {
         this.conn.chatRoom.map.addEnterRegionTrigger(
             PARK,
-            this.onCharacterEnterPark,
+            guardHandler(this.key, this.onCharacterEnterPark),
         );
 
         for (const bunnyPos of BUNNY_POSITIONS) {
             this.conn.chatRoom.map.addTileTrigger(
                 bunnyPos,
-                this.onCharacterStepOnBunny,
+                guardHandler(this.key, this.onCharacterStepOnBunny),
             );
         }
     }
 
     private onCharacterEnterPark = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         character.Tell(
             "Whisper",
             "(NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
@@ -51,6 +58,8 @@ export class BunnyParkSystem {
     };
 
     private onCharacterStepOnBunny = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         character.Tell(
             "Whisper",
             "(You step on one of the park's bunnies! Rope seems to shoot out from nowhere, quickly " +

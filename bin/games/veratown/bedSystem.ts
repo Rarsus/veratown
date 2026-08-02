@@ -14,6 +14,7 @@
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
+import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     BED_POSITIONS,
     BED_CHECK_INTERVAL_MS,
@@ -25,7 +26,11 @@ import {
 // true, and removes it as soon as either stops being true (they wake up or
 // leave the bed). Handles the expression being activated either before or
 // after stepping onto the bed.
-export class BedSystem {
+export class BedSystem implements VeratownFeatureSystem {
+    public readonly key = "bed";
+    public readonly label = "Beds";
+    public enabled = true;
+
     private sleepingCharacters = new Set<number>();
 
     public constructor(private conn: API_Connector) {}
@@ -34,12 +39,13 @@ export class BedSystem {
         for (const bedPos of BED_POSITIONS) {
             this.conn.chatRoom.map.addTileTrigger(
                 bedPos,
-                this.onCharacterEnterBed,
+                guardHandler(this.key, this.onCharacterEnterBed),
             );
         }
     }
 
     private onCharacterEnterBed = async (character: API_Character) => {
+        if (!this.enabled) return;
         if (this.sleepingCharacters.has(character.MemberNumber)) return;
         this.sleepingCharacters.add(character.MemberNumber);
 
@@ -51,7 +57,10 @@ export class BedSystem {
         };
 
         try {
-            while (isOnBed()) {
+            // Also polls this.enabled so an admin disabling beds mid-nap
+            // promptly ends the current sleepers' Bed/Covers instead of only
+            // blocking new arrivals.
+            while (isOnBed() && this.enabled) {
                 const isAsleep =
                     character.Appearance.getItemData("Emoticon")?.Property
                         ?.Expression === "Sleep";

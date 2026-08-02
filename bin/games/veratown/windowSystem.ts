@@ -14,23 +14,30 @@
 
 import { API_Connector, API_Character } from "bc-bot";
 import { wait } from "../../hub/utils";
+import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
-export class WindowSystem {
+export class WindowSystem implements VeratownFeatureSystem {
+    public readonly key = "window";
+    public readonly label = "Windows";
+    public enabled = true;
+
     public constructor(private conn: API_Connector) {}
 
     public registerTriggers(): void {
         for (const windowPos of WINDOW_LOCATIONS) {
             this.conn.chatRoom.map.addTileTrigger(
                 windowPos,
-                this.onCharacterPeepThroughWindow,
+                guardHandler(this.key, this.onCharacterPeepThroughWindow),
             );
         }
     }
 
     private onCharacterPeepThroughWindow = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         const pos = { ...character.MapPos };
         const stillThere = () =>
             character.MapPos.X === pos.X && character.MapPos.Y === pos.Y;
