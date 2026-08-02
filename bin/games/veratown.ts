@@ -63,6 +63,7 @@ export class Veratown {
         "/bot map reset - Resets the room layout to the built-in default map, in the database and live (admin only)",
         "/bot map export - Shows the current layout as a portable string, for backup or to move it elsewhere (admin only)",
         "!map import <data> - Loads a layout previously produced by \"/bot map export\", live and as the new default (admin only, must be sent as its own message, not via /bot)",
+        "/bot maintenance - Warns everyone in the room, waits one minute, then frees and removes everyone present (bots excluded) and locks the room to admins only (admin only)",
         "/bot dare <join|leave|start|turn|add|draw|pass|forfeit|reset|list|help> - Join/leave, start/check turn, add, draw, pass (pillory!), forfeit into a kennel, reset or (admin only) list dare/forfeit cards (if configured)",
         "/bot pick - Randomly selects a room member other than the bot or yourself",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
@@ -142,14 +143,16 @@ export class Veratown {
         this.commandParser.register("changelog", this.onCommandChangelog);
 
         // All admin-only commands (strip, feature enable/disable, map
-        // update/reset/import/export) live in their own module, with the
-        // same fault-isolation safeguards (guardHandler()) used by the room
-        // feature systems above.
+        // update/reset/import/export, maintenance) live in their own
+        // module, with the same fault-isolation safeguards (guardHandler())
+        // used by the room feature systems above.
         new VeratownAdminCommands(
             this.conn,
             this.commandParser,
             this.features,
             this.mapStore,
+            (character) => this.freeCharacter(character),
+            this.conn2,
         ).registerCommands();
     }
 

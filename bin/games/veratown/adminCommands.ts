@@ -20,22 +20,35 @@ import {
     BC_Server_ChatRoomMessage,
 } from "bc-bot";
 import { compressToBase64, decompressFromBase64 } from "lz-string";
+import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownMapStore } from "./mapStore";
 import { MAP as DEFAULT_MAP_BUNDLE } from "./veratownConfig";
 
 // Owns every admin-only Veratown command: "strip", "feature
-// enable/disable", and "map update/reset/import/export". Registered
-// through the same guardHandler() safety wrapper used by the room feature
-// systems (bin/games/veratown/featureSystem.ts), so a bug in one admin
-// command is logged and swallowed instead of crashing the bot or taking
-// out any other command.
+// enable/disable", "map update/reset/import/export", and "maintenance".
+// Registered through the same guardHandler() safety wrapper used by the
+// room feature systems (bin/games/veratown/featureSystem.ts), so a bug in
+// one admin command is logged and swallowed instead of crashing the bot or
+// taking out any other command.
 export class VeratownAdminCommands {
+    // Guards against overlapping "!maintenance" runs (eg. a second admin
+    // triggering it while the one-minute warning is still counting down).
+    private maintenanceInProgress = false;
+
     public constructor(
         private conn: API_Connector,
         private commandParser: CommandParser,
         private features: VeratownFeatureSystem[],
         private mapStore?: VeratownMapStore,
+        // Delegates to Veratown's private freeCharacter() (strips bind
+        // items and frees from any cage), so the maintenance shutdown frees
+        // people the same way "/bot freeandleave" does.
+        private freeCharacter?: (character: API_Character) => void,
+        // The optional second bot connection (eg. for shower narration) -
+        // used only to exclude it from the maintenance shutdown's
+        // free/kick pass, since it's a bot, not a room member.
+        private conn2?: API_Connector,
     ) {}
 
     public registerCommands(): void {
@@ -50,6 +63,10 @@ export class VeratownAdminCommands {
         this.commandParser.register(
             "map",
             guardHandler("admin:map", this.onCommandMap),
+        );
+        this.commandParser.register(
+            "maintenance",
+            guardHandler("admin:maintenance", this.onCommandMaintenance),
         );
 
         // "!map import <data>" is handled separately from the other "map"
@@ -229,6 +246,71 @@ export class VeratownAdminCommands {
                     msg,
                     "Usage: !map <update|reset|export|import <data>>",
                 );
+        }
+    };
+
+    private onCommandMaintenance = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.requireAdmin(sender, msg)) return;
+
+        if (this.maintenanceInProgress) {
+            this.conn.reply(
+                msg,
+                "A maintenance shutdown is already in progress.",
+            );
+            return;
+        }
+        this.maintenanceInProgress = true;
+
+        try {
+            this.conn.SendMessage(
+                "Chat",
+                "This room will be taken down for maintenance in one minute. " +
+                    "Please wrap up - everyone present will be freed and removed, " +
+                    "and the room will then be locked to admins only.",
+            );
+
+            await wait(60_000);
+
+            // Bots (this connection's own character, plus the optional
+            // second shower-narration bot) are excluded from the free/kick
+            // pass below - only room members should be freed and removed.
+            const botMemberNumbers = new Set(
+                [
+                    this.conn.Player.MemberNumber,
+                    this.conn2?.Player.MemberNumber,
+                ].filter((n): n is number => n !== undefined),
+            );
+
+            const targets = (this.conn.chatRoom?.characters ?? []).filter(
+                (character) => !botMemberNumbers.has(character.MemberNumber),
+            );
+
+            for (const character of targets) {
+                this.freeCharacter?.(character);
+            }
+
+            // Give freed items/messages a moment to land before kicking,
+            // same as the regular "/bot freeandleave" command.
+            await wait(500);
+
+            for (const character of targets) {
+                character.Kick();
+            }
+
+            if (this.conn.chatRoom) {
+                this.conn.chatRoom.Access = ["Admin"];
+            }
+
+            this.conn.reply(
+                msg,
+                "Maintenance shutdown complete: the room is now locked to admins only.",
+            );
+        } finally {
+            this.maintenanceInProgress = false;
         }
     };
 

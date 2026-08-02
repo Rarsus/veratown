@@ -132,6 +132,13 @@ export class API_Chatroom extends EventEmitter<ChatRoomEvents> {
     public get Private(): boolean {
         return !this.data.Visibility.includes("All");
     }
+    public get Access(): ServerChatRoomRole[] {
+        return this.data.Access;
+    }
+    public set Access(value: ServerChatRoomRole[]) {
+        this.data.Access = value;
+        this.saveChanges();
+    }
     public get Limit(): number {
         return this.data.Limit;
     }
