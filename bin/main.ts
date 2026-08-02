@@ -30,6 +30,31 @@ const SERVER_URL = {
     test: "https://bondage-club-server-test.herokuapp.com/",
 };
 
+// Promotes a secondary bot account (eg. Veratown's shower-narration or pool
+// roulette bot) to room admin, using the primary bot connection - which
+// must already be a room admin itself, since only admins can promote
+// others. Without this, any bot account that didn't happen to be the one
+// that originally created the room would never become an admin, and could
+// get locked out of the room entirely by admin-only features (eg.
+// Veratown's "!maintenance" command, which locks room Access to admins
+// only).
+function ensureBotIsRoomAdmin(
+    adminConn: API_Connector,
+    botConn: API_Connector,
+): void {
+    if (!adminConn.Player.IsRoomAdmin()) {
+        console.log(
+            `${adminConn.Player.Name} isn't a room admin, so it can't promote ${botConn.Player.Name} to admin; a human admin will need to do this manually.`,
+        );
+        return;
+    }
+
+    if (botConn.Player.IsRoomAdmin()) return;
+
+    console.log(`Promoting ${botConn.Player.Name} to room admin.`);
+    adminConn.chatRoom!.promoteAdmin(botConn.Player.MemberNumber);
+}
+
 export interface RopeyBot {
     connector: API_Connector;
     config: ConfigFile;
@@ -102,6 +127,12 @@ export async function startBot(): Promise<RopeyBot> {
     );
     await connector.joinOrCreateRoom(config.room);
 
+    if (!connector.Player.IsRoomAdmin()) {
+        console.log(
+            `${connector.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
+        );
+    }
+
     switch (config.game) {
         case undefined:
             break;
@@ -160,6 +191,7 @@ export async function startBot(): Promise<RopeyBot> {
                     config.env,
                 );
                 await veratownConn2.joinOrCreateRoom(config.room);
+                ensureBotIsRoomAdmin(connector, veratownConn2);
             } else {
                 console.log(
                     "No user2/password2 configured; Veratown will narrate the shower using the main bot instead of a second bot.",
@@ -182,6 +214,7 @@ export async function startBot(): Promise<RopeyBot> {
                         config.env,
                     );
                     await poolRouletteConn.joinOrCreateRoom(config.room);
+                    ensureBotIsRoomAdmin(connector, poolRouletteConn);
 
                     poolRouletteConn.moveOnMap(
                         GAME_MISTRESS_POSITION.X,
