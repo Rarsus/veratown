@@ -215,21 +215,45 @@ and are listed here as concrete starting points for a future pass.
 
 ### Veratown
 
-- **`Veratown` (bin/games/veratown.ts, ~935 lines) is a monolithic
-  controller for ~7 unrelated room subsystems**: cages, kennels, showers,
-  beds, the bunny park, the trashcan easter egg, and window-peeping,
-  plus a 95-line constructor that both wires up event listeners and
-  registers 60+ lines of per-tile triggers inline. A per-feature split
-  (`CageSystem`, `KennelSystem`, `ShowerSystem`, `BedSystem`,
-  `BunnyParkSystem`, `TrashcanSystem`), each owning its own state map and a
-  `registerTriggers(map)` method, with `Veratown` reduced to constructing
-  these systems and delegating, would make each subsystem independently
-  readable and testable, and would let new room features (eg. a new mini
-  game) be added without touching existing systems.
-- **All map-position constants (cages, beds, showers, bunny spots, etc.)
-  are inline in `veratown.ts`.** Moving them to a dedicated
-  `veratownConfig.ts` would give a single place to update the room layout
-  without touching game logic.
+- **Implemented.** `Veratown` (`bin/games/veratown.ts`) was a monolithic
+  ~935-line controller for 7 unrelated room subsystems (cages, kennels,
+  showers, beds, the bunny park, the trashcan easter egg, and
+  window-peeping), plus a 95-line constructor that both wired up event
+  listeners and registered 60+ lines of per-tile triggers inline. It has
+  been split into a `bin/games/veratown/` folder:
+  - `veratownConfig.ts` - every map-position constant, region, timing
+    constant, the compressed map string, `PET_EARS`, and small shared
+    helpers (`isCharacterAtAnyPosition()`, `randomBetweenMinutesMs()`,
+    `showerBroadcastPos()`) - now the single place to update room layout
+    without touching game logic.
+  - `cageSystem.ts` (`CageSystem`) - containment cage entry-warning tiles,
+    the Futuristic Crate lock lifecycle, and the cage-occupancy info
+    screen. Exposes `freeCharacterIfCaged()` so the orchestrator's
+    `freeCharacter()` doesn't need direct access to the cage state map.
+  - `kennelSystem.ts` (`KennelSystem`) - kennel tile logic (equip on
+    entry, auto-close door after a delay).
+  - `showerSystem.ts` (`ShowerSystem`) - the strip/narrate/redress
+    sequence, including the optional second "narrator" bot.
+  - `bedSystem.ts` (`BedSystem`) - the sleep-expression/Bed-device polling
+    loop.
+  - `bunnyParkSystem.ts` (`BunnyParkSystem`) - park entry warning and the
+    bunny-step punishment logic.
+  - `windowSystem.ts` (`WindowSystem`) - window-peeping detection.
+  - `trashcanSystem.ts` (`TrashcanSystem`) - the trash-search easter egg
+    (the one subsystem driven by the room's generic `Message` event
+    rather than a tile trigger).
+
+  `bin/games/veratown.ts` itself is now a thin orchestrator: it
+  constructs each system, calls their `registerTriggers()` (or
+  `register()` for `TrashcanSystem`), wires up the `Dare` game and the
+  three top-level commands (`freeandleave`/`strip`/`changelog`), and
+  re-exports `GAME_LOCATION`, `GAME_MISTRESS_POSITION`, and `PET_EARS`
+  from `veratownConfig.ts` so existing importers (`bin/main.ts`,
+  `bin/games/casino/forfeits.ts`) did not need to change. No behavioural
+  changes were made as part of this split - including the still-open
+  unawaited `moveOnMap()` calls inside `ShowerSystem`'s narration helper,
+  which remains tracked as a separate "Proposals not implemented" item
+  under Pass 2 above rather than being fixed incidentally here.
 
 ### Core `bc-bot` library
 
