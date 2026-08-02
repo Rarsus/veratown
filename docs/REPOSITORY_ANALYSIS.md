@@ -56,13 +56,16 @@ ropeybot/
 │   ├── bcdata/              # BC game data & definitions
 │   │   ├── ChatRoomMap.ts   # Map tile/object definitions
 │   │   ├── defs.ts          # Enum definitions
-│   │   ├── Female3DCG.js    # BC 3D graphics code (unmodified)
+│   │   ├── female3DCG.js    # BC 3D graphics/asset database (unmodified)
+│   │   ├── Female3DCGExtended.ts # Extended/modular/typed item configuration
 │   │   └── Female3DCG_Types.d.ts
 │   └── util/
 │       └── wait.ts          # Promise-based delay utility
+├── docs/                    # Reference documentation (see README.md for the index)
+│   └── items/               # Generated per-asset-group item catalog (see docs/ITEMS.md)
 ├── config.sample.json       # Sample configuration
 ├── package.json             # Root dependencies + build scripts
-├── tsconfig.json            # TypeScript configuration
+├── tsconfig.json             # TypeScript configuration
 ├── Dockerfile               # Docker build configuration
 ├── pnpm-lock.yaml          # Lockfile
 └── README.md               # Quick-start guide
@@ -204,13 +207,14 @@ Socket.IO Events → API_Connector → Wrapped Objects → Game Logic
 ### Event System
 
 **Emitted by API_Connector:**
-- `RoomCreate` - Room initialized
-- `RoomJoin` - Player joins room
+- `RoomCreate` - Room created by the bot
+- `RoomJoin` - Bot joined an existing room
+- `RoomUpdate` - Room metadata changed
 - `Message` - Chat/action message received
-- `CharacterEnter` - Character joins room
-- `CharacterLeave` - Character leaves room
-- `CharacterMove` - Character moves on map (map rooms only)
-- `CharacterChange` - Character appearance/pose changes
+- `CharacterEntered` - Character joins the room
+- `CharacterLeft` - Character leaves the room (includes whether it was an intentional leave or a disconnect)
+- `PoseChange` - A character's pose changed
+- `Beep` - Bot received a beep
 
 **Emitted by API_Map:**
 - `MapUpdate` - Map data changed

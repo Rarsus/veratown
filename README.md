@@ -20,18 +20,20 @@ Usual club ettiquette applies, eg:
   sending messages will affect the server.
 - Make bots fun / interesting / useful, rather than to just sit in rooms.
 
-See [CREDITS.md](CREDITS.md) for who's contributed to the project, and
-[IMPROVEMENTS.md](IMPROVEMENTS.md) for the results of an in-depth code review
+See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
+[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) for the results of an in-depth code review
 (fixes made and proposals for further work).
 
-Further reference documentation:
+Further reference documentation (all under [`docs/`](docs)):
 
-- [LOCKS.md](LOCKS.md) - lock types and the locking API.
-- [BONDAGE.md](BONDAGE.md) - bondage item categories/catalogs and how to apply/remove them.
-- [CLOTHING.md](CLOTHING.md) - clothing classification, applying/saving/restoring/recolouring outfits.
-- [VERATOWN.md](VERATOWN.md) - current feature set of the Veratown room bot.
-- [HOWTOS.md](HOWTOS.md) - patterns for tile/region triggers, command construction, and building a new bot.
-- [ITEMS.md](ITEMS.md) - generated, exhaustive catalog of every asset group/item in `src/bcdata`, with per-group "how to add" snippets and extended-item customization options.
+- [docs/LOCKS.md](docs/LOCKS.md) - lock types and the locking API.
+- [docs/BONDAGE.md](docs/BONDAGE.md) - bondage item categories/catalogs and how to apply/remove them.
+- [docs/CLOTHING.md](docs/CLOTHING.md) - clothing classification, applying/saving/restoring/recolouring outfits.
+- [docs/VERATOWN.md](docs/VERATOWN.md) - current feature set of the Veratown room bot.
+- [docs/HOWTOS.md](docs/HOWTOS.md) - patterns for tile/region triggers, command construction, and building a new bot.
+- [docs/ITEMS.md](docs/ITEMS.md) - generated, exhaustive catalog of every asset group/item in `src/bcdata`, with per-group "how to add" snippets and extended-item customization options.
+- [docs/BUILD_SETUP.md](docs/BUILD_SETUP.md) - step-by-step build/run/Docker setup guide.
+- [docs/REPOSITORY_ANALYSIS.md](docs/REPOSITORY_ANALYSIS.md) - architecture/repo-structure deep dive.
 
 ## Code layout
 
@@ -49,6 +51,8 @@ This is a two-package repo:
   - `bin/games/` uses a newer, more event-based API on top of `bc-bot` (map region/tile
     triggers, a `CommandParser` for `/bot`/`!` commands, etc). If you write new bots,
     they should probably look like the ones in here.
+- `docs/` holds all reference documentation (see the links above), including the
+  generated per-asset item catalog under `docs/items/`.
 
 Some things are unfinished and imperfect, but there should be enough here to make working and
 fun bots! Improvements and fixes are always welcome.

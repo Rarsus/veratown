@@ -192,7 +192,8 @@ ropeybot/
 ├── docker-compose.yml          ✓ Created (for Docker management)
 ├── .dockerignore               ✓ Created (build optimization)
 ├── Dockerfile                  (existing)
-├── BUILD_SETUP.md              ✓ This file
+├── docs/
+│   └── BUILD_SETUP.md          ✓ This file (plus the rest of the reference docs)
 ├── package.json
 ├── pnpm-lock.yaml
 ├── node_modules/               (after pnpm install)

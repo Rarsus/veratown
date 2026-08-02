@@ -2,14 +2,14 @@
 
 Practical, copy-pasteable patterns for building a new "game"/room bot in
 `bin/games/`, using `Veratown`/`Dare`/`Casino` as worked examples. See
-[README.md](README.md) for the overall repo layout (`src/` = low-level
+[README.md](../README.md) for the overall repo layout (`src/` = low-level
 `bc-bot` API library, `bin/games/` = bots built on top of it).
 
 ## 1. Tile triggers
 
 Fire a callback whenever a character steps onto (or off of) a specific map
 tile. Backed by `API_Map.addTileTrigger`/`removeTileTrigger`
-([`src/apiMap.ts`](src/apiMap.ts)).
+([`src/apiMap.ts`](../src/apiMap.ts)).
 
 ```ts
 import { API_Character, ChatRoomMapPos } from "bc-bot";
@@ -78,7 +78,7 @@ Other region helpers in `apiMap.ts`:
 
 ## 3. Command construction (`CommandParser`)
 
-`CommandParser` ([`src/commandParser.ts`](src/commandParser.ts)) recognizes
+`CommandParser` ([`src/commandParser.ts`](../src/commandParser.ts)) recognizes
 `!command` typed in `Whisper`/`Chat`, or `"ChatRoomBot "`-prefixed `Hidden`
 messages (the `/bot command` convention used by the club's slash-command
 UI), and dispatches to registered handlers.
@@ -174,14 +174,14 @@ private async onCharacterEnterBed(character: API_Character): Promise<void> {
 }
 ```
 
-`wait(ms)` is from [`src/util/wait.ts`](src/util/wait.ts) - a plain
+`wait(ms)` is from [`src/util/wait.ts`](../src/util/wait.ts) - a plain
 `setTimeout`-wrapped promise, used throughout for pacing (staggered
 item application, narration delays, etc).
 
 ## 6. Wiring a new game/bot into `main.ts`
 
 Every bot is one `case` in the `switch (config.game)` block in
-[`bin/main.ts`](bin/main.ts), constructed with the already-connected
+[`bin/main.ts`](../bin/main.ts), constructed with the already-connected
 `connector` (and optionally a second `API_Connector`/a `Db`):
 
 ```ts
@@ -204,8 +204,8 @@ Patterns seen for optional second bots/config (copy whichever applies):
   *hard* requirement (like the standalone Dare game) is missing, or just skip
   the optional feature (like Veratown's dare integration) otherwise.
 
-Add your new config fields to `ConfigFile` in [`bin/config.ts`](bin/config.ts)
-and document them in [`config.sample.json`](config.sample.json).
+Add your new config fields to `ConfigFile` in [`bin/config.ts`](../bin/config.ts)
+and document them in [`config.sample.json`](../config.sample.json).
 
 ## 7. Skeleton for a brand new `bin/games/` bot
 
@@ -239,6 +239,6 @@ export class MyGame {
 }
 ```
 
-Per [README.md](README.md)'s own advice: copying `bin/games/veratown.ts` as a
+Per [README.md](../README.md)'s own advice: copying `bin/games/veratown.ts` as a
 starting point is reasonable too, if you want a fuller-featured example to
 trim down rather than building up from scratch.

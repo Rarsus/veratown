@@ -8,12 +8,12 @@ mechanics specifically, see [LOCKS.md](LOCKS.md) (this document links to it
 rather than repeating it). For an exhaustive, generated list of every
 individual bondage asset (every `ItemArms`/`ItemMouth`/`ItemDevices`/etc.
 item, not just the ones already used in this bot's code), see
-[ITEMS.md](ITEMS.md) and its per-group files under [`docs/items/`](docs/items).
+[ITEMS.md](ITEMS.md) and its per-group files under [`items/`](items).
 
 ## What counts as "bondage"
 
 Every equippable thing in Bondage Club lives in an `AssetGroupName` "slot"
-(`ItemArms`, `ItemMouth`, `Hat`, `ItemDevices`, etc). [`src/assetHelpers.ts`](src/assetHelpers.ts)
+(`ItemArms`, `ItemMouth`, `Hat`, `ItemDevices`, etc). [`src/assetHelpers.ts`](../src/assetHelpers.ts)
 classifies each slot/item into one of four buckets, based on the group's
 data (`AssetFemale3DCG`) plus the item's own asset definition:
 
@@ -24,7 +24,7 @@ data (`AssetFemale3DCG`) plus the item's own asset definition:
 | `isCosplay(item)` | Like clothing, but flagged `BodyCosplay` (either on the group or the specific asset) — cosplay items (animal ears/tails, etc) that look like body parts rather than clothing. |
 | `isBody(item)` | Not clothing and can't be set to "None" — body parts (skin, eyes, etc), not something you'd normally add/remove. |
 
-`AppearanceType.stripBulk()`/`applyBundle()` (in [`src/appearance.ts`](src/appearance.ts))
+`AppearanceType.stripBulk()`/`applyBundle()` (in [`src/appearance.ts`](../src/appearance.ts))
 take a `BundleApplyConfig` (`{ appearance, bodyCosplay, clothing, item }`) built
 from these four categories, so "strip all bondage" is `{ item: true }` and
 "strip all clothing" is `{ clothing: true }` — see
@@ -152,7 +152,7 @@ The Dare game layers additional bondage on top of the forfeits catalog:
 
 - **Drawn bondage dares** (`DareDoc.category === "bondage"`) reference one or
   more `forfeitKeys` (looked up in `FORFEITS`) plus an optional `durationMs`
-  override — see `DareDoc` in [`bin/games/dareStore.ts`](bin/games/dareStore.ts).
+  override — see `DareDoc` in [`bin/games/dareStore.ts`](../bin/games/dareStore.ts).
   `Dare.applyDareEffect()` loops over `forfeitKeys`, calling
   `applyForfeitForDare()`/`describeForfeitOutcome()` for each.
 - **Pillory pass consequence** (`applyPassConsequence()`) — not a forfeit-catalog
@@ -173,7 +173,7 @@ places:
   `BUNNY_ROPE_COLOR` and crafted with `BUNNY_ROPE_CRAFT_DESCRIPTION`, plus a
   `WoodenSign` reading "I step on / Bunnies". **Not locked** — these are just
   added items, meant to be a light, removable punishment. See
-  [`bin/games/bunny.md`](bin/games/bunny.md) for the exhaustive
+  [`bin/games/bunny.md`](../bin/games/bunny.md) for the exhaustive
   add/remove/reconfigure guide (rope asset options per body part, etc).
 - **Kennels** (`onCharacterEnterKennel`) — stepping on a kennel tile equips a
   `Kennel` with the door open (`d: 0`), then after
@@ -254,15 +254,15 @@ what `/bot freeandleave` and the dare game's round-10 winner cleanup both do).
 ## Adding a brand new bondage item/category
 
 1. Confirm the asset exists for the group you want — check
-   [`src/bcdata/Female3DCGExtended.ts`](src/bcdata/Female3DCGExtended.ts) /
-   [`src/bcdata/female3DCG.js`](src/bcdata/female3DCG.js) for the asset
+   [`src/bcdata/Female3DCGExtended.ts`](../src/bcdata/Female3DCGExtended.ts) /
+   [`src/bcdata/female3DCG.js`](../src/bcdata/female3DCG.js) for the asset
    definition, or just try it and watch for console errors.
 2. Decide whether it's a **simple single-item forfeit** (add an entry to
    `FORFEITS` with just `items()`) or needs **custom apply logic**
    (`applyItems`) — see "Catalog 1" above for the distinction.
 3. If it should be reachable from the Dare game's card deck, either seed a
    `DareDoc` with `category: "bondage"` and `forfeitKeys: ["yourkey"]`
-   (see [`bin/games/dareStore.ts`](bin/games/dareStore.ts)), or reference the
+   (see [`bin/games/dareStore.ts`](../bin/games/dareStore.ts)), or reference the
    key from the Casino's forfeit-wheel config.
 4. If the item's `AssetGroupName` isn't already covered by
    `bodyPartFlavor()` in `forfeits.ts`, add a case for it so dare emotes

@@ -5,11 +5,11 @@ restraints - see [BONDAGE.md](BONDAGE.md)) is classified, applied, saved,
 restored, recoloured, and stripped in this repo. For an exhaustive,
 generated list of every individual clothing asset (every `Cloth`/`Hat`/
 `Shoes`/etc. item), see [ITEMS.md](ITEMS.md) and its per-group files under
-[`docs/items/`](docs/items).
+[`items/`](items).
 
 ## What counts as "clothing"
 
-[`src/assetHelpers.ts`](src/assetHelpers.ts) classifies every item based on
+[`src/assetHelpers.ts`](../src/assetHelpers.ts) classifies every item based on
 its `AssetGroupName`'s data (`AssetFemale3DCG`) and the item's own asset
 definition:
 
@@ -100,7 +100,7 @@ for (const item of savedClothingItems) {
 ```
 
 This exact pattern is what Veratown's shower sequence
-(`onCharacterEnterShower` in [`bin/games/veratown.ts`](bin/games/veratown.ts))
+(`onCharacterEnterShower` in [`bin/games/veratown.ts`](../bin/games/veratown.ts))
 uses: it snapshots clothing, strips it item-by-item with delays, runs the
 shower narration, then re-adds each saved item with delays. If the character
 leaves the shower tile partway through, the sequence aborts and their clothes
@@ -108,14 +108,14 @@ are **not** restored (`abortShower()`) - a deliberate consequence, not a bug.
 
 For bulk import/export across characters or persistence to a database,
 `importBundle(base64string)` / `exportBundle(items)` (in
-[`src/appearance.ts`](src/appearance.ts)) compress/decompress a
+[`src/appearance.ts`](../src/appearance.ts)) compress/decompress a
 `BC_AppearanceItem[]` via `lz-string`, and `applyBundle()`/`slowlyApplyBundle()`
 apply a whole bundle at once (respecting the same `BundleApplyConfig`
 filtering and an optional `skipGroups` list).
 
 ## Recolouring clothing/outfits
 
-`colourOutfit()` (in [`src/outfitColour.ts`](src/outfitColour.ts)) does a
+`colourOutfit()` (in [`src/outfitColour.ts`](../src/outfitColour.ts)) does a
 find/replace across an entire outfit bundle, useful for theming a "template"
 outfit per-character without hand-authoring every color:
 

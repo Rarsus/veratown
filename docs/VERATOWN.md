@@ -37,7 +37,7 @@ Stepping on one of the three `BUNNY_POSITIONS` tiles
 (`onCharacterStepOnBunny`) whispers a punishment notice, adds a "I step on /
 Bunnies" `WoodenSign`, and applies one randomly chosen rope restraint
 "outfit" from `BUNNY_RESTRAINT_CONFIGS` (unlocked - just added items). See
-[`bin/games/bunny.md`](bin/games/bunny.md) for the exhaustive
+[`bin/games/bunny.md`](../bin/games/bunny.md) for the exhaustive
 add/remove/reconfigure guide for this feature specifically.
 
 ### Futuristic Crate cages (1-3)
@@ -117,7 +117,7 @@ the general "listen for a phrase in chat" pattern this demonstrates.
 
 `GAME_LOCATION` (a `MapRegion`) and `GAME_MISTRESS_POSITION` mark where a
 **separate** `Casino` bot instance stands and operates (see
-[`bin/games/casino.ts`](bin/games/casino.ts), wired up in `main.ts` alongside
+[`bin/games/casino.ts`](../bin/games/casino.ts), wired up in `main.ts` alongside
 Veratown when `config.user3`/`config.password3` are set). Veratown's own
 `CommandParser` is explicitly constructed with `GAME_LOCATION` as an
 **exclude region**, so it ignores commands from anyone standing in the casino
@@ -129,7 +129,7 @@ If `db` is provided, Veratown constructs a shared `Dare` instance
 (`new Dare(conn, new DareStore(db), this.commandParser, new CasinoStore(db))`),
 registering `!dare ...` and `!pick` onto Veratown's own `CommandParser` (so
 they work anywhere in the room except the casino-excluded area). See
-[`bin/games/dare.ts`](bin/games/dare.ts)'s own documentation/description
+[`bin/games/dare.ts`](../bin/games/dare.ts)'s own documentation/description
 string (`Dare.description_intro`/`description_commands`/`description_rules`,
 shown via `!dare help`) for the full Dare game mechanics - it's a large,
 independently-evolving feature and not duplicated here.

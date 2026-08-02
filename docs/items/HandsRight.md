@@ -13,7 +13,7 @@ import { AssetGet } from "bc-bot";
 const item = character.Appearance.AddItem(AssetGet("HandsRight", "SomeAssetName"));
 ```
 
-See [BONDAGE.md](../../BONDAGE.md) or [CLOTHING.md](../../CLOTHING.md) for the
+See [BONDAGE.md](../BONDAGE.md) or [CLOTHING.md](../CLOTHING.md) for the
 full generic recipe (colouring, crafting, difficulty, locking, extended
 type/text configuration).
 

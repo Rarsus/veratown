@@ -2,7 +2,7 @@
 
 This document covers the lock types available in Bondage Club and how to
 apply/read/remove them from scripting code in this repo (`bin/games/*`),
-using the same API surface as `Veratown` (see [bin/games/veratown.ts](bin/games/veratown.ts)).
+using the same API surface as `Veratown` (see [bin/games/veratown.ts](../bin/games/veratown.ts)).
 
 ## Available lock types (`AssetLockType`)
 
@@ -38,7 +38,7 @@ Not every asset supports every lock type — see "Checking lockability" below.
 
 ## Applying a lock: `item.lock(...)`
 
-`API_AppearanceItem.lock()` (in [src/item.ts](src/item.ts)) is the entry point:
+`API_AppearanceItem.lock()` (in [src/item.ts](../src/item.ts)) is the entry point:
 
 ```ts
 public lock(
@@ -90,7 +90,7 @@ crate.lock("TimerPadlock", character.MemberNumber, {
 });
 ```
 
-See [bin/games/veratown.ts](bin/games/veratown.ts) (`onCharacterEnterCage`) for the
+See [bin/games/veratown.ts](../bin/games/veratown.ts) (`onCharacterEnterCage`) for the
 full context, including per-cage lock durations and reading back the live
 timer (below).
 
@@ -107,8 +107,8 @@ cage.lock("TimerPasswordPadlock", lockMemberNumber, {
 });
 ```
 
-See [bin/games/casino/forfeits.ts](bin/games/casino/forfeits.ts) and
-[bin/games/casino.ts](bin/games/casino.ts) for more usages.
+See [bin/games/casino/forfeits.ts](../bin/games/casino/forfeits.ts) and
+[bin/games/casino.ts](../bin/games/casino.ts) for more usages.
 
 ## Checking lockability
 
@@ -143,7 +143,7 @@ does exactly this to keep its cage-occupancy info and auto-release timing in
 sync with the actual lock data.
 
 You can combine this with `remainingTimeString()` (from
-[bin/utils.ts](bin/utils.ts)) to render a human-readable countdown from an
+[bin/utils.ts](../bin/utils.ts)) to render a human-readable countdown from an
 absolute expiry timestamp.
 
 ## Removing / unlocking a lock

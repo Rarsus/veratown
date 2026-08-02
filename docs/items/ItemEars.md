@@ -13,7 +13,7 @@ import { AssetGet } from "bc-bot";
 const item = character.Appearance.AddItem(AssetGet("ItemEars", "LightDutyEarPlugs"));
 ```
 
-See [BONDAGE.md](../../BONDAGE.md) or [CLOTHING.md](../../CLOTHING.md) for the
+See [BONDAGE.md](../BONDAGE.md) or [CLOTHING.md](../CLOTHING.md) for the
 full generic recipe (colouring, crafting, difficulty, locking, extended
 type/text configuration).
 
@@ -36,7 +36,7 @@ type/text configuration).
 
 ## Extended item configuration
 
-Items marked "Extended" above expose extra configuration through `item.setProperty("TypeRecord", {...})` (or the `item.Extended` wrapper for typed/text items - see [BONDAGE.md](../../BONDAGE.md)). Their available options, as defined in `Female3DCGExtended.ts`:
+Items marked "Extended" above expose extra configuration through `item.setProperty("TypeRecord", {...})` (or the `item.Extended` wrapper for typed/text items - see [BONDAGE.md](../BONDAGE.md)). Their available options, as defined in `Female3DCGExtended.ts`:
 
 **HeadphoneEarPlugs** — archetype `typed`
   - 4 type option(s): Off, Light, Heavy, NoiseCancelling

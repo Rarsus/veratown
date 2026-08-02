@@ -14,7 +14,7 @@ or carry some risk of changing behavior players rely on.
    landed, both pass the "enough chips?" check, and both write independently
    - duplicating chips into the target account. Fixed by adding
    `CasinoStore.transferCredits()`, an atomic conditional `$inc` update.
-   See [bin/games/casino/casinostore.ts](bin/games/casino/casinostore.ts).
+   See [bin/games/casino/casinostore.ts](../bin/games/casino/casinostore.ts).
 
 2. **Missing `await` in `CasinoStore.savePlayer()` / `saveOutfit()`** —
    these fired off their `updateOne()` call without awaiting it, so callers
@@ -52,7 +52,7 @@ should be a deliberate choice rather than a silent bugfix:
   version of the Pet Spa game** (different map layout, no import from
   `bin/main.ts`) left over in the working tree. It has since been removed:
   the live Pet Spa game (renamed to Veratown) now lives at that path
-  instead - see [bin/games/veratown.ts](bin/games/veratown.ts).
+  instead - see [bin/games/veratown.ts](../bin/games/veratown.ts).
 - **`README.md` described a directory layout (`src/hub`, `src/games`) that
   no longer matches the repo** (game code now lives under `bin/`, and
   `src/` is just the `bc-bot` library). This has been fixed as part of this
@@ -70,7 +70,7 @@ should be a deliberate choice rather than a silent bugfix:
 
 `bin/hub/**` (Kidnappers, Roleplay Challenge, Maid's Party Night, Gameroom
 Matchmaking, Administration/Logging logic) is largely unmodified code
-ported from the original bot hub project (see [README.md](README.md) and
+ported from the original bot hub project (see [README.md](../README.md) and
 [CREDITS.md](CREDITS.md)). It has its own long-standing `TODO` comments and
 patterns; these were intentionally left untouched in this review to avoid
 second-guessing decisions made by its original authors.
