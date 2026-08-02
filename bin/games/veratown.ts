@@ -921,7 +921,11 @@ export class Veratown {
     };
 
     private freeCharacter(character: API_Character): void {
-        character.Appearance.RemoveItem("ItemArms");
+        // Strip every bind item (locked or not) regardless of which bot
+        // system placed it - dare game bondage/pillory/kennel, casino
+        // forfeits, veratown cages, etc. Collars (ItemNeck/
+        // ItemNeckAccessories) are intentionally left alone by stripBulk.
+        character.Appearance.stripBulk({ item: true }, true);
 
         if (this.cagedCharacters.delete(character.MemberNumber)) {
             character.Appearance.RemoveItem("ItemDevices");

@@ -40,6 +40,15 @@ const BONDAGE_DECISION_MS = 15 * 1000;
 // stripped back off while a structured game is running.
 const STRIP_ENFORCE_INTERVAL_MS = 20 * 1000;
 
+// How long someone can sit on their turn without drawing before getting a
+// reminder, and before the bot passes on their behalf entirely.
+const TURN_REMINDER_MS = 30 * 1000;
+const TURN_AUTO_PASS_MS = 60 * 1000;
+
+// How many full rounds a disconnected participant's turn gets silently
+// skipped before they're removed from the game outright.
+const DISCONNECT_GRACE_ROUNDS = 2;
+
 export class Dare {
 
     public static description_intro = `Dares
@@ -71,6 +80,13 @@ Game Overview
    will keep stripping anything you try to put back on until it ends.
 9. If a body part is already bound when a new bondage dare targets it, the
    existing lock's timer is extended instead of piling on more gear.
+10. Not responding on your turn? You'll get a reminder after 30 seconds,
+    and after 60 seconds the bot passes on your behalf (with the usual
+    pillory consequence, escalating on a second miss).
+11. Disconnected mid-game? Your turns are silently skipped for up to 2
+    rounds - come back in time and you'll pay the pass penalty for each
+    turn missed. Stay gone longer and you're removed from the game
+    entirely. If everyone else leaves, whoever's left auto-wins!
 `;
 
 public static description_commands = `Commands
@@ -105,6 +121,10 @@ public static description_rules = `Rules
 7. Stripped players stay bare until the game ends - no redressing early!
 8. At the end of round 10, the player with the fewest binds wins and is
    freed from all their bondage.
+9. Ignore your turn too long and the bot passes for you automatically.
+   Disconnect mid-game and your turns are skipped (not penalized) for up
+   to 2 rounds; come back and pay the penalty, or stay gone longer and
+   get removed. Last one standing auto-wins.
 `;
 public static description = Dare.description_intro + "\n" + Dare.description_commands + "\n" + Dare.description_rules;
 
@@ -146,6 +166,20 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
     // released automatically the next time they successfully !dare draw.
     private pilloriedUntilNextDraw = new Set<number>();
 
+    // Reminder/auto-pass timers for whoever's turn it currently is, so an
+    // unresponsive player doesn't stall the whole game.
+    private turnReminderTimer: ReturnType<typeof setTimeout> | undefined;
+    private turnAutoPassTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // Members currently disconnected mid-game: value is the round they
+    // disconnected in, used to decide when DISCONNECT_GRACE_ROUNDS has
+    // elapsed and they should be removed from the game entirely.
+    private disconnectedSince = new Map<number, number>();
+    // How many of their turns have been silently skipped while
+    // disconnected - penalties (as if they'd !dare pass'd) are applied for
+    // each of these once/if they return in time.
+    private missedTurnsWhileDisconnected = new Map<number, number>();
+
     public constructor(
         private conn: API_Connector,
         private store: DareStore,
@@ -156,6 +190,9 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
 
         this.commandParser.register("pick", this.onPick);
         this.commandParser.register("dare", this.onDare);
+
+        this.conn.on("CharacterLeft", this.onCharacterLeft);
+        this.conn.on("CharacterEntered", this.onCharacterEntered);
     }
 
     onDare = async (
@@ -208,6 +245,9 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 this.strippedForGame.clear();
                 this.passCounts.clear();
                 this.pilloriedUntilNextDraw.clear();
+                this.disconnectedSince.clear();
+                this.missedTurnsWhileDisconnected.clear();
+                this.clearTurnTimers();
 
                 if (this.stripEnforceInterval) {
                     clearInterval(this.stripEnforceInterval);
@@ -228,6 +268,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     `*The dare game begins! ${this.totalRounds} rounds, turn order: ${order}.`,
                 );
                 this.announceTurn();
+                this.startTurnTimers(this.turnOrder[this.currentTurnIndex]);
                 break;
             }
             case "turn":
@@ -298,6 +339,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                         );
                         return;
                     }
+                    this.clearTurnTimers();
                 }
 
                 if (
@@ -376,71 +418,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     );
                 }
 
-                const passCount =
-                    (this.passCounts.get(senderCharacter.MemberNumber) ?? 0) +
-                    1;
-                this.passCounts.set(senderCharacter.MemberNumber, passCount);
-
-                senderCharacter.Appearance.RemoveItem("ItemArms");
-                const pillory = senderCharacter.Appearance.AddItem(
-                    AssetGet("ItemArms", "Pillory"),
-                );
-                pillory.SetDifficulty(20);
-
-                if (passCount === 1) {
-                    pillory.SetCraft({
-                        Name: "Dare: Pillory",
-                        Description: `${senderCharacter} chickened out of a dare and has been locked into the pillory until their next draw!`,
-                    });
-                    pillory.lock(
-                        "ExclusivePadlock",
-                        this.conn.Player.MemberNumber,
-                        {},
-                    );
-                    this.pilloriedUntilNextDraw.add(
-                        senderCharacter.MemberNumber,
-                    );
-                    this.conn.SendMessage(
-                        "Emote",
-                        `*${senderCharacter} chickens out of their dare and is clamped into the pillory - stuck there until their next draw!`,
-                    );
-                } else {
-                    pillory.SetCraft({
-                        Name: "Dare: Repeat Evader",
-                        Description: `${senderCharacter} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
-                    });
-                    pillory.lock(
-                        "TimerPasswordPadlock",
-                        this.conn.Player.MemberNumber,
-                        {
-                            RemoveItem: true,
-                            RemoveTimer:
-                                Date.now() + PILLORY_REPEAT_LOCK_MS,
-                            ShowTimer: false,
-                            LockSet: true,
-                        },
-                    );
-                    this.pilloriedUntilNextDraw.delete(
-                        senderCharacter.MemberNumber,
-                    );
-
-                    senderCharacter.Appearance.RemoveItem("ItemMisc");
-                    const sign = senderCharacter.Appearance.AddItem(
-                        AssetGet("ItemMisc", "WoodenSign"),
-                    );
-                    sign.setProperty("Text", "Evades");
-                    sign.setProperty("Text2", "Dares");
-
-                    this.conn.SendMessage(
-                        "Emote",
-                        `*${senderCharacter} chickens out AGAIN! Locked in the pillory for 4 hours with a sign reading "Evades / Dares" for everyone to see.`,
-                    );
-                }
-
-                this.addBinds(
-                    senderCharacter.MemberNumber,
-                    passCount === 1 ? 1 : 2,
-                );
+                this.applyPassConsequence(senderCharacter);
                 if (bondageTimer) this.finishTurn();
                 break;
             }
@@ -539,6 +517,205 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         );
     };
 
+    // Applies the "chickened out" pillory consequence to a character - used
+    // both by the explicit "!dare pass" command and by auto-pass when
+    // someone doesn't respond to their turn in time (or catches up on
+    // penalties for turns missed while disconnected).
+    private applyPassConsequence = (character: API_Character): void => {
+        const memberNumber = character.MemberNumber;
+        const passCount = (this.passCounts.get(memberNumber) ?? 0) + 1;
+        this.passCounts.set(memberNumber, passCount);
+
+        character.Appearance.RemoveItem("ItemArms");
+        const pillory = character.Appearance.AddItem(
+            AssetGet("ItemArms", "Pillory"),
+        );
+        pillory.SetDifficulty(20);
+
+        if (passCount === 1) {
+            pillory.SetCraft({
+                Name: "Dare: Pillory",
+                Description: `${character} chickened out of a dare and has been locked into the pillory until their next draw!`,
+            });
+            pillory.lock("ExclusivePadlock", this.conn.Player.MemberNumber, {});
+            this.pilloriedUntilNextDraw.add(memberNumber);
+            this.conn.SendMessage(
+                "Emote",
+                `*${character} chickens out of their dare and is clamped into the pillory - stuck there until their next draw!`,
+            );
+        } else {
+            pillory.SetCraft({
+                Name: "Dare: Repeat Evader",
+                Description: `${character} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
+            });
+            pillory.lock("TimerPasswordPadlock", this.conn.Player.MemberNumber, {
+                RemoveItem: true,
+                RemoveTimer: Date.now() + PILLORY_REPEAT_LOCK_MS,
+                ShowTimer: false,
+                LockSet: true,
+            });
+            this.pilloriedUntilNextDraw.delete(memberNumber);
+
+            character.Appearance.RemoveItem("ItemMisc");
+            const sign = character.Appearance.AddItem(
+                AssetGet("ItemMisc", "WoodenSign"),
+            );
+            sign.setProperty("Text", "Evades");
+            sign.setProperty("Text2", "Dares");
+
+            this.conn.SendMessage(
+                "Emote",
+                `*${character} chickens out AGAIN! Locked in the pillory for 4 hours with a sign reading "Evades / Dares" for everyone to see.`,
+            );
+        }
+
+        this.addBinds(memberNumber, passCount === 1 ? 1 : 2);
+    };
+
+    // Clears the idle-turn reminder/auto-pass timers, if any are pending.
+    private clearTurnTimers = (): void => {
+        if (this.turnReminderTimer) clearTimeout(this.turnReminderTimer);
+        if (this.turnAutoPassTimer) clearTimeout(this.turnAutoPassTimer);
+        this.turnReminderTimer = undefined;
+        this.turnAutoPassTimer = undefined;
+    };
+
+    // Starts the reminder (30s) / auto-pass (60s) timers for whoever's
+    // turn it now is, so an unresponsive player doesn't stall the game.
+    private startTurnTimers = (memberNumber: number): void => {
+        this.clearTurnTimers();
+        this.turnReminderTimer = setTimeout(() => {
+            if (!this.gameActive) return;
+            if (this.turnOrder[this.currentTurnIndex] !== memberNumber) return;
+            this.conn.SendMessage(
+                "Emote",
+                `*Reminder: it's still ${this.describeMember(memberNumber)}'s turn - !dare draw within ${(TURN_AUTO_PASS_MS - TURN_REMINDER_MS) / 1000} more seconds or the bot will pass on their behalf!`,
+            );
+        }, TURN_REMINDER_MS);
+        this.turnAutoPassTimer = setTimeout(() => {
+            if (!this.gameActive) return;
+            if (this.turnOrder[this.currentTurnIndex] !== memberNumber) return;
+            const character = this.conn.chatRoom.findMember(memberNumber);
+            if (!character) return;
+            this.conn.SendMessage(
+                "Emote",
+                `*${character} doesn't respond in time to draw a dare - the bot passes on their behalf!`,
+            );
+            this.applyPassConsequence(character);
+            this.finishTurn();
+        }, TURN_AUTO_PASS_MS);
+    };
+
+    // Fired whenever anyone leaves the room. Only cares about unintentional
+    // (disconnect) departures of current game participants.
+    private onCharacterLeft = (
+        sourceMemberNumber: number,
+        character: API_Character,
+        _leaveMessage: string | null,
+        intentional: boolean,
+    ): void => {
+        if (intentional || !this.gameActive) return;
+        if (!this.turnOrder.includes(sourceMemberNumber)) return;
+        if (this.disconnectedSince.has(sourceMemberNumber)) return;
+
+        this.disconnectedSince.set(sourceMemberNumber, this.round);
+        this.missedTurnsWhileDisconnected.set(sourceMemberNumber, 0);
+        this.conn.SendMessage(
+            "Emote",
+            `*${character} has disconnected from the dare game - they have ${DISCONNECT_GRACE_ROUNDS} round(s) to return before being removed.`,
+        );
+
+        if (this.turnOrder[this.currentTurnIndex] === sourceMemberNumber) {
+            this.clearTurnTimers();
+            this.finishTurn();
+        }
+    };
+
+    // Fired whenever anyone (re)joins the room. Only cares about game
+    // participants who were tracked as disconnected.
+    private onCharacterEntered = (character: API_Character): void => {
+        const memberNumber = character.MemberNumber;
+        if (!this.disconnectedSince.has(memberNumber)) return;
+
+        const missed = this.missedTurnsWhileDisconnected.get(memberNumber) ?? 0;
+        this.disconnectedSince.delete(memberNumber);
+        this.missedTurnsWhileDisconnected.delete(memberNumber);
+
+        if (missed > 0) {
+            this.conn.SendMessage(
+                "Emote",
+                `*${character} returns to the dare game after missing ${missed} turn(s) - time to pay the price!`,
+            );
+            for (let i = 0; i < missed; i++) {
+                this.applyPassConsequence(character);
+            }
+        } else {
+            this.conn.SendMessage(
+                "Emote",
+                `*${character} returns to the dare game just in time!`,
+            );
+        }
+    };
+
+    // Called from advanceTurn() when the next player in turn order is still
+    // marked as disconnected. Tracks the skip and removes them from the
+    // game entirely once they've missed more than DISCONNECT_GRACE_ROUNDS
+    // rounds. Returns true if the player was removed.
+    private registerDisconnectedSkip = (memberNumber: number): boolean => {
+        const missed = (this.missedTurnsWhileDisconnected.get(memberNumber) ?? 0) + 1;
+        this.missedTurnsWhileDisconnected.set(memberNumber, missed);
+
+        const disconnectedSinceRound =
+            this.disconnectedSince.get(memberNumber) ?? this.round;
+        const roundsMissed = this.round - disconnectedSinceRound;
+
+        if (roundsMissed > DISCONNECT_GRACE_ROUNDS) {
+            this.removePlayerFromGame(
+                memberNumber,
+                "has been disconnected too long and is removed from the dare game!",
+            );
+            return true;
+        }
+
+        this.conn.SendMessage(
+            "Emote",
+            `*${this.describeMember(memberNumber)} is still disconnected - their turn is skipped.`,
+        );
+        return false;
+    };
+
+    // Removes a participant from the active game entirely: turn order,
+    // joined-players set, and any pending per-player state for them.
+    private removePlayerFromGame = (
+        memberNumber: number,
+        reason: string,
+    ): void => {
+        const idx = this.turnOrder.indexOf(memberNumber);
+        if (idx !== -1) {
+            this.turnOrder.splice(idx, 1);
+            if (idx <= this.currentTurnIndex) {
+                this.currentTurnIndex--;
+            }
+        }
+
+        this.joinedPlayers.delete(memberNumber);
+        this.disconnectedSince.delete(memberNumber);
+        this.missedTurnsWhileDisconnected.delete(memberNumber);
+        this.pendingDraws.delete(memberNumber);
+        this.pilloriedUntilNextDraw.delete(memberNumber);
+
+        const bondageTimer = this.pendingBondageTimers.get(memberNumber);
+        if (bondageTimer) {
+            clearTimeout(bondageTimer);
+            this.pendingBondageTimers.delete(memberNumber);
+        }
+
+        this.conn.SendMessage(
+            "Emote",
+            `*${this.describeMember(memberNumber)} ${reason}`,
+        );
+    };
+
     // Advances the turn/round if a structured game is running; a no-op
     // during casual free-for-all play. Called once a drawn dare (and any
     // pass/forfeit decision window for it) has fully resolved.
@@ -547,18 +724,99 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
     };
 
     // Moves to the next player's turn, advancing the round (and ending the
-    // game at the end of round 10) once everyone's gone.
+    // game at the end of round 10) once everyone's gone. Silently skips
+    // (and eventually removes) disconnected players, and ends the game
+    // early if only one participant is left standing.
     private advanceTurn = (): void => {
-        this.currentTurnIndex++;
-        if (this.currentTurnIndex >= this.turnOrder.length) {
-            this.currentTurnIndex = 0;
-            this.round++;
-            if (this.round > this.totalRounds) {
+        this.clearTurnTimers();
+
+        const guardLimit = this.turnOrder.length + 1;
+        for (let attempt = 0; attempt < guardLimit; attempt++) {
+            if (this.turnOrder.length === 0) {
+                this.endGame();
+                return;
+            }
+            if (this.turnOrder.length === 1) {
+                this.winBySoleSurvivor();
+                return;
+            }
+
+            this.currentTurnIndex++;
+            if (this.currentTurnIndex >= this.turnOrder.length) {
+                this.currentTurnIndex = 0;
+                this.round++;
+                if (this.round > this.totalRounds) {
+                    this.endGame();
+                    return;
+                }
+            }
+
+            const nextMember = this.turnOrder[this.currentTurnIndex];
+            if (!this.disconnectedSince.has(nextMember)) {
+                this.announceTurn();
+                this.startTurnTimers(nextMember);
+                return;
+            }
+
+            const removed = this.registerDisconnectedSkip(nextMember);
+            if (removed && this.turnOrder.length === 1) {
+                this.winBySoleSurvivor();
+                return;
+            }
+            if (removed && this.turnOrder.length === 0) {
                 this.endGame();
                 return;
             }
         }
-        this.announceTurn();
+
+        // Safety net - shouldn't normally be reached.
+        this.endGame();
+    };
+
+    // Resets all structured-game state. Shared by both a normal round-10
+    // finish and an early sole-survivor win.
+    private resetGameState = (): void => {
+        this.gameActive = false;
+        this.turnOrder = [];
+        this.currentTurnIndex = 0;
+        this.round = 1;
+        this.bindCounts.clear();
+        this.passCounts.clear();
+        this.pilloriedUntilNextDraw.clear();
+        this.strippedForGame.clear();
+        this.disconnectedSince.clear();
+        this.missedTurnsWhileDisconnected.clear();
+        this.clearTurnTimers();
+        for (const timer of this.pendingBondageTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.pendingBondageTimers.clear();
+        if (this.stripEnforceInterval) {
+            clearInterval(this.stripEnforceInterval);
+            this.stripEnforceInterval = undefined;
+        }
+    };
+
+    // Frees the winner of all bondage and announces the game's end.
+    private declareWinner = (winner: number, reasonPhrase: string): void => {
+        const winnerCharacter = this.conn.chatRoom.findMember(winner);
+        winnerCharacter?.Appearance.stripBulk({ item: true }, true);
+
+        this.conn.SendMessage(
+            "Emote",
+            `*The dare game is over! ${this.describeMember(winner)} ${reasonPhrase} and is freed from all bondage!`,
+        );
+    };
+
+    // Ends the game early because only one participant remains (everyone
+    // else left or was removed for being disconnected too long).
+    private winBySoleSurvivor = (): void => {
+        const winner = this.turnOrder[0];
+        this.resetGameState();
+        this.declareWinner(
+            winner,
+            "is the only one left standing and wins by default",
+        );
     };
 
     // Ends the current game: whoever has the fewest binds wins and is
@@ -574,22 +832,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             }
         }
 
-        this.gameActive = false;
-        this.turnOrder = [];
-        this.currentTurnIndex = 0;
-        this.round = 1;
-        this.bindCounts.clear();
-        this.passCounts.clear();
-        this.pilloriedUntilNextDraw.clear();
-        this.strippedForGame.clear();
-        for (const timer of this.pendingBondageTimers.values()) {
-            clearTimeout(timer);
-        }
-        this.pendingBondageTimers.clear();
-        if (this.stripEnforceInterval) {
-            clearInterval(this.stripEnforceInterval);
-            this.stripEnforceInterval = undefined;
-        }
+        this.resetGameState();
 
         if (winner === undefined) {
             this.conn.SendMessage(
@@ -599,13 +842,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             return;
         }
 
-        const winnerCharacter = this.conn.chatRoom.findMember(winner);
-        winnerCharacter?.Appearance.stripBulk({ item: true }, true);
-
-        this.conn.SendMessage(
-            "Emote",
-            `*The dare game is over! ${this.describeMember(winner)} wins with only ${lowestBinds} bind(s) and is freed from all bondage!`,
-        );
+        this.declareWinner(winner, `wins with only ${lowestBinds} bind(s)`);
     };
 
     // Picks who a drawn dare's effect actually applies to: the drawer
