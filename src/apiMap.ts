@@ -157,7 +157,7 @@ export class API_Map extends EventEmitter<MapEvents> {
     }
 
     public removeLeaveRegionTrigger(callback: TriggerCallback): void {
-        this.leaveRegionTriggers = this.enterRegionTriggers.filter(
+        this.leaveRegionTriggers = this.leaveRegionTriggers.filter(
             (trigger) => trigger.callback !== callback,
         );
     }

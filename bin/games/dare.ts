@@ -419,7 +419,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 }
 
                 this.applyPassConsequence(senderCharacter);
-                if (bondageTimer) this.finishTurn();
+                this.finishTurn();
                 break;
             }
             case "reset":

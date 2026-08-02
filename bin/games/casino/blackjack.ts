@@ -1,4 +1,3 @@
-import { resolve } from "path";
 import { waitForCondition } from "../../hub/utils";
 import { Casino, getItemsBlockingForfeit } from "../casino";
 import { FORFEITS } from "./forfeits";
@@ -212,7 +211,6 @@ export class BlackjackGame implements Game {
         this.casino.commandParser.unregister("double");
         this.casino.commandParser.unregister("sign");
         this.clear();
-        resolve();
     }
 
     public isBettingOpen(): boolean {
@@ -329,6 +327,14 @@ export class BlackjackGame implements Game {
         const player = this.players.find(
             (b) => b.memberNumber === sender.MemberNumber,
         );
+        if (!player) {
+            this.conn.SendMessage(
+                "Whisper",
+                "You're not playing in this game.",
+                sender.MemberNumber,
+            );
+            return;
+        }
         const bet = this.getBetsForPlayer(sender.MemberNumber)[
             player.playingHand
         ];
@@ -392,7 +398,14 @@ export class BlackjackGame implements Game {
         const player = this.players.find(
             (b) => b.memberNumber === sender.MemberNumber,
         );
-        const currentBet = bets[player.playingHand];
+        if (!player) {
+            this.conn.SendMessage(
+                "Whisper",
+                "You're not playing in this game.",
+                sender.MemberNumber,
+            );
+            return;
+        }
         if (!bets) {
             this.conn.SendMessage(
                 "Whisper",
@@ -400,7 +413,9 @@ export class BlackjackGame implements Game {
                 sender.MemberNumber,
             );
             return;
-        } else if (currentBet.standing) {
+        }
+        const currentBet = bets[player.playingHand];
+        if (currentBet.standing) {
             this.conn.SendMessage(
                 "Whisper",
                 "You are already standing.",
@@ -486,7 +501,14 @@ export class BlackjackGame implements Game {
         const player = this.players.find(
             (b) => b.memberNumber === sender.MemberNumber,
         );
-        const currentBet = bets[player.playingHand];
+        if (!player) {
+            this.conn.SendMessage(
+                "Whisper",
+                "You're not playing in this game.",
+                sender.MemberNumber,
+            );
+            return;
+        }
         if (!bets) {
             this.conn.SendMessage(
                 "Whisper",
@@ -494,7 +516,9 @@ export class BlackjackGame implements Game {
                 sender.MemberNumber,
             );
             return;
-        } else if (currentBet.standing) {
+        }
+        const currentBet = bets[player.playingHand];
+        if (currentBet.standing) {
             this.conn.SendMessage(
                 "Whisper",
                 "You are already standing.",
@@ -662,6 +686,14 @@ export class BlackjackGame implements Game {
         const player = this.players.find(
             (b) => b.memberNumber === sender.MemberNumber,
         );
+        if (!player) {
+            this.conn.SendMessage(
+                "Whisper",
+                "You're not playing in this game.",
+                sender.MemberNumber,
+            );
+            return;
+        }
         const bet = this.getBetsForPlayer(sender.MemberNumber)[
             player.playingHand
         ];

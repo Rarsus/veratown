@@ -12,7 +12,6 @@
  * limitations under the License.
  */
 
-import { resolve } from "path";
 import { wait, waitForCondition } from "../../hub/utils";
 import { Casino, getItemsBlockingForfeit } from "../casino";
 import {
@@ -722,6 +721,5 @@ export class RouletteGame implements Game {
         this.casino.commandParser.unregister("sign");
         this.casino.commandParser.unregister("wheel");
         this.clear();
-        resolve();
     }
 }
