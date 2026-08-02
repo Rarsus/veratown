@@ -17,25 +17,28 @@ import {
     CommandParser,
     API_Character,
     BC_Server_ChatRoomMessage,
+    AssetGet,
 } from "bc-bot";
 import { wait } from "../hub/utils";
 import { DareStore, DareDoc } from "./dareStore";
 import { CasinoStore } from "./casino/casinostore";
-import { applyForfeitForDare } from "./casino/forfeits";
+import {
+    applyForfeitForDare,
+    describeForfeitOutcome,
+    lockInForfeitKennel,
+} from "./casino/forfeits";
 
-// Forfeit items a player can be lumbered with if they pass on a drawn dare.
-const PASS_FORFEIT_KEYS = [
-    "boots",
-    "legbinder",
-    "frogtie",
-    "gag",
-    "blindfold",
-    "mittens",
-    "paws",
-    "armbinder",
-    "yoke",
-];
-const PASS_FORFEIT_DURATION_MS = 30 * 60 * 1000;
+// How long a repeat dare-evader stays locked in the pillory (first pass is
+// only locked until their next draw instead - see the "pass" command).
+const PILLORY_REPEAT_LOCK_MS = 4 * 60 * 60 * 1000;
+
+// How long a player gets to "!dare forfeit" into the kennel instead of
+// having a drawn bondage dare's effect applied automatically.
+const BONDAGE_DECISION_MS = 15 * 1000;
+
+// How often stripped-for-the-game players get any redressed clothing
+// stripped back off while a structured game is running.
+const STRIP_ENFORCE_INTERVAL_MS = 20 * 1000;
 
 export class Dare {
     public static description = `Dares
@@ -53,13 +56,20 @@ Game Overview
 3. On your turn, !dare draw draws a random card. Strip, bondage and reward
    dares are applied automatically - to yourself, or to a random other
    joined participant if the dare calls for it.
-4. Don't want to do your dare? !dare pass - you'll be forfeited into a
-   random piece of bondage instead (and it still counts against you).
-5. The bot announces whose turn is next after every draw. Once everyone's
+4. Don't want to do your dare? !dare pass - you'll be locked into the
+   pillory until your next draw (and it counts against you). Pass again
+   and you're pilloried for 4 hours with a sign reading "Evades / Dares"!
+5. Drawn a bondage dare? You get a short window to !dare forfeit instead -
+   skip the specific bondage and get locked into a heavy kennel instead.
+6. The bot announces whose turn is next after every draw. Once everyone's
    gone, the round advances - 10 rounds total.
-6. Win condition: when round 10 finishes, whoever picked up the FEWEST
+7. Win condition: when round 10 finishes, whoever picked up the FEWEST
    binds over the whole game wins, and is automatically freed from all
    their bondage. Everyone else stays locked up until their timers run out!
+8. Stripped by a dare? You stay bare for the rest of the game - the bot
+   will keep stripping anything you try to put back on until it ends.
+9. If a body part is already bound when a new bondage dare targets it, the
+   existing lock's timer is extended instead of piling on more gear.
 
 Commands
 =====
@@ -69,6 +79,7 @@ Commands
 !dare turn          - Show whose turn it currently is.
 !dare draw          - Draw a dare card (on your turn, if a game's running).
 !dare pass          - Chicken out of your last drawn dare - forfeit instead.
+!dare forfeit       - After drawing bondage, get kenneled instead of bound.
 !dare add <dare>    - Whisper a new dare card to add to the deck.
 !dare list <page>   - (admin only) List dares in the database.
 !dare reset         - (admin only) Reset the deck / mark all dares unused.
@@ -82,9 +93,15 @@ Rules
 2. For dares involving someone else, the dare is applied to a random other
    joined participant automatically - no need to spin anything yourself.
 3. Dares last 10 minutes unless the dare says otherwise.
-4. Don't want to do your dare? !dare pass - but you'll be forfeited into
-   bondage instead, and it still counts against you for the win condition.
-5. At the end of round 10, the player with the fewest binds wins and is
+4. Don't want to do your dare? !dare pass - but you'll be locked into the
+   pillory until your next draw, and it counts against you. Pass again on
+   a later turn and it's 4 hours in the pillory with a shaming sign!
+5. Bondage dares give you a short window to !dare forfeit into a heavy,
+   exclusively-locked kennel instead of the specific bondage drawn.
+6. If the spot a dare wants to bind is already covered, the existing
+   item's timer is extended rather than adding a second item there.
+7. Stripped players stay bare until the game ends - no redressing early!
+8. At the end of round 10, the player with the fewest binds wins and is
    freed from all their bondage.
 `;
 
@@ -109,6 +126,22 @@ Rules
     // How many bondage items each member has been forfeited into over the
     // course of the current game, used to decide the round-10 winner.
     private bindCounts = new Map<number, number>();
+
+    // Scheduled auto-apply timers for bondage dares currently in their
+    // "!dare forfeit" decision window, keyed by the drawer's member number.
+    private pendingBondageTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+    // Members who've been stripped by a dare during the current game and so
+    // must stay bare until it ends.
+    private strippedForGame = new Set<number>();
+    private stripEnforceInterval: ReturnType<typeof setInterval> | undefined;
+
+    // How many times each member has passed on a drawn dare this game -
+    // the 2nd+ pass escalates the pillory into a long timed, signed one.
+    private passCounts = new Map<number, number>();
+    // Members currently pilloried "until their next draw" (first pass),
+    // released automatically the next time they successfully !dare draw.
+    private pilloriedUntilNextDraw = new Set<number>();
 
     public constructor(
         private conn: API_Connector,
@@ -165,6 +198,25 @@ Rules
                 this.bindCounts.clear();
                 this.pendingDraws.clear();
 
+                for (const timer of this.pendingBondageTimers.values()) {
+                    clearTimeout(timer);
+                }
+                this.pendingBondageTimers.clear();
+                this.strippedForGame.clear();
+                this.passCounts.clear();
+                this.pilloriedUntilNextDraw.clear();
+
+                if (this.stripEnforceInterval) {
+                    clearInterval(this.stripEnforceInterval);
+                }
+                this.stripEnforceInterval = setInterval(() => {
+                    for (const memberNumber of this.strippedForGame) {
+                        this.conn.chatRoom
+                            .findMember(memberNumber)
+                            ?.Appearance.stripBulk({ clothing: true }, false);
+                    }
+                }, STRIP_ENFORCE_INTERVAL_MS);
+
                 const order = this.turnOrder
                     .map((m) => this.describeMember(m))
                     .join(" -> ");
@@ -188,6 +240,33 @@ Rules
             case "help":
                 this.conn.reply(msg, Dare.description);
                 break;
+            case "forfeit": {
+                const timer = this.pendingBondageTimers.get(
+                    senderCharacter.MemberNumber,
+                );
+                if (!timer) {
+                    this.conn.reply(
+                        msg,
+                        "You don't have a bondage dare pending to forfeit out of!",
+                    );
+                    return;
+                }
+                clearTimeout(timer);
+                this.pendingBondageTimers.delete(senderCharacter.MemberNumber);
+                this.pendingDraws.delete(senderCharacter.MemberNumber);
+
+                lockInForfeitKennel(
+                    senderCharacter,
+                    this.conn.Player.MemberNumber,
+                );
+                this.addBinds(senderCharacter.MemberNumber, 2);
+                this.conn.SendMessage(
+                    "Emote",
+                    `*${senderCharacter} can't face that bondage and taps out - the bot scoops them up and seals them into a heavy kennel instead, exclusively locked until someone lets them out!`,
+                );
+                this.finishTurn();
+                break;
+            }
             case "add":
                 if (args.length < 2) {
                     this.conn.SendMessage("Emote", "*Usage: !dare add <dare>");
@@ -216,6 +295,18 @@ Rules
                     }
                 }
 
+                if (
+                    this.pilloriedUntilNextDraw.delete(
+                        senderCharacter.MemberNumber,
+                    )
+                ) {
+                    senderCharacter.Appearance.RemoveItem("ItemArms");
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*The pillory releases ${senderCharacter} just in time for their next draw!`,
+                    );
+                }
+
                 this.conn.SendMessage(
                     "Emote",
                     `*${senderCharacter} draws a dare card...`,
@@ -233,9 +324,28 @@ Rules
                 );
 
                 this.pendingDraws.set(senderCharacter.MemberNumber, dare);
-                await this.applyDareEffect(senderCharacter, dare);
 
-                if (this.gameActive) this.advanceTurn();
+                if (dare.category === "bondage") {
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${senderCharacter} has ${BONDAGE_DECISION_MS / 1000} seconds to !dare forfeit into the kennel instead, or !dare pass to chicken out entirely - otherwise the bondage locks in automatically!`,
+                    );
+                    const timer = setTimeout(() => {
+                        this.pendingBondageTimers.delete(
+                            senderCharacter.MemberNumber,
+                        );
+                        void this.applyDareEffect(senderCharacter, dare).then(
+                            () => this.finishTurn(),
+                        );
+                    }, BONDAGE_DECISION_MS);
+                    this.pendingBondageTimers.set(
+                        senderCharacter.MemberNumber,
+                        timer,
+                    );
+                } else {
+                    await this.applyDareEffect(senderCharacter, dare);
+                    this.finishTurn();
+                }
                 break;
             }
             case "pass": {
@@ -251,21 +361,82 @@ Rules
                 }
                 this.pendingDraws.delete(senderCharacter.MemberNumber);
 
-                const forfeitKey =
-                    PASS_FORFEIT_KEYS[
-                        Math.floor(Math.random() * PASS_FORFEIT_KEYS.length)
-                    ];
-                applyForfeitForDare(
-                    senderCharacter,
-                    this.conn.Player.MemberNumber,
-                    forfeitKey,
-                    PASS_FORFEIT_DURATION_MS,
+                const bondageTimer = this.pendingBondageTimers.get(
+                    senderCharacter.MemberNumber,
                 );
-                this.addBinds(senderCharacter.MemberNumber, 1);
-                this.conn.SendMessage(
-                    "Emote",
-                    `*${senderCharacter} chickens out of their dare and gets locked into a forfeit instead!`,
+                if (bondageTimer) {
+                    clearTimeout(bondageTimer);
+                    this.pendingBondageTimers.delete(
+                        senderCharacter.MemberNumber,
+                    );
+                }
+
+                const passCount =
+                    (this.passCounts.get(senderCharacter.MemberNumber) ?? 0) +
+                    1;
+                this.passCounts.set(senderCharacter.MemberNumber, passCount);
+
+                senderCharacter.Appearance.RemoveItem("ItemArms");
+                const pillory = senderCharacter.Appearance.AddItem(
+                    AssetGet("ItemArms", "Pillory"),
                 );
+                pillory.SetDifficulty(20);
+
+                if (passCount === 1) {
+                    pillory.SetCraft({
+                        Name: "Dare: Pillory",
+                        Description: `${senderCharacter} chickened out of a dare and has been locked into the pillory until their next draw!`,
+                    });
+                    pillory.lock(
+                        "ExclusivePadlock",
+                        this.conn.Player.MemberNumber,
+                        {},
+                    );
+                    this.pilloriedUntilNextDraw.add(
+                        senderCharacter.MemberNumber,
+                    );
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${senderCharacter} chickens out of their dare and is clamped into the pillory - stuck there until their next draw!`,
+                    );
+                } else {
+                    pillory.SetCraft({
+                        Name: "Dare: Repeat Evader",
+                        Description: `${senderCharacter} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
+                    });
+                    pillory.lock(
+                        "TimerPadlock",
+                        this.conn.Player.MemberNumber,
+                        {
+                            RemoveItem: true,
+                            RemoveTimer:
+                                Date.now() + PILLORY_REPEAT_LOCK_MS,
+                            ShowTimer: true,
+                            LockSet: true,
+                        },
+                    );
+                    this.pilloriedUntilNextDraw.delete(
+                        senderCharacter.MemberNumber,
+                    );
+
+                    senderCharacter.Appearance.RemoveItem("ItemMisc");
+                    const sign = senderCharacter.Appearance.AddItem(
+                        AssetGet("ItemMisc", "WoodenSign"),
+                    );
+                    sign.setProperty("Text", "Evades");
+                    sign.setProperty("Text2", "Dares");
+
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${senderCharacter} chickens out AGAIN! Locked in the pillory for 4 hours with a sign reading "Evades / Dares" for everyone to see.`,
+                    );
+                }
+
+                this.addBinds(
+                    senderCharacter.MemberNumber,
+                    passCount === 1 ? 1 : 2,
+                );
+                if (bondageTimer) this.finishTurn();
                 break;
             }
             case "reset":
@@ -325,7 +496,7 @@ Rules
             default:
                 this.conn.SendMessage(
                     "Emote",
-                    "*Usage: !dare <join|leave|start|turn|add|draw|pass|reset|list|help>",
+                    "*Usage: !dare <join|leave|start|turn|add|draw|pass|forfeit|reset|list|help>",
                 );
                 return;
         }
@@ -334,6 +505,17 @@ Rules
     private describeMember = (memberNumber: number): string => {
         const character = this.conn.chatRoom.findMember(memberNumber);
         return character ? `${character}` : `#${memberNumber}`;
+    };
+
+    // Descriptive strip emote, instead of a flat "strips off" statement.
+    private describeStrip = (target: API_Character, dare: DareDoc): string => {
+        if (dare.stripCount === 1) {
+            return `*${target} peels off a single item of clothing and tosses it aside.`;
+        }
+        if (dare.stripCount) {
+            return `*${target} slowly strips off ${dare.stripCount} items of clothing, one by one.`;
+        }
+        return `*${target} strips down completely, leaving nothing to the imagination.`;
     };
 
     private addBinds = (memberNumber: number, count: number): void => {
@@ -350,6 +532,13 @@ Rules
             "Emote",
             `*Round ${this.round}/${this.totalRounds}: it's ${this.describeMember(memberNumber)}'s turn to !dare draw.`,
         );
+    };
+
+    // Advances the turn/round if a structured game is running; a no-op
+    // during casual free-for-all play. Called once a drawn dare (and any
+    // pass/forfeit decision window for it) has fully resolved.
+    private finishTurn = (): void => {
+        if (this.gameActive) this.advanceTurn();
     };
 
     // Moves to the next player's turn, advancing the round (and ending the
@@ -385,6 +574,17 @@ Rules
         this.currentTurnIndex = 0;
         this.round = 1;
         this.bindCounts.clear();
+        this.passCounts.clear();
+        this.pilloriedUntilNextDraw.clear();
+        this.strippedForGame.clear();
+        for (const timer of this.pendingBondageTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.pendingBondageTimers.clear();
+        if (this.stripEnforceInterval) {
+            clearInterval(this.stripEnforceInterval);
+            this.stripEnforceInterval = undefined;
+        }
 
         if (winner === undefined) {
             this.conn.SendMessage(
@@ -446,7 +646,11 @@ Rules
                 : this.resolveDareTarget(drawer, dare);
 
         switch (dare.category) {
-            case "strip":
+            case "strip": {
+                this.conn.SendMessage(
+                    "Emote",
+                    this.describeStrip(target, dare),
+                );
                 target.Appearance.stripBulk(
                     { clothing: true },
                     false,
@@ -458,18 +662,33 @@ Rules
                         `*${target} must stay undressed for this dare - no getting dressed until it's done!`,
                     );
                 }
+                if (this.gameActive) {
+                    this.strippedForGame.add(target.MemberNumber);
+                    this.conn.SendMessage(
+                        "Emote",
+                        `*${target} will stay bare for the rest of the game!`,
+                    );
+                }
                 break;
+            }
             case "bondage": {
                 const forfeitKeys = dare.forfeitKeys ?? [];
+                let appliedCount = 0;
                 for (const forfeitKey of forfeitKeys) {
-                    applyForfeitForDare(
+                    const result = applyForfeitForDare(
                         target,
                         this.conn.Player.MemberNumber,
                         forfeitKey,
                         dare.durationMs,
                     );
+                    if (!result) continue;
+                    this.conn.SendMessage(
+                        "Emote",
+                        describeForfeitOutcome(target, result),
+                    );
+                    if (result.outcome === "applied") appliedCount++;
                 }
-                this.addBinds(target.MemberNumber, forfeitKeys.length);
+                this.addBinds(target.MemberNumber, appliedCount);
                 if (dare.noRedress) {
                     this.conn.SendMessage(
                         "Emote",

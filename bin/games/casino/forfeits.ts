@@ -107,6 +107,27 @@ export const FORFEITS: Record<string, Forfeit> = {
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemArms", "Yoke")],
     },
+    straitjacket: {
+        name: "Straitjacket",
+        value: 14,
+        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lockTimeMs: 20 * 60 * 1000,
+        items: () => [AssetGet("ItemArms", "StraitJacket")],
+    },
+    hood: {
+        name: "Hood",
+        value: 12,
+        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lockTimeMs: 20 * 60 * 1000,
+        items: () => [AssetGet("ItemHood", "LeatherHoodSealed")],
+    },
+    spreader: {
+        name: "Spreader bar",
+        value: 8,
+        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lockTimeMs: 20 * 60 * 1000,
+        items: () => [AssetGet("ItemFeet", "SpreaderMetal")],
+    },
     cage: {
         name: "Cage",
         value: 30,
@@ -311,29 +332,134 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
 }
 
 /**
+ * Human body part flavor text used to describe what wearing a given
+ * forfeit's asset group feels/looks like, for descriptive dare emotes.
+ */
+function bodyPartFlavor(group: AssetGroupName): string {
+    switch (group) {
+        case "ItemMouth":
+            return "gagged, muffling every word";
+        case "ItemHead":
+            return "blindfolded, plunged into darkness";
+        case "ItemHood":
+            return "hooded, the world reduced to muffled darkness";
+        case "ItemHands":
+            return "mittened, fingers made useless";
+        case "ItemArms":
+            return "bound at the arms, elbows drawn in tight";
+        case "ItemLegs":
+            return "strapped up at the legs, steps shortened to a shuffle";
+        case "ItemBoots":
+            return "locked into towering heels";
+        case "ItemFeet":
+            return "spread wide at the ankles, barely able to shuffle";
+        case "ItemDevices":
+            return "sealed inside a heavy device";
+        case "ItemPelvis":
+        case "ItemVulva":
+            return "locked into chastity, with no relief in sight";
+        default:
+            return "bound up snugly";
+    }
+}
+
+export interface ForfeitApplyResult {
+    forfeit: Forfeit;
+    forfeitKey: string;
+    group: AssetGroupName;
+    outcome: "applied" | "extended";
+    durationMs: number;
+}
+
+/**
+ * Builds a descriptive emote line for the outcome of applyForfeitForDare(),
+ * instead of just flatly stating that an item was equipped.
+ */
+export function describeForfeitOutcome(
+    target: API_Character,
+    result: ForfeitApplyResult,
+): string {
+    const itemName = result.forfeit.name.toLowerCase();
+    if (result.outcome === "extended") {
+        const extraMinutes = Math.max(1, Math.round(result.durationMs / 60000));
+        return (
+            `*${target} is already ${bodyPartFlavor(result.group)} - instead of piling on more gear, ` +
+            `the bot simply winds their ${itemName}'s timer forward by another ${extraMinutes} minute(s)!`
+        );
+    }
+
+    return (
+        `*${target} is ${bodyPartFlavor(result.group)} as the ${itemName} ` +
+        `is fastened into place and locks shut with a firm click.`
+    );
+}
+
+/**
  * Equips a single forfeit item (by FORFEITS key) on a character, optionally
  * overriding its default lock duration. Used by the dare game so dare cards
  * can vary how long a piece of bondage stays locked on.
  *
+ * If the character already has something equipped in the forfeit's asset
+ * group, no new item is added - instead the existing item's lock timer is
+ * extended by the requested duration, so a dare never stacks two items onto
+ * the same body part (e.g. two gags).
+ *
  * Forfeits with a custom `applyItems` (cage/pet/chastity) always use their
- * own baked-in duration, since overriding those isn't supported.
+ * own baked-in duration when newly applied, since overriding those isn't
+ * supported - but an already-equipped one can still have its timer extended.
  */
 export function applyForfeitForDare(
     character: API_Character,
     lockMemberNumber: number,
     forfeitKey: string,
     durationMsOverride?: number,
-): void {
+): ForfeitApplyResult | undefined {
     const forfeit = FORFEITS[forfeitKey];
-    if (!forfeit) return;
+    if (!forfeit) return undefined;
+
+    const probeItems = forfeit.items(character);
+    if (probeItems.length !== 1) return undefined;
+    const group = probeItems[0].Group;
+
+    const existing = character.Appearance.InventoryGet(group);
+    if (existing) {
+        const extendMs =
+            durationMsOverride ?? forfeit.lockTimeMs ?? 20 * 60 * 1000;
+        const currentExpiry =
+            existing.getData().Property?.RemoveTimer ?? Date.now();
+        const newExpiry = Math.max(currentExpiry, Date.now()) + extendMs;
+        existing.setProperty("RemoveTimer", newExpiry);
+        existing.setProperty("ShowTimer", true);
+        existing.setProperty("RemoveItem", true);
+        if (!existing.getData().Property?.LockedBy) {
+            existing.lock("TimerPasswordPadlock", lockMemberNumber, {
+                Password: generatePassword(),
+                Hint: "Dare in progress!",
+                LockSet: true,
+            });
+        }
+        return {
+            forfeit,
+            forfeitKey,
+            group,
+            outcome: "extended",
+            durationMs: extendMs,
+        };
+    }
 
     if (forfeit.applyItems) {
         forfeit.applyItems(character, lockMemberNumber);
-        return;
+        return {
+            forfeit,
+            forfeitKey,
+            group,
+            outcome: "applied",
+            durationMs: forfeit.lockTimeMs ?? 0,
+        };
     }
 
-    const items = forfeit.items(character);
-    if (items.length !== 1) return;
+    const items = probeItems;
+    if (items.length !== 1) return undefined;
 
     const hairColor = character.Appearance.InventoryGet("HairFront").GetColor();
     const added = character.Appearance.AddItem(items[0]);
@@ -372,6 +498,38 @@ export function applyForfeitForDare(
             LockSet: true,
         });
     }
+
+    return {
+        forfeit,
+        forfeitKey,
+        group,
+        outcome: "applied",
+        durationMs: lockTime ?? 0,
+    };
+}
+
+/**
+ * Locks a character into a custom heavy kennel with an exclusive padlock
+ * (no timer - only the bot, as the locker, can free them). Used as the
+ * "forfeit" option a player can choose instead of having a bondage dare's
+ * effect applied to them.
+ */
+export function lockInForfeitKennel(
+    character: API_Character,
+    lockMemberNumber: number,
+): void {
+    const kennel = character.Appearance.AddItem(
+        AssetGet("ItemDevices", "Kennel"),
+    );
+    kennel.setProperty("TypeRecord", { d: 1, p: 1 });
+    kennel.SetDifficulty(30);
+    kennel.SetCraft({
+        Name: "Dare: Forfeit Kennel",
+        Description:
+            `${character} couldn't face their bondage dare and was scooped up and sealed into a heavy kennel instead. ` +
+            "There's no timer on this one - someone will have to let them out!",
+    });
+    kennel.lock("ExclusivePadlock", lockMemberNumber, {});
 }
 
 function makePet(
