@@ -24,6 +24,14 @@ See [CREDITS.md](CREDITS.md) for who's contributed to the project, and
 [IMPROVEMENTS.md](IMPROVEMENTS.md) for the results of an in-depth code review
 (fixes made and proposals for further work).
 
+Further reference documentation:
+
+- [LOCKS.md](LOCKS.md) - lock types and the locking API.
+- [BONDAGE.md](BONDAGE.md) - bondage item categories/catalogs and how to apply/remove them.
+- [CLOTHING.md](CLOTHING.md) - clothing classification, applying/saving/restoring/recolouring outfits.
+- [VERATOWN.md](VERATOWN.md) - current feature set of the Veratown room bot.
+- [HOWTOS.md](HOWTOS.md) - patterns for tile/region triggers, command construction, and building a new bot.
+
 ## Code layout
 
 This is a two-package repo:
