@@ -32,6 +32,8 @@ import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { VeratownFeatureSystem } from "./veratown/featureSystem";
+import { VeratownMapStore } from "./veratown/mapStore";
+import { VeratownAdminCommands } from "./veratown/adminCommands";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -57,6 +59,10 @@ export class Veratown {
         "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
         "/bot changelog - Shows a summary of recent functional changes to the map",
         "/bot feature <list|enable|disable> <name> - Show, or (admin only) enable/disable, individual room features (cage, kennel, shower, bed, bunnyPark, window, trashcan)",
+        "/bot map update - Saves the room's current layout to the database as the new default (admin only)",
+        "/bot map reset - Resets the room layout to the built-in default map, in the database and live (admin only)",
+        "/bot map export - Shows the current layout as a portable string, for backup or to move it elsewhere (admin only)",
+        "!map import <data> - Loads a layout previously produced by \"/bot map export\", live and as the new default (admin only, must be sent as its own message, not via /bot)",
         "/bot dare <join|leave|start|turn|add|draw|pass|forfeit|reset|list|help> - Join/leave, start/check turn, add, draw, pass (pillory!), forfeit into a kennel, reset or (admin only) list dare/forfeit cards (if configured)",
         "/bot pick - Randomly selects a room member other than the bot or yourself",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
@@ -80,6 +86,11 @@ export class Veratown {
     // absent from this list rather than crashing Veratown's startup.
     private features: VeratownFeatureSystem[] = [];
 
+    // Only set when mongo_uri/mongo_db are configured; without it, the map
+    // layout falls back to the built-in default (MAP, from veratownConfig.ts)
+    // and can't be saved/persisted across restarts.
+    private mapStore?: VeratownMapStore;
+
     public constructor(
         private conn: API_Connector,
         private conn2?: API_Connector,
@@ -96,9 +107,10 @@ export class Veratown {
                 this.commandParser,
                 new CasinoStore(db),
             );
+            this.mapStore = new VeratownMapStore(db);
         } else {
             console.log(
-                "mongo_uri/mongo_db must be configured to enable the dare/pick commands in Veratown; skipping.",
+                "mongo_uri/mongo_db must be configured to enable the dare/pick commands and persistent map storage in Veratown; skipping.",
             );
         }
 
@@ -127,9 +139,18 @@ export class Veratown {
         // are updated to match the new map layout.
 
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
-        this.commandParser.register("strip", this.onCommandStrip);
         this.commandParser.register("changelog", this.onCommandChangelog);
-        this.commandParser.register("feature", this.onCommandFeature);
+
+        // All admin-only commands (strip, feature enable/disable, map
+        // update/reset/import/export) live in their own module, with the
+        // same fault-isolation safeguards (guardHandler()) used by the room
+        // feature systems above.
+        new VeratownAdminCommands(
+            this.conn,
+            this.commandParser,
+            this.features,
+            this.mapStore,
+        ).registerCommands();
     }
 
     // Constructs and registers a single room feature system, isolating any
@@ -173,9 +194,14 @@ export class Veratown {
 
     private setupRoom = async () => {
         try {
-            this.conn.chatRoom.map.setMapFromData(
-                JSON.parse(decompressFromBase64(MAP)),
-            );
+            // The database holds the current "live" layout (as saved via
+            // "/bot map update"/"import"); if it's unavailable or empty
+            // (eg. a fresh database), fail over to the built-in default map
+            // from veratownConfig.ts instead.
+            const storedMapData = await this.mapStore?.load();
+            const mapData =
+                storedMapData ?? JSON.parse(decompressFromBase64(MAP));
+            this.conn.chatRoom.map.setMapFromData(mapData);
         } catch (e) {
             console.log("Map data not loaded", e);
         }
@@ -203,31 +229,6 @@ export class Veratown {
         sender.Kick();
     };
 
-    private onCommandStrip = async (
-        sender: API_Character,
-        msg: BC_Server_ChatRoomMessage,
-        args: string[],
-    ) => {
-        if (!sender.IsRoomAdmin()) {
-            this.conn.reply(msg, "Only admins can use this command.");
-            return;
-        }
-
-        if (args.length === 0) {
-            this.conn.reply(msg, "Usage: strip <name or member number>");
-            return;
-        }
-
-        const target = this.conn.chatRoom.findCharacter(args[0]);
-        if (!target) {
-            this.conn.reply(msg, "I can't find that person.");
-            return;
-        }
-
-        target.Appearance.stripBulk({ clothing: true });
-        this.conn.reply(msg, `${target} has been stripped of their clothing.`);
-    };
-
     private onCommandChangelog = async (
         sender: API_Character,
         msg: BC_Server_ChatRoomMessage,
@@ -236,62 +237,6 @@ export class Veratown {
         this.conn.reply(
             msg,
             `Recent changes to the map:\n${CHANGELOG.map((entry) => `- ${entry}`).join("\n")}`,
-        );
-    };
-
-    private onCommandFeature = async (
-        sender: API_Character,
-        msg: BC_Server_ChatRoomMessage,
-        args: string[],
-    ) => {
-        const sub = args[0];
-
-        if (!sub || sub === "list") {
-            if (this.features.length === 0) {
-                this.conn.reply(
-                    msg,
-                    "No room features are currently available.",
-                );
-                return;
-            }
-            const lines = this.features.map(
-                (f) =>
-                    `${f.key} - ${f.label}: ${f.enabled ? "enabled" : "disabled"}`,
-            );
-            this.conn.reply(msg, `Room features:\n${lines.join("\n")}`);
-            return;
-        }
-
-        if (sub !== "enable" && sub !== "disable") {
-            this.conn.reply(
-                msg,
-                "Usage: /bot feature <list|enable|disable> [name]",
-            );
-            return;
-        }
-
-        if (!sender.IsRoomAdmin()) {
-            this.conn.reply(
-                msg,
-                "Only admins can enable or disable features.",
-            );
-            return;
-        }
-
-        const key = args[1];
-        const feature = this.features.find((f) => f.key === key);
-        if (!feature) {
-            this.conn.reply(
-                msg,
-                `Unknown feature "${key}". Use "/bot feature list" to see available features.`,
-            );
-            return;
-        }
-
-        feature.enabled = sub === "enable";
-        this.conn.reply(
-            msg,
-            `${feature.label} is now ${feature.enabled ? "enabled" : "disabled"}.`,
         );
     };
 
