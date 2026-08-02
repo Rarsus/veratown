@@ -2,7 +2,10 @@
 
 This document covers how ordinary clothing (as opposed to bondage/"Item"
 restraints - see [BONDAGE.md](BONDAGE.md)) is classified, applied, saved,
-restored, recoloured, and stripped in this repo.
+restored, recoloured, and stripped in this repo. For an exhaustive,
+generated list of every individual clothing asset (every `Cloth`/`Hat`/
+`Shoes`/etc. item), see [ITEMS.md](ITEMS.md) and its per-group files under
+[`docs/items/`](docs/items).
 
 ## What counts as "clothing"
 

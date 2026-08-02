@@ -31,6 +31,7 @@ Further reference documentation:
 - [CLOTHING.md](CLOTHING.md) - clothing classification, applying/saving/restoring/recolouring outfits.
 - [VERATOWN.md](VERATOWN.md) - current feature set of the Veratown room bot.
 - [HOWTOS.md](HOWTOS.md) - patterns for tile/region triggers, command construction, and building a new bot.
+- [ITEMS.md](ITEMS.md) - generated, exhaustive catalog of every asset group/item in `src/bcdata`, with per-group "how to add" snippets and extended-item customization options.
 
 ## Code layout
 

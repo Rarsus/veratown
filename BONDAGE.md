@@ -5,7 +5,10 @@ repo: how the game data classifies something as bondage vs. clothing, the
 catalogs of bondage items already defined in the code, and the full recipe
 for applying/configuring/removing them from your own bot code. For locking
 mechanics specifically, see [LOCKS.md](LOCKS.md) (this document links to it
-rather than repeating it).
+rather than repeating it). For an exhaustive, generated list of every
+individual bondage asset (every `ItemArms`/`ItemMouth`/`ItemDevices`/etc.
+item, not just the ones already used in this bot's code), see
+[ITEMS.md](ITEMS.md) and its per-group files under [`docs/items/`](docs/items).
 
 ## What counts as "bondage"
 
