@@ -41,7 +41,8 @@ const BONDAGE_DECISION_MS = 15 * 1000;
 const STRIP_ENFORCE_INTERVAL_MS = 20 * 1000;
 
 export class Dare {
-    public static description = `Dares
+
+    public static description_intro = `Dares
  =====
 
 A structured bondage/strip dare game for a group, played over 10 rounds
@@ -70,23 +71,24 @@ Game Overview
    will keep stripping anything you try to put back on until it ends.
 9. If a body part is already bound when a new bondage dare targets it, the
    existing lock's timer is extended instead of piling on more gear.
+`;
 
-Commands
+public static description_commands = `Commands
 =====
 !dare join          - Join the game as a participant.
-!dare leave         - Leave the game (you won't be targeted or turned to).
+!dare leave         - Leave the game - you won't be targeted or turned to.
 !dare start         - Start a fresh 10-round game with everyone joined.
 !dare turn          - Show whose turn it currently is.
-!dare draw          - Draw a dare card (on your turn, if a game's running).
+!dare draw          - Draw a dare card - on your turn, if a game's running.
 !dare pass          - Chicken out of your last drawn dare - forfeit instead.
 !dare forfeit       - After drawing bondage, get kenneled instead of bound.
 !dare add <dare>    - Whisper a new dare card to add to the deck.
-!dare list <page>   - (admin only) List dares in the database.
-!dare reset         - (admin only) Reset the deck / mark all dares unused.
+!dare list <page>   - [admin only] List dares in the database.
+!dare reset         - [admin only] Reset the deck / mark all dares unused.
 !dare help          - Show this message.
-!pick               - Randomly pick a room member (not you, not the bot).
-
-Rules
+!pick               - Randomly pick a room member, not you, not the bot.
+`;
+public static description_rules = `Rules
 =====
 1. !dare join before you start, so you can be picked as a dare's target and
    take your turn in a structured game.
@@ -104,6 +106,7 @@ Rules
 8. At the end of round 10, the player with the fewest binds wins and is
    freed from all their bondage.
 `;
+public static description = Dare.description_intro + "\n" + Dare.description_commands + "\n" + Dare.description_rules;
 
     private commandParser: CommandParser;
 
@@ -238,7 +241,9 @@ Rules
                 this.announceTurn();
                 break;
             case "help":
-                this.conn.reply(msg, Dare.description);
+                this.conn.reply(msg, Dare.description_intro);
+                this.conn.reply(msg, Dare.description_commands);
+                this.conn.reply(msg, Dare.description_rules);
                 break;
             case "forfeit": {
                 const timer = this.pendingBondageTimers.get(
@@ -405,13 +410,13 @@ Rules
                         Description: `${senderCharacter} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
                     });
                     pillory.lock(
-                        "TimerPadlock",
+                        "TimerPasswordPadlock",
                         this.conn.Player.MemberNumber,
                         {
                             RemoveItem: true,
                             RemoveTimer:
                                 Date.now() + PILLORY_REPEAT_LOCK_MS,
-                            ShowTimer: true,
+                            ShowTimer: false,
                             LockSet: true,
                         },
                     );
