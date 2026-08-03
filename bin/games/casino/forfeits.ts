@@ -198,11 +198,14 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Chastity",
         value: 15,
         items: (sender) => {
-            if (!sender || !sender.Appearance) {
-                return [AssetGet("ItemPelvis", "ModularChastityBelt")];
-            }
-            const item = sender.Appearance.InventoryGet("Pussy");
-            if (item.Name == "Penis") {
+            // InventoryGet("Pussy") returns null for characters that don't
+            // have anything equipped in that group at all (e.g. some body
+            // types/outfits never populate it) - fall back to the belt
+            // instead of crashing on `item.Name` below, which used to abort
+            // the whole bondage dare (and every other forfeitKey after this
+            // one) for those characters.
+            const item = sender?.Appearance?.InventoryGet("Pussy");
+            if (item?.Name == "Penis") {
                 return [AssetGet("ItemVulva", "PlasticChastityCage2")];
             } else {
                 return [AssetGet("ItemPelvis", "ModularChastityBelt")];
@@ -273,7 +276,12 @@ export const SERVICES: Record<string, Service> = {
 };
 
 function makeChaste(character: API_Character, lockMemberNumber: number): void {
-    if (character.Appearance.InventoryGet("Pussy").Name == "Penis") {
+    // Same InventoryGet("Pussy") null-guard as the "chastity" forfeit's
+    // items() above - some bodies/outfits never populate that group, and
+    // this used to crash with `.Name` on null, aborting the whole bondage
+    // application for the character.
+    const pussyItem = character.Appearance.InventoryGet("Pussy");
+    if (pussyItem?.Name == "Penis") {
         const chastityCage = character.Appearance.AddItem(
             AssetGet("ItemVulva", "PlasticChastityCage2"),
         );
