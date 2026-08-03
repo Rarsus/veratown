@@ -56,14 +56,48 @@ export interface DareOutfitDoc {
     savedAt: number;
 }
 
+// Full snapshot of the Dare feature's live state (lobby, every active
+// game's roster/turn/round, and all the per-member bookkeeping needed to
+// resume exactly where things left off), persisted as a single document so
+// a bot restart/reconnect doesn't lose in-progress games. See Dare's
+// persistState()/loadState().
+export interface DareStateDoc {
+    _id: "state";
+    lobby: number[];
+    nextGameId: number;
+    games: {
+        id: number;
+        turnOrder: number[];
+        currentTurnIndex: number;
+        round: number;
+        // Epoch ms when the current turn began - used to recompute
+        // remaining reminder/auto-pass delays after a reload, rather than
+        // persisting the timers themselves.
+        turnStartedAt?: number;
+    }[];
+    bindCounts: [number, number][];
+    passCounts: [number, number][];
+    pilloriedUntilNextDraw: number[];
+    dressingBlocked: number[];
+    pendingDraws: [number, DareDoc][];
+    pendingBondage: [number, { dare: DareDoc; deadlineAt: number }][];
+    // Members who've left the room and are on their 1-minute grace period
+    // before being purged from the lobby/game they were in, keyed by the
+    // epoch ms their disconnect was first noticed.
+    disconnected: [number, number][];
+    updatedAt: number;
+}
+
 export class DareStore {
     private inited = false;
     private dares: Collection<DareDoc>;
     private outfits: Collection<DareOutfitDoc>;
+    private state: Collection<DareStateDoc>;
 
     constructor(private db: Db) {
         this.dares = this.db.collection<DareDoc>("dares");
         this.outfits = this.db.collection<DareOutfitDoc>("dareOutfits");
+        this.state = this.db.collection<DareStateDoc>("dareState");
     }
 
     private async init(): Promise<void> {
@@ -158,5 +192,205 @@ export class DareStore {
     public async clearOriginalOutfit(memberNumber: number): Promise<void> {
         await this.init();
         await this.outfits.deleteOne({ _id: memberNumber });
+    }
+
+    // Persists (upserts) the full live-state snapshot. Called by Dare after
+    // every state-mutating action so a restart/reconnect can resume without
+    // losing in-progress games, the lobby, or per-member bookkeeping.
+    public async saveState(
+        state: Omit<DareStateDoc, "_id" | "updatedAt">,
+    ): Promise<void> {
+        await this.init();
+        await this.state.updateOne(
+            { _id: "state" },
+            { $set: { ...state, updatedAt: Date.now() } },
+            { upsert: true },
+        );
+    }
+
+    public async loadState(): Promise<DareStateDoc | undefined> {
+        await this.init();
+        const doc = await this.state.findOne({ _id: "state" });
+        return doc ?? undefined;
+    }
+
+    // Checks every dare in the database against the expected DareDoc shape
+    // and repairs (or strips) any field that doesn't conform - eg. a
+    // non-numeric stripCount, an unrecognized category, a negative chips
+    // value. Returns a summary plus a human-readable line per fixed dare.
+    public async validateDares(): Promise<{
+        checked: number;
+        fixed: number;
+        issues: string[];
+    }> {
+        await this.init();
+        const all = await this.dares.find({}).toArray();
+        const issues: string[] = [];
+        let fixed = 0;
+
+        const validCategories = new Set(["strip", "bondage", "reward"]);
+        const validTargets = new Set(["self", "other"]);
+
+        for (const dare of all) {
+            const update: Partial<DareDoc> = {};
+            const unset: Record<string, ""> = {};
+            let changed = false;
+
+            if (typeof dare.text !== "string" || dare.text.trim() === "") {
+                issues.push(
+                    `#${dare._id}: empty/invalid text - skipped (needs manual fix).`,
+                );
+                continue;
+            }
+
+            if (
+                dare.category !== undefined &&
+                !validCategories.has(dare.category)
+            ) {
+                issues.push(
+                    `#${dare._id}: unrecognized category "${dare.category}" - cleared.`,
+                );
+                unset.category = "";
+                changed = true;
+            }
+
+            const category =
+                unset.category !== undefined ? undefined : dare.category;
+
+            if (dare.stripCount !== undefined) {
+                const n = Number(dare.stripCount);
+                if (!Number.isFinite(n) || n < 1) {
+                    issues.push(
+                        `#${dare._id}: invalid stripCount "${dare.stripCount}" - cleared.`,
+                    );
+                    unset.stripCount = "";
+                    changed = true;
+                } else if (n !== dare.stripCount) {
+                    update.stripCount = Math.floor(n);
+                    changed = true;
+                }
+                if (category !== "strip" && category !== undefined) {
+                    issues.push(
+                        `#${dare._id}: stripCount set on a non-strip dare - cleared.`,
+                    );
+                    unset.stripCount = "";
+                    changed = true;
+                }
+            }
+
+            if (dare.forfeitKeys !== undefined) {
+                if (
+                    !Array.isArray(dare.forfeitKeys) ||
+                    !dare.forfeitKeys.every((k) => typeof k === "string")
+                ) {
+                    issues.push(`#${dare._id}: invalid forfeitKeys - cleared.`);
+                    unset.forfeitKeys = "";
+                    changed = true;
+                } else if (category !== "bondage" && category !== undefined) {
+                    issues.push(
+                        `#${dare._id}: forfeitKeys set on a non-bondage dare - cleared.`,
+                    );
+                    unset.forfeitKeys = "";
+                    changed = true;
+                }
+            }
+
+            if (dare.durationMs !== undefined) {
+                const n = Number(dare.durationMs);
+                if (!Number.isFinite(n) || n <= 0) {
+                    issues.push(
+                        `#${dare._id}: invalid durationMs "${dare.durationMs}" - cleared.`,
+                    );
+                    unset.durationMs = "";
+                    changed = true;
+                }
+            }
+
+            if (dare.chips !== undefined) {
+                const n = Number(dare.chips);
+                if (!Number.isFinite(n) || n <= 0) {
+                    issues.push(
+                        `#${dare._id}: invalid chips "${dare.chips}" - cleared.`,
+                    );
+                    unset.chips = "";
+                    changed = true;
+                } else if (n !== dare.chips) {
+                    update.chips = Math.floor(n);
+                    changed = true;
+                }
+                if (category !== "reward" && category !== undefined) {
+                    issues.push(
+                        `#${dare._id}: chips set on a non-reward dare - cleared.`,
+                    );
+                    unset.chips = "";
+                    changed = true;
+                }
+            }
+
+            if (dare.target !== undefined && !validTargets.has(dare.target)) {
+                issues.push(
+                    `#${dare._id}: unrecognized target "${dare.target}" - cleared.`,
+                );
+                unset.target = "";
+                changed = true;
+            }
+
+            if (typeof dare.used !== "boolean") {
+                update.used = !!dare.used;
+                changed = true;
+            }
+
+            if (!changed) continue;
+
+            fixed++;
+            const setOps = Object.keys(update).length > 0 ? { $set: update } : {};
+            const unsetOps =
+                Object.keys(unset).length > 0 ? { $unset: unset } : {};
+            await this.dares.updateOne(
+                { _id: dare._id },
+                { ...setOps, ...unsetOps },
+            );
+        }
+
+        return { checked: all.length, fixed, issues };
+    }
+
+    // Tops up the deck with new "reward" dares (varying casino chip
+    // payouts) until reward dares make up roughly the given ratio (default
+    // 25%) of the whole deck. No-ops if that ratio is already met.
+    public async ensureRewardRatio(
+        addedBy: number,
+        addedByName: string,
+        ratio = 0.25,
+    ): Promise<{ added: number }> {
+        await this.init();
+        const total = await this.dares.countDocuments({});
+        const rewardCount = await this.dares.countDocuments({
+            category: "reward",
+        });
+
+        // Solve for how many new reward dares N need to be added so that
+        // (rewardCount + N) / (total + N) >= ratio.
+        const neededRaw = (ratio * total - rewardCount) / (1 - ratio);
+        const needed = Math.max(0, Math.ceil(neededRaw));
+        if (needed === 0) return { added: 0 };
+
+        const chipChoices = [15, 20, 25, 30, 40, 50, 75, 100];
+        const docs: DareDoc[] = [];
+        for (let i = 0; i < needed; i++) {
+            const chips =
+                chipChoices[Math.floor(Math.random() * chipChoices.length)];
+            docs.push({
+                text: `You resisted temptation admirably - here's ${chips} casino chips as a reward!`,
+                addedBy,
+                addedByName,
+                used: false,
+                createdAt: Date.now(),
+                category: "reward",
+                chips,
+            });
+        }
+        await this.dares.insertMany(docs);
+        return { added: needed };
     }
 }

@@ -50,10 +50,33 @@ const STRIP_ENFORCE_INTERVAL_MS = 20 * 1000;
 const TURN_REMINDER_MS = 30 * 1000;
 const TURN_AUTO_PASS_MS = 60 * 1000;
 
+// How long a player who disconnects (leaves the room) from the lobby or an
+// active game gets to return before being purged entirely.
+const DISCONNECT_GRACE_MS = 60 * 1000;
+
+// How many structured games can run at once. Each is fully independent -
+// own roster, turn order and round counter - and shares only the deck.
+const MAX_CONCURRENT_GAMES = 3;
+
 export interface DareConfig {
     // If set, dare commands are only handled while the sender stands
     // inside this map region.
     region?: MapRegion;
+}
+
+// Live (in-memory) state for a single running structured game. Mirrored to
+// the database (see DareStateDoc) after every mutation so a bot restart or
+// reconnect can resume without losing progress.
+interface GameRuntime {
+    id: number;
+    turnOrder: number[];
+    currentTurnIndex: number;
+    round: number;
+    // When the current turn began - used both to schedule the reminder/
+    // auto-pass timers and to recompute their remaining delay on reload.
+    turnStartedAt: number;
+    turnReminderTimer?: ReturnType<typeof setTimeout>;
+    turnAutoPassTimer?: ReturnType<typeof setTimeout>;
 }
 
 export class Dare implements VeratownFeatureSystem {
@@ -72,50 +95,62 @@ game. Whisper !dare help any time for the full rundown.
 
 Game Overview
 =====
-1. Everyone who wants to play whispers !dare join to sign up.
-2. Once at least 2 people have joined, anyone can start the game with
-   !dare start. This locks in a random turn order and begins round 1 of 10.
-3. On your turn, !dare draw draws a random card. Strip, bondage and reward
+1. Everyone who wants to play whispers !dare join to sign up to the lobby.
+2. Once at least 2 people are in the lobby, anyone can start a game with
+   !dare start. This locks in a random turn order for everyone currently
+   in the lobby and begins round 1 of 10 - the lobby is then empty again,
+   so new joiners form the next, separate game (up to 3 games at once).
+3. Once a game has started, nobody else can join it - they'll be told to
+   join the lobby instead and start their own game.
+4. On your turn, !dare draw draws a random card. Strip, bondage and reward
    dares are applied automatically - to yourself, or to a random other
-   joined participant if the dare calls for it.
-4. Don't want to do your dare? !dare pass - you'll be locked into the
+   participant in your game if the dare calls for it.
+5. Don't want to do your dare? !dare pass - you'll be locked into the
    pillory until your next draw (and it counts against you). Pass again
    and you're pilloried for 4 hours with a sign reading "Evades / Dares"!
-5. Drawn a bondage dare? You get a short window to !dare forfeit instead -
+6. Drawn a bondage dare? You get a short window to !dare forfeit instead -
    skip the specific bondage and get locked into a heavy kennel instead.
-6. The bot announces whose turn is next after every draw. Once everyone's
+7. The bot announces whose turn is next after every draw. Once everyone's
    gone, the round advances - 10 rounds total.
-7. Win condition: when round 10 finishes, whoever picked up the FEWEST
+8. Win condition: when round 10 finishes, whoever picked up the FEWEST
    binds over the whole game wins, and is automatically freed from all
    their bondage. Everyone else stays locked up until their timers run out!
-8. Stripped by a dare? You stay bare for the rest of the game - the bot
-   will keep stripping anything you try to put back on until it ends.
-9. If a body part is already bound when a new bondage dare targets it, the
-   existing lock's timer is extended instead of piling on more gear.
-10. Not responding on your turn? You'll get a reminder after 30 seconds,
+9. Stripped by a dare? You stay bare - blocked from getting dressed - until
+   every last bit of your dare-applied bondage is gone, even after the game
+   ends. The bot keeps stripping anything you try to put back on early.
+10. If a body part is already bound when a new bondage dare targets it, the
+    existing lock's timer is extended instead of piling on more gear.
+11. Not responding on your turn? You'll get a reminder after 30 seconds,
     and after 60 seconds the bot passes on your behalf (with the usual
     pillory consequence, escalating on a second miss).
-11. Leave the room mid-game and you're removed from the running game
-    immediately. If everyone else leaves, whoever's left auto-wins.
+12. Disconnect from the room and you get a 60 second grace period to
+    return before being purged from the lobby/game entirely. Game state
+    survives a bot restart too.
+13. Errors, status queries and list output are always whispered to you
+    directly - room-wide game activity (joins, turns, strip/bondage
+    effects, drawn dares) stays publicly visible as before.
 `;
 
 public static description_commands = `Commands
 =====
-!dare join          - Join the game as a participant.
-!dare leave         - Leave the game - you won't be targeted or turned to.
-!dare start         - Start a fresh 10-round game with everyone joined.
-!dare turn          - Show whose turn it currently is.
-!dare draw          - Draw a dare card - on your turn, if a game's running.
-!dare pass          - Chicken out of your last drawn dare - forfeit instead.
-!dare forfeit       - After drawing bondage, get kenneled instead of bound.
-!dare players       - Show everyone currently joined to dare.
-!dare remove <who>  - [admin only] Remove a joined player from dare.
-!dare stop          - [admin only] Stop the currently running dare game.
-!dare add <dare>    - Whisper a new dare card to add to the deck.
-!dare list <page>   - [admin only] List dares in the database.
-!dare reset         - [admin only] Reset the deck / mark all dares unused.
-!dare help          - Show this message.
-!pick               - Randomly pick a room member, not you, not the bot.
+!dare join              - Join the lobby, waiting for a game to start.
+!dare leave             - Leave the lobby/game you're currently in.
+!dare start             - Start a fresh 10-round game with everyone in the
+                          lobby (up to 3 games can run at once).
+!dare turn              - Show whose turn it currently is in your game.
+!dare draw              - Draw a dare card - on your turn, if playing.
+!dare pass              - Chicken out of your last drawn dare - forfeit.
+!dare forfeit           - After drawing bondage, get kenneled instead.
+!dare players           - Whisper the lobby and every running game's roster.
+!dare remove <who>      - [admin only] Remove a player from dare entirely.
+!dare stop <gameId>     - [admin only] Stop a running dare game.
+!dare add <dare>        - [admin only] Add a new dare card to the deck.
+!dare list <page>       - [admin only] List dares in the database.
+!dare reset             - [admin only] Reset the deck / mark all unused.
+!dare validate          - [admin only] Check/repair the dare database.
+!dare balancerewards    - [admin only] Top up reward dares to ~25% of deck.
+!dare help              - Show this message.
+!pick                   - Randomly pick a room member, not you, not the bot.
 `;
 public static description_rules = `Rules
 =====
@@ -131,39 +166,53 @@ public static description_rules = `Rules
    exclusively-locked kennel instead of the specific bondage drawn.
 6. If the spot a dare wants to bind is already covered, the existing
    item's timer is extended rather than adding a second item there.
-7. Stripped players stay bare until the game ends - no redressing early!
+7. Stripped/noRedress players stay dressing-blocked until every last bit
+   of their dare-applied bondage is gone - even after their game ends.
 8. At the end of round 10, the player with the fewest binds wins and is
-   freed from all their bondage.
+   freed from all their bondage and redressed in their original outfit.
 9. Ignore your turn too long and the bot passes for you automatically.
-    Leave mid-game and you're removed immediately. Last one standing wins.
+   Disconnecting gives you 60 seconds to return before you're purged.
+   Last one standing in a game wins by default.
+10. Up to 3 separate dare games can run at once; once a game starts,
+    nobody new can join it - they join the lobby and start their own.
 `;
 public static description = Dare.description_intro + "\n" + Dare.description_commands + "\n" + Dare.description_rules;
 
     private commandParser: CommandParser;
 
+    // Resolves once persisted state (lobby, games, per-member bookkeeping)
+    // has been loaded from the database - awaited at the top of every
+    // command handler so a just-restarted bot doesn't act on empty state.
+    private ready: Promise<void>;
+
     // Tracks the dare each player most recently drew but hasn't resolved
     // yet, so "!dare pass" knows what to forfeit against.
     private pendingDraws = new Map<number, DareDoc>();
 
-    // Members who've opted into the dare game via "!dare join", and so can
-    // be picked as the target of a dare drawn by someone else.
-    private joinedPlayers = new Set<number>();
+    // Players who've done "!dare join" but aren't in a running game yet.
+    // Starting a game moves everyone currently here into a new, separate
+    // GameRuntime and empties the lobby for the next group.
+    private lobby = new Set<number>();
 
-    // Structured 10-round game state. turnOrder/currentTurnIndex/round are
-    // only meaningful while gameActive is true.
+    // Every currently-running structured game, keyed by its id (up to
+    // MAX_CONCURRENT_GAMES at once).
+    private games = new Map<number, GameRuntime>();
+    // Member number -> the id of the game they're currently playing in, if
+    // any. Used to route per-player commands (draw/pass/turn/leave) to the
+    // right game without the caller needing to know the id.
+    private playerGame = new Map<number, number>();
+    private nextGameId = 1;
     private readonly totalRounds = 10;
-    private gameActive = false;
-    private turnOrder: number[] = [];
-    private currentTurnIndex = 0;
-    private round = 1;
 
     // How many bondage items each member has been forfeited into over the
-    // course of the current game, used to decide the round-10 winner.
+    // course of their current game, used to decide the round-10 winner.
     private bindCounts = new Map<number, number>();
 
-    // Scheduled auto-apply timers for bondage dares currently in their
-    // "!dare forfeit" decision window, keyed by the drawer's member number.
+    // Scheduled auto-apply timers (and their absolute deadlines, for
+    // persistence) for bondage dares currently in their "!dare forfeit"
+    // decision window, keyed by the drawer's member number.
     private pendingBondageTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    private pendingBondageDeadlines = new Map<number, number>();
 
     // Members currently blocked from getting dressed - either their
     // clothing was stripped by a dare, or they're bound by a "noRedress"
@@ -181,10 +230,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
     // released automatically the next time they successfully !dare draw.
     private pilloriedUntilNextDraw = new Set<number>();
 
-    // Reminder/auto-pass timers for whoever's turn it currently is, so an
-    // unresponsive player doesn't stall the whole game.
-    private turnReminderTimer: ReturnType<typeof setTimeout> | undefined;
-    private turnAutoPassTimer: ReturnType<typeof setTimeout> | undefined;
+    // Members who've left the room and are on their 1-minute grace period
+    // before being purged from the lobby/game they were in.
+    private disconnectTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    private disconnectedAt = new Map<number, number>();
 
     private region?: MapRegion;
 
@@ -198,6 +247,9 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.commandParser =
             commandParser ?? new CommandParser(conn, config?.region);
         this.region = config?.region;
+        this.ready = this.loadState().catch((e) => {
+            console.error("[dare] Failed to load persisted state", e);
+        });
     }
 
     // Registers commands/listeners - called once during Veratown startup
@@ -217,8 +269,8 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             guardHandler("dare", this.onCharacterEntered),
         );
 
-        // Dressing-block enforcement runs continuously, independent of
-        // gameActive, so it also covers players still bound after a
+        // Dressing-block enforcement runs continuously, independent of any
+        // game's lifecycle, so it also covers players still bound after a
         // structured game ends (see dressingBlocked's doc comment above).
         this.dressingEnforceInterval = setInterval(
             () => this.enforceDressingBlocks(),
@@ -226,18 +278,24 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         );
     }
 
+    private whisper = (memberNumber: number, text: string): void => {
+        this.conn.SendMessage("Whisper", text, memberNumber);
+    };
+
     onDare = async (
         senderCharacter: API_Character,
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
         if (!this.enabled) {
-            this.conn.reply(
-                msg,
+            this.whisper(
+                senderCharacter.MemberNumber,
                 "The dare game is currently disabled in this room.",
             );
             return;
         }
+
+        await this.ready;
 
         if (!this.requireInDareRegion(senderCharacter, msg)) return;
 
@@ -249,20 +307,42 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         }
 
         switch (args[0]) {
-            case "join":
-                if (this.joinedPlayers.has(senderCharacter.MemberNumber)) {
-                    this.conn.reply(msg, "You're already joined.");
+            case "join": {
+                const activeGameId = this.playerGame.get(
+                    senderCharacter.MemberNumber,
+                );
+                if (activeGameId !== undefined) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        `You're already playing in dare game #${activeGameId} - you can't join another until it finishes.`,
+                    );
                     return;
                 }
-                this.joinedPlayers.add(senderCharacter.MemberNumber);
+                if (this.lobby.has(senderCharacter.MemberNumber)) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "You're already joined.",
+                    );
+                    return;
+                }
+                this.lobby.add(senderCharacter.MemberNumber);
                 this.conn.SendMessage(
                     "Emote",
-                    `*${senderCharacter} joins the dare game! (${this.joinedPlayers.size} participant(s))`,
+                    `*${senderCharacter} joins the dare lobby! (${this.lobby.size} waiting to start)`,
                 );
+                this.persistState();
                 break;
-            case "leave":
-                if (!this.joinedPlayers.has(senderCharacter.MemberNumber)) {
-                    this.conn.reply(msg, "You're not currently joined.");
+            }
+            case "leave": {
+                const inLobby = this.lobby.has(senderCharacter.MemberNumber);
+                const inGame = this.playerGame.has(
+                    senderCharacter.MemberNumber,
+                );
+                if (!inLobby && !inGame) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "You're not currently joined.",
+                    );
                     return;
                 }
                 const result = this.removeParticipantByMemberNumber(
@@ -272,94 +352,128 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 if (result.removedFromJoined && !result.removedFromGame) {
                     this.conn.SendMessage(
                         "Emote",
-                        `*${senderCharacter} leaves the dare game.`,
+                        `*${senderCharacter} leaves the dare lobby.`,
                     );
                 }
                 break;
+            }
             case "start": {
                 this.pruneUnavailableParticipants();
-                if (this.joinedPlayers.size < 2) {
-                    this.conn.reply(
-                        msg,
+                if (this.playerGame.has(senderCharacter.MemberNumber)) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "You're already playing in an active dare game - finish that one before starting another.",
+                    );
+                    return;
+                }
+                if (this.lobby.size < 2) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
                         "Need at least 2 joined players (!dare join) to start a game.",
                     );
                     return;
                 }
+                if (this.games.size >= MAX_CONCURRENT_GAMES) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        `Maximum of ${MAX_CONCURRENT_GAMES} concurrent dare games are already running - wait for one to finish.`,
+                    );
+                    return;
+                }
 
-                this.turnOrder = [...this.joinedPlayers].sort(
+                const gameId = this.nextGameId++;
+                const turnOrder = [...this.lobby].sort(
                     () => Math.random() - 0.5,
                 );
-                this.currentTurnIndex = 0;
-                this.round = 1;
-                this.gameActive = true;
-                this.bindCounts.clear();
-                this.pendingDraws.clear();
-
-                for (const timer of this.pendingBondageTimers.values()) {
-                    clearTimeout(timer);
+                this.lobby.clear();
+                for (const memberNumber of turnOrder) {
+                    this.playerGame.set(memberNumber, gameId);
                 }
-                this.pendingBondageTimers.clear();
-                // Note: dressingBlocked is intentionally NOT cleared here -
-                // anyone still blocked (and bound) from a previous game
-                // stays blocked until their bondage actually clears, per
-                // enforceDressingBlocks().
-                this.passCounts.clear();
-                this.pilloriedUntilNextDraw.clear();
-                this.clearTurnTimers();
+
+                const game: GameRuntime = {
+                    id: gameId,
+                    turnOrder,
+                    currentTurnIndex: 0,
+                    round: 1,
+                    turnStartedAt: Date.now(),
+                };
+                this.games.set(gameId, game);
 
                 // Snapshot everyone's current outfit before the game can
                 // touch it, so the eventual winner can be redressed exactly
                 // as they were at the start (see declareWinner()).
-                for (const memberNumber of this.turnOrder) {
+                for (const memberNumber of turnOrder) {
                     const character =
                         this.conn.chatRoom.findMember(memberNumber);
                     if (character)
                         await this.captureOriginalOutfitIfMissing(character);
                 }
 
-                const order = this.turnOrder
+                const order = turnOrder
                     .map((m) => this.describeMember(m))
                     .join(" -> ");
                 this.conn.SendMessage(
                     "Emote",
-                    `*The dare game begins! ${this.totalRounds} rounds, turn order: ${order}.`,
+                    `*Dare game #${gameId} begins! ${this.totalRounds} rounds, turn order: ${order}.`,
                 );
-                this.announceTurn();
-                this.startTurnTimers(this.turnOrder[this.currentTurnIndex]);
+                this.announceTurn(gameId);
+                this.startTurnTimers(gameId);
                 break;
             }
             case "players": {
                 this.pruneUnavailableParticipants();
-                this.replyWithJoinedPlayers(msg);
+                const lines: string[] = [];
+                lines.push(
+                    this.lobby.size === 0
+                        ? "Lobby: nobody is currently waiting to start a game."
+                        : `Lobby (${this.lobby.size}): ${[...this.lobby].map((m) => this.describeMember(m)).join(", ")}`,
+                );
+                if (this.games.size === 0) {
+                    lines.push("No dare games are currently running.");
+                } else {
+                    for (const game of this.games.values()) {
+                        lines.push(
+                            `Game #${game.id} (round ${game.round}/${this.totalRounds}): ${game.turnOrder.map((m) => this.describeMember(m)).join(", ")}`,
+                        );
+                    }
+                }
+                this.whisper(senderCharacter.MemberNumber, lines.join("\n"));
                 break;
             }
-            case "turn":
-                if (!this.gameActive) {
-                    this.conn.reply(
-                        msg,
-                        "No game is running - use !dare start to begin one.",
+            case "turn": {
+                const gameId = this.playerGame.get(
+                    senderCharacter.MemberNumber,
+                );
+                if (gameId === undefined) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "You're not in an active dare game - use !dare start to begin one.",
                     );
                     return;
                 }
-                this.announceTurn();
+                this.announceTurn(gameId);
                 break;
+            }
             case "remove": {
                 if (!senderCharacter.IsRoomAdmin()) {
-                    this.conn.reply(msg, "Only admins can use this command.");
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Only admins can use this command.",
+                    );
                     return;
                 }
                 const who = args[1];
                 if (!who) {
-                    this.conn.reply(
-                        msg,
+                    this.whisper(
+                        senderCharacter.MemberNumber,
                         "Usage: !dare remove <name or member number>",
                     );
                     return;
                 }
                 const memberNumber = this.resolveParticipantMemberNumber(who);
                 if (memberNumber === undefined) {
-                    this.conn.reply(
-                        msg,
+                    this.whisper(
+                        senderCharacter.MemberNumber,
                         "I can't find a joined dare player by that name/member number.",
                     );
                     return;
@@ -371,45 +485,65 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 if (result.removedFromJoined && !result.removedFromGame) {
                     this.conn.SendMessage(
                         "Emote",
-                        `*${this.describeMember(memberNumber)} was removed from dare by admin ${senderCharacter}.`,
+                        `*${this.describeMember(memberNumber)} was removed from the dare lobby by admin ${senderCharacter}.`,
                     );
                 }
                 break;
             }
             case "stop": {
                 if (!senderCharacter.IsRoomAdmin()) {
-                    this.conn.reply(msg, "Only admins can use this command.");
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Only admins can use this command.",
+                    );
                     return;
                 }
-                if (!this.gameActive) {
-                    this.conn.reply(msg, "No dare game is currently running.");
+                if (this.games.size === 0) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "No dare games are currently running.",
+                    );
                     return;
                 }
-                this.resetGameState();
+                const gameId = Number.parseInt(args[1], 10);
+                if (!Number.isInteger(gameId) || !this.games.has(gameId)) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        `Usage: !dare stop <gameId>. Currently running: ${[...this.games.keys()].join(", ")}`,
+                    );
+                    return;
+                }
+                this.resetGameState(gameId);
                 this.conn.SendMessage(
                     "Emote",
-                    `*The running dare game was stopped by admin ${senderCharacter}.`,
+                    `*Dare game #${gameId} was stopped by admin ${senderCharacter}.`,
                 );
                 break;
             }
             case "help":
-                this.conn.reply(msg, Dare.description_intro);
-                this.conn.reply(msg, Dare.description_commands);
-                this.conn.reply(msg, Dare.description_rules);
+                this.whisper(senderCharacter.MemberNumber, Dare.description_intro);
+                this.whisper(
+                    senderCharacter.MemberNumber,
+                    Dare.description_commands,
+                );
+                this.whisper(senderCharacter.MemberNumber, Dare.description_rules);
                 break;
             case "forfeit": {
                 const timer = this.pendingBondageTimers.get(
                     senderCharacter.MemberNumber,
                 );
                 if (!timer) {
-                    this.conn.reply(
-                        msg,
+                    this.whisper(
+                        senderCharacter.MemberNumber,
                         "You don't have a bondage dare pending to forfeit out of!",
                     );
                     return;
                 }
                 clearTimeout(timer);
                 this.pendingBondageTimers.delete(senderCharacter.MemberNumber);
+                this.pendingBondageDeadlines.delete(
+                    senderCharacter.MemberNumber,
+                );
                 this.pendingDraws.delete(senderCharacter.MemberNumber);
 
                 lockInForfeitKennel(
@@ -421,10 +555,18 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     "Emote",
                     `*${senderCharacter} can't face that bondage and taps out - the bot scoops them up and seals them into a heavy kennel instead, exclusively locked until someone lets them out!`,
                 );
-                this.finishTurn();
+                this.finishTurn(senderCharacter.MemberNumber);
+                this.persistState();
                 break;
             }
             case "add":
+                if (!senderCharacter.IsRoomAdmin()) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Only admins can use this command.",
+                    );
+                    return;
+                }
                 if (args.length < 2) {
                     this.conn.SendMessage("Emote", "*Usage: !dare add <dare>");
                     return;
@@ -441,16 +583,21 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
 
                 break;
             case "draw": {
-                if (this.gameActive) {
-                    const currentTurn = this.turnOrder[this.currentTurnIndex];
+                const gameId = this.playerGame.get(
+                    senderCharacter.MemberNumber,
+                );
+                let game: GameRuntime | undefined;
+                if (gameId !== undefined) {
+                    game = this.games.get(gameId);
+                    const currentTurn = game?.turnOrder[game.currentTurnIndex];
                     if (senderCharacter.MemberNumber !== currentTurn) {
-                        this.conn.reply(
-                            msg,
-                            `It's not your turn! Waiting on ${this.describeMember(currentTurn)}.`,
+                        this.whisper(
+                            senderCharacter.MemberNumber,
+                            `It's not your turn! Waiting on ${this.describeMember(currentTurn ?? -1)}.`,
                         );
                         return;
                     }
-                    this.clearTurnTimers();
+                    if (game) this.clearGameTurnTimers(game);
                 }
 
                 if (
@@ -488,21 +635,24 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                         "Emote",
                         `*${senderCharacter} has ${BONDAGE_DECISION_MS / 1000} seconds to !dare forfeit into the kennel instead, or !dare pass to chicken out entirely - otherwise the bondage locks in automatically!`,
                     );
+                    this.pendingBondageDeadlines.set(
+                        senderCharacter.MemberNumber,
+                        Date.now() + BONDAGE_DECISION_MS,
+                    );
                     const timer = setTimeout(() => {
-                        this.pendingBondageTimers.delete(
+                        this.autoApplyPendingBondage(
                             senderCharacter.MemberNumber,
-                        );
-                        void this.applyDareEffect(senderCharacter, dare).then(
-                            () => this.finishTurn(),
+                            dare,
                         );
                     }, BONDAGE_DECISION_MS);
                     this.pendingBondageTimers.set(
                         senderCharacter.MemberNumber,
                         timer,
                     );
+                    this.persistState();
                 } else {
                     await this.applyDareEffect(senderCharacter, dare);
-                    this.finishTurn();
+                    this.finishTurn(senderCharacter.MemberNumber);
                 }
                 break;
             }
@@ -511,8 +661,8 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     senderCharacter.MemberNumber,
                 );
                 if (!pending) {
-                    this.conn.reply(
-                        msg,
+                    this.whisper(
+                        senderCharacter.MemberNumber,
                         "You haven't drawn a dare to pass on!",
                     );
                     return;
@@ -527,15 +677,22 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     this.pendingBondageTimers.delete(
                         senderCharacter.MemberNumber,
                     );
+                    this.pendingBondageDeadlines.delete(
+                        senderCharacter.MemberNumber,
+                    );
                 }
 
                 this.applyPassConsequence(senderCharacter);
-                this.finishTurn();
+                this.finishTurn(senderCharacter.MemberNumber);
+                this.persistState();
                 break;
             }
             case "reset":
                 if (!senderCharacter.IsRoomAdmin()) {
-                    this.conn.reply(msg, "Only admins can use this command.");
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Only admins can use this command.",
+                    );
                     return;
                 }
                 await this.store.resetDares();
@@ -544,6 +701,49 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     "*" + (await this.store.getSummary()),
                 );
                 break;
+            case "validate": {
+                if (!senderCharacter.IsRoomAdmin()) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Only admins can use this command.",
+                    );
+                    return;
+                }
+                const result = await this.store.validateDares();
+                const summary = `Checked ${result.checked} dare(s), fixed ${result.fixed}.`;
+                const shown = result.issues.slice(0, 20);
+                const extra =
+                    result.issues.length > shown.length
+                        ? `\n...and ${result.issues.length - shown.length} more.`
+                        : "";
+                this.whisper(
+                    senderCharacter.MemberNumber,
+                    shown.length > 0
+                        ? `${summary}\n${shown.join("\n")}${extra}`
+                        : summary,
+                );
+                break;
+            }
+            case "balancerewards": {
+                if (!senderCharacter.IsRoomAdmin()) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Only admins can use this command.",
+                    );
+                    return;
+                }
+                const result = await this.store.ensureRewardRatio(
+                    senderCharacter.MemberNumber,
+                    senderCharacter.Name,
+                );
+                this.whisper(
+                    senderCharacter.MemberNumber,
+                    result.added > 0
+                        ? `Added ${result.added} new reward dare(s) so rewards make up about 25% of the deck.`
+                        : "Reward dares already make up at least 25% of the deck - nothing added.",
+                );
+                break;
+            }
             case "list": {
                 try {
                     console.log(
@@ -551,8 +751,8 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     );
 
                     if (!senderCharacter.IsRoomAdmin()) {
-                        this.conn.reply(
-                            msg,
+                        this.whisper(
+                            senderCharacter.MemberNumber,
                             "Only admins can use this command.",
                         );
                         return;
@@ -560,7 +760,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     const dares = await this.store.listDares();
                     console.log(`!dare list found ${dares.length} dares`);
                     if (dares.length === 0) {
-                        this.conn.reply(msg, "No dares in the database.");
+                        this.whisper(
+                            senderCharacter.MemberNumber,
+                            "No dares in the database.",
+                        );
                         return;
                     }
 
@@ -581,11 +784,14 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                         `Page ${page} of ${pageCount} - !dare list <page> for more`,
                     );
 
-                    this.conn.reply(msg, lines.join("\n"));
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        lines.join("\n"),
+                    );
                 } catch (e) {
                     console.error("!dare list failed", e);
-                    this.conn.reply(
-                        msg,
+                    this.whisper(
+                        senderCharacter.MemberNumber,
                         "Something went wrong listing dares, sorry!",
                     );
                 }
@@ -594,7 +800,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             default:
                 this.conn.SendMessage(
                     "Emote",
-                    "*Usage: !dare <join|leave|start|turn|draw|pass|forfeit|players|remove|stop|add|reset|list|help>",
+                    "*Usage: !dare <join|leave|start|turn|draw|pass|forfeit|players|remove|stop|add|reset|list|validate|balancerewards|help>",
                 );
                 return;
         }
@@ -607,8 +813,8 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         if (!this.region) return true;
         if (this.isInRegion(sender, this.region)) return true;
 
-        this.conn.reply(
-            msg,
+        this.whisper(
+            sender.MemberNumber,
             "Dare commands only work inside the dare area on the map.",
         );
         return false;
@@ -629,28 +835,24 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             (this.conn.chatRoom?.characters ?? []).map((c) => c.MemberNumber),
         );
 
-        for (const memberNumber of [...this.joinedPlayers]) {
+        for (const memberNumber of [...this.lobby]) {
             if (online.has(memberNumber)) continue;
-            this.joinedPlayers.delete(memberNumber);
-            this.pendingDraws.delete(memberNumber);
-            this.pilloriedUntilNextDraw.delete(memberNumber);
-            this.dressingBlocked.delete(memberNumber);
-            this.passCounts.delete(memberNumber);
-            this.bindCounts.delete(memberNumber);
-
-            const bondageTimer = this.pendingBondageTimers.get(memberNumber);
-            if (bondageTimer) {
-                clearTimeout(bondageTimer);
-                this.pendingBondageTimers.delete(memberNumber);
-            }
+            // Already on its own disconnect-grace timer - let that handle
+            // the eventual purge instead of racing it here.
+            if (this.disconnectTimers.has(memberNumber)) continue;
+            this.lobby.delete(memberNumber);
+            this.cleanupMemberBookkeeping(memberNumber);
         }
 
-        for (const memberNumber of [...this.turnOrder]) {
-            if (online.has(memberNumber)) continue;
-            this.removeParticipantByMemberNumber(
-                memberNumber,
-                "is no longer available and is removed from the dare game.",
-            );
+        for (const game of [...this.games.values()]) {
+            for (const memberNumber of [...game.turnOrder]) {
+                if (online.has(memberNumber)) continue;
+                if (this.disconnectTimers.has(memberNumber)) continue;
+                this.removeParticipantByMemberNumber(
+                    memberNumber,
+                    "is no longer available and is removed from the dare game.",
+                );
+            }
         }
     };
 
@@ -661,42 +863,34 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         return Math.max(1, Math.floor(parsed));
     };
 
-    private replyWithJoinedPlayers = (msg: BC_Server_ChatRoomMessage): void => {
-        if (this.joinedPlayers.size === 0) {
-            this.conn.reply(msg, "Nobody is currently joined to dare.");
-            return;
+    // Removes all per-member bookkeeping not tied to a specific game (used
+    // whether the member is leaving the lobby or a running game entirely).
+    private cleanupMemberBookkeeping = (memberNumber: number): void => {
+        this.pendingDraws.delete(memberNumber);
+        this.pilloriedUntilNextDraw.delete(memberNumber);
+        this.dressingBlocked.delete(memberNumber);
+        this.passCounts.delete(memberNumber);
+        this.bindCounts.delete(memberNumber);
+
+        const bondageTimer = this.pendingBondageTimers.get(memberNumber);
+        if (bondageTimer) {
+            clearTimeout(bondageTimer);
+            this.pendingBondageTimers.delete(memberNumber);
         }
-
-        const names = [...this.joinedPlayers].map((memberNumber) => {
-            const c = this.conn.chatRoom.findMember(memberNumber);
-            return c
-                ? `${c} (#${c.MemberNumber})`
-                : `#${memberNumber} (offline)`;
-        });
-
-        this.conn.reply(
-            msg,
-            `Joined dare players (${names.length}):\n${names.join("\n")}`,
-        );
+        this.pendingBondageDeadlines.delete(memberNumber);
     };
 
     private resolveParticipantMemberNumber = (
         input: string,
     ): number | undefined => {
+        const isTracked = (memberNumber: number): boolean =>
+            this.lobby.has(memberNumber) || this.playerGame.has(memberNumber);
+
         const asNumber = Number.parseInt(input, 10);
-        if (
-            Number.isInteger(asNumber) &&
-            (this.joinedPlayers.has(asNumber) || this.turnOrder.includes(asNumber))
-        ) {
-            return asNumber;
-        }
+        if (Number.isInteger(asNumber) && isTracked(asNumber)) return asNumber;
 
         const fromRoom = this.conn.chatRoom.findCharacter(input);
-        if (!fromRoom) return undefined;
-        if (
-            this.joinedPlayers.has(fromRoom.MemberNumber) ||
-            this.turnOrder.includes(fromRoom.MemberNumber)
-        ) {
+        if (fromRoom && isTracked(fromRoom.MemberNumber)) {
             return fromRoom.MemberNumber;
         }
 
@@ -787,11 +981,13 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         }
     };
 
-    private announceTurn = (): void => {
-        const memberNumber = this.turnOrder[this.currentTurnIndex];
+    private announceTurn = (gameId: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+        const memberNumber = game.turnOrder[game.currentTurnIndex];
         this.conn.SendMessage(
             "Emote",
-            `*Round ${this.round}/${this.totalRounds}: it's ${this.describeMember(memberNumber)}'s turn to !dare draw.`,
+            `*Game #${gameId} - round ${game.round}/${this.totalRounds}: it's ${this.describeMember(memberNumber)}'s turn to !dare draw.`,
         );
     };
 
@@ -850,73 +1046,147 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.addBinds(memberNumber, passCount === 1 ? 1 : 2);
     };
 
-    // Clears the idle-turn reminder/auto-pass timers, if any are pending.
-    private clearTurnTimers = (): void => {
-        if (this.turnReminderTimer) clearTimeout(this.turnReminderTimer);
-        if (this.turnAutoPassTimer) clearTimeout(this.turnAutoPassTimer);
-        this.turnReminderTimer = undefined;
-        this.turnAutoPassTimer = undefined;
+    // Clears a specific game's idle-turn reminder/auto-pass timers, if any
+    // are pending.
+    private clearGameTurnTimers = (game: GameRuntime): void => {
+        if (game.turnReminderTimer) clearTimeout(game.turnReminderTimer);
+        if (game.turnAutoPassTimer) clearTimeout(game.turnAutoPassTimer);
+        game.turnReminderTimer = undefined;
+        game.turnAutoPassTimer = undefined;
     };
 
-    // Starts the reminder (30s) / auto-pass (60s) timers for whoever's
-    // turn it now is, so an unresponsive player doesn't stall the game.
-    private startTurnTimers = (memberNumber: number): void => {
-        this.clearTurnTimers();
-        this.turnReminderTimer = setTimeout(() => {
-            if (!this.gameActive) return;
-            if (this.turnOrder[this.currentTurnIndex] !== memberNumber) return;
-            this.conn.SendMessage(
-                "Emote",
-                `*Reminder: it's still ${this.describeMember(memberNumber)}'s turn - !dare draw within ${(TURN_AUTO_PASS_MS - TURN_REMINDER_MS) / 1000} more seconds or the bot will pass on their behalf!`,
-            );
+    // Starts the reminder (30s) / auto-pass (60s) timers for a game's
+    // current turn holder, so an unresponsive player doesn't stall it.
+    private startTurnTimers = (gameId: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+        this.clearGameTurnTimers(game);
+        game.turnStartedAt = Date.now();
+
+        const memberNumber = game.turnOrder[game.currentTurnIndex];
+        game.turnReminderTimer = setTimeout(() => {
+            this.fireTurnReminder(gameId, memberNumber);
         }, TURN_REMINDER_MS);
-        this.turnAutoPassTimer = setTimeout(() => {
-            if (!this.gameActive) return;
-            if (this.turnOrder[this.currentTurnIndex] !== memberNumber) return;
-            const character = this.conn.chatRoom.findMember(memberNumber);
-            if (!character) {
-                this.removeParticipantByMemberNumber(
-                    memberNumber,
-                    "is no longer available and is removed from the dare game.",
-                );
-                return;
-            }
-            this.conn.SendMessage(
-                "Emote",
-                `*${character} doesn't respond in time to draw a dare - the bot passes on their behalf!`,
-            );
-            this.applyPassConsequence(character);
-            this.finishTurn();
+        game.turnAutoPassTimer = setTimeout(() => {
+            this.fireTurnAutoPass(gameId, memberNumber);
         }, TURN_AUTO_PASS_MS);
+        this.persistState();
     };
 
-    // Fired whenever anyone leaves the room. Leaving always removes them from
-    // the joined list immediately, and from any running game as well.
+    // Re-arms a resumed game's turn timers based on how long ago its turn
+    // actually began (see DareStateDoc.turnStartedAt), so a bot restart
+    // doesn't silently reset (or skip) the reminder/auto-pass window.
+    private resumeTurnTimers = (game: GameRuntime): void => {
+        const memberNumber = game.turnOrder[game.currentTurnIndex];
+        const elapsed = Date.now() - game.turnStartedAt;
+
+        const reminderDelay = TURN_REMINDER_MS - elapsed;
+        if (reminderDelay > 0) {
+            game.turnReminderTimer = setTimeout(() => {
+                this.fireTurnReminder(game.id, memberNumber);
+            }, reminderDelay);
+        }
+
+        const autoPassDelay = TURN_AUTO_PASS_MS - elapsed;
+        game.turnAutoPassTimer = setTimeout(
+            () => this.fireTurnAutoPass(game.id, memberNumber),
+            Math.max(0, autoPassDelay),
+        );
+    };
+
+    private fireTurnReminder = (gameId: number, memberNumber: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+        if (game.turnOrder[game.currentTurnIndex] !== memberNumber) return;
+        this.conn.SendMessage(
+            "Emote",
+            `*Reminder: it's still ${this.describeMember(memberNumber)}'s turn (game #${gameId}) - !dare draw within ${(TURN_AUTO_PASS_MS - TURN_REMINDER_MS) / 1000} more seconds or the bot will pass on their behalf!`,
+        );
+    };
+
+    private fireTurnAutoPass = (gameId: number, memberNumber: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+        if (game.turnOrder[game.currentTurnIndex] !== memberNumber) return;
+
+        const character = this.conn.chatRoom.findMember(memberNumber);
+        if (!character) {
+            this.removeParticipantByMemberNumber(
+                memberNumber,
+                "is no longer available and is removed from the dare game.",
+            );
+            return;
+        }
+        this.conn.SendMessage(
+            "Emote",
+            `*${character} doesn't respond in time to draw a dare - the bot passes on their behalf!`,
+        );
+        this.applyPassConsequence(character);
+        this.finishTurn(memberNumber);
+    };
+
+    // Fired whenever anyone leaves the room. Rather than removing them
+    // immediately, they get a grace period to return (see
+    // DISCONNECT_GRACE_MS) before being purged from the lobby/game.
     private onCharacterLeft = (
         sourceMemberNumber: number,
         character: API_Character,
         _leaveMessage: string | null,
         _intentional: boolean,
     ): void => {
-        const wasJoined = this.joinedPlayers.has(sourceMemberNumber);
-        const wasInGame = this.turnOrder.includes(sourceMemberNumber);
-        this.removeParticipantByMemberNumber(
-            sourceMemberNumber,
-            "left the room and is removed from dare.",
-        );
+        const inLobby = this.lobby.has(sourceMemberNumber);
+        const inGame = this.playerGame.has(sourceMemberNumber);
+        if (!inLobby && !inGame) return;
 
-        if (wasJoined && !wasInGame) {
-            this.conn.SendMessage(
-                "Emote",
-                `*${character} left the room and is removed from dare.`,
-            );
-        }
+        this.disconnectedAt.set(sourceMemberNumber, Date.now());
+        const timer = setTimeout(
+            () => this.purgeDisconnected(sourceMemberNumber),
+            DISCONNECT_GRACE_MS,
+        );
+        this.disconnectTimers.set(sourceMemberNumber, timer);
+
+        this.conn.SendMessage(
+            "Emote",
+            `*${character} disconnects from the dare game - they have ${DISCONNECT_GRACE_MS / 1000} seconds to return before being removed.`,
+        );
+        this.persistState();
     };
 
-    // No reconnect recovery path is needed now that leaving removes a player
-    // from the running game immediately.
-    private onCharacterEntered = (_character: API_Character): void => {
-        // Intentionally empty.
+    // Cancels a pending disconnect-grace purge once a member returns to the
+    // room in time, leaving them exactly where they were.
+    private onCharacterEntered = (character: API_Character): void => {
+        const timer = this.disconnectTimers.get(character.MemberNumber);
+        if (!timer) return;
+
+        clearTimeout(timer);
+        this.disconnectTimers.delete(character.MemberNumber);
+        this.disconnectedAt.delete(character.MemberNumber);
+
+        this.conn.SendMessage(
+            "Emote",
+            `*${character} returns just in time and rejoins the dare game!`,
+        );
+        this.persistState();
+    };
+
+    // A disconnected member's grace period ran out without them returning -
+    // purge them from whatever lobby/game they were in, same as an
+    // explicit "!dare leave"/admin removal would.
+    private purgeDisconnected = (memberNumber: number): void => {
+        this.disconnectTimers.delete(memberNumber);
+        this.disconnectedAt.delete(memberNumber);
+
+        const result = this.removeParticipantByMemberNumber(
+            memberNumber,
+            "didn't return in time and is removed from the dare game.",
+        );
+        if (result.removedFromJoined && !result.removedFromGame) {
+            this.conn.SendMessage(
+                "Emote",
+                `*${this.describeMember(memberNumber)} didn't return in time and is removed from the dare lobby.`,
+            );
+        }
+        this.persistState();
     };
 
     private removeParticipantByMemberNumber = (
@@ -926,164 +1196,173 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         removedFromGame: boolean;
         removedFromJoined: boolean;
     } => {
-        const wasJoined = this.joinedPlayers.has(memberNumber);
-        const isCurrentTurn =
-            this.gameActive &&
-            this.turnOrder[this.currentTurnIndex] === memberNumber;
+        const wasInLobby = this.lobby.has(memberNumber);
+        const gameId = this.playerGame.get(memberNumber);
 
-        if (this.turnOrder.includes(memberNumber)) {
-            this.removePlayerFromGame(memberNumber, reason);
-
-            if (!this.gameActive) {
-                return { removedFromGame: true, removedFromJoined: wasJoined };
-            }
-
-            if (this.turnOrder.length === 0) {
-                this.endGame();
-                return { removedFromGame: true, removedFromJoined: wasJoined };
-            }
-            if (this.turnOrder.length === 1) {
-                this.winBySoleSurvivor();
-                return { removedFromGame: true, removedFromJoined: wasJoined };
-            }
-
-            if (isCurrentTurn) {
-                this.clearTurnTimers();
-                this.advanceTurn();
-            }
-            return { removedFromGame: true, removedFromJoined: wasJoined };
+        if (gameId !== undefined) {
+            this.removePlayerFromGame(gameId, memberNumber, reason);
+            return { removedFromGame: true, removedFromJoined: wasInLobby };
         }
 
-        this.joinedPlayers.delete(memberNumber);
-        this.pendingDraws.delete(memberNumber);
-        this.pilloriedUntilNextDraw.delete(memberNumber);
-        this.dressingBlocked.delete(memberNumber);
-        this.passCounts.delete(memberNumber);
-        this.bindCounts.delete(memberNumber);
-
-        const bondageTimer = this.pendingBondageTimers.get(memberNumber);
-        if (bondageTimer) {
-            clearTimeout(bondageTimer);
-            this.pendingBondageTimers.delete(memberNumber);
+        if (!wasInLobby) {
+            return { removedFromGame: false, removedFromJoined: false };
         }
 
-        return { removedFromGame: false, removedFromJoined: wasJoined };
+        this.lobby.delete(memberNumber);
+        this.cleanupMemberBookkeeping(memberNumber);
+        this.persistState();
+        return { removedFromGame: false, removedFromJoined: true };
     };
 
-    // Removes a participant from the active game entirely: turn order,
-    // joined-players set, and any pending per-player state for them.
+    // Removes a participant from a specific running game: turn order and
+    // any pending per-player state for them, then resolves whatever that
+    // leaves the game in (ended, sole-survivor win, or just advance past
+    // them if it was their turn).
     private removePlayerFromGame = (
+        gameId: number,
         memberNumber: number,
         reason: string,
     ): void => {
-        const idx = this.turnOrder.indexOf(memberNumber);
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        const wasCurrentTurn =
+            game.turnOrder[game.currentTurnIndex] === memberNumber;
+
+        const idx = game.turnOrder.indexOf(memberNumber);
         if (idx !== -1) {
-            this.turnOrder.splice(idx, 1);
-            if (idx <= this.currentTurnIndex) {
-                this.currentTurnIndex--;
+            game.turnOrder.splice(idx, 1);
+            if (idx <= game.currentTurnIndex) {
+                game.currentTurnIndex--;
             }
         }
 
-        this.joinedPlayers.delete(memberNumber);
-        this.pendingDraws.delete(memberNumber);
-        this.pilloriedUntilNextDraw.delete(memberNumber);
-        this.dressingBlocked.delete(memberNumber);
-        this.passCounts.delete(memberNumber);
-        this.bindCounts.delete(memberNumber);
-
-        const bondageTimer = this.pendingBondageTimers.get(memberNumber);
-        if (bondageTimer) {
-            clearTimeout(bondageTimer);
-            this.pendingBondageTimers.delete(memberNumber);
-        }
+        this.playerGame.delete(memberNumber);
+        this.cleanupMemberBookkeeping(memberNumber);
 
         this.conn.SendMessage(
             "Emote",
             `*${this.describeMember(memberNumber)} ${reason}`,
         );
+
+        if (game.turnOrder.length === 0) {
+            this.endGame(gameId);
+            return;
+        }
+        if (game.turnOrder.length === 1) {
+            this.winBySoleSurvivor(gameId);
+            return;
+        }
+        if (wasCurrentTurn) {
+            this.clearGameTurnTimers(game);
+            this.advanceTurn(gameId);
+            return;
+        }
+        this.persistState();
     };
 
-    // Advances the turn/round if a structured game is running; a no-op
-    // during casual free-for-all play. Called once a drawn dare (and any
-    // pass/forfeit decision window for it) has fully resolved.
-    private finishTurn = (): void => {
-        if (this.gameActive) this.advanceTurn();
+    // Advances the turn/round for a specific game if it's still active
+    // (called once a drawn dare - and any pass/forfeit decision window for
+    // it - has fully resolved). No-ops for casual, non-game play.
+    private finishTurn = (memberNumber: number): void => {
+        const gameId = this.playerGame.get(memberNumber);
+        if (gameId !== undefined) this.advanceTurn(gameId);
+        this.persistState();
     };
 
-    // Moves to the next player's turn, advancing the round (and ending the
-    // game at the end of round 10) once everyone's gone. Silently skips
-    // (and eventually removes) disconnected players, and ends the game
-    // early if only one participant is left standing.
-    private advanceTurn = (): void => {
-        this.clearTurnTimers();
+    // Moves a game to the next player's turn, advancing the round (and
+    // ending the game at the end of round 10) once everyone's gone.
+    // Silently skips (and eventually removes) disconnected players, and
+    // ends the game early if only one participant is left standing.
+    private advanceTurn = (gameId: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        this.clearGameTurnTimers(game);
         this.pruneUnavailableParticipants();
+        if (!this.games.has(gameId)) return;
 
-        const guardLimit = this.turnOrder.length + 1;
+        const guardLimit = game.turnOrder.length + 1;
         for (let attempt = 0; attempt < guardLimit; attempt++) {
-            if (this.turnOrder.length === 0) {
-                this.endGame();
+            if (game.turnOrder.length === 0) {
+                this.endGame(gameId);
                 return;
             }
-            if (this.turnOrder.length === 1) {
-                this.winBySoleSurvivor();
+            if (game.turnOrder.length === 1) {
+                this.winBySoleSurvivor(gameId);
                 return;
             }
 
-            this.currentTurnIndex++;
-            if (this.currentTurnIndex >= this.turnOrder.length) {
-                this.currentTurnIndex = 0;
-                this.round++;
-                if (this.round > this.totalRounds) {
-                    this.endGame();
+            game.currentTurnIndex++;
+            if (game.currentTurnIndex >= game.turnOrder.length) {
+                game.currentTurnIndex = 0;
+                game.round++;
+                if (game.round > this.totalRounds) {
+                    this.endGame(gameId);
                     return;
                 }
             }
 
-            const nextMember = this.turnOrder[this.currentTurnIndex];
+            const nextMember = game.turnOrder[game.currentTurnIndex];
             const nextCharacter = this.conn.chatRoom.findMember(nextMember);
             if (!nextCharacter) {
                 this.removeParticipantByMemberNumber(
                     nextMember,
                     "is no longer available and is removed from the dare game.",
                 );
+                if (!this.games.has(gameId)) return;
                 continue;
             }
 
-            this.announceTurn();
-            this.startTurnTimers(nextMember);
+            this.announceTurn(gameId);
+            this.startTurnTimers(gameId);
             return;
         }
 
         // Safety net - shouldn't normally be reached.
-        this.endGame();
+        this.endGame(gameId);
     };
 
-    // Resets all structured-game state. Shared by both a normal round-10
-    // finish and an early sole-survivor win. Deliberately leaves
-    // dressingBlocked (and the persistent enforcement interval) untouched -
-    // that's handled per-member, independent of the game's lifecycle, by
-    // enforceDressingBlocks()/declareWinner().
-    private resetGameState = (): void => {
-        this.gameActive = false;
-        this.turnOrder = [];
-        this.currentTurnIndex = 0;
-        this.round = 1;
-        this.pendingDraws.clear();
-        this.bindCounts.clear();
-        this.passCounts.clear();
-        this.pilloriedUntilNextDraw.clear();
-        this.clearTurnTimers();
-        for (const timer of this.pendingBondageTimers.values()) {
-            clearTimeout(timer);
+    // Tears down a specific game's state: turn timers, roster and every
+    // per-member bookkeeping entry tied to it (bind/pass counts, pending
+    // draws/bondage decisions). Deliberately leaves dressingBlocked (and
+    // the persistent enforcement interval) untouched for former
+    // participants - that's handled independently of the game's lifecycle
+    // by enforceDressingBlocks()/declareWinner().
+    private resetGameState = (gameId: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        this.clearGameTurnTimers(game);
+
+        for (const memberNumber of game.turnOrder) {
+            this.playerGame.delete(memberNumber);
+            this.pendingDraws.delete(memberNumber);
+            this.bindCounts.delete(memberNumber);
+            this.passCounts.delete(memberNumber);
+            this.pilloriedUntilNextDraw.delete(memberNumber);
+
+            const bondageTimer = this.pendingBondageTimers.get(memberNumber);
+            if (bondageTimer) {
+                clearTimeout(bondageTimer);
+                this.pendingBondageTimers.delete(memberNumber);
+            }
+            this.pendingBondageDeadlines.delete(memberNumber);
         }
-        this.pendingBondageTimers.clear();
+
+        this.games.delete(gameId);
+        this.persistState();
     };
 
     // Frees the winner of all bondage, redresses them in whatever they were
     // wearing before the game touched their outfit, and announces the
     // game's end. Everyone else stays locked up (and dressing-blocked)
     // until their own bondage timers run out - see enforceDressingBlocks().
-    private declareWinner = (winner: number, reasonPhrase: string): void => {
+    private declareWinner = (
+        gameId: number,
+        winner: number,
+        reasonPhrase: string,
+    ): void => {
         const winnerCharacter = this.conn.chatRoom.findMember(winner);
         winnerCharacter?.Appearance.stripBulk({ item: true }, true);
 
@@ -1099,27 +1378,33 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
 
         this.conn.SendMessage(
             "Emote",
-            `*The dare game is over! ${this.describeMember(winner)} ${reasonPhrase} and is freed from all bondage!`,
+            `*Dare game #${gameId} is over! ${this.describeMember(winner)} ${reasonPhrase} and is freed from all bondage!`,
         );
     };
 
-    // Ends the game early because only one participant remains (everyone
+    // Ends a game early because only one participant remains (everyone
     // else left or was removed for being disconnected too long).
-    private winBySoleSurvivor = (): void => {
-        const winner = this.turnOrder[0];
-        this.resetGameState();
+    private winBySoleSurvivor = (gameId: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+        const winner = game.turnOrder[0];
+        this.resetGameState(gameId);
         this.declareWinner(
+            gameId,
             winner,
             "is the only one left standing and wins by default",
         );
     };
 
-    // Ends the current game: whoever has the fewest binds wins and is
-    // stripped of all their bondage (including locked items).
-    private endGame = (): void => {
+    // Ends a game: whoever has the fewest binds wins and is stripped of all
+    // their bondage (including locked items).
+    private endGame = (gameId: number): void => {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
         let winner: number | undefined;
         let lowestBinds = Infinity;
-        for (const memberNumber of this.turnOrder) {
+        for (const memberNumber of game.turnOrder) {
             const binds = this.bindCounts.get(memberNumber) ?? 0;
             if (binds < lowestBinds) {
                 lowestBinds = binds;
@@ -1127,29 +1412,36 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             }
         }
 
-        this.resetGameState();
+        this.resetGameState(gameId);
 
         if (winner === undefined) {
             this.conn.SendMessage(
                 "Emote",
-                "*The dare game has ended with no participants!",
+                `*Dare game #${gameId} has ended with no participants!`,
             );
             return;
         }
 
-        this.declareWinner(winner, `wins with only ${lowestBinds} bind(s)`);
+        this.declareWinner(gameId, winner, `wins with only ${lowestBinds} bind(s)`);
     };
 
     // Picks who a drawn dare's effect actually applies to: the drawer
-    // themselves, unless the dare calls for a random other joined
-    // participant (falling back to the drawer if nobody else has joined).
+    // themselves, unless the dare calls for a random other participant in
+    // the same game (or lobby, for casual play) - falling back to the
+    // drawer if nobody else is available.
     private resolveDareTarget = (
         drawer: API_Character,
         dare: DareDoc,
     ): API_Character => {
         if (dare.target !== "other") return drawer;
 
-        const candidates = [...this.joinedPlayers]
+        const gameId = this.playerGame.get(drawer.MemberNumber);
+        const pool =
+            gameId !== undefined
+                ? (this.games.get(gameId)?.turnOrder ?? [])
+                : [...this.lobby];
+
+        const candidates = pool
             .filter((memberNumber) => memberNumber !== drawer.MemberNumber)
             .map((memberNumber) => this.conn.chatRoom.findMember(memberNumber))
             .filter((character): character is API_Character => !!character);
@@ -1169,6 +1461,125 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             `*This dare targets ${target} instead of ${drawer}!`,
         );
         return target;
+    };
+
+    // Applies a resolved bondage decision (auto-locked-in after the
+    // "!dare forfeit" window elapses, or resumed from persisted state
+    // after a restart) to whichever member drew it.
+    private autoApplyPendingBondage = (
+        memberNumber: number,
+        dare: DareDoc,
+    ): void => {
+        this.pendingBondageTimers.delete(memberNumber);
+        this.pendingBondageDeadlines.delete(memberNumber);
+        this.pendingDraws.delete(memberNumber);
+
+        const character = this.conn.chatRoom.findMember(memberNumber);
+        if (!character) {
+            this.finishTurn(memberNumber);
+            return;
+        }
+
+        void this.applyDareEffect(character, dare)
+            .catch((e) =>
+                console.error(
+                    `[dare] Failed to auto-apply bondage dare for ${memberNumber}`,
+                    e,
+                ),
+            )
+            .then(() => this.finishTurn(memberNumber));
+    };
+
+    // Persists the full live-state snapshot (fire-and-forget). Called after
+    // every state-mutating action so a restart/reconnect can resume without
+    // losing the lobby, in-progress games, or per-member bookkeeping.
+    private persistState = (): void => {
+        void this.buildAndSaveState().catch((e) =>
+            console.error("[dare] Failed to persist state", e),
+        );
+    };
+
+    private buildAndSaveState = async (): Promise<void> => {
+        const games = [...this.games.values()].map((g) => ({
+            id: g.id,
+            turnOrder: [...g.turnOrder],
+            currentTurnIndex: g.currentTurnIndex,
+            round: g.round,
+            turnStartedAt: g.turnStartedAt,
+        }));
+
+        const pendingBondage: [number, { dare: DareDoc; deadlineAt: number }][] =
+            [];
+        for (const [memberNumber, deadlineAt] of this.pendingBondageDeadlines) {
+            const dare = this.pendingDraws.get(memberNumber);
+            if (dare) pendingBondage.push([memberNumber, { dare, deadlineAt }]);
+        }
+
+        await this.store.saveState({
+            lobby: [...this.lobby],
+            nextGameId: this.nextGameId,
+            games,
+            bindCounts: [...this.bindCounts.entries()],
+            passCounts: [...this.passCounts.entries()],
+            pilloriedUntilNextDraw: [...this.pilloriedUntilNextDraw],
+            dressingBlocked: [...this.dressingBlocked],
+            pendingDraws: [...this.pendingDraws.entries()],
+            pendingBondage,
+            disconnected: [...this.disconnectedAt.entries()],
+        });
+    };
+
+    // Rehydrates lobby/game/per-member state from the database - called
+    // once from the constructor (see `ready`) so a bot restart resumes
+    // in-progress games instead of silently losing them.
+    private loadState = async (): Promise<void> => {
+        const state = await this.store.loadState();
+        if (!state) return;
+
+        this.nextGameId = state.nextGameId || 1;
+        this.lobby = new Set(state.lobby ?? []);
+        this.bindCounts = new Map(state.bindCounts ?? []);
+        this.passCounts = new Map(state.passCounts ?? []);
+        this.pilloriedUntilNextDraw = new Set(state.pilloriedUntilNextDraw ?? []);
+        this.dressingBlocked = new Set(state.dressingBlocked ?? []);
+        this.pendingDraws = new Map(state.pendingDraws ?? []);
+
+        const now = Date.now();
+
+        for (const g of state.games ?? []) {
+            const game: GameRuntime = {
+                id: g.id,
+                turnOrder: [...g.turnOrder],
+                currentTurnIndex: g.currentTurnIndex,
+                round: g.round,
+                turnStartedAt: g.turnStartedAt ?? now,
+            };
+            this.games.set(g.id, game);
+            for (const memberNumber of g.turnOrder) {
+                this.playerGame.set(memberNumber, g.id);
+            }
+            this.resumeTurnTimers(game);
+        }
+
+        for (const [memberNumber, entry] of state.pendingBondage ?? []) {
+            const remaining = entry.deadlineAt - now;
+            const timer = setTimeout(
+                () => this.autoApplyPendingBondage(memberNumber, entry.dare),
+                Math.max(0, remaining),
+            );
+            this.pendingBondageTimers.set(memberNumber, timer);
+            this.pendingBondageDeadlines.set(memberNumber, entry.deadlineAt);
+        }
+
+        for (const [memberNumber, disconnectedAt] of state.disconnected ?? []) {
+            this.disconnectedAt.set(memberNumber, disconnectedAt);
+            const remaining = DISCONNECT_GRACE_MS - (now - disconnectedAt);
+            const timer = setTimeout(
+                () => this.purgeDisconnected(memberNumber),
+                Math.max(0, remaining),
+            );
+            this.disconnectTimers.set(memberNumber, timer);
+        }
     };
 
     private applyDareEffect = async (
@@ -1263,12 +1674,14 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         args: string[],
     ) => {
         if (!this.enabled) {
-            this.conn.reply(
-                msg,
+            this.whisper(
+                senderCharacter.MemberNumber,
                 "The dare game is currently disabled in this room.",
             );
             return;
         }
+
+        await this.ready;
 
         this.conn.SendMessage(
             "Emote",
