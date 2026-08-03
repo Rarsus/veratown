@@ -22,6 +22,7 @@ import {
 } from "bc-bot";
 import { wait } from "../hub/utils";
 import { Dare } from "./dare";
+import { DareConfig } from "./dare";
 import { DareStore } from "./dareStore";
 import { CasinoStore } from "./casino/casinostore";
 import { CageSystem } from "./veratown/cageSystem";
@@ -38,6 +39,7 @@ import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
     GAME_MISTRESS_POSITION,
+    DARE_LOCATION,
     CHANGELOG,
     MAP,
     SHOWER_BOT2_HOME_POSITION,
@@ -64,7 +66,7 @@ export class Veratown {
         "/bot map export - Shows the current layout as a portable string, for backup or to move it elsewhere (admin only)",
         "!map import <data> - Loads a layout previously produced by \"/bot map export\", live and as the new default (admin only, must be sent as its own message, not via /bot)",
         "/bot maintenance - Warns everyone in the room, waits one minute, then frees and removes everyone present (bots excluded) and locks the room to admins only (admin only)",
-        "/bot dare <join|leave|start|turn|add|draw|pass|forfeit|reset|list|help> - Join/leave, start/check turn, add, draw, pass (pillory!), forfeit into a kennel, reset or (admin only) list dare/forfeit cards (if configured)",
+        "/bot dare <join|leave|start|turn|draw|pass|forfeit|players|remove|stop|add|reset|list|help> - Join/leave, start/check turn, draw, pass (pillory!), forfeit into a kennel, view joined players, admin-remove players, admin-stop a running game, add, reset or (admin only) list dare cards (if configured)",
         "/bot pick - Randomly selects a room member other than the bot or yourself",
         "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
     ].join("\n");
@@ -96,17 +98,21 @@ export class Veratown {
         private conn: API_Connector,
         private conn2?: API_Connector,
         db?: Db,
+        dareConfig?: DareConfig,
     ) {
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
         ]);
 
         if (db) {
+            const effectiveDareConfig: DareConfig | undefined = dareConfig ??
+                (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
             this.dare = new Dare(
                 this.conn,
                 new DareStore(db),
                 this.commandParser,
                 new CasinoStore(db),
+                effectiveDareConfig,
             );
             this.mapStore = new VeratownMapStore(db);
         } else {

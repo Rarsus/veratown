@@ -6,6 +6,12 @@
     "mongo_uri": "mongodb://mongo:27017",
     "mongo_db": "ropeybot",
     "mongo_tls": false,
+    "dare": {
+        "region": {
+            "TopLeft": { "X": 0, "Y": 0 },
+            "BottomRight": { "X": 0, "Y": 0 }
+        }
+    },
     "superusers": [],
     "members": [],
     "room": {

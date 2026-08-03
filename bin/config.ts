@@ -14,6 +14,7 @@
 
 import { type RoomDefinition } from "bc-bot";
 import { type CasinoConfig } from "./games/casino";
+import { type DareConfig } from "./games/dare";
 
 export interface ConfigFile {
     user: string;
@@ -39,4 +40,5 @@ export interface ConfigFile {
     password3?: string;
 
     casino?: CasinoConfig;
+    dare?: DareConfig;
 }

@@ -177,7 +177,13 @@ export async function startBot(): Promise<RopeyBot> {
                 process.exit(1);
             }
             connector.accountUpdate({ Nickname: "Dare Bot" });
-            new Dare(connector, new DareStore(db), undefined, new CasinoStore(db));
+            new Dare(
+                connector,
+                new DareStore(db),
+                undefined,
+                new CasinoStore(db),
+                config.dare,
+            );
             connector.setBotDescription(Dare.description);
             break;
         case "veratown":
@@ -197,7 +203,12 @@ export async function startBot(): Promise<RopeyBot> {
                     "No user2/password2 configured; Veratown will narrate the shower using the main bot instead of a second bot.",
                 );
             }
-            const veratownGame = new Veratown(connector, veratownConn2, db);
+            const veratownGame = new Veratown(
+                connector,
+                veratownConn2,
+                db,
+                config.dare,
+            );
             await veratownGame.init();
             connector.setBotDescription(Veratown.description);
 
