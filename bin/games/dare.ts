@@ -227,8 +227,12 @@ Game Overview
     // bondage dare. Stays populated past the end of the game: only cleared
     // once the member has no dare-applied (bot-locked) bondage left on them
     // (see enforceDressingBlocks()), at which point their original outfit
-    // is automatically restored.
-    private dressingBlocked = new Set<number>();
+    // is automatically restored. Maps to the clothing-item cap that member
+    // was actually dared to lose - undefined means "everything" (a
+    // stripCount-less strip dare, or a noRedress bondage dare) - so
+    // re-enforcement only strips back down to that same partial cap
+    // instead of always stripping every last stitch of clothing.
+    private dressingBlocked = new Map<number, number | undefined>();
     private dressingEnforceInterval: ReturnType<typeof setInterval> | undefined;
 
     // How many times each member has passed on a drawn dare this game -
@@ -973,15 +977,17 @@ Game Overview
     };
 
     // Runs continuously (see registerTriggers()): re-strips any clothing a
-    // dressing-blocked member has tried to put back on, and once they no
-    // longer have any bot-locked ("dare-applied") bondage item left,
-    // releases the block and redresses them in their original outfit.
+    // dressing-blocked member has tried to put back on (limited to the
+    // same partial cap they were originally dared to lose, if any), and
+    // once they no longer have any bot-locked ("dare-applied") bondage
+    // item left, releases the block and redresses them in their original
+    // outfit.
     private enforceDressingBlocks = (): void => {
-        for (const memberNumber of [...this.dressingBlocked]) {
+        for (const [memberNumber, stripCap] of [...this.dressingBlocked]) {
             const character = this.conn.chatRoom.findMember(memberNumber);
             if (!character) continue;
 
-            character.Appearance.stripBulk({ clothing: true }, false);
+            character.Appearance.stripBulk({ clothing: true }, false, stripCap);
 
             const stillBound = character.Appearance.getAppearanceData().some(
                 (item) =>
@@ -1573,7 +1579,7 @@ Game Overview
         this.pilloriedUntilNextDraw = new Set(
             state.pilloriedUntilNextDraw ?? [],
         );
-        this.dressingBlocked = new Set(state.dressingBlocked ?? []);
+        this.dressingBlocked = new Map(state.dressingBlocked ?? []);
         this.pendingDraws = new Map(state.pendingDraws ?? []);
 
         const now = Date.now();
@@ -1645,10 +1651,12 @@ Game Overview
                     false,
                     stripCount,
                 );
-                this.dressingBlocked.add(target.MemberNumber);
+                this.dressingBlocked.set(target.MemberNumber, stripCount);
                 this.conn.SendMessage(
                     "Emote",
-                    `*${target} will stay bare until they're free of every last bit of dare-applied bondage!`,
+                    stripCount
+                        ? `*${target} will stay short those ${stripCount} item(s) until they're free of every last bit of dare-applied bondage!`
+                        : `*${target} will stay bare until they're free of every last bit of dare-applied bondage!`,
                 );
                 break;
             }
@@ -1671,7 +1679,7 @@ Game Overview
                 }
                 this.addBinds(target.MemberNumber, appliedCount);
                 if (dare.noRedress) {
-                    this.dressingBlocked.add(target.MemberNumber);
+                    this.dressingBlocked.set(target.MemberNumber, undefined);
                     this.conn.SendMessage(
                         "Emote",
                         `*${target} isn't allowed to get dressed again until the timer runs out!`,

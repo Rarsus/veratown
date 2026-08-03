@@ -78,7 +78,11 @@ export interface DareStateDoc {
     bindCounts: [number, number][];
     passCounts: [number, number][];
     pilloriedUntilNextDraw: number[];
-    dressingBlocked: number[];
+    // Members currently blocked from (re)dressing, and the clothing-item
+    // cap (see Dare.enforceDressingBlocks()) each one is limited to -
+    // undefined means "strip everything", matching a full-strip dare or a
+    // noRedress bondage dare rather than a partial "!dare"-drawn strip.
+    dressingBlocked: [number, number | undefined][];
     pendingDraws: [number, DareDoc][];
     pendingBondage: [number, { dare: DareDoc; deadlineAt: number }][];
     // Members who've left the room and are on their 1-minute grace period
