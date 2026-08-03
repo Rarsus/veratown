@@ -13,6 +13,7 @@
  */
 
 import { Collection, Db } from "mongodb";
+import { BC_AppearanceItem } from "bc-bot";
 
 export interface DareDoc {
     text: string;
@@ -45,12 +46,24 @@ export interface DareDoc {
     target?: "self" | "other";
 }
 
+// A member's appearance snapshot, taken before a strip/bondage dare first
+// affects them, so they can be redressed exactly as they were once they're
+// done playing (or freed of all dare-applied bondage). Keyed by member
+// number so there's at most one snapshot per player at a time.
+export interface DareOutfitDoc {
+    _id: number;
+    appearance: BC_AppearanceItem[];
+    savedAt: number;
+}
+
 export class DareStore {
     private inited = false;
     private dares: Collection<DareDoc>;
+    private outfits: Collection<DareOutfitDoc>;
 
     constructor(private db: Db) {
         this.dares = this.db.collection<DareDoc>("dares");
+        this.outfits = this.db.collection<DareOutfitDoc>("dareOutfits");
     }
 
     private async init(): Promise<void> {
@@ -112,5 +125,38 @@ export class DareStore {
     public async listDares(): Promise<DareDoc[]> {
         await this.init();
         return this.dares.find({}).sort({ createdAt: 1 }).toArray();
+    }
+
+    // Saves a member's current appearance as their "original outfit", but
+    // only if one isn't already stored - so the first strip/bondage dare to
+    // affect them (at game start, or on their first casual draw) captures
+    // what they looked like beforehand, and later dares/redraws don't
+    // clobber that snapshot with an already-undressed state.
+    public async saveOriginalOutfitIfMissing(
+        memberNumber: number,
+        appearance: BC_AppearanceItem[],
+    ): Promise<void> {
+        await this.init();
+        await this.outfits.updateOne(
+            { _id: memberNumber },
+            { $setOnInsert: { appearance, savedAt: Date.now() } },
+            { upsert: true },
+        );
+    }
+
+    public async getOriginalOutfit(
+        memberNumber: number,
+    ): Promise<BC_AppearanceItem[] | undefined> {
+        await this.init();
+        const doc = await this.outfits.findOne({ _id: memberNumber });
+        return doc?.appearance;
+    }
+
+    // Clears a member's saved outfit once it's no longer needed - either
+    // it's just been restored to them, or a fresh game is starting and will
+    // capture a new snapshot instead.
+    public async clearOriginalOutfit(memberNumber: number): Promise<void> {
+        await this.init();
+        await this.outfits.deleteOne({ _id: memberNumber });
     }
 }

@@ -19,6 +19,7 @@ import {
     BC_Server_ChatRoomMessage,
     AssetGet,
     MapRegion,
+    isBind,
 } from "bc-bot";
 import { wait } from "../hub/utils";
 import { DareStore, DareDoc } from "./dareStore";
@@ -28,6 +29,7 @@ import {
     describeForfeitOutcome,
     lockInForfeitKennel,
 } from "./casino/forfeits";
+import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
@@ -37,8 +39,10 @@ const PILLORY_REPEAT_LOCK_MS = 4 * 60 * 60 * 1000;
 // having a drawn bondage dare's effect applied automatically.
 const BONDAGE_DECISION_MS = 15 * 1000;
 
-// How often stripped-for-the-game players get any redressed clothing
-// stripped back off while a structured game is running.
+// How often dressing-blocked players get any redressed clothing stripped
+// back off. Runs continuously (not just while a game is active), since a
+// stripped/noRedress-bound player stays blocked after the game too, until
+// their last dare-applied bondage item is gone (see enforceDressingBlocks()).
 const STRIP_ENFORCE_INTERVAL_MS = 20 * 1000;
 
 // How long someone can sit on their turn without drawing before getting a
@@ -52,7 +56,12 @@ export interface DareConfig {
     region?: MapRegion;
 }
 
-export class Dare {
+export class Dare implements VeratownFeatureSystem {
+    public readonly key = "dare";
+    public readonly label = "Dares";
+    // Toggled via "/bot feature enable|disable dare". When disabled, !dare
+    // and !pick simply reply that the feature is off instead of acting.
+    public enabled = true;
 
     public static description_intro = `Dares
  =====
@@ -156,10 +165,14 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
     // "!dare forfeit" decision window, keyed by the drawer's member number.
     private pendingBondageTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
-    // Members who've been stripped by a dare during the current game and so
-    // must stay bare until it ends.
-    private strippedForGame = new Set<number>();
-    private stripEnforceInterval: ReturnType<typeof setInterval> | undefined;
+    // Members currently blocked from getting dressed - either their
+    // clothing was stripped by a dare, or they're bound by a "noRedress"
+    // bondage dare. Stays populated past the end of the game: only cleared
+    // once the member has no dare-applied (bot-locked) bondage left on them
+    // (see enforceDressingBlocks()), at which point their original outfit
+    // is automatically restored.
+    private dressingBlocked = new Set<number>();
+    private dressingEnforceInterval: ReturnType<typeof setInterval> | undefined;
 
     // How many times each member has passed on a drawn dare this game -
     // the 2nd+ pass escalates the pillory into a long timed, signed one.
@@ -185,12 +198,32 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.commandParser =
             commandParser ?? new CommandParser(conn, config?.region);
         this.region = config?.region;
+    }
 
-        this.commandParser.register("pick", this.onPick);
-        this.commandParser.register("dare", this.onDare);
+    // Registers commands/listeners - called once during Veratown startup
+    // (see VeratownFeatureSystem). Split out from the constructor so a
+    // freshly-constructed Dare doesn't wire itself up until the caller is
+    // ready, matching the other room feature systems.
+    public registerTriggers(): void {
+        this.commandParser.register("pick", guardHandler("dare", this.onPick));
+        this.commandParser.register("dare", guardHandler("dare", this.onDare));
 
-        this.conn.on("CharacterLeft", this.onCharacterLeft);
-        this.conn.on("CharacterEntered", this.onCharacterEntered);
+        this.conn.on(
+            "CharacterLeft",
+            guardHandler("dare", this.onCharacterLeft),
+        );
+        this.conn.on(
+            "CharacterEntered",
+            guardHandler("dare", this.onCharacterEntered),
+        );
+
+        // Dressing-block enforcement runs continuously, independent of
+        // gameActive, so it also covers players still bound after a
+        // structured game ends (see dressingBlocked's doc comment above).
+        this.dressingEnforceInterval = setInterval(
+            () => this.enforceDressingBlocks(),
+            STRIP_ENFORCE_INTERVAL_MS,
+        );
     }
 
     onDare = async (
@@ -198,6 +231,14 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.enabled) {
+            this.conn.reply(
+                msg,
+                "The dare game is currently disabled in this room.",
+            );
+            return;
+        }
+
         if (!this.requireInDareRegion(senderCharacter, msg)) return;
 
         this.pruneUnavailableParticipants();
@@ -258,21 +299,23 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     clearTimeout(timer);
                 }
                 this.pendingBondageTimers.clear();
-                this.strippedForGame.clear();
+                // Note: dressingBlocked is intentionally NOT cleared here -
+                // anyone still blocked (and bound) from a previous game
+                // stays blocked until their bondage actually clears, per
+                // enforceDressingBlocks().
                 this.passCounts.clear();
                 this.pilloriedUntilNextDraw.clear();
                 this.clearTurnTimers();
 
-                if (this.stripEnforceInterval) {
-                    clearInterval(this.stripEnforceInterval);
+                // Snapshot everyone's current outfit before the game can
+                // touch it, so the eventual winner can be redressed exactly
+                // as they were at the start (see declareWinner()).
+                for (const memberNumber of this.turnOrder) {
+                    const character =
+                        this.conn.chatRoom.findMember(memberNumber);
+                    if (character)
+                        await this.captureOriginalOutfitIfMissing(character);
                 }
-                this.stripEnforceInterval = setInterval(() => {
-                    for (const memberNumber of this.strippedForGame) {
-                        this.conn.chatRoom
-                            .findMember(memberNumber)
-                            ?.Appearance.stripBulk({ clothing: true }, false);
-                    }
-                }, STRIP_ENFORCE_INTERVAL_MS);
 
                 const order = this.turnOrder
                     .map((m) => this.describeMember(m))
@@ -591,7 +634,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             this.joinedPlayers.delete(memberNumber);
             this.pendingDraws.delete(memberNumber);
             this.pilloriedUntilNextDraw.delete(memberNumber);
-            this.strippedForGame.delete(memberNumber);
+            this.dressingBlocked.delete(memberNumber);
             this.passCounts.delete(memberNumber);
             this.bindCounts.delete(memberNumber);
 
@@ -683,6 +726,65 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             memberNumber,
             (this.bindCounts.get(memberNumber) ?? 0) + count,
         );
+    };
+
+    // Saves a member's current outfit as their "original" one, if nothing's
+    // saved for them already - see DareStore.saveOriginalOutfitIfMissing().
+    private captureOriginalOutfitIfMissing = async (
+        character: API_Character,
+    ): Promise<void> => {
+        await this.store.saveOriginalOutfitIfMissing(
+            character.MemberNumber,
+            character.Appearance.MakeAppearanceBundle(),
+        );
+    };
+
+    // Restores a member's saved outfit (clothing and restraints alike),
+    // then clears the saved snapshot so a future game/dare starts fresh.
+    // No-ops if nothing was ever saved for them.
+    private restoreOriginalOutfit = async (
+        character: API_Character,
+    ): Promise<void> => {
+        const original = await this.store.getOriginalOutfit(
+            character.MemberNumber,
+        );
+        if (!original) return;
+
+        character.Appearance.stripBulk(
+            { appearance: true, bodyCosplay: true, clothing: true, item: true },
+            true,
+        );
+        character.Appearance.applyBundle(original);
+        await this.store.clearOriginalOutfit(character.MemberNumber);
+    };
+
+    // Runs continuously (see registerTriggers()): re-strips any clothing a
+    // dressing-blocked member has tried to put back on, and once they no
+    // longer have any bot-locked ("dare-applied") bondage item left,
+    // releases the block and redresses them in their original outfit.
+    private enforceDressingBlocks = (): void => {
+        for (const memberNumber of [...this.dressingBlocked]) {
+            const character = this.conn.chatRoom.findMember(memberNumber);
+            if (!character) continue;
+
+            character.Appearance.stripBulk({ clothing: true }, false);
+
+            const stillBound = character.Appearance.getAppearanceData().some(
+                (item) =>
+                    isBind(item) &&
+                    item.Property?.LockMemberNumber ===
+                        this.conn.Player.MemberNumber,
+            );
+            if (stillBound) continue;
+
+            this.dressingBlocked.delete(memberNumber);
+            void this.restoreOriginalOutfit(character).catch((e) =>
+                console.error(
+                    `[dare] Failed to restore ${memberNumber}'s original outfit`,
+                    e,
+                ),
+            );
+        }
     };
 
     private announceTurn = (): void => {
@@ -855,7 +957,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.joinedPlayers.delete(memberNumber);
         this.pendingDraws.delete(memberNumber);
         this.pilloriedUntilNextDraw.delete(memberNumber);
-        this.strippedForGame.delete(memberNumber);
+        this.dressingBlocked.delete(memberNumber);
         this.passCounts.delete(memberNumber);
         this.bindCounts.delete(memberNumber);
 
@@ -885,7 +987,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.joinedPlayers.delete(memberNumber);
         this.pendingDraws.delete(memberNumber);
         this.pilloriedUntilNextDraw.delete(memberNumber);
-        this.strippedForGame.delete(memberNumber);
+        this.dressingBlocked.delete(memberNumber);
         this.passCounts.delete(memberNumber);
         this.bindCounts.delete(memberNumber);
 
@@ -957,7 +1059,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
     };
 
     // Resets all structured-game state. Shared by both a normal round-10
-    // finish and an early sole-survivor win.
+    // finish and an early sole-survivor win. Deliberately leaves
+    // dressingBlocked (and the persistent enforcement interval) untouched -
+    // that's handled per-member, independent of the game's lifecycle, by
+    // enforceDressingBlocks()/declareWinner().
     private resetGameState = (): void => {
         this.gameActive = false;
         this.turnOrder = [];
@@ -967,22 +1072,30 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.bindCounts.clear();
         this.passCounts.clear();
         this.pilloriedUntilNextDraw.clear();
-        this.strippedForGame.clear();
         this.clearTurnTimers();
         for (const timer of this.pendingBondageTimers.values()) {
             clearTimeout(timer);
         }
         this.pendingBondageTimers.clear();
-        if (this.stripEnforceInterval) {
-            clearInterval(this.stripEnforceInterval);
-            this.stripEnforceInterval = undefined;
-        }
     };
 
-    // Frees the winner of all bondage and announces the game's end.
+    // Frees the winner of all bondage, redresses them in whatever they were
+    // wearing before the game touched their outfit, and announces the
+    // game's end. Everyone else stays locked up (and dressing-blocked)
+    // until their own bondage timers run out - see enforceDressingBlocks().
     private declareWinner = (winner: number, reasonPhrase: string): void => {
         const winnerCharacter = this.conn.chatRoom.findMember(winner);
         winnerCharacter?.Appearance.stripBulk({ item: true }, true);
+
+        if (winnerCharacter) {
+            this.dressingBlocked.delete(winner);
+            void this.restoreOriginalOutfit(winnerCharacter).catch((e) =>
+                console.error(
+                    `[dare] Failed to restore ${winner}'s original outfit`,
+                    e,
+                ),
+            );
+        }
 
         this.conn.SendMessage(
             "Emote",
@@ -1069,6 +1182,14 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 ? drawer
                 : this.resolveDareTarget(drawer, dare);
 
+        // Snapshot the target's outfit the first time a strip/bondage dare
+        // is about to touch it - whether that's at the start of a
+        // structured game (see "start" above) or their first casual draw -
+        // so they can be redressed exactly as they were once they're free.
+        if (dare.category === "strip" || dare.category === "bondage") {
+            await this.captureOriginalOutfitIfMissing(target);
+        }
+
         switch (dare.category) {
             case "strip": {
                 const stripCount = this.normalizeStripCount(dare.stripCount);
@@ -1081,19 +1202,11 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                     false,
                     stripCount,
                 );
-                if (dare.noRedress) {
-                    this.conn.SendMessage(
-                        "Emote",
-                        `*${target} must stay undressed for this dare - no getting dressed until it's done!`,
-                    );
-                }
-                if (this.gameActive) {
-                    this.strippedForGame.add(target.MemberNumber);
-                    this.conn.SendMessage(
-                        "Emote",
-                        `*${target} will stay bare for the rest of the game!`,
-                    );
-                }
+                this.dressingBlocked.add(target.MemberNumber);
+                this.conn.SendMessage(
+                    "Emote",
+                    `*${target} will stay bare until they're free of every last bit of dare-applied bondage!`,
+                );
                 break;
             }
             case "bondage": {
@@ -1115,6 +1228,7 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 }
                 this.addBinds(target.MemberNumber, appliedCount);
                 if (dare.noRedress) {
+                    this.dressingBlocked.add(target.MemberNumber);
                     this.conn.SendMessage(
                         "Emote",
                         `*${target} isn't allowed to get dressed again until the timer runs out!`,
@@ -1148,6 +1262,14 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.enabled) {
+            this.conn.reply(
+                msg,
+                "The dare game is currently disabled in this room.",
+            );
+            return;
+        }
+
         this.conn.SendMessage(
             "Emote",
             `*${senderCharacter} randomly selects a room member...`,

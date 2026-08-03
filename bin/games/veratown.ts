@@ -60,7 +60,7 @@ export class Veratown {
         "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
         "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
         "/bot changelog - Shows a summary of recent functional changes to the map",
-        "/bot feature <list|enable|disable> <name> - Show, or (admin only) enable/disable, individual room features (cage, kennel, shower, bed, bunnyPark, window, trashcan)",
+        "/bot feature <list|enable|disable> <name> - Show, or (admin only) enable/disable, individual room features (cage, kennel, shower, bed, bunnyPark, window, trashcan, dare)",
         "/bot map update - Saves the room's current layout to the database as the new default (admin only)",
         "/bot map reset - Resets the room layout to the built-in default map, in the database and live (admin only)",
         "/bot map export - Shows the current layout as a portable string, for backup or to move it elsewhere (admin only)",
@@ -107,12 +107,15 @@ export class Veratown {
         if (db) {
             const effectiveDareConfig: DareConfig | undefined = dareConfig ??
                 (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
-            this.dare = new Dare(
-                this.conn,
-                new DareStore(db),
-                this.commandParser,
-                new CasinoStore(db),
-                effectiveDareConfig,
+            this.dare = this.initFeature(
+                () =>
+                    new Dare(
+                        this.conn,
+                        new DareStore(db),
+                        this.commandParser,
+                        new CasinoStore(db),
+                        effectiveDareConfig,
+                    ),
             );
             this.mapStore = new VeratownMapStore(db);
         } else {

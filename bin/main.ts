@@ -183,7 +183,7 @@ export async function startBot(): Promise<RopeyBot> {
                 undefined,
                 new CasinoStore(db),
                 config.dare,
-            );
+            ).registerTriggers();
             connector.setBotDescription(Dare.description);
             break;
         case "veratown":
