@@ -149,7 +149,12 @@ export class VeratownAdminCommands {
         if (!this.requireAdmin(sender, msg)) return;
 
         const key = args[1];
-        const feature = this.features.find((f) => f.key === key);
+        // CommandParser lowercases every arg (not just the command name)
+        // before handlers see it, so match feature keys case-insensitively
+        // - otherwise mixed-case keys like "bunnyPark" could never match.
+        const feature = this.features.find(
+            (f) => f.key.toLowerCase() === key,
+        );
         if (!feature) {
             this.conn.reply(
                 msg,
