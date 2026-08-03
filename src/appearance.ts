@@ -85,6 +85,28 @@ export interface BundleApplyConfig {
     item?: boolean;
 }
 
+// Priority order used by stripBulk() when a maxItems cap limits how many
+// clothing items get removed (e.g. Dare's strip-category dares). Earlier
+// entries are stripped first; only slots that are actually occupied count
+// towards/consume the cap. Any equipped clothing group that isn't listed
+// here is only eligible for removal after every listed slot has already
+// been considered.
+export const CLOTHING_STRIP_PRIORITY: AssetGroupName[] = [
+    "ClothOuter",
+    "Gloves",
+    "Shoes",
+    "Socks",
+    "Cloth",
+    "ClothLower",
+    "Corset",
+    "Bra",
+    "Garters",
+    "Panties",
+    "Suit",
+    "SuitLower",
+    "Hat",
+];
+
 const DEFAULT_APPLY_CFG: BundleApplyConfig = {
     appearance: true,
     bodyCosplay: true,
@@ -199,19 +221,56 @@ export class AppearanceType {
         let numItemsStripped = 0;
         let capped = false;
 
-        this.data = this.data.filter((i) => {
-            if (maxItems !== undefined && numItemsStripped >= maxItems) {
-                capped = true;
-                return true;
+        // When capping how many clothing items to remove, decide *which*
+        // slots to strip up front (in CLOTHING_STRIP_PRIORITY order,
+        // skipping any slot that isn't actually occupied) instead of
+        // whatever order items happen to be stored in. Without this, a
+        // maxItems cap on clothing had no effect at all (see below).
+        let clothingGroupsToStrip: Set<AssetGroupName> | undefined;
+        if (cfg.clothing && maxItems !== undefined) {
+            clothingGroupsToStrip = new Set();
+            const equippedGroups = new Set(
+                this.data.filter((i) => isClothing(i)).map((i) => i.Group),
+            );
+            for (const group of CLOTHING_STRIP_PRIORITY) {
+                if (clothingGroupsToStrip.size >= maxItems) break;
+                if (equippedGroups.has(group))
+                    clothingGroupsToStrip.add(group);
             }
+            // Any equipped clothing group not covered by the priority list
+            // is only eligible once every listed slot has been considered.
+            if (clothingGroupsToStrip.size < maxItems) {
+                for (const group of equippedGroups) {
+                    if (clothingGroupsToStrip.size >= maxItems) break;
+                    if (!clothingGroupsToStrip.has(group))
+                        clothingGroupsToStrip.add(group);
+                }
+            }
+            if (equippedGroups.size > clothingGroupsToStrip.size) capped = true;
+        }
 
+        this.data = this.data.filter((i) => {
             if (i.Group === "ItemNeck" || i.Group == "ItemNeckAccessories")
                 return true;
             if (stripLocked && i.Property?.LockedBy) return false;
 
             if (cfg.appearance && isBody(i)) return false;
             if (cfg.bodyCosplay && isCosplay(i)) return false;
-            if (cfg.clothing && isClothing(i)) return false;
+            if (cfg.clothing && isClothing(i)) {
+                // Capped clothing removal: only strip slots chosen above,
+                // in priority order - everything else stays on for now.
+                if (
+                    clothingGroupsToStrip &&
+                    !clothingGroupsToStrip.has(i.Group)
+                ) {
+                    return true;
+                }
+                return false;
+            }
+            if (maxItems !== undefined && numItemsStripped >= maxItems) {
+                capped = true;
+                return true;
+            }
             if (cfg.item && isBind(i)) {
                 ++numItemsStripped;
                 return false;
