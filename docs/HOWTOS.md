@@ -29,11 +29,12 @@ private onCharacterEnterMyTile = (
 ```
 
 Notes:
+
 - The trigger fires on **entry** to that exact tile (position equality), not
   continuously while standing there. For "how long have they been standing
   here" behavior (windows, beds), poll with `setInterval`/a loop instead -
   see pattern 5 below.
-- `removeTileTrigger(x, y, callback)` needs the *same* callback reference to
+- `removeTileTrigger(x, y, callback)` needs the _same_ callback reference to
   unregister, so store bound/arrow-function handlers as class fields (as
   above) rather than creating new closures each time.
 - Multiple tiles sharing one handler: just call `addTileTrigger` once per
@@ -62,6 +63,7 @@ private onCharacterEnterMyRegion = (character: API_Character): void => {
 ```
 
 Other region helpers in `apiMap.ts`:
+
 - `positionIsInRegion(pos, region)` - plain boolean check, useful for
   "is this event relevant right now" guards inside other handlers (e.g. only
   react to a chat message if the sender is standing in a given area - see
@@ -195,13 +197,14 @@ case "mygame":
 ```
 
 Patterns seen for optional second bots/config (copy whichever applies):
+
 - **Second connector for narration** (Veratown's shower bot): guarded by
   `config.user2`/`config.password2` both being set; falls back to using the
   main `connector` if absent, with a console warning.
 - **Requires a database** (Dare, Veratown's dare/pick commands): guarded by
   `db` being set (itself only constructed if `config.mongo_uri`/
   `config.mongo_db` are set); `process.exit(1)` with a clear message if a
-  *hard* requirement (like the standalone Dare game) is missing, or just skip
+  _hard_ requirement (like the standalone Dare game) is missing, or just skip
   the optional feature (like Veratown's dare integration) otherwise.
 
 Add your new config fields to `ConfigFile` in [`bin/config.ts`](../bin/config.ts)

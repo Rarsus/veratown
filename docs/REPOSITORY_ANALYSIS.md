@@ -89,19 +89,20 @@ ropeybot/
 
 ### Build Scripts
 
-| Script | Purpose | Output |
-|--------|---------|--------|
-| `pnpm install` | Install deps + preinstall hook | `node_modules/` |
-| `npm run types` | Type check without emit | Diagnostics only |
-| `npm run compile:bc-bot` | Compile framework library | `src/dist/` |
-| `npm start` | Local dev: compile + run with tsx | Runtime execution |
-| `npm run bundle` | Production: esbuild bundle | `dist/bundle.js` + sourcemaps |
-| `npm run docker` | Build Docker image | Docker image `ropeybot:latest` |
-| `npm run prettier` | Code style check | Report only |
+| Script                   | Purpose                           | Output                         |
+| ------------------------ | --------------------------------- | ------------------------------ |
+| `pnpm install`           | Install deps + preinstall hook    | `node_modules/`                |
+| `npm run types`          | Type check without emit           | Diagnostics only               |
+| `npm run compile:bc-bot` | Compile framework library         | `src/dist/`                    |
+| `npm start`              | Local dev: compile + run with tsx | Runtime execution              |
+| `npm run bundle`         | Production: esbuild bundle        | `dist/bundle.js` + sourcemaps  |
+| `npm run docker`         | Build Docker image                | Docker image `ropeybot:latest` |
+| `npm run prettier`       | Code style check                  | Report only                    |
 
 ### Build Stages
 
 #### Stage 1: Framework Compilation
+
 ```bash
 cd src && npm run compile
 # Runs: tsc -p tsconfig.json
@@ -109,6 +110,7 @@ cd src && npm run compile
 ```
 
 #### Stage 2: Application Build (Development)
+
 ```bash
 npm start
 # Runs: npm run compile:bc-bot && tsx bin/main.ts
@@ -116,6 +118,7 @@ npm start
 ```
 
 #### Stage 3: Production Bundle
+
 ```bash
 npm run bundle
 # Runs: npm run compile:bc-bot && esbuild bin/main.ts --bundle ...
@@ -123,6 +126,7 @@ npm run bundle
 ```
 
 #### Stage 4: Docker Deployment
+
 ```bash
 npm run docker
 # Builds bundle, then docker build -t ropeybot .
@@ -152,61 +156,68 @@ Socket.IO Events → API_Connector → Wrapped Objects → Game Logic
 ### Key Classes
 
 #### `API_Connector`
+
 - **Purpose**: Main connection handler, event dispatcher
 - **Extends**: EventEmitter
 - **Events**: RoomCreate, RoomJoin, Message, CharacterMove, etc.
 - **Provides**:
-  - Socket.IO client management
-  - Room state tracking
-  - Player character wrapper
-  - Chatroom wrapper
-  - Event broadcasting to game logic
+    - Socket.IO client management
+    - Room state tracking
+    - Player character wrapper
+    - Chatroom wrapper
+    - Event broadcasting to game logic
 
 #### `API_Chatroom`
+
 - **Purpose**: Room state wrapper
 - **Provides**:
-  - Character list with API_Character wrappers
-  - Room metadata (description, background, privacy, limits)
-  - Map data wrapper (if map room)
-  - Character join/leave tracking
-  - Message event bubbling
+    - Character list with API_Character wrappers
+    - Room metadata (description, background, privacy, limits)
+    - Map data wrapper (if map room)
+    - Character join/leave tracking
+    - Message event bubbling
 
 #### `API_Character`
+
 - **Purpose**: Character state wrapper
 - **Provides**:
-  - Member number, name, position on map
-  - Appearance wrapper (outfit, items, colors)
-  - Active pose
-  - Faction/role
-  - Helper: `Tell()` for whispers, `SetActivePose()`, `GetColor()`
+    - Member number, name, position on map
+    - Appearance wrapper (outfit, items, colors)
+    - Active pose
+    - Faction/role
+    - Helper: `Tell()` for whispers, `SetActivePose()`, `GetColor()`
 
 #### `API_Map`
+
 - **Purpose**: Map room interaction system
 - **Provides**:
-  - Map data loading/manipulation
-  - Tile trigger system (position-based)
-  - Region trigger system (area-based)
-  - Object placement/retrieval
-  - Character movement tracking
-  - Automatic room sync via `ChatRoomUpdate()`
+    - Map data loading/manipulation
+    - Tile trigger system (position-based)
+    - Region trigger system (area-based)
+    - Object placement/retrieval
+    - Character movement tracking
+    - Automatic room sync via `ChatRoomUpdate()`
 
 #### `CommandParser`
+
 - **Purpose**: Command parsing utility
 - **Pattern**: `/bot <command> [args]`
 - **Usage**: Register commands, parse/dispatch to handlers
 
 #### `Appearance`
+
 - **Purpose**: Character outfit management
 - **Provides**:
-  - `InventoryGet()` - Get equipped item by group
-  - `AddItem()` - Equip with color/properties
-  - `RemoveItem()` - Unequip
-  - `SetColor()` - Modify item colors
-  - Color helpers for RGB/hex conversion
+    - `InventoryGet()` - Get equipped item by group
+    - `AddItem()` - Equip with color/properties
+    - `RemoveItem()` - Unequip
+    - `SetColor()` - Modify item colors
+    - Color helpers for RGB/hex conversion
 
 ### Event System
 
 **Emitted by API_Connector:**
+
 - `RoomCreate` - Room created by the bot
 - `RoomJoin` - Bot joined an existing room
 - `RoomUpdate` - Room metadata changed
@@ -217,6 +228,7 @@ Socket.IO Events → API_Connector → Wrapped Objects → Game Logic
 - `Beep` - Bot received a beep
 
 **Emitted by API_Map:**
+
 - `MapUpdate` - Map data changed
 - Tile triggers (custom callbacks)
 - Region triggers (custom callbacks)
@@ -235,6 +247,7 @@ Socket.IO Events → API_Connector → Wrapped Objects → Game Logic
 ### Overview
 
 Map rooms are interactive 2D grid environments where:
+
 - Each room is 40×40 tiles
 - Characters have X/Y positions
 - Tiles and objects are dynamically modifiable
@@ -243,70 +256,79 @@ Map rooms are interactive 2D grid environments where:
 ### Map Data Structure
 
 **Storage Format:**
+
 - Base64-compressed JSON (lz-string compression)
 - Decompressed to `ServerChatRoomMapData`:
-  ```typescript
-  {
-    Tiles: string,      // 1600 chars (40×40), each char = tile ID
-    Objects: string,    // 1600 chars, each char = object ID
-    // (other BC-specific fields)
-  }
-  ```
+    ```typescript
+    {
+      Tiles: string,      // 1600 chars (40×40), each char = tile ID
+      Objects: string,    // 1600 chars, each char = object ID
+      // (other BC-specific fields)
+    }
+    ```
 
 **Tile/Object Lookup:**
+
 - Tiles resolved by name + optional type via `ChatRoomMapViewTileList`
 - Objects resolved by name via `ChatRoomMapViewObjectList`
 - Maps in `src/bcdata/ChatRoomMap.ts` (BC game data)
 
 **Position Formula:**
+
 ```typescript
-tileIndex = X + Y * 40  // Convert 2D to 1D array index
+tileIndex = X + Y * 40; // Convert 2D to 1D array index
 ```
 
 ### Trigger System
 
 #### Tile Triggers
+
 ```typescript
 conn.chatRoom.map.addTileTrigger(
-    { X: 23, Y: 5 },           // Position
-    (char, prevPos) => {         // Callback
+    { X: 23, Y: 5 }, // Position
+    (char, prevPos) => {
+        // Callback
         char.Tell("Whisper", "You stepped here!");
     },
-    { X: 23, Y: 4 }             // Optional: only if came from this position
+    { X: 23, Y: 4 }, // Optional: only if came from this position
 );
 ```
 
 **Use Cases:**
+
 - Step on painting → describe it
 - Step on pad → trigger equipment script
 - Conditional entry (only from certain direction)
 
 #### Region Triggers
+
 ```typescript
 conn.chatRoom.map.addEnterRegionTrigger(
     {
         TopLeft: { X: 13, Y: 11 },
-        BottomRight: { X: 33, Y: 15 }
+        BottomRight: { X: 33, Y: 15 },
     },
     (char, prevPos) => {
         // Fires once when entering region
-    }
+    },
 );
 
 conn.chatRoom.map.addLeaveRegionTrigger(region, callback);
 ```
 
 **Use Cases:**
+
 - Greet players entering reception
 - Detect door approach
 - Track player exit
 
 #### Door Helper
+
 ```typescript
 const doorRegion = makeDoorRegion(
-    { X: 18, Y: 2 },    // Door position
-    true,               // Include tile above
-    false               // Exclude tile below
+    { X: 18, Y: 2 }, // Door position
+    true, // Include tile above
+    false, // Exclude tile below
 );
 conn.chatRoom.map.addEnterRegionTrigger(doorRegion, onDoorApproach);
 ```
@@ -314,23 +336,26 @@ conn.chatRoom.map.addEnterRegionTrigger(doorRegion, onDoorApproach);
 ### Dynamic Modifications
 
 **Change Tile:**
+
 ```typescript
 conn.chatRoom.map.setTile(
     { X: 10, Y: 10 },
-    "Wood",              // Tile name
-    "Floor"              // Optional type
+    "Wood", // Tile name
+    "Floor", // Optional type
 );
 ```
 
 **Change Object:**
+
 ```typescript
 conn.chatRoom.map.setObject(
     { X: 18, Y: 2 },
-    "WoodOpen"           // Object name (e.g., door state)
+    "WoodOpen", // Object name (e.g., door state)
 );
 ```
 
 **Retrieve Object:**
+
 ```typescript
 const currentObject = conn.chatRoom.map.getObject({ X: 18, Y: 2 });
 ```
@@ -349,6 +374,7 @@ const currentObject = conn.chatRoom.map.getObject({ X: 18, Y: 2 });
 ### File: `config.json` (copied from config.sample.json)
 
 **Required Fields:**
+
 ```json
 {
     "user": "bot_username",           // Account username
@@ -359,6 +385,7 @@ const currentObject = conn.chatRoom.map.getObject({ X: 18, Y: 2 });
 ```
 
 **Optional Fields:**
+
 ```json
 {
     "superusers": [123456],           // Member numbers with full control
@@ -388,6 +415,7 @@ const currentObject = conn.chatRoom.map.getObject({ X: 18, Y: 2 });
 ### Config Loading
 
 In `bin/main.ts`:
+
 ```typescript
 const config = JSON.parse(await readFile("config.json", "utf-8"));
 // Validated against ConfigFile interface
@@ -398,6 +426,7 @@ const config = JSON.parse(await readFile("config.json", "utf-8"));
 ## Available Games/Bots
 
 ### 1. Dare Game (`dare`)
+
 - **Type**: Simple turn-based party game
 - **Mechanic**: Players add dares, then draw anonymously
 - **Persistence**: Stored in a MongoDB `dares` collection (`mongo_uri`/`mongo_db` required)
@@ -406,42 +435,47 @@ const config = JSON.parse(await readFile("config.json", "utf-8"));
 - Also embedded directly into Veratown's own commands when MongoDB is configured
 
 ### 2. Veratown (`veratown`)
+
 - **Type**: Interactive map-based roleplay
 - **Mechanic**: Players enter as "pets", must wear outfit, speak only via animal sounds
 - **Features**:
-  - Full map layout with exhibits, dressing rooms, spa area
-  - Dynamic door opening (checks for outfit)
-  - Tile triggers on paintings (descriptions)
-  - Region triggers on reception/doors
-  - Timed exits (minimum 30-min stay)
-  - Character outfit management (adds ears/tail)
+    - Full map layout with exhibits, dressing rooms, spa area
+    - Dynamic door opening (checks for outfit)
+    - Tile triggers on paintings (descriptions)
+    - Region triggers on reception/doors
+    - Timed exits (minimum 30-min stay)
+    - Character outfit management (adds ears/tail)
 - **Map Room**: Yes (40×40 grid, 6+ areas)
 - **Reference**: Demonstrates API usage patterns
 
 ### 3. Kidnappers (`kidnappers`)
+
 - **Type**: Capture/escape game (legacy)
 - **Source**: Original BC bot hub (unmodified)
 - **Location**: `bin/hub/logic/kidnappersGameRoom.ts`
 - **Map Room**: Yes (implied)
 
 ### 4. Roleplay Challenge (`roleplay`)
+
 - **Type**: Roleplay scenario game (legacy)
 - **Source**: Original BC bot hub
 - **Location**: `bin/hub/logic/roleplaychallengeGameRoom.ts`
 - **Map Room**: Likely
 
 ### 5. Casino (`casino`)
+
 - **Type**: Gambling games
 - **Sub-games**:
-  - Blackjack
-  - Roulette
-  - Cocktails (betting variant?)
-  - Card/game engine
-  - Forfeit system
+    - Blackjack
+    - Roulette
+    - Cocktails (betting variant?)
+    - Card/game engine
+    - Forfeit system
 - **Location**: `bin/games/casino/` + `bin/games/casino.ts`
 - **Map Room**: Unknown
 
 ### 6. Maid's Party Night (`maidspartynight`)
+
 - **Type**: Single-player adventure
 - **Requirement**: Needs 2 bot accounts (user2/password2 in config)
 - **Status**: Possibly buggy (per README)
@@ -506,19 +540,20 @@ docker run --rm -it \
 ### Creating New Games
 
 **Pattern:**
+
 1. Copy `veratown.ts` as template
 2. Implement game logic in `bin/games/yourgame.ts`
 3. Create class with:
-   - Constructor taking `API_Connector`
-   - Static `description` property
-   - Event listeners via `conn.on()`
+    - Constructor taking `API_Connector`
+    - Static `description` property
+    - Event listeners via `conn.on()`
 4. Register in `bin/main.ts`:
-   ```typescript
-   import { YourGame } from "./games/yourgame";
-   // In game factory:
-   case "yourname":
-       return new YourGame(conn);
-   ```
+    ```typescript
+    import { YourGame } from "./games/yourgame";
+    // In game factory:
+    case "yourname":
+        return new YourGame(conn);
+    ```
 5. Add config option: `"game": "yourname"`
 
 ---
@@ -527,29 +562,30 @@ docker run --rm -it \
 
 ### Runtime
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `bc-stubs` | 130.0.0 | BC API type definitions |
-| `socket.io-client` | 4.8.3 | WebSocket communication |
-| `@socket.io/component-emitter` | 3.1.2 | Event emitter (Socket.IO dependency) |
-| `lz-string` | 1.5.0 | Map data decompression |
-| `lodash` | 4.17.21 | Utility library |
-| `mongodb` | 6.21.0 | Optional data persistence |
-| `prom-client` | 14.2.0 | Prometheus metrics (monitoring) |
-| `prettier` | 3.7.4 | Code formatter |
+| Package                        | Version | Purpose                              |
+| ------------------------------ | ------- | ------------------------------------ |
+| `bc-stubs`                     | 130.0.0 | BC API type definitions              |
+| `socket.io-client`             | 4.8.3   | WebSocket communication              |
+| `@socket.io/component-emitter` | 3.1.2   | Event emitter (Socket.IO dependency) |
+| `lz-string`                    | 1.5.0   | Map data decompression               |
+| `lodash`                       | 4.17.21 | Utility library                      |
+| `mongodb`                      | 6.21.0  | Optional data persistence            |
+| `prom-client`                  | 14.2.0  | Prometheus metrics (monitoring)      |
+| `prettier`                     | 3.7.4   | Code formatter                       |
 
 ### Development
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `typescript` | 5.9.3 | Language compiler |
-| `esbuild` | 0.27.2 | Bundler (production builds) |
-| `tsx` | 4.21.0 | TypeScript executor (dev execution) |
-| `@tsconfig/node18` | 18.2.6 | TypeScript config preset |
-| `@types/node` | 20.19.27 | Node.js type definitions |
-| `@types/lodash` | 4.17.21 | Lodash types |
+| Package            | Version  | Purpose                             |
+| ------------------ | -------- | ----------------------------------- |
+| `typescript`       | 5.9.3    | Language compiler                   |
+| `esbuild`          | 0.27.2   | Bundler (production builds)         |
+| `tsx`              | 4.21.0   | TypeScript executor (dev execution) |
+| `@tsconfig/node18` | 18.2.6   | TypeScript config preset            |
+| `@types/node`      | 20.19.27 | Node.js type definitions            |
+| `@types/lodash`    | 4.17.21  | Lodash types                        |
 
 ### Notes
+
 - No `mongoose` (raw MongoDB driver only)
 - No React, Vue, or frontend frameworks (backend bot only)
 - Source maps enabled in production builds for debugging
@@ -568,6 +604,7 @@ CMD ["node", "--enable-source-maps", "/bot/bundle.js"]
 ```
 
 **Characteristics:**
+
 - Single-stage build (bundle pre-made)
 - Works directory: `/bot/cfg` (config location)
 - Expects `/bot/bundle.js` (from `npm run bundle`)
@@ -592,25 +629,30 @@ docker run --rm -it \
 ## Key Design Patterns
 
 ### 1. Event-Driven Architecture
+
 - Socket.IO events → API_Connector broadcasts → Game logic listens
 - Decoupled: games don't need to know about network layer
 
 ### 2. Wrapper Pattern
+
 - BC API objects wrapped in TypeScript classes (API_Character, API_Chatroom, etc.)
 - Provides type-safe, developer-friendly interface
 - Handles data transformation and updates
 
 ### 3. Monorepo with Local Package Linking
+
 - `src/` is published as `bc-bot` NPM package
 - `bin/` links to local version during development
 - Simplifies framework evolution without version bumps
 
 ### 4. Event Emission with Typed Callbacks
+
 - Callback-based triggers for map interactions
 - Type-safe: arguments validated at registration
 - Context available: character, position, previous position
 
 ### 5. Batched Updates
+
 - Map changes queued (not immediate)
 - Single room update per batch cycle
 - Reduces network traffic
@@ -620,28 +662,33 @@ docker run --rm -it \
 ## Notable Implementation Details
 
 ### Map Position Encoding
+
 - 1D string encoding (40 tiles per row)
 - Position to index: `X + Y * 40`
 - Efficient but requires careful index calculation
 
 ### Character Appearance Modification
+
 - Items added via `Appearance.AddItem()`
 - Colors extracted from existing items or provided explicitly
 - Changes propagate to room view
 - Persisted until next login or explicit removal
 
 ### Command Parsing
+
 - Simple format: `/bot commandname arg1 arg2`
 - CommandParser handles routing
 - Case-insensitive by convention
 - Returns parsed tokens to handler
 
 ### Asset Lookup
+
 - BC assets retrieved by group + name
 - Example: `AssetGet("ItemArms", "ShinyPetSuit")`
 - Throws if not found; check availability first
 
 ### Async/Await Patterns
+
 - Map triggers are async functions
 - `await wait(ms)` for delays
 - Bot pauses execution until completion
@@ -665,6 +712,7 @@ docker run --rm -it \
 Ropeybot is a well-structured, TypeScript-based bot framework for Bondage Club featuring:
 
 ✅ **Strengths:**
+
 - Event-driven, modular architecture
 - Comprehensive map room support with flexible trigger system
 - Clean API wrappers for BC objects
@@ -673,6 +721,7 @@ Ropeybot is a well-structured, TypeScript-based bot framework for Bondage Club f
 - Simple build pipeline
 
 ⚠️ **Considerations:**
+
 - Strict mode disabled (less type safety)
 - Limited to single-room operation
 - Requires valid BC account credentials

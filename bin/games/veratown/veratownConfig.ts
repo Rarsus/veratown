@@ -43,10 +43,9 @@ export const GAME_MISTRESS_POSITION: ChatRoomMapPos = { X: 38, Y: 38 };
 //     BottomRight: { X: 20, Y: 39 },
 // };
 export const DARE_LOCATION: MapRegion = {
-    TopLeft:     { X: 4, Y: 6 },
+    TopLeft: { X: 4, Y: 6 },
     BottomRight: { X: 16, Y: 14 },
 };
-
 
 // --- Cages ---
 
@@ -232,7 +231,7 @@ export const SHOWER_SONGS: string[] = [
     '"Row, row, row your boat, gently down the stream, merrily, merrily, merrily, merrily, life is but a dream!"',
     '"Rubber ducky, you\'re the one, you make bathtime lots of fun!"',
     '"Twinkle, twinkle, little star, how I wonder what you are!"',
-    '"I\'m singing in the shower, just singing in the shower, what a glorious feeling, I\'m happy again!"',
+    "\"I'm singing in the shower, just singing in the shower, what a glorious feeling, I'm happy again!\"",
     '"Splish splash, I was taking a bath, long about a Saturday night!"',
     '"Head, shoulders, knees and toes, knees and toes, head, shoulders, knees and toes, knees and toes!"',
     '"Oh Susanna, oh don\'t you cry for me, for I come from Alabama with a banjo on my knee!"',

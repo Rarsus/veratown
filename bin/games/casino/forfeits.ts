@@ -470,7 +470,9 @@ export function applyForfeitForDare(
         if (forfeit.colourLayers) {
             const colors: BCColor[] = [];
             for (let i = 0; i <= Math.max(...forfeit.colourLayers); i++) {
-                colors.push(forfeit.colourLayers.includes(i) ? base : "Default");
+                colors.push(
+                    forfeit.colourLayers.includes(i) ? base : "Default",
+                );
             }
             added.SetColor(colors);
         } else {

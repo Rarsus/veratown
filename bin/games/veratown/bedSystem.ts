@@ -91,7 +91,9 @@ export class BedSystem implements VeratownFeatureSystem {
                 await wait(BED_CHECK_INTERVAL_MS);
             }
         } finally {
-            if (character.Appearance.getItemData("ItemDevices")?.Name === "Bed") {
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name === "Bed"
+            ) {
                 character.Appearance.RemoveItem("ItemAddon");
                 character.Appearance.RemoveItem("ItemDevices");
             }

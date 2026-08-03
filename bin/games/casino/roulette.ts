@@ -589,10 +589,7 @@ export class RouletteGame implements Game {
         } else {
             if (timeLeft <= LAST_CALL_THRESHOLD_MS && !this.lastCallAnnounced) {
                 this.lastCallAnnounced = true;
-                this.conn.SendMessage(
-                    "Chat",
-                    "Rien ne va plus! No more bets.",
-                );
+                this.conn.SendMessage("Chat", "Rien ne va plus! No more bets.");
             }
 
             this.casino.setTextColor("#ffffff");

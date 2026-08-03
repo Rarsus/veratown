@@ -4,7 +4,6 @@
 **Worn as:** Facial hair style.
 **Asset count:** 18
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,25 +18,23 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Goatee | - | - | - | - |  |
-| BigBeard | - | - | - | - |  |
-| MediumBeard | - | - | - | - |  |
-| Moustache | - | - | - | - |  |
-| MoustacheBeard | - | - | - | - |  |
-| ChinstrapBeard | - | - | - | - |  |
-| XLBeard | - | - | - | - |  |
-| XXLBeard | - | - | - | - |  |
-| MuttonChops | - | - | - | - |  |
-| XLMoustache | - | - | - | - |  |
-| XLGoatie | - | - | - | - |  |
-| Handlebar | - | - | - | - |  |
-| XXLBeardHandlebar | - | - | - | - |  |
-| XXLBeardXLStache | - | - | - | - |  |
-| VanDyke | - | - | - | - |  |
-| VanDykeHandlebar | - | - | - | - |  |
-| LargeBeard | - | - | - | - |  |
-| LargeGoatee | - | - | - | - |  |
-
-
+| Name              | Value | Difficulty | Lockable | Extended | Notes |
+| ----------------- | ----- | ---------- | -------- | -------- | ----- |
+| Goatee            | -     | -          | -        | -        |       |
+| BigBeard          | -     | -          | -        | -        |       |
+| MediumBeard       | -     | -          | -        | -        |       |
+| Moustache         | -     | -          | -        | -        |       |
+| MoustacheBeard    | -     | -          | -        | -        |       |
+| ChinstrapBeard    | -     | -          | -        | -        |       |
+| XLBeard           | -     | -          | -        | -        |       |
+| XXLBeard          | -     | -          | -        | -        |       |
+| MuttonChops       | -     | -          | -        | -        |       |
+| XLMoustache       | -     | -          | -        | -        |       |
+| XLGoatie          | -     | -          | -        | -        |       |
+| Handlebar         | -     | -          | -        | -        |       |
+| XXLBeardHandlebar | -     | -          | -        | -        |       |
+| XXLBeardXLStache  | -     | -          | -        | -        |       |
+| VanDyke           | -     | -          | -        | -        |       |
+| VanDykeHandlebar  | -     | -          | -        | -        |       |
+| LargeBeard        | -     | -          | -        | -        |       |
+| LargeGoatee       | -     | -          | -        | -        |       |

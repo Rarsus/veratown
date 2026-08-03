@@ -234,8 +234,7 @@ export class AppearanceType {
             );
             for (const group of CLOTHING_STRIP_PRIORITY) {
                 if (clothingGroupsToStrip.size >= maxItems) break;
-                if (equippedGroups.has(group))
-                    clothingGroupsToStrip.add(group);
+                if (equippedGroups.has(group)) clothingGroupsToStrip.add(group);
             }
             // Any equipped clothing group not covered by the priority list
             // is only eligible once every listed slot has been considered.

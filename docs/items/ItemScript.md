@@ -19,8 +19,6 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Script | - | - | - | - |  |
-
-
+| Name   | Value | Difficulty | Lockable | Extended | Notes |
+| ------ | ----- | ---------- | -------- | -------- | ----- |
+| Script | -     | -          | -        | -        |       |

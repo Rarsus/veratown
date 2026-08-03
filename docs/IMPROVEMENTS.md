@@ -15,9 +15,9 @@ review passes; later passes assume earlier ones' fixes are already in place.
    classic time-of-check-to-time-of-use (TOCTOU) bug: two `give` commands
    fired back-to-back could both read the same balance before either write
    landed, both pass the "enough chips?" check, and both write independently
-   - duplicating chips into the target account. Fixed by adding
-   `CasinoStore.transferCredits()`, an atomic conditional `$inc` update.
-   See [bin/games/casino/casinostore.ts](../bin/games/casino/casinostore.ts).
+    - duplicating chips into the target account. Fixed by adding
+      `CasinoStore.transferCredits()`, an atomic conditional `$inc` update.
+      See [bin/games/casino/casinostore.ts](../bin/games/casino/casinostore.ts).
 
 2. **Missing `await` in `CasinoStore.savePlayer()` / `saveOutfit()`** —
    these fired off their `updateOne()` call without awaiting it, so callers
@@ -85,7 +85,7 @@ severity or misread control flow.
    result to `this.leaveRegionTriggers`, a copy-paste bug from the adjacent
    `removeEnterRegionTrigger()`. Any code that registered then later
    unregistered a leave-region trigger would silently replace the leave
-   trigger list with a filtered copy of the *enter* trigger list, losing
+   trigger list with a filtered copy of the _enter_ trigger list, losing
    any other registered leave triggers. Fixed to filter the correct array.
    See [src/apiMap.ts](../src/apiMap.ts).
 
@@ -93,7 +93,7 @@ severity or misread control flow.
    `BlackjackGame.endGame()` and `RouletteGame.endGame()` called a bare
    `resolve()` with no arguments at the end of the function. This wasn't a
    Promise executor's `resolve` callback (there was no surrounding `new
-   Promise(...)`) - it was Node's `path.resolve`, imported at the top of
+Promise(...)`) - it was Node's `path.resolve`, imported at the top of
    each file and shadowing what was clearly meant to be a different
    `resolve`. Calling `path.resolve()` with no arguments doesn't throw (it
    just returns `process.cwd()`, discarded), so this wasn't causing crashes,
@@ -106,13 +106,13 @@ severity or misread control flow.
 - **Bet-placement race in Roulette/Blackjack** (`onCommandBet` in both
   games) uses the same getPlayer-mutate-savePlayer pattern as the old
   `give` command (Pass 1, item 1). It's lower severity than `give` was,
-  because it can't be used to mint chips into an *arbitrary* other account
-  - the worst case is a player's own balance going more negative than
-  intended if they fire two bets in the same instant. Hardening this would
-  mean moving bet-placement onto the same atomic-`$inc`-with-a-`$gte`-guard
-  pattern used for `transferCredits`, which touches the betting flow of
-  both games and is worth testing carefully rather than doing as a "safe"
-  drive-by fix.
+  because it can't be used to mint chips into an _arbitrary_ other account
+    - the worst case is a player's own balance going more negative than
+      intended if they fire two bets in the same instant. Hardening this would
+      mean moving bet-placement onto the same atomic-`$inc`-with-a-`$gte`-guard
+      pattern used for `transferCredits`, which touches the betting flow of
+      both games and is worth testing carefully rather than doing as a "safe"
+      drive-by fix.
 - **Shower narration sends messages before the narrator bot has moved.**
   In `veratown.ts`, the `sayNear()` helper inside `onCharacterEnterShower()`
   calls `narratorConn.moveOnMap(...)`, `narratorConn.SendMessage(...)`, and
@@ -190,21 +190,21 @@ and are listed here as concrete starting points for a future pass.
   application, game lifecycle (init/reset/end/win conditions), dare-effect
   application (strip/bondage/reward), and a 245-line command-dispatch
   switch. Concrete extractable pieces, in priority order:
-  - `TurnOrderManager` - owns `turnOrder`/`currentTurnIndex`/`round`,
-    `advanceTurn()`, and player removal (this is where the turn-stall bug
-    fixed above lives; consolidating this logic in one place makes it much
-    easier to keep turn-advancement invariants correct).
-  - `TurnTimerManager` - consolidates the reminder timer, auto-pass timer,
-    strip-enforcement interval, and per-player bondage-decision timers,
-    which are currently four separately-managed timer fields.
-  - `DisconnectTracker` - `disconnectedSince` / `missedTurnsWhileDisconnected`
-    bookkeeping and the grace-period/removal decision.
-  - `DareEffectApplier` - the strip/bondage/reward application logic,
-    which is a reasonable strategy-pattern candidate (one method per dare
-    category instead of one large branching method).
-  - A command-handler map (or one method per command) instead of the
-    single large `switch` in `onDare()`, to make individual commands
-    testable and easier to extend.
+    - `TurnOrderManager` - owns `turnOrder`/`currentTurnIndex`/`round`,
+      `advanceTurn()`, and player removal (this is where the turn-stall bug
+      fixed above lives; consolidating this logic in one place makes it much
+      easier to keep turn-advancement invariants correct).
+    - `TurnTimerManager` - consolidates the reminder timer, auto-pass timer,
+      strip-enforcement interval, and per-player bondage-decision timers,
+      which are currently four separately-managed timer fields.
+    - `DisconnectTracker` - `disconnectedSince` / `missedTurnsWhileDisconnected`
+      bookkeeping and the grace-period/removal decision.
+    - `DareEffectApplier` - the strip/bondage/reward application logic,
+      which is a reasonable strategy-pattern candidate (one method per dare
+      category instead of one large branching method).
+    - A command-handler map (or one method per command) instead of the
+      single large `switch` in `onDare()`, to make individual commands
+      testable and easier to extend.
 - **8+ separate `Map`s keyed by member number** (`pendingDraws`,
   `bindCounts`, `passCounts`, `pilloriedUntilNextDraw`,
   `disconnectedSince`, `missedTurnsWhileDisconnected`,
@@ -221,39 +221,39 @@ and are listed here as concrete starting points for a future pass.
   window-peeping), plus a 95-line constructor that both wired up event
   listeners and registered 60+ lines of per-tile triggers inline. It has
   been split into a `bin/games/veratown/` folder:
-  - `veratownConfig.ts` - every map-position constant, region, timing
-    constant, the compressed map string, `PET_EARS`, and small shared
-    helpers (`isCharacterAtAnyPosition()`, `randomBetweenMinutesMs()`,
-    `showerBroadcastPos()`) - now the single place to update room layout
-    without touching game logic.
-  - `cageSystem.ts` (`CageSystem`) - containment cage entry-warning tiles,
-    the Futuristic Crate lock lifecycle, and the cage-occupancy info
-    screen. Exposes `freeCharacterIfCaged()` so the orchestrator's
-    `freeCharacter()` doesn't need direct access to the cage state map.
-  - `kennelSystem.ts` (`KennelSystem`) - kennel tile logic (equip on
-    entry, auto-close door after a delay).
-  - `showerSystem.ts` (`ShowerSystem`) - the strip/narrate/redress
-    sequence, including the optional second "narrator" bot.
-  - `bedSystem.ts` (`BedSystem`) - the sleep-expression/Bed-device polling
-    loop.
-  - `bunnyParkSystem.ts` (`BunnyParkSystem`) - park entry warning and the
-    bunny-step punishment logic.
-  - `windowSystem.ts` (`WindowSystem`) - window-peeping detection.
-  - `trashcanSystem.ts` (`TrashcanSystem`) - the trash-search easter egg
-    (the one subsystem driven by the room's generic `Message` event
-    rather than a tile trigger).
+    - `veratownConfig.ts` - every map-position constant, region, timing
+      constant, the compressed map string, `PET_EARS`, and small shared
+      helpers (`isCharacterAtAnyPosition()`, `randomBetweenMinutesMs()`,
+      `showerBroadcastPos()`) - now the single place to update room layout
+      without touching game logic.
+    - `cageSystem.ts` (`CageSystem`) - containment cage entry-warning tiles,
+      the Futuristic Crate lock lifecycle, and the cage-occupancy info
+      screen. Exposes `freeCharacterIfCaged()` so the orchestrator's
+      `freeCharacter()` doesn't need direct access to the cage state map.
+    - `kennelSystem.ts` (`KennelSystem`) - kennel tile logic (equip on
+      entry, auto-close door after a delay).
+    - `showerSystem.ts` (`ShowerSystem`) - the strip/narrate/redress
+      sequence, including the optional second "narrator" bot.
+    - `bedSystem.ts` (`BedSystem`) - the sleep-expression/Bed-device polling
+      loop.
+    - `bunnyParkSystem.ts` (`BunnyParkSystem`) - park entry warning and the
+      bunny-step punishment logic.
+    - `windowSystem.ts` (`WindowSystem`) - window-peeping detection.
+    - `trashcanSystem.ts` (`TrashcanSystem`) - the trash-search easter egg
+      (the one subsystem driven by the room's generic `Message` event
+      rather than a tile trigger).
 
-  `bin/games/veratown.ts` itself is now a thin orchestrator: it
-  constructs each system, calls their `registerTriggers()` (or
-  `register()` for `TrashcanSystem`), wires up the `Dare` game and the
-  three top-level commands (`freeandleave`/`strip`/`changelog`), and
-  re-exports `GAME_LOCATION`, `GAME_MISTRESS_POSITION`, and `PET_EARS`
-  from `veratownConfig.ts` so existing importers (`bin/main.ts`,
-  `bin/games/casino/forfeits.ts`) did not need to change. No behavioural
-  changes were made as part of this split - including the still-open
-  unawaited `moveOnMap()` calls inside `ShowerSystem`'s narration helper,
-  which remains tracked as a separate "Proposals not implemented" item
-  under Pass 2 above rather than being fixed incidentally here.
+    `bin/games/veratown.ts` itself is now a thin orchestrator: it
+    constructs each system, calls their `registerTriggers()` (or
+    `register()` for `TrashcanSystem`), wires up the `Dare` game and the
+    three top-level commands (`freeandleave`/`strip`/`changelog`), and
+    re-exports `GAME_LOCATION`, `GAME_MISTRESS_POSITION`, and `PET_EARS`
+    from `veratownConfig.ts` so existing importers (`bin/main.ts`,
+    `bin/games/casino/forfeits.ts`) did not need to change. No behavioural
+    changes were made as part of this split - including the still-open
+    unawaited `moveOnMap()` calls inside `ShowerSystem`'s narration helper,
+    which remains tracked as a separate "Proposals not implemented" item
+    under Pass 2 above rather than being fixed incidentally here.
 
 ### Core `bc-bot` library
 
@@ -282,4 +282,3 @@ ported from the original bot hub project (see [README.md](../README.md) and
 [CREDITS.md](CREDITS.md)). It has its own long-standing `TODO` comments and
 patterns; these were intentionally left untouched in this review to avoid
 second-guessing decisions made by its original authors.
-

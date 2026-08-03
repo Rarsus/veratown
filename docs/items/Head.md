@@ -4,7 +4,6 @@
 **Worn as:** Base head shape.
 **Asset count:** 3
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,10 +18,8 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Default | - | - | - | - |  |
-| SmallEars | - | - | - | - |  |
-| NoEars | - | - | - | - |  |
-
-
+| Name      | Value | Difficulty | Lockable | Extended | Notes |
+| --------- | ----- | ---------- | -------- | -------- | ----- |
+| Default   | -     | -          | -        | -        |       |
+| SmallEars | -     | -          | -        | -        |       |
+| NoEars    | -     | -          | -        | -        |       |

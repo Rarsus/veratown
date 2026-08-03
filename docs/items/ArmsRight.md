@@ -10,7 +10,9 @@
 ```ts
 import { AssetGet } from "bc-bot";
 
-const item = character.Appearance.AddItem(AssetGet("ArmsRight", "SomeAssetName"));
+const item = character.Appearance.AddItem(
+    AssetGet("ArmsRight", "SomeAssetName"),
+);
 ```
 
 See [BONDAGE.md](../BONDAGE.md) or [CLOTHING.md](../CLOTHING.md) for the
@@ -20,7 +22,5 @@ type/text configuration).
 ## Items
 
 | Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-|  | - | - | - | - |  |
-
-
+| ---- | ----- | ---------- | -------- | -------- | ----- |
+|      | -     | -          | -        | -        |       |

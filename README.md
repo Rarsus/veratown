@@ -45,12 +45,12 @@ This is a two-package repo:
   `cd src && npx tsc -p tsconfig.json` after changing anything in `src/` before your
   changes will be visible to code in `bin/`.
 - `bin/` is where the actual bots/games live, built on top of `bc-bot`:
-  - `bin/hub/` is from the original bot hub. This includes the 'kidnappers' game, the
-    roleplay challenge bot, Maid's Party Night, and gameroom matchmaking/administration
-    logic. These are copied in as they were, but with additions since.
-  - `bin/games/` uses a newer, more event-based API on top of `bc-bot` (map region/tile
-    triggers, a `CommandParser` for `/bot`/`!` commands, etc). If you write new bots,
-    they should probably look like the ones in here.
+    - `bin/hub/` is from the original bot hub. This includes the 'kidnappers' game, the
+      roleplay challenge bot, Maid's Party Night, and gameroom matchmaking/administration
+      logic. These are copied in as they were, but with additions since.
+    - `bin/games/` uses a newer, more event-based API on top of `bc-bot` (map region/tile
+      triggers, a `CommandParser` for `/bot`/`!` commands, etc). If you write new bots,
+      they should probably look like the ones in here.
 - `docs/` holds all reference documentation (see the links above), including the
   generated per-asset item catalog under `docs/items/`.
 
@@ -146,5 +146,5 @@ Also from the original bot hub, a single player adventure. Needs a second bot ac
 A gambling room with Roulette and Blackjack (`casino.game` in the config picks which one
 to start with; admins can switch with `/bot game <roulette|blackjack>`). Chip balances are
 stored in MongoDB, so `mongo_uri`/`mongo_db` must be configured (see "Running with Docker
- Compose" above). Players get a daily allowance of free chips, can bet chips or forfeits,
+Compose" above). Players get a daily allowance of free chips, can bet chips or forfeits,
 and can `/bot give`/admins can `/bot grant` chips to other players.

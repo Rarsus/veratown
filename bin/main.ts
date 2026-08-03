@@ -20,7 +20,11 @@ import { DareStore } from "./games/dareStore";
 import { readFile } from "fs/promises";
 import { ConfigFile } from "./config";
 import { Db, MongoClient } from "mongodb";
-import { Veratown, GAME_LOCATION, GAME_MISTRESS_POSITION } from "./games/veratown";
+import {
+    Veratown,
+    GAME_LOCATION,
+    GAME_MISTRESS_POSITION,
+} from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { Casino } from "./games/casino";
 import { CasinoStore } from "./games/casino/casinostore";

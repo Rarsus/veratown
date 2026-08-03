@@ -131,7 +131,7 @@ Game Overview
     effects, drawn dares) stays publicly visible as before.
 `;
 
-public static description_commands = `Commands
+    public static description_commands = `Commands
 =====
 !dare join              - Join the lobby, waiting for a game to start.
 !dare leave             - Leave the lobby/game you're currently in.
@@ -152,7 +152,7 @@ public static description_commands = `Commands
 !dare help              - Show this message.
 !pick                   - Randomly pick a room member, not you, not the bot.
 `;
-public static description_rules = `Rules
+    public static description_rules = `Rules
 =====
 1. !dare join before you start, so you can be picked as a dare's target and
    take your turn in a structured game.
@@ -176,7 +176,12 @@ public static description_rules = `Rules
 10. Up to 3 separate dare games can run at once; once a game starts,
     nobody new can join it - they join the lobby and start their own.
 `;
-public static description = Dare.description_intro + "\n" + Dare.description_commands + "\n" + Dare.description_rules;
+    public static description =
+        Dare.description_intro +
+        "\n" +
+        Dare.description_commands +
+        "\n" +
+        Dare.description_rules;
 
     private commandParser: CommandParser;
 
@@ -211,7 +216,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
     // Scheduled auto-apply timers (and their absolute deadlines, for
     // persistence) for bondage dares currently in their "!dare forfeit"
     // decision window, keyed by the drawer's member number.
-    private pendingBondageTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    private pendingBondageTimers = new Map<
+        number,
+        ReturnType<typeof setTimeout>
+    >();
     private pendingBondageDeadlines = new Map<number, number>();
 
     // Members currently blocked from getting dressed - either their
@@ -302,7 +310,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.pruneUnavailableParticipants();
 
         if (args.length < 1) {
-            this.conn.SendMessage("Emote", "*" + (await this.store.getSummary()));
+            this.conn.SendMessage(
+                "Emote",
+                "*" + (await this.store.getSummary()),
+            );
             return;
         }
 
@@ -521,12 +532,18 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 break;
             }
             case "help":
-                this.whisper(senderCharacter.MemberNumber, Dare.description_intro);
+                this.whisper(
+                    senderCharacter.MemberNumber,
+                    Dare.description_intro,
+                );
                 this.whisper(
                     senderCharacter.MemberNumber,
                     Dare.description_commands,
                 );
-                this.whisper(senderCharacter.MemberNumber, Dare.description_rules);
+                this.whisper(
+                    senderCharacter.MemberNumber,
+                    Dare.description_rules,
+                );
                 break;
             case "forfeit": {
                 const timer = this.pendingBondageTimers.get(
@@ -820,7 +837,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         return false;
     };
 
-    private isInRegion = (character: API_Character, region: MapRegion): boolean => {
+    private isInRegion = (
+        character: API_Character,
+        region: MapRegion,
+    ): boolean => {
         const { X, Y } = character.MapPos;
         return (
             X >= region.TopLeft.X &&
@@ -1022,12 +1042,16 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
                 Name: "Dare: Repeat Evader",
                 Description: `${character} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
             });
-            pillory.lock("TimerPasswordPadlock", this.conn.Player.MemberNumber, {
-                RemoveItem: true,
-                RemoveTimer: Date.now() + PILLORY_REPEAT_LOCK_MS,
-                ShowTimer: false,
-                LockSet: true,
-            });
+            pillory.lock(
+                "TimerPasswordPadlock",
+                this.conn.Player.MemberNumber,
+                {
+                    RemoveItem: true,
+                    RemoveTimer: Date.now() + PILLORY_REPEAT_LOCK_MS,
+                    ShowTimer: false,
+                    LockSet: true,
+                },
+            );
             this.pilloriedUntilNextDraw.delete(memberNumber);
 
             character.Appearance.RemoveItem("ItemMisc");
@@ -1422,7 +1446,11 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             return;
         }
 
-        this.declareWinner(gameId, winner, `wins with only ${lowestBinds} bind(s)`);
+        this.declareWinner(
+            gameId,
+            winner,
+            `wins with only ${lowestBinds} bind(s)`,
+        );
     };
 
     // Picks who a drawn dare's effect actually applies to: the drawer
@@ -1508,8 +1536,10 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
             turnStartedAt: g.turnStartedAt,
         }));
 
-        const pendingBondage: [number, { dare: DareDoc; deadlineAt: number }][] =
-            [];
+        const pendingBondage: [
+            number,
+            { dare: DareDoc; deadlineAt: number },
+        ][] = [];
         for (const [memberNumber, deadlineAt] of this.pendingBondageDeadlines) {
             const dare = this.pendingDraws.get(memberNumber);
             if (dare) pendingBondage.push([memberNumber, { dare, deadlineAt }]);
@@ -1540,7 +1570,9 @@ public static description = Dare.description_intro + "\n" + Dare.description_com
         this.lobby = new Set(state.lobby ?? []);
         this.bindCounts = new Map(state.bindCounts ?? []);
         this.passCounts = new Map(state.passCounts ?? []);
-        this.pilloriedUntilNextDraw = new Set(state.pilloriedUntilNextDraw ?? []);
+        this.pilloriedUntilNextDraw = new Set(
+            state.pilloriedUntilNextDraw ?? [],
+        );
         this.dressingBlocked = new Set(state.dressingBlocked ?? []);
         this.pendingDraws = new Map(state.pendingDraws ?? []);
 

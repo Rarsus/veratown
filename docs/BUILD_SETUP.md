@@ -22,20 +22,21 @@ Edit `config.json` and replace:
 
 ```json
 {
-    "user": "YOUR_BOT_USERNAME_HERE",           // ← Replace with bot account username
-    "password": "YOUR_BOT_PASSWORD_HERE",       // ← Replace with bot account password
-    "env": "live",                              // "live" or "test"
-    "game": "dare",                             // Game mode to run
+    "user": "YOUR_BOT_USERNAME_HERE", // ← Replace with bot account username
+    "password": "YOUR_BOT_PASSWORD_HERE", // ← Replace with bot account password
+    "env": "live", // "live" or "test"
+    "game": "dare", // Game mode to run
     "room": {
         "Name": "Ropeybot Test Room",
         "Description": "A test room for ropeybot development",
-        "Background": "PartyBasement",          // See BC backgrounds
+        "Background": "PartyBasement" // See BC backgrounds
         // ... other room settings
     }
 }
 ```
 
 **Available games:**
+
 - `dare` — Simple dare drawing game
 - `veratown` — Interactive Veratown map room (map-based example)
 - `kidnappers` — Capture/escape game
@@ -55,11 +56,13 @@ pnpm install
 ```
 
 This will:
+
 1. Install root dependencies
 2. Auto-run `pnpm install` in `src/` (via preinstall hook)
 3. Set up bc-bot framework as a linked local package
 
 **Expected output:**
+
 ```
 ✓ All dependencies resolved
 ✓ 120+ packages installed
@@ -86,11 +89,13 @@ npm start
 ```
 
 This will:
+
 1. Compile the bc-bot framework (`src/dist/`)
 2. Run the bot with tsx (live TypeScript execution)
 3. Connect to BC using credentials from `config.json`
 
 **Expected output:**
+
 ```
 [timestamp] Connected to server
 [timestamp] Bot logged in as: YOUR_BOT_USERNAME_HERE
@@ -108,12 +113,14 @@ npm run bundle
 ```
 
 This will:
+
 1. Compile bc-bot framework
 2. Bundle everything into `dist/bundle.js`
 3. Generate source maps for debugging
 4. Output ready for Docker
 
 **Expected output:**
+
 ```
 ✓ Compiled in 8.2s
 ✓ Bundled dist/bundle.js (1.2 MB)
@@ -126,26 +133,31 @@ This will:
 ### Option A: docker-compose (Recommended)
 
 The workspace includes `docker-compose.yml` configured to:
+
 - Build the image from the Dockerfile
 - Mount `config.json` as read-only
 - Enable interactive mode (logs visible)
 
 **Build and run:**
+
 ```bash
 docker-compose up --build
 ```
 
 **Detached mode (background):**
+
 ```bash
 docker-compose up -d
 ```
 
 **View logs:**
+
 ```bash
 docker-compose logs -f
 ```
 
 **Stop:**
+
 ```bash
 docker-compose down
 ```
@@ -153,11 +165,13 @@ docker-compose down
 ### Option B: Manual Docker Commands
 
 **Build image:**
+
 ```bash
 docker build -t ropeybot .
 ```
 
 **Run container:**
+
 ```bash
 docker run --rm -it \
   -v ${PWD}/config.json:/bot/cfg/config.json \
@@ -165,6 +179,7 @@ docker run --rm -it \
 ```
 
 **With persistent logging:**
+
 ```bash
 mkdir -p logs
 docker run --rm -it \
@@ -224,10 +239,11 @@ NODE_ENV=production   # Always set to production in Docker
 ```
 
 Add to `docker-compose.yml` if needed:
+
 ```yaml
 environment:
-  NODE_ENV: production
-  DEBUG: ropeybot:*  # Enable debug logging
+    NODE_ENV: production
+    DEBUG: ropeybot:* # Enable debug logging
 ```
 
 ---
@@ -235,30 +251,35 @@ environment:
 ## Troubleshooting
 
 ### `config.json` not found
+
 ```bash
 cp config.sample.json config.json
 # Then edit config.json with your credentials
 ```
 
 ### Compilation errors
+
 ```bash
 npm run types
 # Check output for type errors, fix as needed
 ```
 
 ### Docker build fails
+
 ```bash
 docker build --no-cache -t ropeybot .
 # Force rebuild without cache
 ```
 
 ### Bot disconnects after login
+
 - Verify username/password in `config.json`
 - Check `env` setting (live vs. test)
 - Ensure account is not already logged in elsewhere
 - Check BC server status
 
 ### Connection refused
+
 - Verify internet connection
 - Try switching `env` from "live" to "test"
 - Check BC server URLs in logs
@@ -267,15 +288,15 @@ docker build --no-cache -t ropeybot .
 
 ## Build Scripts Reference
 
-| Command | Purpose | Output |
-|---------|---------|--------|
-| `pnpm install` | Install dependencies | `node_modules/` |
-| `npm run types` | Type check (no build) | Type errors only |
-| `npm run prettier` | Check code style | Report only |
-| `npm run compile:bc-bot` | Compile framework | `src/dist/` |
-| `npm start` | Run locally | Live execution |
-| `npm run bundle` | Build for production | `dist/bundle.js` |
-| `npm run docker` | Build Docker image | Docker image `ropeybot` |
+| Command                  | Purpose               | Output                  |
+| ------------------------ | --------------------- | ----------------------- |
+| `pnpm install`           | Install dependencies  | `node_modules/`         |
+| `npm run types`          | Type check (no build) | Type errors only        |
+| `npm run prettier`       | Check code style      | Report only             |
+| `npm run compile:bc-bot` | Compile framework     | `src/dist/`             |
+| `npm start`              | Run locally           | Live execution          |
+| `npm run bundle`         | Build for production  | `dist/bundle.js`        |
+| `npm run docker`         | Build Docker image    | Docker image `ropeybot` |
 
 ---
 

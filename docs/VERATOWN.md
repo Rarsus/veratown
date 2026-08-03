@@ -44,9 +44,11 @@ add/remove/reconfigure guide for this feature specifically.
 
 Three cages (`CAGES`: positions `CAGE_1`/`CAGE_2`/`CAGE_3`, each with its own
 `entryPos` one tile before it and its own lock-duration function/description
+
 - 5 min, 10 min, and a random 5-15 min respectively).
 
 Flow:
+
 1. Stepping on a cage's `entryPos` (`onCharacterEnterCageEntry`) whispers a
    detailed in-character "containment protocol" consent/rules notice
    naming the specific cage and its estimated duration.
@@ -138,13 +140,13 @@ independently-evolving feature and not duplicated here.
 
 Registered directly by Veratown (in addition to whatever Dare registers):
 
-| Command | Who | Effect |
-|---|---|---|
-| `/bot freeandleave` | anyone | Strips every bind item (locked or not, via `stripBulk({item:true}, true)`), releases any tracked cage occupancy, then kicks the sender from the room after a short delay. This is the room-wide "safeword" escape hatch - see "Known gaps" below for what it does and doesn't cover. |
-| `/bot strip <name>` | admin only | Strips all clothing (not bondage) from the named/numbered character. |
-| `/bot changelog` | anyone | Shows the `CHANGELOG` list (a manually maintained, newest-first summary of recent feature additions). |
-| `/bot dare ...` | anyone (if `db` configured) | See Dare game docs. |
-| `/bot pick` | anyone (if `db` configured) | Randomly picks a room member (not the sender, not the bot). |
+| Command             | Who                         | Effect                                                                                                                                                                                                                                                                               |
+| ------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/bot freeandleave` | anyone                      | Strips every bind item (locked or not, via `stripBulk({item:true}, true)`), releases any tracked cage occupancy, then kicks the sender from the room after a short delay. This is the room-wide "safeword" escape hatch - see "Known gaps" below for what it does and doesn't cover. |
+| `/bot strip <name>` | admin only                  | Strips all clothing (not bondage) from the named/numbered character.                                                                                                                                                                                                                 |
+| `/bot changelog`    | anyone                      | Shows the `CHANGELOG` list (a manually maintained, newest-first summary of recent feature additions).                                                                                                                                                                                |
+| `/bot dare ...`     | anyone (if `db` configured) | See Dare game docs.                                                                                                                                                                                                                                                                  |
+| `/bot pick`         | anyone (if `db` configured) | Randomly picks a room member (not the sender, not the bot).                                                                                                                                                                                                                          |
 
 ## Known gaps / TODOs (as of this writing)
 

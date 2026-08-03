@@ -4,7 +4,6 @@
 **Worn as:** Character pronoun setting.
 **Asset count:** 4
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,11 +18,9 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| SheHer | - | - | - | - |  |
-| HeHim | - | - | - | - |  |
-| TheyThem | - | - | - | - |  |
-| ItIt | - | - | - | - |  |
-
-
+| Name     | Value | Difficulty | Lockable | Extended | Notes |
+| -------- | ----- | ---------- | -------- | -------- | ----- |
+| SheHer   | -     | -          | -        | -        |       |
+| HeHim    | -     | -          | -        | -        |       |
+| TheyThem | -     | -          | -        | -        |       |
+| ItIt     | -     | -          | -        | -        |       |

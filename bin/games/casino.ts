@@ -666,10 +666,7 @@ ${forfeitsString()}
 
         await this.store.addCredits(target.MemberNumber, amount);
 
-        this.conn.reply(
-            msg,
-            `Granted ${amount} chips to ${target}.`,
-        );
+        this.conn.reply(msg, `Granted ${amount} chips to ${target}.`);
     };
 
     private closingInProgress = false;

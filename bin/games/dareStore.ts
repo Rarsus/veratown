@@ -343,7 +343,8 @@ export class DareStore {
             if (!changed) continue;
 
             fixed++;
-            const setOps = Object.keys(update).length > 0 ? { $set: update } : {};
+            const setOps =
+                Object.keys(update).length > 0 ? { $set: update } : {};
             const unsetOps =
                 Object.keys(unset).length > 0 ? { $unset: unset } : {};
             await this.dares.updateOne(

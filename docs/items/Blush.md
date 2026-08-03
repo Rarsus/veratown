@@ -4,7 +4,6 @@
 **Worn as:** Blush makeup.
 **Asset count:** 1
 
-
 ## Adding an item from this group
 
 ```ts
@@ -20,7 +19,5 @@ type/text configuration).
 ## Items
 
 | Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-|  | - | - | - | - |  |
-
-
+| ---- | ----- | ---------- | -------- | -------- | ----- |
+|      | -     | -          | -        | -        |       |

@@ -13,12 +13,12 @@ generated list of every individual clothing asset (every `Cloth`/`Hat`/
 its `AssetGroupName`'s data (`AssetFemale3DCG`) and the item's own asset
 definition:
 
-| Helper | Meaning |
-|---|---|
-| `isClothing(item)` | Group has no `Category`, is flagged `Clothing`, and allows "None" (can be unequipped) — ordinary wearable clothing (dresses, shoes, gloves, hats, jewelry, etc). |
-| `isCosplay(item)` | Same as clothing, but the group or asset is flagged `BodyCosplay` — cosmetic "body-like" items (animal ears/tails/wings) that read as part of the body rather than an outfit. |
-| `isBody(item)` | Not clothing, and can't be set to "None" — actual body layers (skin, eyes, etc), not normally added/removed by bots. |
-| `isBind(item)` | Category is `"Item"` and not cosplay — bondage, see [BONDAGE.md](BONDAGE.md). |
+| Helper             | Meaning                                                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isClothing(item)` | Group has no `Category`, is flagged `Clothing`, and allows "None" (can be unequipped) — ordinary wearable clothing (dresses, shoes, gloves, hats, jewelry, etc).              |
+| `isCosplay(item)`  | Same as clothing, but the group or asset is flagged `BodyCosplay` — cosmetic "body-like" items (animal ears/tails/wings) that read as part of the body rather than an outfit. |
+| `isBody(item)`     | Not clothing, and can't be set to "None" — actual body layers (skin, eyes, etc), not normally added/removed by bots.                                                          |
+| `isBind(item)`     | Category is `"Item"` and not cosplay — bondage, see [BONDAGE.md](BONDAGE.md).                                                                                                 |
 
 A few groups are force-classified as cosplay regardless of what the data
 says: `HairAccessory2`, `TailStraps`, `Wings`.
@@ -30,8 +30,8 @@ These four categories map directly onto `BundleApplyConfig` (used by
 interface BundleApplyConfig {
     appearance?: boolean; // isBody
     bodyCosplay?: boolean; // isCosplay
-    clothing?: boolean;    // isClothing
-    item?: boolean;        // isBind
+    clothing?: boolean; // isClothing
+    item?: boolean; // isBind
 }
 ```
 
@@ -131,7 +131,7 @@ Author your template outfit bundle using `#FF00FF` (main) and `#00FF00`
 (tint) as placeholder colors, then call `colourOutfit()` per-character with
 their actual theme colors before `applyBundle()`-ing it.
 
-For matching a *single* new item to a character's existing look (rather than
+For matching a _single_ new item to a character's existing look (rather than
 reskinning a whole template), just read and reapply their current color
 directly - e.g. the chastity forfeit logic matches new chastity gear to the
 wearer's hair color:
@@ -145,12 +145,14 @@ chastityBelt.SetColor(hairColor);
 ## Practical recipes
 
 **Admin "strip someone" command** (see `Veratown.onCommandStrip`):
+
 ```ts
 target.Appearance.stripBulk({ clothing: true });
 ```
 
 **Force a cosmetic item that isn't really "clothing"** (e.g. pet ears, see
 `PET_EARS` in `veratown.ts`, applied by the Casino's `makePet()`):
+
 ```ts
 export const PET_EARS: BC_AppearanceItem = {
     Name: "HarnessCatMask",
@@ -161,15 +163,18 @@ export const PET_EARS: BC_AppearanceItem = {
 // ...
 character.Appearance.AddItem(PET_EARS);
 ```
+
 Pre-building a full `BC_AppearanceItem` object like this (rather than calling
 `AssetGet()` + configuring it step by step) is handy for a fixed, reusable
 "preset" item you apply in more than one place.
 
 **Strip everything except collars, ignoring locks** (used by
 `/bot freeandleave` and end-of-game cleanup):
+
 ```ts
 character.Appearance.stripBulk({ item: true }, true); // bondage only, see BONDAGE.md
 character.Appearance.stripBulk({ clothing: true, item: true }, true); // clothing + bondage
 ```
+
 `ItemNeck`/`ItemNeckAccessories` are always skipped by `stripBulk`
 regardless of config, so collars never get stripped this way.

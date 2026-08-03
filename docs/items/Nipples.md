@@ -4,7 +4,6 @@
 **Worn as:** Base nipple appearance.
 **Asset count:** 3
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,10 +18,8 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Nipples1 | - | - | - | - |  |
-| Nipples2 | - | - | - | - | Requires: HasBreasts |
-| Nipples3 | - | - | - | - | Requires: HasBreasts |
-
-
+| Name     | Value | Difficulty | Lockable | Extended | Notes                |
+| -------- | ----- | ---------- | -------- | -------- | -------------------- |
+| Nipples1 | -     | -          | -        | -        |                      |
+| Nipples2 | -     | -          | -        | -        | Requires: HasBreasts |
+| Nipples3 | -     | -          | -        | -        | Requires: HasBreasts |

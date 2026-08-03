@@ -8,26 +8,26 @@ using the same API surface as `Veratown` (see [bin/games/veratown.ts](../bin/gam
 
 Defined in `bc-stubs` (`Typedef.d.ts`):
 
-| Lock type | Notes |
-|---|---|
-| `CombinationPadlock` | Unlocked with a 4-digit code (`CombinationNumber`). |
-| `ExclusivePadlock` | Can only be unlocked by the person who locked it. |
-| `HighSecurityPadlock` | Can only be unlocked by members listed in `MemberNumberListKeys`. |
-| `IntricatePadlock` | Pickable lock with higher difficulty. |
-| `LoversPadlock` | Unlockable only by the wearer's "lovers". |
-| `LoversTimerPadlock` | Timer variant of `LoversPadlock`; supports `RemoveItem`/`RemoveTimer`. |
-| `FamilyPadlock` | Unlockable by family members (Club-specific relationship). |
-| `MetalPadlock` | Simple pickable padlock. |
-| `MistressPadlock` | Unlockable only by the wearer's "Mistress". |
-| `MistressTimerPadlock` | Timer variant of `MistressPadlock`. |
-| `OwnerPadlock` | Unlockable only by the wearer's owner. |
-| `OwnerTimerPadlock` | Timer variant of `OwnerPadlock`. |
-| `PandoraPadlock` | Special event lock (Pandora's box), one-way. |
-| `PasswordPadlock` | Unlocked with a password (`Password`, `Hint`, `LockSet`). |
-| `PortalLinkPadlock` | Used to link portal-type items together (`PortalLinkCode`). |
-| `SafewordPadlock` | Only removable via the wearer's Club safeword. |
-| `TimerPadlock` | Auto-unlocks after a set time, no password required. |
-| `TimerPasswordPadlock` | Combination of `PasswordPadlock` + timer. |
+| Lock type              | Notes                                                                  |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `CombinationPadlock`   | Unlocked with a 4-digit code (`CombinationNumber`).                    |
+| `ExclusivePadlock`     | Can only be unlocked by the person who locked it.                      |
+| `HighSecurityPadlock`  | Can only be unlocked by members listed in `MemberNumberListKeys`.      |
+| `IntricatePadlock`     | Pickable lock with higher difficulty.                                  |
+| `LoversPadlock`        | Unlockable only by the wearer's "lovers".                              |
+| `LoversTimerPadlock`   | Timer variant of `LoversPadlock`; supports `RemoveItem`/`RemoveTimer`. |
+| `FamilyPadlock`        | Unlockable by family members (Club-specific relationship).             |
+| `MetalPadlock`         | Simple pickable padlock.                                               |
+| `MistressPadlock`      | Unlockable only by the wearer's "Mistress".                            |
+| `MistressTimerPadlock` | Timer variant of `MistressPadlock`.                                    |
+| `OwnerPadlock`         | Unlockable only by the wearer's owner.                                 |
+| `OwnerTimerPadlock`    | Timer variant of `OwnerPadlock`.                                       |
+| `PandoraPadlock`       | Special event lock (Pandora's box), one-way.                           |
+| `PasswordPadlock`      | Unlocked with a password (`Password`, `Hint`, `LockSet`).              |
+| `PortalLinkPadlock`    | Used to link portal-type items together (`PortalLinkCode`).            |
+| `SafewordPadlock`      | Only removable via the wearer's Club safeword.                         |
+| `TimerPadlock`         | Auto-unlocks after a set time, no password required.                   |
+| `TimerPasswordPadlock` | Combination of `PasswordPadlock` + timer.                              |
 
 For bot scripting, the two most commonly used are **`TimerPadlock`**
 (no password, just a countdown) and **`TimerPasswordPadlock`** (countdown +
@@ -54,6 +54,7 @@ public lock(
   These are merged directly onto the item's `Property` object.
 
 Internally this:
+
 1. Does nothing if the asset doesn't allow locks (`AllowLock` is false on the
    asset definition) — safe to call unconditionally.
 2. Sets `Property.LockedBy` and `Property.LockMemberNumber`.
@@ -63,19 +64,19 @@ Internally this:
 
 ### Relevant `ItemProperties` lock fields (`opts`)
 
-| Field | Type | Used by | Purpose |
-|---|---|---|---|
-| `Password` | `string` (`/^[A-Z]{1,8}$/`) | `PasswordPadlock`, `SafewordPadlock`, `TimerPasswordPadlock` | The password required to unlock. |
-| `Hint` | `string` | same as above | Hint shown to whoever tries to unlock. |
-| `LockSet` | `boolean` | same as above | Marks the password/hint as configured. |
-| `CombinationNumber` | `string` (`/^[0-9]{4}$/`) | `CombinationPadlock` | The 4-digit code. |
-| `MemberNumberListKeys` | `string` (comma-separated numbers) | `HighSecurityPadlock` | Members who hold a "key". |
-| `RemoveItem` | `boolean` | `LoversTimerPadlock`, `MistressTimerPadlock`, `OwnerTimerPadlock`, `TimerPadlock`, `TimerPasswordPadlock` | Whether the item itself is removed when the timer lock unlocks. |
-| `RemoveTimer` | `number` (epoch ms) | same timer locks | Absolute timestamp when the lock auto-unlocks. |
-| `ShowTimer` | `boolean` | timer locks | Whether the wearer/others see the actual time left vs. "Unknown time left". |
-| `EnableRandomInput` | `boolean` | timer locks | Enables random re-lock behavior. |
-| `MemberNumberList` | `number[]` | timer locks | Tracks who has publicly modified the timer. |
-| `RemoveOnUnlock` | `boolean` | `PasswordPadlock` | Removes item once correctly unlocked. |
+| Field                  | Type                               | Used by                                                                                                   | Purpose                                                                     |
+| ---------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Password`             | `string` (`/^[A-Z]{1,8}$/`)        | `PasswordPadlock`, `SafewordPadlock`, `TimerPasswordPadlock`                                              | The password required to unlock.                                            |
+| `Hint`                 | `string`                           | same as above                                                                                             | Hint shown to whoever tries to unlock.                                      |
+| `LockSet`              | `boolean`                          | same as above                                                                                             | Marks the password/hint as configured.                                      |
+| `CombinationNumber`    | `string` (`/^[0-9]{4}$/`)          | `CombinationPadlock`                                                                                      | The 4-digit code.                                                           |
+| `MemberNumberListKeys` | `string` (comma-separated numbers) | `HighSecurityPadlock`                                                                                     | Members who hold a "key".                                                   |
+| `RemoveItem`           | `boolean`                          | `LoversTimerPadlock`, `MistressTimerPadlock`, `OwnerTimerPadlock`, `TimerPadlock`, `TimerPasswordPadlock` | Whether the item itself is removed when the timer lock unlocks.             |
+| `RemoveTimer`          | `number` (epoch ms)                | same timer locks                                                                                          | Absolute timestamp when the lock auto-unlocks.                              |
+| `ShowTimer`            | `boolean`                          | timer locks                                                                                               | Whether the wearer/others see the actual time left vs. "Unknown time left". |
+| `EnableRandomInput`    | `boolean`                          | timer locks                                                                                               | Enables random re-lock behavior.                                            |
+| `MemberNumberList`     | `number[]`                         | timer locks                                                                                               | Tracks who has publicly modified the timer.                                 |
+| `RemoveOnUnlock`       | `boolean`                          | `PasswordPadlock`                                                                                         | Removes item once correctly unlocked.                                       |
 
 ### Example: Timer lock, no password (as used in `Veratown`)
 
@@ -83,7 +84,7 @@ Internally this:
 const lockExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes from now
 
 crate.lock("TimerPadlock", character.MemberNumber, {
-    RemoveItem: true,   // strip the item automatically once unlocked
+    RemoveItem: true, // strip the item automatically once unlocked
     RemoveTimer: lockExpiry,
     ShowTimer: true,
     LockSet: true,
@@ -135,7 +136,7 @@ const lockedBy = crate?.getData().Property?.LockMemberNumber;
 const expiry = crate?.getData().Property?.RemoveTimer; // epoch ms, timer locks only
 ```
 
-This is important for anything that might *extend* or *shorten* a lock after
+This is important for anything that might _extend_ or _shorten_ a lock after
 it was first applied (e.g. an admin command, or another game system) — always
 re-read `Property.RemoveTimer` rather than caching the value you originally
 computed, so your code reflects the live state. `Veratown.getCageLockExpiry()`

@@ -98,9 +98,8 @@ export class ShowerSystem implements VeratownFeatureSystem {
 
         sayNear("Emote", `*${character} is taking a shower*`);
 
-        const clothingItems = character.Appearance
-            .getAppearanceData()
-            .filter(isClothing);
+        const clothingItems =
+            character.Appearance.getAppearanceData().filter(isClothing);
         for (const item of clothingItems) {
             if (!isInShower()) return abortShower();
             character.Appearance.RemoveItem(item.Group);

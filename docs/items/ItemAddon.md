@@ -19,16 +19,16 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Covers | n/a (in-game only) | 1 | - | - |  |
-| BedRopes | n/a (in-game only) | 6 | - | - |  |
-| BedStraps | n/a (in-game only) | 6 | Yes | - |  |
-| BedTape | n/a (in-game only) | 6 | - | - |  |
-| BedChains | n/a (in-game only) | 6 | Yes | - |  |
-| CeilingRope | 60 | 6 | - | Yes | Effect: Freeze, MapImmobile; Requires: CanBeCeilingTethered |
-| CeilingChain | 90 | 6 | Yes | Yes | Effect: Freeze, MapImmobile; Requires: CanBeCeilingTethered |
-| CeilingNeckCuff | n/a (in-game only) | 7 | Yes | Yes | Effect: Freeze, MapImmobile; Requires: CanBeCeilingTethered, NotSuspended, NotLifted |
+| Name            | Value              | Difficulty | Lockable | Extended | Notes                                                                                |
+| --------------- | ------------------ | ---------- | -------- | -------- | ------------------------------------------------------------------------------------ |
+| Covers          | n/a (in-game only) | 1          | -        | -        |                                                                                      |
+| BedRopes        | n/a (in-game only) | 6          | -        | -        |                                                                                      |
+| BedStraps       | n/a (in-game only) | 6          | Yes      | -        |                                                                                      |
+| BedTape         | n/a (in-game only) | 6          | -        | -        |                                                                                      |
+| BedChains       | n/a (in-game only) | 6          | Yes      | -        |                                                                                      |
+| CeilingRope     | 60                 | 6          | -        | Yes      | Effect: Freeze, MapImmobile; Requires: CanBeCeilingTethered                          |
+| CeilingChain    | 90                 | 6          | Yes      | Yes      | Effect: Freeze, MapImmobile; Requires: CanBeCeilingTethered                          |
+| CeilingNeckCuff | n/a (in-game only) | 7          | Yes      | Yes      | Effect: Freeze, MapImmobile; Requires: CanBeCeilingTethered, NotSuspended, NotLifted |
 
 ## Extended item configuration
 
@@ -37,8 +37,9 @@ Items marked "Extended" above expose extra configuration through `item.setProper
 **CeilingRope** — archetype `typed`
 
 **CeilingChain** — archetype `typed`
-  - 3 type option(s): Lowered, LoweredShort, Suspended
+
+- 3 type option(s): Lowered, LoweredShort, Suspended
 
 **CeilingNeckCuff** — archetype `typed`
-  - 2 type option(s): Loose, Strict
 
+- 2 type option(s): Loose, Strict

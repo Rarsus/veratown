@@ -4,7 +4,6 @@
 **Worn as:** Overall body shape/size variant.
 **Asset count:** 3
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,10 +18,8 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Original | - | - | - | - |  |
-| EchoV1 | - | - | - | - |  |
-| EchoV2 | - | - | - | - |  |
-
-
+| Name     | Value | Difficulty | Lockable | Extended | Notes |
+| -------- | ----- | ---------- | -------- | -------- | ----- |
+| Original | -     | -          | -        | -        |       |
+| EchoV1   | -     | -          | -        | -        |       |
+| EchoV2   | -     | -          | -        | -        |       |

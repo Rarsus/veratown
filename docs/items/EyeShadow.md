@@ -4,7 +4,6 @@
 **Worn as:** Eye makeup/eyeshadow.
 **Asset count:** 13
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,20 +18,18 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| CatEye | - | - | - | - |  |
-| CatEye2 | - | - | - | - |  |
-| LargeBlurred | - | - | - | - |  |
-| LargeSolid | - | - | - | - |  |
-| SmallBlurred | - | - | - | - |  |
-| SmallSolid | - | - | - | - |  |
-| SuperstarBlurred | - | - | - | - |  |
-| SuperstarSolid | - | - | - | - |  |
-| Tanuki | - | - | - | - |  |
-| UndershadowedBlurred | - | - | - | - |  |
-| UndershadowedSolid | - | - | - | - |  |
-| Wings | - | - | - | - |  |
-| Running | - | - | - | - |  |
-
-
+| Name                 | Value | Difficulty | Lockable | Extended | Notes |
+| -------------------- | ----- | ---------- | -------- | -------- | ----- |
+| CatEye               | -     | -          | -        | -        |       |
+| CatEye2              | -     | -          | -        | -        |       |
+| LargeBlurred         | -     | -          | -        | -        |       |
+| LargeSolid           | -     | -          | -        | -        |       |
+| SmallBlurred         | -     | -          | -        | -        |       |
+| SmallSolid           | -     | -          | -        | -        |       |
+| SuperstarBlurred     | -     | -          | -        | -        |       |
+| SuperstarSolid       | -     | -          | -        | -        |       |
+| Tanuki               | -     | -          | -        | -        |       |
+| UndershadowedBlurred | -     | -          | -        | -        |       |
+| UndershadowedSolid   | -     | -          | -        | -        |       |
+| Wings                | -     | -          | -        | -        |       |
+| Running              | -     | -          | -        | -        |       |

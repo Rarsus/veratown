@@ -17,12 +17,12 @@ Every equippable thing in Bondage Club lives in an `AssetGroupName` "slot"
 classifies each slot/item into one of four buckets, based on the group's
 data (`AssetFemale3DCG`) plus the item's own asset definition:
 
-| Helper | Meaning |
-|---|---|
-| `isBind(item)` | The group's `Category === "Item"` and isn't `BodyCosplay` — this is a genuine bondage/restraint item (ropes, cuffs, gags, cages, chastity, etc). |
-| `isClothing(item)` | Category is `undefined`, the group is `Clothing`, and it allows "None" — ordinary wearable clothing. |
-| `isCosplay(item)` | Like clothing, but flagged `BodyCosplay` (either on the group or the specific asset) — cosplay items (animal ears/tails, etc) that look like body parts rather than clothing. |
-| `isBody(item)` | Not clothing and can't be set to "None" — body parts (skin, eyes, etc), not something you'd normally add/remove. |
+| Helper             | Meaning                                                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isBind(item)`     | The group's `Category === "Item"` and isn't `BodyCosplay` — this is a genuine bondage/restraint item (ropes, cuffs, gags, cages, chastity, etc).                              |
+| `isClothing(item)` | Category is `undefined`, the group is `Clothing`, and it allows "None" — ordinary wearable clothing.                                                                          |
+| `isCosplay(item)`  | Like clothing, but flagged `BodyCosplay` (either on the group or the specific asset) — cosplay items (animal ears/tails, etc) that look like body parts rather than clothing. |
+| `isBody(item)`     | Not clothing and can't be set to "None" — body parts (skin, eyes, etc), not something you'd normally add/remove.                                                              |
 
 `AppearanceType.stripBulk()`/`applyBundle()` (in [`src/appearance.ts`](../src/appearance.ts))
 take a `BundleApplyConfig` (`{ appearance, bodyCosplay, clothing, item }`) built
@@ -39,21 +39,21 @@ mass-strip operations.
 These are the `AssetGroupName` slots actually used for bondage today (there
 are more available in the underlying game data if you need something new):
 
-| Group | Used for |
-|---|---|
-| `ItemMouth` | Gags (`HarnessBallGag`). |
-| `ItemHead` | Blindfolds (`LatexBlindfold`). |
-| `ItemHood` | Sealed hoods (`LeatherHoodSealed`), pet ears/cat mask (`HarnessCatMask`, cosmetic not a bind). |
-| `ItemHands` | Mittens (`LatexBondageMitts`, `ElbowLengthMittens`). |
-| `ItemArms` | Armbinders, yokes, straitjackets, pillories, pet suits (`ShinyArmbinder`, `Yoke`, `StraitJacket`, `Pillory`, `ShinyPetSuit`), rope box-ties (`HempRope`). |
-| `ItemLegs` | Leg binders, frogtie straps, rope frogties (`ShinyLegBinder`, `FrogtieStraps`, `HempRope`). |
-| `ItemFeet` | Spreader bars (`SpreaderMetal`), rope ankle ties (`HempRope`). |
-| `ItemBoots` | Ballet heels (`BalletHeels`). |
-| `ItemPelvis` / `ItemVulva` | Chastity belts/cages (`ModularChastityBelt`, `PlasticChastityCage2`), rope crotch ropes. |
-| `ItemTorso` | Rope harnesses (`HempRopeHarness`). |
-| `ItemNeck` | Rope collars (`NeckRope`) — deliberately exempt from bulk-strip. |
-| `ItemDevices` | Cages/kennels/crates (`Kennel`, `FuturisticCrate`, `Bed` — Bed isn't really "bondage" but lives in the same slot). |
-| `ItemMisc` | Padlock display items, wooden signs (`WoodenSign`) — signs aren't locks themselves but are usually applied alongside one. |
+| Group                      | Used for                                                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ItemMouth`                | Gags (`HarnessBallGag`).                                                                                                                                  |
+| `ItemHead`                 | Blindfolds (`LatexBlindfold`).                                                                                                                            |
+| `ItemHood`                 | Sealed hoods (`LeatherHoodSealed`), pet ears/cat mask (`HarnessCatMask`, cosmetic not a bind).                                                            |
+| `ItemHands`                | Mittens (`LatexBondageMitts`, `ElbowLengthMittens`).                                                                                                      |
+| `ItemArms`                 | Armbinders, yokes, straitjackets, pillories, pet suits (`ShinyArmbinder`, `Yoke`, `StraitJacket`, `Pillory`, `ShinyPetSuit`), rope box-ties (`HempRope`). |
+| `ItemLegs`                 | Leg binders, frogtie straps, rope frogties (`ShinyLegBinder`, `FrogtieStraps`, `HempRope`).                                                               |
+| `ItemFeet`                 | Spreader bars (`SpreaderMetal`), rope ankle ties (`HempRope`).                                                                                            |
+| `ItemBoots`                | Ballet heels (`BalletHeels`).                                                                                                                             |
+| `ItemPelvis` / `ItemVulva` | Chastity belts/cages (`ModularChastityBelt`, `PlasticChastityCage2`), rope crotch ropes.                                                                  |
+| `ItemTorso`                | Rope harnesses (`HempRopeHarness`).                                                                                                                       |
+| `ItemNeck`                 | Rope collars (`NeckRope`) — deliberately exempt from bulk-strip.                                                                                          |
+| `ItemDevices`              | Cages/kennels/crates (`Kennel`, `FuturisticCrate`, `Bed` — Bed isn't really "bondage" but lives in the same slot).                                        |
+| `ItemMisc`                 | Padlock display items, wooden signs (`WoodenSign`) — signs aren't locks themselves but are usually applied alongside one.                                 |
 
 ## Catalog 1: Casino/Dare forfeits (`bin/games/casino/forfeits.ts`)
 
@@ -63,12 +63,12 @@ forfeit:
 
 ```ts
 interface Forfeit {
-    name: string;                 // Display name, e.g. "Armbinder"
-    value: number;                // Casino chip value / severity score
+    name: string; // Display name, e.g. "Armbinder"
+    value: number; // Casino chip value / severity score
     items: (player) => BC_AppearanceItem[]; // The item(s) to add
-    lock?: BC_AppearanceItem;     // (Legacy/unused directly - see applyForfeitForDare)
-    lockTimeMs?: number;          // Default lock duration
-    colourLayers?: number[];      // Which color layers get recoloured to match hair, etc.
+    lock?: BC_AppearanceItem; // (Legacy/unused directly - see applyForfeitForDare)
+    lockTimeMs?: number; // Default lock duration
+    colourLayers?: number[]; // Which color layers get recoloured to match hair, etc.
     applyItems?: (char, lockMemberNumber) => void; // Custom apply logic (multi-item/complex forfeits)
 }
 ```
@@ -112,10 +112,10 @@ Don't hand-roll the apply logic — use the shared helper:
 import { applyForfeitForDare, describeForfeitOutcome } from "./casino/forfeits";
 
 const result = applyForfeitForDare(
-    target,                       // API_Character
-    lockerMemberNumber,           // usually this.conn.Player.MemberNumber (the bot)
-    "armbinder",                  // FORFEITS key
-    optionalDurationMsOverride,   // omit to use the forfeit's own lockTimeMs
+    target, // API_Character
+    lockerMemberNumber, // usually this.conn.Player.MemberNumber (the bot)
+    "armbinder", // FORFEITS key
+    optionalDurationMsOverride, // omit to use the forfeit's own lockTimeMs
 );
 
 if (result) {
@@ -193,7 +193,9 @@ Whether you're adding a brand new one-off, or extending a catalog above:
 import { AssetGet } from "bc-bot";
 
 // 1. Add the item.
-const item = character.Appearance.AddItem(AssetGet("ItemArms", "ShinyArmbinder"));
+const item = character.Appearance.AddItem(
+    AssetGet("ItemArms", "ShinyArmbinder"),
+);
 
 // 2. (Optional) Configure sub-modules ("TypeRecord") for items that have them,
 //    e.g. gags/mittens/cages expose per-part options this way. Check the

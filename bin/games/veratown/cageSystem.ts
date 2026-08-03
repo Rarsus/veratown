@@ -74,8 +74,7 @@ export class CageSystem implements VeratownFeatureSystem {
         if (!this.enabled) return;
 
         const cage = CAGES.find(
-            (c) =>
-                c.entryPos.X === character.X && c.entryPos.Y === character.Y,
+            (c) => c.entryPos.X === character.X && c.entryPos.Y === character.Y,
         );
         const cageName = cage?.name ?? "the containment cage";
         const durationDescription =
@@ -120,7 +119,8 @@ export class CageSystem implements VeratownFeatureSystem {
             (c) => c.pos.X === cagePos.X && c.pos.Y === cagePos.Y,
         );
         const cageName = cage?.name ?? "Unknown cage";
-        const lockExpiry = Date.now() + (cage?.lockDurationMs() ?? 30 * 60 * 1000);
+        const lockExpiry =
+            Date.now() + (cage?.lockDurationMs() ?? 30 * 60 * 1000);
 
         const crate = character.Appearance.AddItem(
             AssetGet("ItemDevices", "FuturisticCrate"),

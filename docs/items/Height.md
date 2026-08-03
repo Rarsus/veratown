@@ -4,7 +4,6 @@
 **Worn as:** Character height variant (a body slider, not a wearable item).
 **Asset count:** 11
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,18 +18,16 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| H0950 | - | - | - | - |  |
-| H0960 | - | - | - | - |  |
-| H0970 | - | - | - | - |  |
-| H0980 | - | - | - | - |  |
-| H0990 | - | - | - | - |  |
-| H1000 | - | - | - | - |  |
-| H0900 | - | - | - | - |  |
-| H0910 | - | - | - | - |  |
-| H0920 | - | - | - | - |  |
-| H0930 | - | - | - | - |  |
-| H0940 | - | - | - | - |  |
-
-
+| Name  | Value | Difficulty | Lockable | Extended | Notes |
+| ----- | ----- | ---------- | -------- | -------- | ----- |
+| H0950 | -     | -          | -        | -        |       |
+| H0960 | -     | -          | -        | -        |       |
+| H0970 | -     | -          | -        | -        |       |
+| H0980 | -     | -          | -        | -        |       |
+| H0990 | -     | -          | -        | -        |       |
+| H1000 | -     | -          | -        | -        |       |
+| H0900 | -     | -          | -        | -        |       |
+| H0910 | -     | -          | -        | -        |       |
+| H0920 | -     | -          | -        | -        |       |
+| H0930 | -     | -          | -        | -        |       |
+| H0940 | -     | -          | -        | -        |       |

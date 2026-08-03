@@ -4,7 +4,6 @@
 **Worn as:** Base mouth/lip appearance.
 **Asset count:** 3
 
-
 ## Adding an item from this group
 
 ```ts
@@ -19,17 +18,17 @@ type/text configuration).
 
 ## Items
 
-| Name | Value | Difficulty | Lockable | Extended | Notes |
-|---|---|---|---|---|---|
-| Regular | - | - | - | - |  |
-| Discreet | - | - | - | - |  |
-| Full | - | - | - | Yes |  |
+| Name     | Value | Difficulty | Lockable | Extended | Notes |
+| -------- | ----- | ---------- | -------- | -------- | ----- |
+| Regular  | -     | -          | -        | -        |       |
+| Discreet | -     | -          | -        | -        |       |
+| Full     | -     | -          | -        | Yes      |       |
 
 ## Extended item configuration
 
 Items marked "Extended" above expose extra configuration through `item.setProperty("TypeRecord", {...})` (or the `item.Extended` wrapper for typed/text items - see [BONDAGE.md](../BONDAGE.md)). Their available options, as defined in `Female3DCGExtended.ts`:
 
 **Full** — archetype `modular`
-  - Module `Lips` (key `l`): 8 option(s)
-  - Module `Tongue` (key `t`): 3 option(s)
 
+- Module `Lips` (key `l`): 8 option(s)
+- Module `Tongue` (key `t`): 3 option(s)

@@ -338,7 +338,9 @@ export function AssetGet(
 // ("appearance tool") pseudo-group). We don't support these, but there's no
 // need to spam the logs about them since they're expected and harmless.
 function isIgnorableUnknownGroup(groupName: string): boolean {
-    return groupName.includes("Luzi") || groupName === "\u5916\u89c2\u5de5\u5177";
+    return (
+        groupName.includes("Luzi") || groupName === "\u5916\u89c2\u5de5\u5177"
+    );
 }
 
 export function getAssetDef(desc: BC_AppearanceItem): AssetDefinition | null {

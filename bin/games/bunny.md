@@ -77,14 +77,14 @@ A "piece" is:
 
 ### Available rope assets by body part
 
-| Body part (`group`)   | `asset`           | `extendedType` options            |
-| ---------------------- | ----------------- | ---------------------------------- |
-| Arms (`ItemArms`)       | `HempRope`         | e.g. `"BoxTie"`                     |
-| Legs (`ItemLegs`)       | `HempRope`         | e.g. `"Frogtie"`                    |
-| Feet (`ItemFeet`)       | `HempRope`         | none                                |
-| Thighs/crotch (`ItemPelvis`) | `HempRope`    | none                                |
-| Torso (`ItemTorso`)     | `HempRopeHarness`  | none                                |
-| Neck (`ItemNeck`)       | `NeckRope`         | none                                |
+| Body part (`group`)          | `asset`           | `extendedType` options |
+| ---------------------------- | ----------------- | ---------------------- |
+| Arms (`ItemArms`)            | `HempRope`        | e.g. `"BoxTie"`        |
+| Legs (`ItemLegs`)            | `HempRope`        | e.g. `"Frogtie"`       |
+| Feet (`ItemFeet`)            | `HempRope`        | none                   |
+| Thighs/crotch (`ItemPelvis`) | `HempRope`        | none                   |
+| Torso (`ItemTorso`)          | `HempRopeHarness` | none                   |
+| Neck (`ItemNeck`)            | `NeckRope`        | none                   |
 
 These are just the rope-family assets used by the current configs above -
 any other asset name that exists for a given group in the game's asset data

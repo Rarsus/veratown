@@ -64,11 +64,12 @@ export class Veratown {
         "/bot map update - Saves the room's current layout to the database as the new default (admin only)",
         "/bot map reset - Resets the room layout to the built-in default map, in the database and live (admin only)",
         "/bot map export - Shows the current layout as a portable string, for backup or to move it elsewhere (admin only)",
-        "!map import <data> - Loads a layout previously produced by \"/bot map export\", live and as the new default (admin only, must be sent as its own message, not via /bot)",
+        '!map import <data> - Loads a layout previously produced by "/bot map export", live and as the new default (admin only, must be sent as its own message, not via /bot)',
         "/bot maintenance - Warns everyone in the room, waits one minute, then frees and removes everyone present (bots excluded) and locks the room to admins only (admin only)",
         "/bot dare <join|leave|start|turn|draw|pass|forfeit|players|remove|stop|add|reset|list|help> - Join/leave, start/check turn, draw, pass (pillory!), forfeit into a kennel, view joined players, admin-remove players, admin-stop a running game, add, reset or (admin only) list dare cards (if configured)",
         "/bot pick - Randomly selects a room member other than the bot or yourself",
-        "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",,
+        "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",
+        ,
     ].join("\n");
 
     private commandParser: CommandParser;
@@ -105,7 +106,8 @@ export class Veratown {
         ]);
 
         if (db) {
-            const effectiveDareConfig: DareConfig | undefined = dareConfig ??
+            const effectiveDareConfig: DareConfig | undefined =
+                dareConfig ??
                 (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
             this.dare = this.initFeature(
                 () =>
