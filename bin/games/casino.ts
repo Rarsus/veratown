@@ -43,6 +43,10 @@ import {
     VeratownLocationDoc,
 } from "./veratown/veratownLocationStore";
 import { loadRegionFromDatabase } from "./shared/locationUtils";
+import {
+    VeratownFeatureSystem,
+    guardHandler,
+} from "./veratown/featureSystem";
 
 const FREE_CHIPS = 20;
 
@@ -112,7 +116,11 @@ export interface CasinoConfig {
     fallbackLocations?: VeratownLocationDoc[];
 }
 
-export class Casino {
+export class Casino implements VeratownFeatureSystem {
+    public readonly key = "casino";
+    public readonly label = "Casino";
+    public enabled = true;
+
     private game: Game;
     public commandParser: CommandParser;
     public store: CasinoStore;
@@ -125,29 +133,15 @@ export class Casino {
         private conn: API_Connector,
         db: Db,
         config?: CasinoConfig,
+        commandParser?: CommandParser,
     ) {
         this.store = new CasinoStore(db);
-        this.commandParser = new CommandParser(conn, config?.region);
+        this.commandParser =
+            commandParser ?? new CommandParser(conn, config?.region);
         this.game =
             config?.game === "roulette"
                 ? new RouletteGame(conn, this)
                 : new BlackjackGame(conn, this);
-
-        if (config?.region) {
-            conn.chatRoom.map.addEnterRegionTrigger(
-                config.region,
-                this.onCharacterEnterCasinoRegion,
-            );
-        }
-
-        // Load game region from database if location store is available
-        if (
-            config?.locationStore &&
-            config?.fallbackLocations &&
-            !config?.region
-        ) {
-            this.loadGameRegion(config.locationStore, config.fallbackLocations);
-        }
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
@@ -156,28 +150,91 @@ export class Casino {
             }
         }
 
-        conn.on("CharacterEntered", this.onCharacterEntered);
-        conn.on("Beep", (msg) => this.onBeep(msg));
-
-        this.commandParser.register("help", this.onCommandHelp);
-        this.commandParser.register("forfeits", this.onCommandForfeits);
-        this.commandParser.register("commands", this.onCommandCommands);
-        this.commandParser.register("chips", this.onCommandChips);
-        this.commandParser.register("addfriend", this.onCommandAddFriend);
-        this.commandParser.register("remove", this.onCommandRemove);
-        this.commandParser.register("buy", this.onCommandBuy);
-        this.commandParser.register("vouchers", this.onCommandVouchers);
-        this.commandParser.register("give", this.onCommandGive);
-        this.commandParser.register("grant", this.onCommandGrant);
-        this.commandParser.register("close", this.onCommandClose);
-        this.commandParser.register("open", this.onCommandOpen);
-        this.commandParser.register("bonus", this.onCommandBonusRound);
-        this.commandParser.register("game", this.onCommandGame);
-
         this.conn.setItemPermission(ItemPermissionLevel.OwnerOnly);
+
+        // Store config for later use in registerTriggers
+        this.gameConfig = config;
+    }
+
+    // Store config for registerTriggers method
+    private gameConfig?: CasinoConfig;
+
+    /**
+     * Registers casino triggers, commands, and event listeners.
+     * Called once during Veratown startup (see VeratownFeatureSystem).
+     */
+    public registerTriggers(): void {
+        if (this.gameConfig?.region) {
+            this.conn.chatRoom.map.addEnterRegionTrigger(
+                this.gameConfig.region,
+                guardHandler("casino:enterRegion", this.onCharacterEnterCasinoRegion),
+            );
+        }
+
+        // Load game region from database if location store is available
+        if (
+            this.gameConfig?.locationStore &&
+            this.gameConfig?.fallbackLocations &&
+            !this.gameConfig?.region
+        ) {
+            this.loadGameRegion(
+                this.gameConfig.locationStore,
+                this.gameConfig.fallbackLocations,
+            );
+        }
+
+        this.commandParser.register("help", guardHandler("casino:help", this.onCommandHelp));
+        this.commandParser.register(
+            "forfeits",
+            guardHandler("casino:forfeits", this.onCommandForfeits),
+        );
+        this.commandParser.register(
+            "commands",
+            guardHandler("casino:commands", this.onCommandCommands),
+        );
+        this.commandParser.register("chips", guardHandler("casino:chips", this.onCommandChips));
+        this.commandParser.register(
+            "addfriend",
+            guardHandler("casino:addfriend", this.onCommandAddFriend),
+        );
+        this.commandParser.register(
+            "remove",
+            guardHandler("casino:remove", this.onCommandRemove),
+        );
+        this.commandParser.register("buy", guardHandler("casino:buy", this.onCommandBuy));
+        this.commandParser.register(
+            "vouchers",
+            guardHandler("casino:vouchers", this.onCommandVouchers),
+        );
+        this.commandParser.register("give", guardHandler("casino:give", this.onCommandGive));
+        this.commandParser.register(
+            "grant",
+            guardHandler("casino:grant", this.onCommandGrant),
+        );
+        this.commandParser.register(
+            "close",
+            guardHandler("casino:close", this.onCommandClose),
+        );
+        this.commandParser.register("open", guardHandler("casino:open", this.onCommandOpen));
+        this.commandParser.register(
+            "bonus",
+            guardHandler("casino:bonus", this.onCommandBonusRound),
+        );
+        this.commandParser.register(
+            "game",
+            guardHandler("casino:game", this.onCommandGame),
+        );
+
+        this.conn.on(
+            "CharacterEntered",
+            guardHandler("casino:characterEntered", this.onCharacterEntered),
+        );
+        this.conn.on("Beep", (msg) => guardHandler("casino:beep", this.onBeep)(msg));
     }
 
     private onCharacterEntered = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         await this.store.setPlayerName(
             character.MemberNumber,
             character.toString(),
@@ -229,6 +286,8 @@ export class Casino {
     }
 
     private onCharacterEnterCasinoRegion = async (character: API_Character) => {
+        if (!this.enabled) return;
+
         // this.game.HELPMESSAGE already includes the commands list (see
         // ROULETTEHELP/FULLBLACKJACKHELP), so don't also append
         // COMMANDSMESSAGE here or the commands get printed twice.
@@ -239,6 +298,8 @@ export class Casino {
     };
 
     private onBeep = (beep: ServerAccountBeepResponse) => {
+        if (!this.enabled) return;
+
         if (
             beep.Message.includes("TypingStatus") ||
             beep.Message.includes("ReqRoom")
@@ -331,6 +392,7 @@ export class Casino {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.enabled) return;
         this.conn.reply(msg, this.game.HELPCOMMANDMESSAGE);
     };
 
@@ -339,6 +401,7 @@ export class Casino {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.enabled) return;
         let text = `Forfeit Table
 Restraints are for 20 minutes, unless otherwise stated.
 
@@ -352,6 +415,7 @@ ${forfeitsString()}
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.enabled) return;
         this.conn.reply(msg, this.game.COMMANDSMESSAGE);
     };
 
@@ -360,6 +424,8 @@ ${forfeitsString()}
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.enabled) return;
+
         if (args.length > 0) {
             if (!sender.IsRoomAdmin()) {
                 this.conn.reply(

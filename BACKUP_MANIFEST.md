@@ -66,3 +66,20 @@ docker-compose restart ropeybot
 - Standalone Dare/Casino modes kept for non-Veratown deployments
 - Database schema unchanged - no migrations needed
 - Config format unchanged
+
+---
+
+## PHASE 1 COMPLETION ✅
+
+**Date**: 2026-08-04 11:50 CEST  
+**Commit**: 27bc902  
+**Changes**:
+- Created bin/games/shared/locationUtils.ts with loadRegionFromDatabase()
+- Created bin/games/shared/commandParserFactory.ts  
+- Updated dare.ts and casino.ts to use shared utilities
+- Eliminated ~40 lines of duplicate code
+- Reduced casino.loadGameRegion() by 50%
+
+**Testing**: ✓ Compilation ✓ Docker startup ✓ Bot connects successfully
+
+**Rollback**: `git revert 27bc902` then `docker-compose restart ropeybot`

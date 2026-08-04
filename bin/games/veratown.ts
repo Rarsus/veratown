@@ -24,6 +24,7 @@ import { wait } from "../hub/utils";
 import { Dare } from "./dare";
 import { DareConfig } from "./dare";
 import { DareStore } from "./dareStore";
+import { Casino } from "./casino";
 import { CasinoStore } from "./casino/casinostore";
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
@@ -109,6 +110,7 @@ export class Veratown {
     private commandParser: CommandParser;
 
     private dare?: Dare;
+    private casino?: Casino;
 
     private cageSystem?: CageSystem;
     private kennelSystem?: KennelSystem;
@@ -158,6 +160,20 @@ export class Veratown {
                         effectiveDareConfig,
                         this.locationStore,
                         VERATOWN_LOCATIONS_FALLBACK,
+                    ),
+            );
+            // Initialize Casino as a Veratown feature
+            this.casino = this.initFeature(
+                () =>
+                    new Casino(
+                        this.conn,
+                        db,
+                        {
+                            region: GAME_LOCATION,
+                            locationStore: this.locationStore,
+                            fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,
+                        },
+                        this.commandParser,
                     ),
             );
             this.mapStore = new VeratownMapStore(db);
