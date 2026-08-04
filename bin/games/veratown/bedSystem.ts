@@ -15,6 +15,7 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { NarratorBot } from "./veratownNarrationUtils";
 import {
     BED_POSITIONS,
     BED_CHECK_INTERVAL_MS,
@@ -30,6 +31,10 @@ import {
 // true, and removes it as soon as either stops being true (they wake up or
 // leave the bed). Handles the expression being activated either before or
 // after stepping onto the bed.
+//
+// To add narration (e.g., "*Character drifts off to sleep*"), use NarratorBot:
+//   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
+//   narrator.sayAt(character.MapPos, "Emote", `*${character} falls asleep*`);
 export class BedSystem implements VeratownFeatureSystem {
     public readonly key = "bed";
     public readonly label = "Beds";
@@ -138,7 +143,7 @@ export class BedSystem implements VeratownFeatureSystem {
                         AssetGet("ItemAddon", "Covers"),
                     );
                 } else if (!isAsleep && hasBed) {
-                    character.Appearance.RemoveItem("ItemAddon");
+                    character.Appearance.RemoveItem("ItemAddon"); // 
                     character.Appearance.RemoveItem("ItemDevices");
                 }
 

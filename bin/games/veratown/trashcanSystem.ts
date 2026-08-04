@@ -15,6 +15,7 @@
 import { API_Connector, API_Character, API_Message } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { NarratorBot } from "./veratownNarrationUtils";
 import {
     TRASHCAN_SEARCH_LOCATIONS,
     TRASHCAN_FOUND_ITEMS,
@@ -30,6 +31,10 @@ import {
 // random flavour item. Unlike the tile-trigger-based systems, this is
 // wired off the room's generic "Message" event since it's driven by emote
 // text rather than a tile-entry trigger.
+//
+// To make the found-item message appear from the trashcan location, use NarratorBot:
+//   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
+//   narrator.sayAt(trashcanPos, "Emote", `*${character} found ${item} in the trash!*`);
 export class TrashcanSystem implements VeratownFeatureSystem {
     public readonly key = "trashcan";
     public readonly label = "Trashcan search";

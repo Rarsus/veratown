@@ -15,6 +15,7 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { remainingTimeString } from "../../utils";
+import { NarratorBot } from "./veratownNarrationUtils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     CAGES,
@@ -32,6 +33,10 @@ import {
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
 // information screen showing current occupancy.
+//
+// To add location-based narration, use NarratorBot:
+//   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
+//   narrator.sayAt(cagePos, "Emote", `*Cage door slams shut with a click*`);
 export class CageSystem implements VeratownFeatureSystem {
     public readonly key = "cage";
     public readonly label = "Containment cages";

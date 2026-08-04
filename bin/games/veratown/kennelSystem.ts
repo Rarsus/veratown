@@ -15,6 +15,7 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import {
     VeratownLocationStore,
@@ -24,6 +25,10 @@ import {
 // Owns the kennel tiles: equips a Kennel device (door open, padded) on
 // entry, then automatically closes the door after a short delay as long as
 // the character is still wearing the same Kennel.
+//
+// To add narration (e.g., "*Door closes behind them*"), use NarratorBot:
+//   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
+//   narrator.sayAt(kennelPos, "Emote", `*The kennel door clicks shut*`);
 export class KennelSystem implements VeratownFeatureSystem {
     public readonly key = "kennel";
     public readonly label = "Kennels";

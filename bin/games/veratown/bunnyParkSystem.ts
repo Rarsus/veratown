@@ -14,6 +14,7 @@
 
 import { API_Connector, API_Character, AssetGet, MapRegion } from "bc-bot";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { NarratorBot } from "./veratownNarrationUtils";
 import {
     PARK,
     BUNNY_POSITIONS,
@@ -29,6 +30,10 @@ import {
 // Owns the bunny park: warns visitors on entry, then punishes anyone who
 // steps on one of the protected bunnies with a randomly-chosen rope
 // restraint outfit.
+//
+// To add location-based narration (e.g., \"*A bunny squeaks cutely*\"), use NarratorBot:
+//   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
+//   narrator.sayAt(bunnyPos, \"Emote\", `*A fluffy bunny hops away*`);
 export class BunnyParkSystem implements VeratownFeatureSystem {
     public readonly key = "bunnyPark";
     public readonly label = "Bunny park";

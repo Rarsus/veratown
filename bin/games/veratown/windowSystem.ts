@@ -15,6 +15,7 @@
 import { API_Connector, API_Character } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { NarratorBot } from "./veratownNarrationUtils";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
 import {
     VeratownLocationStore,
@@ -23,6 +24,11 @@ import {
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
+//
+// Currently sends announcements from the bot's current position. To make them
+// appear to come from the window location, use NarratorBot:
+//   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
+//   narrator.sayAt(windowPos, "Emote", `*Peeping Tom detected: ${character}*`);
 export class WindowSystem implements VeratownFeatureSystem {
     public readonly key = "window";
     public readonly label = "Windows";
