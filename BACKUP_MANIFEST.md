@@ -111,3 +111,28 @@ docker-compose restart ropeybot
 
 ---
 
+
+---
+
+## PHASE 4 COMPLETION ✅
+
+**Date**: 2026-08-04 12:20 CEST  
+**Commit**: 3e44e99  
+**Changes**:
+- Removed standalone "casino" case from game selector
+- Casino now exclusively initialized through Veratown feature system
+- Pool roulette Casino setup unchanged (advanced deployment path)
+- Simplified main.ts logic
+
+**Benefits**:
+- Single entry point for Casino (Veratown)
+- Fewer code paths in main.ts
+- Clearer game mode separation
+- Easier to understand and maintain
+
+**Testing**: ✓ Compilation ✓ Docker startup ✓ Bot connects successfully
+
+**Rollback**: `git revert 3e44e99` then `docker-compose restart ropeybot`
+
+---
+
