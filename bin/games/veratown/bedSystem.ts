@@ -20,6 +20,10 @@ import {
     BED_CHECK_INTERVAL_MS,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // While a character remains on a bed tile, keeps checking whether they have
 // the "Sleep" Emoticon expression active: equips a Bed device while both are
@@ -32,14 +36,64 @@ export class BedSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private sleepingCharacters = new Set<number>();
+    private bedPositions: Array<{ X: number; Y: number }> = [];
 
-    public constructor(private conn: API_Connector) {}
+    public constructor(
+        private conn: API_Connector,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
+    ) {}
 
     public registerTriggers(): void {
-        for (const bedPos of BED_POSITIONS) {
-            this.conn.chatRoom.map.addTileTrigger(
-                bedPos,
-                guardHandler(this.key, this.onCharacterEnterBed),
+        // Fire async location loading in the background
+        this.loadLocations();
+    }
+
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load bed locations from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const beds = locations.filter((loc) => loc.type === "bed");
+                    this.bedPositions = beds.map((bed) => ({
+                        X: bed.x,
+                        Y: bed.y,
+                    }));
+                } catch (e) {
+                    console.error(
+                        "[BedSystem] Failed to load locations from database",
+                        e,
+                    );
+                }
+            }
+
+            // If no database locations loaded, fall back to hardcoded BED_POSITIONS
+            if (this.bedPositions.length === 0) {
+                this.bedPositions = [...BED_POSITIONS];
+            }
+
+            // Register tile triggers for bed positions
+            const onCharacterEnterBed = guardHandler(
+                this.key,
+                this.onCharacterEnterBed,
+            );
+            for (const bedPos of this.bedPositions) {
+                this.conn.chatRoom.map.addTileTrigger(
+                    bedPos,
+                    onCharacterEnterBed,
+                );
+            }
+
+            console.log(
+                `[BedSystem] Registered ${this.bedPositions.length} bed location(s)`,
+            );
+        } catch (e) {
+            console.error(
+                "[BedSystem] Unexpected error during initialization",
+                e,
             );
         }
     }
@@ -53,7 +107,7 @@ export class BedSystem implements VeratownFeatureSystem {
             if (!this.conn.chatRoom.getCharacter(character.MemberNumber))
                 return false;
 
-            return isCharacterAtAnyPosition(character, BED_POSITIONS);
+            return isCharacterAtAnyPosition(character, this.bedPositions);
         };
 
         try {

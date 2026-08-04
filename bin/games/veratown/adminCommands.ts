@@ -24,6 +24,10 @@ import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownMapStore } from "./mapStore";
 import { MAP as DEFAULT_MAP_BUNDLE } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // Owns every admin-only Veratown command: "strip", "feature
 // enable/disable", "map update/reset/import/export", and "maintenance".
@@ -41,6 +45,7 @@ export class VeratownAdminCommands {
         private commandParser: CommandParser,
         private features: VeratownFeatureSystem[],
         private mapStore?: VeratownMapStore,
+        private locationStore?: VeratownLocationStore,
         // Delegates to Veratown's private freeCharacter() (strips bind
         // items and frees from any cage), so the maintenance shutdown frees
         // people the same way "/bot freeandleave" does.
@@ -67,6 +72,14 @@ export class VeratownAdminCommands {
         this.commandParser.register(
             "maintenance",
             guardHandler("admin:maintenance", this.onCommandMaintenance),
+        );
+        this.commandParser.register(
+            "adminhelp",
+            guardHandler("admin:help", this.onCommandAdminHelp),
+        );
+        this.commandParser.register(
+            "location",
+            guardHandler("admin:location", this.onCommandLocation),
         );
 
         // "!map import <data>" is handled separately from the other "map"
@@ -317,16 +330,378 @@ export class VeratownAdminCommands {
         }
     };
 
+    private onCommandAdminHelp = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.requireAdmin(sender, msg)) return;
+
+        const helpText = [
+            "=== ADMIN COMMANDS ===",
+            "",
+            "!strip <name or member number>",
+            "  Strips all clothing from the specified character.",
+            "",
+            "!feature <list|enable|disable> [name]",
+            "  Manage room features. Use '!feature list' to see available features.",
+            "",
+            "!map <update|reset|export|import <data>>",
+            "  Manage room layout:",
+            "    - update: Save current layout as new default",
+            "    - reset: Restore built-in default map",
+            "    - export: Export current layout (save the output)",
+            "    - import <data>: Import previously exported layout (case-sensitive)",
+            "",
+            "!location <add|get|update|delete|list|enable|disable>",
+            "  Manage database locations:",
+            "    - add <key> <name> <type> <x> <y> [metadata_json]",
+            "    - get <key>: View location details",
+            "    - update <key> <field> <value>: Update name/type/x/y/data",
+            "    - delete <key>: Remove location",
+            "    - list [type]: Show all locations or filter by type",
+            "    - enable/disable <key>: Toggle enabled state",
+            "",
+            "!maintenance",
+            "  Initiate one-minute shutdown. All room members will be freed and removed.",
+            "",
+            "!adminhelp",
+            "  Display this help message.",
+        ];
+
+        this.conn.reply(msg, helpText.join("\n"));
+    };
+
+    private onCommandLocation = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.requireAdmin(sender, msg)) return;
+
+        if (!this.locationStore) {
+            this.conn.reply(
+                msg,
+                "Location database is not configured (mongo_uri/mongo_db not set).",
+            );
+            return;
+        }
+
+        const subcommand = args[0]?.toLowerCase();
+
+        switch (subcommand) {
+            case "add": {
+                if (args.length < 6) {
+                    this.conn.reply(
+                        msg,
+                        "Usage: !location add <key> <name> <type> <x> <y> [metadata_json]",
+                    );
+                    return;
+                }
+
+                const key = args[1];
+                const name = args[2];
+                const type = args[3];
+                const x = parseFloat(args[4]);
+                const y = parseFloat(args[5]);
+                let metadata: Record<string, unknown> | undefined;
+
+                if (args[6]) {
+                    try {
+                        metadata = JSON.parse(args.slice(6).join(" "));
+                    } catch (e) {
+                        this.conn.reply(msg, "Invalid metadata JSON.");
+                        return;
+                    }
+                }
+
+                if (isNaN(x) || isNaN(y)) {
+                    this.conn.reply(msg, "Coordinates must be valid numbers.");
+                    return;
+                }
+
+                try {
+                    await this.locationStore.addLocation({
+                        key,
+                        name,
+                        type: type as any,
+                        x,
+                        y,
+                        data: metadata,
+                        enabled: true,
+                    });
+                    this.conn.reply(
+                        msg,
+                        `Location "${key}" added successfully.`,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to add location: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "get": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location get <key>");
+                    return;
+                }
+
+                try {
+                    const location = await this.locationStore.getLocation(
+                        args[1],
+                    );
+                    if (!location) {
+                        this.conn.reply(
+                            msg,
+                            `Location "${args[1]}" not found.`,
+                        );
+                        return;
+                    }
+
+                    const details = [
+                        `Key: ${location.key}`,
+                        `Name: ${location.name}`,
+                        `Type: ${location.type}`,
+                        `Position: (${location.x}, ${location.y})`,
+                        `Enabled: ${location.enabled ? "Yes" : "No"}`,
+                        `Created: ${new Date(location.createdAt).toISOString()}`,
+                        `Updated: ${new Date(location.updatedAt).toISOString()}`,
+                    ];
+
+                    if (
+                        location.data &&
+                        Object.keys(location.data).length > 0
+                    ) {
+                        details.push(
+                            `Metadata: ${JSON.stringify(location.data)}`,
+                        );
+                    }
+
+                    this.conn.SendMessage(
+                        "Whisper",
+                        details.join("\n"),
+                        sender.MemberNumber,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to get location: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "update": {
+                if (args.length < 4) {
+                    this.conn.reply(
+                        msg,
+                        "Usage: !location update <key> <field> <value>",
+                    );
+                    return;
+                }
+
+                const key = args[1];
+                const field = args[2];
+                const value = args.slice(3).join(" ");
+
+                try {
+                    const validFields = ["name", "type", "x", "y", "data"];
+                    if (!validFields.includes(field)) {
+                        this.conn.reply(
+                            msg,
+                            `Invalid field. Valid fields: ${validFields.join(", ")}`,
+                        );
+                        return;
+                    }
+
+                    let updateValue: any = value;
+                    if (field === "x" || field === "y") {
+                        updateValue = parseFloat(value);
+                        if (isNaN(updateValue)) {
+                            this.conn.reply(
+                                msg,
+                                `${field} must be a valid number.`,
+                            );
+                            return;
+                        }
+                    } else if (field === "data") {
+                        updateValue = JSON.parse(value);
+                    }
+
+                    const success = await this.locationStore.updateLocation(
+                        key,
+                        { [field]: updateValue },
+                    );
+                    if (success) {
+                        this.conn.reply(
+                            msg,
+                            `Location "${key}" updated successfully.`,
+                        );
+                    } else {
+                        this.conn.reply(msg, `Location "${key}" not found.`);
+                    }
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to update location: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "delete": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location delete <key>");
+                    return;
+                }
+
+                try {
+                    const success = await this.locationStore.deleteLocation(
+                        args[1],
+                    );
+                    if (success) {
+                        this.conn.reply(
+                            msg,
+                            `Location "${args[1]}" deleted successfully.`,
+                        );
+                    } else {
+                        this.conn.reply(
+                            msg,
+                            `Location "${args[1]}" not found.`,
+                        );
+                    }
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to delete location: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "list": {
+                try {
+                    let filter = {};
+                    if (args[1]) {
+                        filter = { type: args[1] };
+                    }
+
+                    const locations = args[1]
+                        ? await this.locationStore.getLocationsByType(args[1])
+                        : await this.locationStore.loadLocations();
+
+                    if (locations.length === 0) {
+                        this.conn.reply(
+                            msg,
+                            args[1]
+                                ? `No locations of type "${args[1]}" found.`
+                                : "No locations found.",
+                        );
+                        return;
+                    }
+
+                    const lines = locations
+                        .map(
+                            (loc) =>
+                                `${loc.key} (${loc.type}) - ${loc.name} ${loc.enabled ? "" : "[DISABLED]"}`,
+                        )
+                        .slice(0, 100); // Limit to 100 entries
+
+                    this.conn.SendMessage(
+                        "Whisper",
+                        `Locations${args[1] ? ` of type "${args[1]}"` : ""} (${locations.length} total):\n${lines.join("\n")}`,
+                        sender.MemberNumber,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to list locations: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "enable": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location enable <key>");
+                    return;
+                }
+
+                try {
+                    const success = await this.locationStore.setLocationEnabled(
+                        args[1],
+                        true,
+                    );
+                    if (success) {
+                        this.conn.reply(msg, `Location "${args[1]}" enabled.`);
+                    } else {
+                        this.conn.reply(
+                            msg,
+                            `Location "${args[1]}" not found.`,
+                        );
+                    }
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to enable location: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "disable": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location disable <key>");
+                    return;
+                }
+
+                try {
+                    const success = await this.locationStore.setLocationEnabled(
+                        args[1],
+                        false,
+                    );
+                    if (success) {
+                        this.conn.reply(msg, `Location "${args[1]}" disabled.`);
+                    } else {
+                        this.conn.reply(
+                            msg,
+                            `Location "${args[1]}" not found.`,
+                        );
+                    }
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to disable location: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            default:
+                this.conn.reply(
+                    msg,
+                    "Usage: !location <add|get|update|delete|list|enable|disable> [args...]",
+                );
+        }
+    };
+
     // Raw (non-CommandParser) listener solely for "!map import <data>", so
     // the base64 map bundle's original casing survives - see the comment
     // in registerCommands() for why.
     private onRawMessage = async (ev: API_Message) => {
         if (!["Whisper", "Chat"].includes(ev.message.Type)) return;
 
-        const content = ev.message.Content.replace(/^\(+/, "").replace(
-            /\)+$/,
-            "",
-        );
+        // Preserve original content, but gracefully handle BC's message wrapping
+        // BC wraps private whispers with parentheses: "(content)" becomes the Content
+        // Only strip if wrapped: starts with '(' AND ends with ')'
+        let content = ev.message.Content;
+        if (content.startsWith("(") && content.endsWith(")")) {
+            content = content.slice(1, -1);
+        }
+
         const match = /^!map import\s+(\S+)\s*$/i.exec(content);
         if (!match) return;
 

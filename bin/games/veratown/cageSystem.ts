@@ -24,6 +24,10 @@ import {
     CAGE_INFORMATION_SCREEN,
     CRATE_LOCK_PASSWORD,
 } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -38,25 +42,173 @@ export class CageSystem implements VeratownFeatureSystem {
         { character: API_Character; cageName: string }
     >();
 
-    public constructor(private conn: API_Connector) {}
+    // Maps loaded from the database. Indexed by position for fast lookup.
+    // Format: key is "X,Y" string, value is location doc + related metadata.
+    private cagesByPos = new Map<
+        string,
+        {
+            doc: VeratownLocationDoc;
+            durationMs: number;
+            durationDescription: string;
+        }
+    >();
+    private cageEntriesByPos = new Map<
+        string,
+        {
+            doc: VeratownLocationDoc;
+            durationMs: number;
+            durationDescription: string;
+        }
+    >();
+
+    public constructor(
+        private conn: API_Connector,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
+    ) {}
 
     public registerTriggers(): void {
-        const onCharacterEnterCage = guardHandler(
-            this.key,
-            this.onCharacterEnterCage,
-        );
-        this.conn.chatRoom.map.addTileTrigger(CAGE_1, onCharacterEnterCage);
-        this.conn.chatRoom.map.addTileTrigger(CAGE_2, onCharacterEnterCage);
-        this.conn.chatRoom.map.addTileTrigger(CAGE_3, onCharacterEnterCage);
+        // Fire async location loading in the background. This allows the
+        // system to be registered synchronously while the database is queried
+        // asynchronously. By the time actual triggers fire, the loading should
+        // have completed.
+        this.loadLocations();
+
+        // Register region trigger for cage information screen (doesn't depend on locations)
         this.conn.chatRoom.map.addEnterRegionTrigger(
             CAGE_INFORMATION_SCREEN,
             guardHandler(this.key, this.onCharacterViewCageInformation),
         );
+    }
 
-        for (const cage of CAGES) {
-            this.conn.chatRoom.map.addTileTrigger(
-                cage.entryPos,
-                guardHandler(this.key, this.onCharacterEnterCageEntry),
+    /**
+     * Load cage locations from the database and register tile triggers.
+     * Called asynchronously so it doesn't block system initialization.
+     */
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load cage locations from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const cages = locations.filter(
+                        (loc) => loc.type === "cage",
+                    );
+
+                    for (const cage of cages) {
+                        if (!cage.enabled) continue;
+
+                        const posKey = `${cage.x},${cage.y}`;
+                        const entryPosKey = `${cage.data?.entryX ?? cage.x},${cage.data?.entryY ?? cage.y}`;
+                        const durationMs =
+                            (cage.data?.durationMs as number) ?? 5 * 60 * 1000;
+                        const durationDescription =
+                            (cage.data?.durationDescription as string) ??
+                            "an undetermined length of time";
+
+                        this.cagesByPos.set(posKey, {
+                            doc: cage,
+                            durationMs,
+                            durationDescription,
+                        });
+                        this.cageEntriesByPos.set(entryPosKey, {
+                            doc: cage,
+                            durationMs,
+                            durationDescription,
+                        });
+                    }
+                } catch (e) {
+                    console.error(
+                        "[CageSystem] Failed to load locations from database",
+                        e,
+                    );
+                    // Fall through to use CAGES fallback below
+                }
+            }
+
+            // If no database locations loaded, fall back to hardcoded CAGES
+            if (this.cagesByPos.size === 0) {
+                for (const cage of CAGES) {
+                    const posKey = `${cage.pos.X},${cage.pos.Y}`;
+                    const entryPosKey = `${cage.entryPos.X},${cage.entryPos.Y}`;
+                    this.cagesByPos.set(posKey, {
+                        doc: {
+                            key: cage.name.toLowerCase().replace(/\s+/g, "_"),
+                            name: cage.name,
+                            type: "cage",
+                            x: cage.pos.X,
+                            y: cage.pos.Y,
+                            data: {
+                                entryX: cage.entryPos.X,
+                                entryY: cage.entryPos.Y,
+                                durationMs: cage.lockDurationMs(),
+                                durationDescription: cage.durationDescription,
+                            },
+                            enabled: true,
+                            createdAt: Date.now(),
+                            updatedAt: Date.now(),
+                        },
+                        durationMs: cage.lockDurationMs(),
+                        durationDescription: cage.durationDescription,
+                    });
+                    this.cageEntriesByPos.set(entryPosKey, {
+                        doc: {
+                            key: cage.name.toLowerCase().replace(/\s+/g, "_"),
+                            name: cage.name,
+                            type: "cage",
+                            x: cage.pos.X,
+                            y: cage.pos.Y,
+                            data: {
+                                entryX: cage.entryPos.X,
+                                entryY: cage.entryPos.Y,
+                                durationMs: cage.lockDurationMs(),
+                                durationDescription: cage.durationDescription,
+                            },
+                            enabled: true,
+                            createdAt: Date.now(),
+                            updatedAt: Date.now(),
+                        },
+                        durationMs: cage.lockDurationMs(),
+                        durationDescription: cage.durationDescription,
+                    });
+                }
+            }
+
+            // Register tile triggers for cage positions
+            const onCharacterEnterCage = guardHandler(
+                this.key,
+                this.onCharacterEnterCage,
+            );
+            for (const posKey of this.cagesByPos.keys()) {
+                const [x, y] = posKey.split(",").map(Number);
+                this.conn.chatRoom.map.addTileTrigger(
+                    { X: x, Y: y },
+                    onCharacterEnterCage,
+                );
+            }
+
+            // Register tile triggers for cage entry positions
+            const onCharacterEnterCageEntry = guardHandler(
+                this.key,
+                this.onCharacterEnterCageEntry,
+            );
+            for (const posKey of this.cageEntriesByPos.keys()) {
+                const [x, y] = posKey.split(",").map(Number);
+                this.conn.chatRoom.map.addTileTrigger(
+                    { X: x, Y: y },
+                    onCharacterEnterCageEntry,
+                );
+            }
+
+            console.log(
+                `[CageSystem] Registered ${this.cagesByPos.size} cage location(s)`,
+            );
+        } catch (e) {
+            console.error(
+                "[CageSystem] Unexpected error during initialization",
+                e,
             );
         }
     }
@@ -73,10 +225,9 @@ export class CageSystem implements VeratownFeatureSystem {
     private onCharacterEnterCageEntry = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        const cage = CAGES.find(
-            (c) => c.entryPos.X === character.X && c.entryPos.Y === character.Y,
-        );
-        const cageName = cage?.name ?? "the containment cage";
+        const posKey = `${character.X},${character.Y}`;
+        const cage = this.cageEntriesByPos.get(posKey);
+        const cageName = cage?.doc.name ?? "the containment cage";
         const durationDescription =
             cage?.durationDescription ?? "an undetermined length of time";
 
@@ -115,12 +266,10 @@ export class CageSystem implements VeratownFeatureSystem {
         await wait(100);
         if (!stillInCage()) return;
 
-        const cage = CAGES.find(
-            (c) => c.pos.X === cagePos.X && c.pos.Y === cagePos.Y,
-        );
-        const cageName = cage?.name ?? "Unknown cage";
-        const lockExpiry =
-            Date.now() + (cage?.lockDurationMs() ?? 30 * 60 * 1000);
+        const posKey = `${cagePos.X},${cagePos.Y}`;
+        const cage = this.cagesByPos.get(posKey);
+        const cageName = cage?.doc.name ?? "Unknown cage";
+        const lockExpiry = Date.now() + (cage?.durationMs ?? 30 * 60 * 1000);
 
         const crate = character.Appearance.AddItem(
             AssetGet("ItemDevices", "FuturisticCrate"),

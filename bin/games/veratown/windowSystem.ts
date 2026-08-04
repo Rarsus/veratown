@@ -16,6 +16,10 @@ import { API_Connector, API_Character } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
@@ -24,13 +28,66 @@ export class WindowSystem implements VeratownFeatureSystem {
     public readonly label = "Windows";
     public enabled = true;
 
-    public constructor(private conn: API_Connector) {}
+    private windowPositions: Array<{ X: number; Y: number }> = [];
+
+    public constructor(
+        private conn: API_Connector,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
+    ) {}
 
     public registerTriggers(): void {
-        for (const windowPos of WINDOW_LOCATIONS) {
-            this.conn.chatRoom.map.addTileTrigger(
-                windowPos,
-                guardHandler(this.key, this.onCharacterPeepThroughWindow),
+        // Fire async location loading in the background
+        this.loadLocations();
+    }
+
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load window locations from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const windows = locations.filter(
+                        (loc) => loc.type === "window",
+                    );
+                    this.windowPositions = windows.map((window) => ({
+                        X: window.x,
+                        Y: window.y,
+                    }));
+                } catch (e) {
+                    console.error(
+                        "[WindowSystem] Failed to load locations from database",
+                        e,
+                    );
+                }
+            }
+
+            // If no database locations loaded, fall back to hardcoded WINDOW_LOCATIONS
+            if (this.windowPositions.length === 0) {
+                this.windowPositions = [...WINDOW_LOCATIONS];
+            }
+
+            // Register tile triggers for window positions
+            const onCharacterPeepThroughWindow = guardHandler(
+                this.key,
+                this.onCharacterPeepThroughWindow,
+            );
+            for (const windowPos of this.windowPositions) {
+                this.conn.chatRoom.map.addTileTrigger(
+                    windowPos,
+                    onCharacterPeepThroughWindow,
+                );
+            }
+
+            console.log(
+                `[WindowSystem] Registered ${this.windowPositions.length} window location(s)`,
+            );
+        } catch (e) {
+            console.error(
+                "[WindowSystem] Unexpected error during initialization",
+                e,
             );
         }
     }

@@ -24,6 +24,10 @@ import {
     showerBroadcastPos,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -35,17 +39,80 @@ export class ShowerSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private showeringCharacters = new Set<number>();
+    private showerPositions: Array<{ X: number; Y: number }> = [];
+    private showerBotHomePos: { X: number; Y: number } =
+        SHOWER_BOT2_HOME_POSITION;
 
     public constructor(
         private conn: API_Connector,
         private conn2?: API_Connector,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
     ) {}
 
     public registerTriggers(): void {
-        for (const showerPos of SHOWER_POSITIONS) {
-            this.conn.chatRoom.map.addTileTrigger(
-                showerPos,
-                guardHandler(this.key, this.onCharacterEnterShower),
+        // Fire async location loading in the background
+        this.loadLocations();
+    }
+
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load shower locations from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const showers = locations.filter(
+                        (loc) => loc.type === "shower",
+                    );
+                    this.showerPositions = showers.map((shower) => ({
+                        X: shower.x,
+                        Y: shower.y,
+                    }));
+
+                    // Also load shower bot home position if present
+                    const showerBotHome = locations.find(
+                        (loc) => loc.type === "shower_bot_home",
+                    );
+                    if (showerBotHome) {
+                        this.showerBotHomePos = {
+                            X: showerBotHome.x,
+                            Y: showerBotHome.y,
+                        };
+                    }
+                } catch (e) {
+                    console.error(
+                        "[ShowerSystem] Failed to load locations from database",
+                        e,
+                    );
+                }
+            }
+
+            // If no database locations loaded, fall back to hardcoded SHOWER_POSITIONS
+            if (this.showerPositions.length === 0) {
+                this.showerPositions = [...SHOWER_POSITIONS];
+            }
+
+            // Register tile triggers for shower positions
+            const onCharacterEnterShower = guardHandler(
+                this.key,
+                this.onCharacterEnterShower,
+            );
+            for (const showerPos of this.showerPositions) {
+                this.conn.chatRoom.map.addTileTrigger(
+                    showerPos,
+                    onCharacterEnterShower,
+                );
+            }
+
+            console.log(
+                `[ShowerSystem] Registered ${this.showerPositions.length} shower location(s)`,
+            );
+        } catch (e) {
+            console.error(
+                "[ShowerSystem] Unexpected error during initialization",
+                e,
             );
         }
     }
@@ -56,7 +123,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
         this.showeringCharacters.add(character.MemberNumber);
 
         const isInShower = () =>
-            isCharacterAtAnyPosition(character, SHOWER_POSITIONS);
+            isCharacterAtAnyPosition(character, this.showerPositions);
 
         // The bot can't stand on the shower tile itself (the showering
         // character is already occupying it), and staying away from its
@@ -66,12 +133,12 @@ export class ShowerSystem implements VeratownFeatureSystem {
         const broadcastPos = showerBroadcastPos(character.MapPos);
 
         // Prefer a dedicated second bot (conn2) for narration, parked at
-        // SHOWER_BOT2_HOME_POSITION between lines, so the main bot never has
+        // showerBotHomePos between lines, so the main bot never has
         // to leave its post. Falls back to blipping the main bot if no
         // second bot is configured.
         const narratorConn = this.conn2 ?? this.conn;
         const homePos = this.conn2
-            ? SHOWER_BOT2_HOME_POSITION
+            ? this.showerBotHomePos
             : { ...this.conn.Player.MapPos };
 
         const sayNear = (type: "Emote" | "Chat", msg: string) => {

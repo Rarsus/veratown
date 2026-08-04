@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import { API_Connector, API_Character, AssetGet, MapRegion } from "bc-bot";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     PARK,
@@ -21,6 +21,10 @@ import {
     BUNNY_ROPE_COLOR,
     BUNNY_ROPE_CRAFT_DESCRIPTION,
 } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // Owns the bunny park: warns visitors on entry, then punishes anyone who
 // steps on one of the protected bunnies with a randomly-chosen rope
@@ -30,18 +34,90 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
     public readonly label = "Bunny park";
     public enabled = true;
 
-    public constructor(private conn: API_Connector) {}
+    private bunnyPositions: Array<{ X: number; Y: number }> = [];
+    private parkRegion: MapRegion = PARK;
+
+    public constructor(
+        private conn: API_Connector,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
+    ) {}
 
     public registerTriggers(): void {
         this.conn.chatRoom.map.addEnterRegionTrigger(
-            PARK,
+            this.parkRegion,
             guardHandler(this.key, this.onCharacterEnterPark),
         );
 
-        for (const bunnyPos of BUNNY_POSITIONS) {
-            this.conn.chatRoom.map.addTileTrigger(
-                bunnyPos,
-                guardHandler(this.key, this.onCharacterStepOnBunny),
+        // Fire async location loading in the background
+        this.loadLocations();
+    }
+
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load bunny locations from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const bunnies = locations.filter(
+                        (loc) => loc.type === "bunny",
+                    );
+                    this.bunnyPositions = bunnies.map((bunny) => ({
+                        X: bunny.x,
+                        Y: bunny.y,
+                    }));
+
+                    // Also load park region if present
+                    const park = locations.find(
+                        (loc) => loc.type === "park_region",
+                    );
+                    if (
+                        park &&
+                        park.data?.bottomRightX &&
+                        park.data?.bottomRightY
+                    ) {
+                        this.parkRegion = {
+                            TopLeft: { X: park.x, Y: park.y },
+                            BottomRight: {
+                                X: park.data.bottomRightX as number,
+                                Y: park.data.bottomRightY as number,
+                            },
+                        };
+                    }
+                } catch (e) {
+                    console.error(
+                        "[BunnyParkSystem] Failed to load locations from database",
+                        e,
+                    );
+                }
+            }
+
+            // If no database locations loaded, fall back to hardcoded BUNNY_POSITIONS
+            if (this.bunnyPositions.length === 0) {
+                this.bunnyPositions = [...BUNNY_POSITIONS];
+            }
+
+            // Register tile triggers for bunny positions
+            const onCharacterStepOnBunny = guardHandler(
+                this.key,
+                this.onCharacterStepOnBunny,
+            );
+            for (const bunnyPos of this.bunnyPositions) {
+                this.conn.chatRoom.map.addTileTrigger(
+                    bunnyPos,
+                    onCharacterStepOnBunny,
+                );
+            }
+
+            console.log(
+                `[BunnyParkSystem] Loaded ${this.bunnyPositions.length} bunny location(s) and park region`,
+            );
+        } catch (e) {
+            console.error(
+                "[BunnyParkSystem] Unexpected error during initialization",
+                e,
             );
         }
     }

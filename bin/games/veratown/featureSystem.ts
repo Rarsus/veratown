@@ -24,7 +24,8 @@ export interface VeratownFeatureSystem {
     // Human-readable name shown in "/bot feature list" output.
     readonly label: string;
     // Registers this system's map/message triggers. Called once during
-    // Veratown startup.
+    // Veratown startup. May be called asynchronously by the implementing
+    // class (e.g., using void Promises for background loading).
     registerTriggers(): void;
     // Whether this feature is currently active. Handlers should check this
     // and no-op (optionally telling the character it's disabled) when

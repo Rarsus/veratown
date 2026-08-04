@@ -30,6 +30,10 @@ import {
     lockInForfeitKennel,
 } from "./casino/forfeits";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratown/veratownLocationStore";
 
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
@@ -86,7 +90,7 @@ export class Dare implements VeratownFeatureSystem {
     // and !pick simply reply that the feature is off instead of acting.
     public enabled = true;
 
-    public static description_intro = `Dares
+    public static description_intro = `(Dares
  =====
 
 A structured bondage/strip dare game for a group, played over 10 rounds
@@ -99,14 +103,14 @@ Game Overview
 2. Once at least 2 people are in the lobby, anyone can start a game with
    !dare start. This locks in a random turn order for everyone currently
    in the lobby and begins round 1 of 10 - the lobby is then empty again,
-   so new joiners form the next, separate game (up to 3 games at once).
+   so new joiners form the next, separate game - up to 3 games at once.
 3. Once a game has started, nobody else can join it - they'll be told to
    join the lobby instead and start their own game.
 4. On your turn, !dare draw draws a random card. Strip, bondage and reward
    dares are applied automatically - to yourself, or to a random other
    participant in your game if the dare calls for it.
 5. Don't want to do your dare? !dare pass - you'll be locked into the
-   pillory until your next draw (and it counts against you). Pass again
+   pillory until your next draw: and it counts against you. Pass again
    and you're pilloried for 4 hours with a sign reading "Evades / Dares"!
 6. Drawn a bondage dare? You get a short window to !dare forfeit instead -
    skip the specific bondage and get locked into a heavy kennel instead.
@@ -121,22 +125,19 @@ Game Overview
 10. If a body part is already bound when a new bondage dare targets it, the
     existing lock's timer is extended instead of piling on more gear.
 11. Not responding on your turn? You'll get a reminder after 30 seconds,
-    and after 60 seconds the bot passes on your behalf (with the usual
-    pillory consequence, escalating on a second miss).
+    and after 60 seconds the bot passes on your behalf, with the usual
+    pillory consequence, escalating on a second miss.
 12. Disconnect from the room and you get a 60 second grace period to
     return before being purged from the lobby/game entirely. Game state
     survives a bot restart too.
-13. Errors, status queries and list output are always whispered to you
-    directly - room-wide game activity (joins, turns, strip/bondage
-    effects, drawn dares) stays publicly visible as before.
 `;
 
-    public static description_commands = `Commands
+    public static description_commands = `(Commands
 =====
 !dare join              - Join the lobby, waiting for a game to start.
 !dare leave             - Leave the lobby/game you're currently in.
 !dare start             - Start a fresh 10-round game with everyone in the
-                          lobby (up to 3 games can run at once).
+                          lobby.
 !dare turn              - Show whose turn it currently is in your game.
 !dare draw              - Draw a dare card - on your turn, if playing.
 !dare pass              - Chicken out of your last drawn dare - forfeit.
@@ -149,10 +150,9 @@ Game Overview
 !dare reset             - [admin only] Reset the deck / mark all unused.
 !dare validate          - [admin only] Check/repair the dare database.
 !dare balancerewards    - [admin only] Top up reward dares to ~25% of deck.
-!dare help              - Show this message.
-!pick                   - Randomly pick a room member, not you, not the bot.
+!dare help              - Show this message.)
 `;
-    public static description_rules = `Rules
+    public static description_rules = `(Rules
 =====
 1. !dare join before you start, so you can be picked as a dare's target and
    take your turn in a structured game.
@@ -174,7 +174,7 @@ Game Overview
    Disconnecting gives you 60 seconds to return before you're purged.
    Last one standing in a game wins by default.
 10. Up to 3 separate dare games can run at once; once a game starts,
-    nobody new can join it - they join the lobby and start their own.
+    nobody new can join it - they join the lobby and start their own.)
 `;
     public static description =
         Dare.description_intro +
@@ -248,6 +248,7 @@ Game Overview
     private disconnectedAt = new Map<number, number>();
 
     private region?: MapRegion;
+    private dareRegion?: MapRegion;
 
     public constructor(
         private conn: API_Connector,
@@ -255,6 +256,8 @@ Game Overview
         commandParser?: CommandParser,
         private casinoStore?: CasinoStore,
         config?: DareConfig,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
     ) {
         this.commandParser =
             commandParser ?? new CommandParser(conn, config?.region);
@@ -288,6 +291,48 @@ Game Overview
             () => this.enforceDressingBlocks(),
             STRIP_ENFORCE_INTERVAL_MS,
         );
+
+        // Fire async location loading in the background
+        this.loadLocations();
+    }
+
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load dare region from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const dareRegionDoc = locations.find(
+                        (loc) => loc.type === "dare_region",
+                    );
+                    if (
+                        dareRegionDoc &&
+                        dareRegionDoc.data?.bottomRightX &&
+                        dareRegionDoc.data?.bottomRightY
+                    ) {
+                        this.dareRegion = {
+                            TopLeft: { X: dareRegionDoc.x, Y: dareRegionDoc.y },
+                            BottomRight: {
+                                X: dareRegionDoc.data.bottomRightX as number,
+                                Y: dareRegionDoc.data.bottomRightY as number,
+                            },
+                        };
+                    }
+                } catch (e) {
+                    console.error(
+                        "[dare] Failed to load dare_region from database",
+                        e,
+                    );
+                }
+            }
+            console.log(
+                `[dare] Loaded dare region: ${this.dareRegion ? "from database" : "using config fallback or none"}`,
+            );
+        } catch (e) {
+            console.error("[dare] Unexpected error during location loading", e);
+        }
     }
 
     private whisper = (memberNumber: number, text: string): void => {
@@ -1664,12 +1709,26 @@ Game Overview
                 const forfeitKeys = dare.forfeitKeys ?? [];
                 let appliedCount = 0;
                 for (const forfeitKey of forfeitKeys) {
-                    const result = applyForfeitForDare(
-                        target,
-                        this.conn.Player.MemberNumber,
-                        forfeitKey,
-                        dare.durationMs,
-                    );
+                    // A single forfeitKey throwing (e.g. a forfeit's items()
+                    // choking on a particular character's body/appearance)
+                    // used to abort this whole loop silently, so the rest of
+                    // the dare's bondage never got applied either. Catch per
+                    // key instead so one bad item can't sink the others.
+                    let result;
+                    try {
+                        result = applyForfeitForDare(
+                            target,
+                            this.conn.Player.MemberNumber,
+                            forfeitKey,
+                            dare.durationMs,
+                        );
+                    } catch (e) {
+                        console.error(
+                            `[dare] Failed to apply forfeitKey "${forfeitKey}" to ${target.MemberNumber}`,
+                            e,
+                        );
+                        continue;
+                    }
                     if (!result) continue;
                     this.conn.SendMessage(
                         "Emote",

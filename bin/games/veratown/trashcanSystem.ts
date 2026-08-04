@@ -20,6 +20,10 @@ import {
     TRASHCAN_FOUND_ITEMS,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 // The trashcan easter egg: searching the trash (an "Emote" containing both
 // "search" and "trash") while standing at one of the trashcan tiles finds a
@@ -31,10 +35,57 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     public readonly label = "Trashcan search";
     public enabled = true;
 
-    public constructor(private conn: API_Connector) {}
+    private trashcanPositions: Array<{ X: number; Y: number }> = [];
+
+    public constructor(
+        private conn: API_Connector,
+        private locationStore?: VeratownLocationStore,
+        private fallbackLocations?: VeratownLocationDoc[],
+    ) {}
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));
+        // Fire async location loading in the background
+        this.loadLocations();
+    }
+
+    private async loadLocations(): Promise<void> {
+        try {
+            // Load trashcan locations from database (or use fallback)
+            if (this.locationStore && this.fallbackLocations) {
+                try {
+                    const locations = await this.locationStore.loadLocations(
+                        this.fallbackLocations,
+                    );
+                    const trashcans = locations.filter(
+                        (loc) => loc.type === "trashcan",
+                    );
+                    this.trashcanPositions = trashcans.map((trashcan) => ({
+                        X: trashcan.x,
+                        Y: trashcan.y,
+                    }));
+                } catch (e) {
+                    console.error(
+                        "[TrashcanSystem] Failed to load locations from database",
+                        e,
+                    );
+                }
+            }
+
+            // If no database locations loaded, fall back to hardcoded TRASHCAN_SEARCH_LOCATIONS
+            if (this.trashcanPositions.length === 0) {
+                this.trashcanPositions = [...TRASHCAN_SEARCH_LOCATIONS];
+            }
+
+            console.log(
+                `[TrashcanSystem] Loaded ${this.trashcanPositions.length} trashcan location(s)`,
+            );
+        } catch (e) {
+            console.error(
+                "[TrashcanSystem] Unexpected error during initialization",
+                e,
+            );
+        }
     }
 
     private onMessage = async (msg: API_Message) => {
@@ -44,7 +95,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
         const content = msg.message.Content.toLowerCase();
         if (!content.includes("search") || !content.includes("trash")) return;
 
-        if (!isCharacterAtAnyPosition(msg.sender, TRASHCAN_SEARCH_LOCATIONS))
+        if (!isCharacterAtAnyPosition(msg.sender, this.trashcanPositions))
             return;
 
         await this.onCharacterSearchTrash(msg.sender);

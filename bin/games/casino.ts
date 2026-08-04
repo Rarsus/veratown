@@ -38,6 +38,10 @@ import {
 import { Cocktail, COCKTAILS } from "./casino/cocktails";
 import { Bet, Game } from "./casino/game";
 import { BlackjackGame } from "./casino/blackjack";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratown/veratownLocationStore";
 
 const FREE_CHIPS = 20;
 
@@ -101,6 +105,10 @@ export interface CasinoConfig {
     // within this map region, and entering characters are told that
     // gambling is available here and given a quick rules explanation.
     region?: MapRegion;
+
+    // Location store and fallback config for database-backed region loading
+    locationStore?: VeratownLocationStore;
+    fallbackLocations?: VeratownLocationDoc[];
 }
 
 export class Casino {
@@ -110,6 +118,7 @@ export class Casino {
     private cocktailOfTheDay: Cocktail | undefined;
     public multiplier = 1;
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
+    private gameRegion?: MapRegion;
 
     public constructor(
         private conn: API_Connector,
@@ -128,6 +137,15 @@ export class Casino {
                 config.region,
                 this.onCharacterEnterCasinoRegion,
             );
+        }
+
+        // Load game region from database if location store is available
+        if (
+            config?.locationStore &&
+            config?.fallbackLocations &&
+            !config?.region
+        ) {
+            this.loadGameRegion(config.locationStore, config.fallbackLocations);
         }
 
         if (config?.cocktail) {
@@ -185,6 +203,53 @@ export class Casino {
             );
         }
     };
+
+    private async loadGameRegion(
+        locationStore: VeratownLocationStore,
+        fallbackLocations: VeratownLocationDoc[],
+    ): Promise<void> {
+        try {
+            // Load game region from database (or use fallback)
+            try {
+                const locations =
+                    await locationStore.loadLocations(fallbackLocations);
+                const gameRegionDoc = locations.find(
+                    (loc) => loc.type === "game_region",
+                );
+                if (
+                    gameRegionDoc &&
+                    gameRegionDoc.data?.bottomRightX &&
+                    gameRegionDoc.data?.bottomRightY
+                ) {
+                    this.gameRegion = {
+                        TopLeft: { X: gameRegionDoc.x, Y: gameRegionDoc.y },
+                        BottomRight: {
+                            X: gameRegionDoc.data.bottomRightX as number,
+                            Y: gameRegionDoc.data.bottomRightY as number,
+                        },
+                    };
+                    // Register enter trigger with loaded region
+                    this.conn.chatRoom.map.addEnterRegionTrigger(
+                        this.gameRegion,
+                        this.onCharacterEnterCasinoRegion,
+                    );
+                }
+            } catch (e) {
+                console.error(
+                    "[casino] Failed to load game_region from database",
+                    e,
+                );
+            }
+            console.log(
+                `[casino] Loaded game region: ${this.gameRegion ? "from database" : "using config or none"}`,
+            );
+        } catch (e) {
+            console.error(
+                "[casino] Unexpected error during location loading",
+                e,
+            );
+        }
+    }
 
     private onCharacterEnterCasinoRegion = async (character: API_Character) => {
         // this.game.HELPMESSAGE already includes the commands list (see

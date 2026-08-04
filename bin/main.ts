@@ -24,10 +24,12 @@ import {
     Veratown,
     GAME_LOCATION,
     GAME_MISTRESS_POSITION,
+    VERATOWN_LOCATIONS_FALLBACK,
 } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { Casino } from "./games/casino";
 import { CasinoStore } from "./games/casino/casinostore";
+import { VeratownLocationStore } from "./games/veratown/veratownLocationStore";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -236,10 +238,15 @@ export async function startBot(): Promise<RopeyBot> {
                         GAME_MISTRESS_POSITION.Y,
                     );
 
+                    const poolRouletteLocationStore = new VeratownLocationStore(
+                        db,
+                    );
                     new Casino(poolRouletteConn, db, {
                         ...config.casino,
                         game: config.casino?.game ?? "roulette",
                         region: GAME_LOCATION,
+                        locationStore: poolRouletteLocationStore,
+                        fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,
                     });
                 }
             } else {

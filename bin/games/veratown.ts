@@ -34,6 +34,7 @@ import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { VeratownFeatureSystem } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
+import { VeratownLocationStore } from "./veratown/veratownLocationStore";
 import { VeratownAdminCommands } from "./veratown/adminCommands";
 import {
     RECEPTIONIST_POSITION,
@@ -44,32 +45,65 @@ import {
     MAP,
     SHOWER_BOT2_HOME_POSITION,
     PET_EARS,
+    VERATOWN_LOCATIONS_FALLBACK,
 } from "./veratown/veratownConfig";
 
 // Re-exported for callers importing map layout/items from this module (kept
 // at its original path so bin/main.ts and bin/games/casino/forfeits.ts
 // don't need to change their imports as part of this file's internal split
 // into bin/games/veratown/*).
-export { GAME_LOCATION, GAME_MISTRESS_POSITION, PET_EARS };
+export {
+    GAME_LOCATION,
+    GAME_MISTRESS_POSITION,
+    PET_EARS,
+    VERATOWN_LOCATIONS_FALLBACK,
+};
 
 export class Veratown {
     public static description = [
-        "This is an example to show how to use the ropeybot API to create a simple game.",
-        "Commands:",
+        "=== WELCOME TO VERATOWN ===",
         "",
-        "/bot freeandleave - Immediately removes any restraints added and kicks you from the room",
-        "/bot strip <name> - Removes all equipped clothing from the named character (admin only)",
-        "/bot changelog - Shows a summary of recent functional changes to the map",
-        "/bot feature <list|enable|disable> <name> - Show, or (admin only) enable/disable, individual room features (cage, kennel, shower, bed, bunnyPark, window, trashcan, dare)",
-        "/bot map update - Saves the room's current layout to the database as the new default (admin only)",
-        "/bot map reset - Resets the room layout to the built-in default map, in the database and live (admin only)",
-        "/bot map export - Shows the current layout as a portable string, for backup or to move it elsewhere (admin only)",
-        '!map import <data> - Loads a layout previously produced by "/bot map export", live and as the new default (admin only, must be sent as its own message, not via /bot)',
-        "/bot maintenance - Warns everyone in the room, waits one minute, then frees and removes everyone present (bots excluded) and locks the room to admins only (admin only)",
-        "/bot dare <join|leave|start|turn|draw|pass|forfeit|players|remove|stop|add|reset|list|help> - Join/leave, start/check turn, draw, pass (pillory!), forfeit into a kennel, view joined players, admin-remove players, admin-stop a running game, add, reset or (admin only) list dare cards (if configured)",
-        "/bot pick - Randomly selects a room member other than the bot or yourself",
-        "Code at https://github.com/FriendsOfBC/ropeybot, modified map code at <tbd>",
-        ,
+        "A dynamic, interactive roleplay environment with games, challenges, and surprises.",
+        "",
+        "PLAYER COMMANDS:",
+        "/bot help - Display this help message",
+        "/bot freeandleave - Remove all restraints and exit the room",
+        "/bot changelog - View recent map changes",
+        "/bot feature list - See available room features (cage, kennel, shower, bed, bunnyPark, window, trashcan, dare, casino)",
+        "",
+        "DARE GAME (if available):",
+        "/bot dare join - Enter the dare game lobby",
+        "/bot dare leave - Exit the dare game",
+        "/bot dare start - Start a new dare round",
+        "/bot dare help - Full dare game rules and commands",
+        "",
+        "CASINO (if available):",
+        "/bot roulette [bet] - Play roulette (see /bot help for options)",
+        "/bot blackjack [bet] - Play blackjack",
+        "/bot chips - Check your current chip balance",
+        "",
+        "UTILITY:",
+        "/bot pick - Bot randomly selects another player (neutral choice)",
+        "",
+        "ADMIN COMMANDS (admin only):",
+        "/bot strip <name> - Remove all clothing from a player",
+        "/bot feature <enable|disable> <name> - Toggle room features",
+        "/bot map update - Save current layout to database",
+        "/bot map reset - Restore default map layout",
+        "/bot map export - Export current layout for backup",
+        "!map import <data> - Import previously exported layout (send as standalone message)",
+        "/bot maintenance - Begin 1-minute shutdown sequence",
+        "/bot adminhelp - View all admin commands",
+        "/bot location - Manage location database (add, get, update, delete, list, enable, disable)",
+        "",
+        "⚠️  WARNINGS:",
+        "• BUNNY PARK: Players sent to the bunny park will be transformed into bunnies with limited commands",
+        "• BONDAGE AREA: The cages and storage areas are active restraint zones - entering may result in confinement",
+        "• DARE GAME: High-risk game with potentially embarrassing forfeits",
+        "• CASINO: Chips earned/lost in games - forfeits may apply to losers",
+        "",
+        "For setup and customization: https://github.com/Rarsus/ropeybot",
+        "Modified map code: https://github.com/Rarsus/ropeybot/tree/main/bin/games/veratown",
     ].join("\n");
 
     private commandParser: CommandParser;
@@ -95,6 +129,10 @@ export class Veratown {
     // and can't be saved/persisted across restarts.
     private mapStore?: VeratownMapStore;
 
+    // Stores location data (cages, keypads, monitors, etc.) in the database,
+    // with config fallback. Only set when mongo_uri/mongo_db are configured.
+    private locationStore?: VeratownLocationStore;
+
     public constructor(
         private conn: API_Connector,
         private conn2?: API_Connector,
@@ -109,6 +147,7 @@ export class Veratown {
             const effectiveDareConfig: DareConfig | undefined =
                 dareConfig ??
                 (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
+            this.locationStore = new VeratownLocationStore(db);
             this.dare = this.initFeature(
                 () =>
                     new Dare(
@@ -117,6 +156,8 @@ export class Veratown {
                         this.commandParser,
                         new CasinoStore(db),
                         effectiveDareConfig,
+                        this.locationStore,
+                        VERATOWN_LOCATIONS_FALLBACK,
                     ),
             );
             this.mapStore = new VeratownMapStore(db);
@@ -132,24 +173,69 @@ export class Veratown {
         // Each system is constructed and registered independently: if one
         // fails (eg. a bug in a single feature), the others are unaffected
         // and Veratown still starts up with everything else working.
-        this.cageSystem = this.initFeature(() => new CageSystem(this.conn));
-        this.kennelSystem = this.initFeature(() => new KennelSystem(this.conn));
+        this.cageSystem = this.initFeature(
+            () =>
+                new CageSystem(
+                    this.conn,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
+        );
+        this.kennelSystem = this.initFeature(
+            () =>
+                new KennelSystem(
+                    this.conn,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
+        );
         this.showerSystem = this.initFeature(
-            () => new ShowerSystem(this.conn, this.conn2),
+            () =>
+                new ShowerSystem(
+                    this.conn,
+                    this.conn2,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
         );
-        this.bedSystem = this.initFeature(() => new BedSystem(this.conn));
+        this.bedSystem = this.initFeature(
+            () =>
+                new BedSystem(
+                    this.conn,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
+        );
         this.bunnyParkSystem = this.initFeature(
-            () => new BunnyParkSystem(this.conn),
+            () =>
+                new BunnyParkSystem(
+                    this.conn,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
         );
-        this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
+        this.windowSystem = this.initFeature(
+            () =>
+                new WindowSystem(
+                    this.conn,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
+        );
         this.trashcanSystem = this.initFeature(
-            () => new TrashcanSystem(this.conn),
+            () =>
+                new TrashcanSystem(
+                    this.conn,
+                    this.locationStore,
+                    VERATOWN_LOCATIONS_FALLBACK,
+                ),
         );
 
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
         // are updated to match the new map layout.
 
+        this.commandParser.register("help", this.onCommandHelp);
         this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
         this.commandParser.register("changelog", this.onCommandChangelog);
 
@@ -162,6 +248,7 @@ export class Veratown {
             this.commandParser,
             this.features,
             this.mapStore,
+            this.locationStore,
             (character) => this.freeCharacter(character),
             this.conn2,
         ).registerCommands();
@@ -193,6 +280,21 @@ export class Veratown {
     }
 
     public async init(): Promise<void> {
+        // Load location data from database (or seed from config fallback)
+        if (this.locationStore) {
+            try {
+                await this.locationStore.loadLocations(
+                    VERATOWN_LOCATIONS_FALLBACK,
+                );
+                console.log("[Veratown] Location store initialized and ready");
+            } catch (e) {
+                console.error(
+                    "[Veratown] Failed to initialize location store",
+                    e,
+                );
+            }
+        }
+
         await this.setupRoom();
         await this.setupCharacter();
     }
@@ -252,6 +354,14 @@ export class Veratown {
             msg,
             `Recent changes to the map:\n${CHANGELOG.map((entry) => `- ${entry}`).join("\n")}`,
         );
+    };
+
+    private onCommandHelp = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        this.conn.reply(msg, Veratown.description);
     };
 
     private freeCharacter(character: API_Character): void {
