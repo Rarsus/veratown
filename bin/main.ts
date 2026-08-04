@@ -209,22 +209,15 @@ export async function startBot(): Promise<RopeyBot> {
                     "No user2/password2 configured; Veratown will narrate the shower using the main bot instead of a second bot.",
                 );
             }
-            const veratownGame = new Veratown(
-                connector,
-                veratownConn2,
-                db,
-                config.dare,
-            );
-            await veratownGame.init();
-            connector.setBotDescription(Veratown.description);
 
+            let poolRouletteConn: API_Connector | undefined;
             if (config.user3 && config.password3) {
                 if (!db) {
                     console.log(
-                        "mongo_uri/mongo_db must be configured to run the pool roulette table; skipping.",
+                        "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
                     );
                 } else {
-                    const poolRouletteConn = new API_Connector(
+                    poolRouletteConn = new API_Connector(
                         serverUrl,
                         config.user3,
                         config.password3,
@@ -237,23 +230,23 @@ export async function startBot(): Promise<RopeyBot> {
                         GAME_MISTRESS_POSITION.X,
                         GAME_MISTRESS_POSITION.Y,
                     );
-
-                    const poolRouletteLocationStore = new VeratownLocationStore(
-                        db,
-                    );
-                    new Casino(poolRouletteConn, db, {
-                        ...config.casino,
-                        game: config.casino?.game ?? "roulette",
-                        region: GAME_LOCATION,
-                        locationStore: poolRouletteLocationStore,
-                        fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,
-                    });
                 }
             } else {
                 console.log(
-                    "No user3/password3 configured; skipping the pool roulette table.",
+                    "No user3/password3 configured; Casino will be unavailable.",
                 );
             }
+
+            const veratownGame = new Veratown(
+                connector,
+                veratownConn2,
+                db,
+                config.dare,
+                poolRouletteConn,
+                config.casino,
+            );
+            await veratownGame.init();
+            connector.setBotDescription(Veratown.description);
             break;
         default:
             console.log("No such game " + config.game);

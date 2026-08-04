@@ -24,6 +24,8 @@ import { wait } from "../hub/utils";
 import { Dare } from "./dare";
 import { DareConfig } from "./dare";
 import { DareStore } from "./dareStore";
+import { Casino } from "./casino";
+import { CasinoConfig } from "./casino";
 import { CasinoStore } from "./casino/casinostore";
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
@@ -74,13 +76,18 @@ export class Veratown {
         "/bot help - Display this help message",
         "/bot freeandleave - Remove all restraints and exit the room",
         "/bot changelog - View recent map changes",
-        "/bot feature list - See available room features (cage, kennel, shower, bed, bunnyPark, window, trashcan, dare)",
+        "/bot feature list - See available room features (cage, kennel, shower, bed, bunnyPark, window, trashcan, dare, casino)",
         "",
         "DARE GAME (if available):",
         "/bot dare join - Enter the dare game lobby",
         "/bot dare leave - Exit the dare game",
         "/bot dare start - Start a new dare round",
         "/bot dare help - Full dare game rules and commands",
+        "",
+        "CASINO (if available):",
+        "/bot roulette [bet] - Play roulette (see /bot help for options)",
+        "/bot blackjack [bet] - Play blackjack",
+        "/bot chips - Check your current chip balance",
         "",
         "UTILITY:",
         "/bot pick - Bot randomly selects another player (neutral choice)",
@@ -100,6 +107,7 @@ export class Veratown {
         "• BUNNY PARK: Players sent to the bunny park will be transformed into bunnies with limited commands",
         "• BONDAGE AREA: The cages and storage areas are active restraint zones - entering may result in confinement",
         "• DARE GAME: High-risk game with potentially embarrassing forfeits",
+        "• CASINO: Chips earned/lost in games - forfeits may apply to losers",
         "",
         "For setup and customization: https://github.com/Rarsus/ropeybot",
         "Modified map code: https://github.com/Rarsus/ropeybot/tree/main/bin/games/veratown",
@@ -109,6 +117,7 @@ export class Veratown {
     private regionManager: RegionManager;
 
     private dare?: Dare;
+    private casino?: Casino;
 
     private cageSystem?: CageSystem;
     private kennelSystem?: KennelSystem;
@@ -138,6 +147,8 @@ export class Veratown {
         private conn2?: API_Connector,
         db?: Db,
         dareConfig?: DareConfig,
+        private conn3?: API_Connector,
+        private casinoConfig?: CasinoConfig,
     ) {
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
@@ -231,6 +242,25 @@ export class Veratown {
                     VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
+
+        // Casino feature uses a separate bot connection (user3) to avoid
+        // modifying the main bot's appearance with casino items
+        if (this.conn3 && db) {
+            this.casino = this.initFeature(
+                () =>
+                    new Casino(
+                        this.conn3!,
+                        db,
+                        {
+                            ...this.casinoConfig,
+                            region: GAME_LOCATION,
+                            locationStore: this.locationStore,
+                            fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,
+                        },
+                        this.commandParser,
+                    ),
+            );
+        }
 
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
