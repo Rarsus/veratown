@@ -257,7 +257,7 @@ export class Veratown {
                             locationStore: this.locationStore,
                             fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,
                         },
-                        this.commandParser,
+                        // Don't pass commandParser - let Casino create its own bound to conn3
                     ),
             );
         }
