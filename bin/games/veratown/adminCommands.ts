@@ -28,6 +28,7 @@ import {
     VeratownLocationStore,
     VeratownLocationDoc,
 } from "./veratownLocationStore";
+import { RegionManager, VeratownRegion } from "./regionManager";
 
 // Owns every admin-only Veratown command: "strip", "feature
 // enable/disable", "map update/reset/import/export", and "maintenance".
@@ -46,6 +47,7 @@ export class VeratownAdminCommands {
         private features: VeratownFeatureSystem[],
         private mapStore?: VeratownMapStore,
         private locationStore?: VeratownLocationStore,
+        private regionManager?: RegionManager,
         // Delegates to Veratown's private freeCharacter() (strips bind
         // items and frees from any cage), so the maintenance shutdown frees
         // people the same way "/bot freeandleave" does.
@@ -680,15 +682,281 @@ export class VeratownAdminCommands {
                 break;
             }
 
+            case "region": {
+                if (!this.regionManager) {
+                    this.conn.reply(msg, "Region manager is not available.");
+                    return;
+                }
+                await this.onCommandLocationRegion(sender, msg, args.slice(1));
+                break;
+            }
+
             default:
                 this.conn.reply(
                     msg,
-                    "Usage: !location <add|get|update|delete|list|enable|disable> [args...]",
+                    "Usage: !location <add|get|update|delete|list|enable|disable|region> [args...]",
                 );
         }
     };
 
-    // Raw (non-CommandParser) listener solely for "!map import <data>", so
+    private onCommandLocationRegion = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        const subcommand = args[0]?.toLowerCase();
+
+        switch (subcommand) {
+            case "add": {
+                if (args.length < 6) {
+                    this.conn.reply(
+                        msg,
+                        "Usage: !location region add <key> <TopLeftX> <TopLeftY> <BottomRightX> <BottomRightY> [type] [description]",
+                    );
+                    return;
+                }
+
+                const key = args[1];
+                const tlX = parseFloat(args[2]);
+                const tlY = parseFloat(args[3]);
+                const brX = parseFloat(args[4]);
+                const brY = parseFloat(args[5]);
+                const regionType = (args[6] as any) || "custom";
+                const description = args.slice(7).join(" ") || undefined;
+
+                if (isNaN(tlX) || isNaN(tlY) || isNaN(brX) || isNaN(brY)) {
+                    this.conn.reply(msg, "All coordinates must be valid numbers.");
+                    return;
+                }
+
+                const region: VeratownRegion = {
+                    key,
+                    name: `Region: ${key}`,
+                    type: "region",
+                    regionType: regionType as any,
+                    region: {
+                        TopLeft: { X: tlX, Y: tlY },
+                        BottomRight: { X: brX, Y: brY },
+                    },
+                    label: `Region: ${key}`,
+                    description,
+                    enabled: true,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+
+                try {
+                    await this.regionManager!.updateRegion(this.locationStore!, region);
+                    this.conn.reply(
+                        msg,
+                        `Region "${key}" added successfully.`,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to add region: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "get": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location region get <key>");
+                    return;
+                }
+
+                try {
+                    const region = this.regionManager!.getRegion(args[1]);
+                    if (!region) {
+                        this.conn.reply(
+                            msg,
+                            `Region "${args[1]}" not found.`,
+                        );
+                        return;
+                    }
+
+                    const details = [
+                        `Key: ${region.key}`,
+                        `Name: ${region.name}`,
+                        `Type: Region (${region.regionType})`,
+                        `Bounds: TopLeft(${region.region.TopLeft.X}, ${region.region.TopLeft.Y}) to BottomRight(${region.region.BottomRight.X}, ${region.region.BottomRight.Y})`,
+                        `Label: ${region.label || "N/A"}`,
+                        `Enabled: ${region.enabled ? "Yes" : "No"}`,
+                        `Created: ${new Date(region.createdAt).toISOString()}`,
+                        `Updated: ${new Date(region.updatedAt).toISOString()}`,
+                    ];
+
+                    if (region.description) {
+                        details.push(`Description: ${region.description}`);
+                    }
+
+                    this.conn.SendMessage(
+                        "Whisper",
+                        details.join("\n"),
+                        sender.MemberNumber,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to get region: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "update": {
+                if (args.length < 6) {
+                    this.conn.reply(
+                        msg,
+                        "Usage: !location region update <key> <TopLeftX> <TopLeftY> <BottomRightX> <BottomRightY>",
+                    );
+                    return;
+                }
+
+                const key = args[1];
+                const tlX = parseFloat(args[2]);
+                const tlY = parseFloat(args[3]);
+                const brX = parseFloat(args[4]);
+                const brY = parseFloat(args[5]);
+
+                if (isNaN(tlX) || isNaN(tlY) || isNaN(brX) || isNaN(brY)) {
+                    this.conn.reply(msg, "All coordinates must be valid numbers.");
+                    return;
+                }
+
+                try {
+                    const existing = this.regionManager!.getRegion(key);
+                    if (!existing) {
+                        this.conn.reply(msg, `Region "${key}" not found.`);
+                        return;
+                    }
+
+                    const updated: VeratownRegion = {
+                        ...existing,
+                        region: {
+                            TopLeft: { X: tlX, Y: tlY },
+                            BottomRight: { X: brX, Y: brY },
+                        },
+                        updatedAt: Date.now(),
+                    };
+
+                    await this.regionManager!.updateRegion(this.locationStore!, updated);
+                    this.conn.reply(
+                        msg,
+                        `Region "${key}" updated successfully.`,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to update region: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "delete": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location region delete <key>");
+                    return;
+                }
+
+                try {
+                    await this.regionManager!.deleteRegion(this.locationStore!, args[1]);
+                    this.conn.reply(
+                        msg,
+                        `Region "${args[1]}" deleted successfully.`,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to delete region: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "list": {
+                try {
+                    const regions = this.regionManager!.getAllRegions();
+
+                    if (regions.length === 0) {
+                        this.conn.reply(msg, "No regions found.");
+                        return;
+                    }
+
+                    let typeFilter = args[1];
+                    let filtered = regions;
+                    if (typeFilter) {
+                        filtered = regions.filter(r => r.regionType === typeFilter);
+                        if (filtered.length === 0) {
+                            this.conn.reply(
+                                msg,
+                                `No regions of type "${typeFilter}" found.`,
+                            );
+                            return;
+                        }
+                    }
+
+                    const lines = filtered
+                        .map(
+                            (r) =>
+                                `${r.key} (${r.regionType}) - ${r.label || r.name} ${r.enabled ? "" : "[DISABLED]"}`,
+                        )
+                        .slice(0, 100);
+
+                    this.conn.SendMessage(
+                        "Whisper",
+                        `Regions${typeFilter ? ` of type "${typeFilter}"` : ""} (${filtered.length} total):\n${lines.join("\n")}`,
+                        sender.MemberNumber,
+                    );
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to list regions: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            case "validate": {
+                try {
+                    const staticRegions = new Map([
+                        ["game_region", this.regionManager!.getRegion("game_region")],
+                        ["dare_region", this.regionManager!.getRegion("dare_region")],
+                    ]);
+
+                    // Filter out undefined values
+                    const validStaticRegions = new Map(
+                        Array.from(staticRegions).filter(([_, v]) => v !== undefined)
+                    ) as Map<string, VeratownRegion>;
+
+                    const warnings = this.regionManager!.validateRegions(validStaticRegions);
+                    if (warnings.length === 0) {
+                        this.conn.reply(msg, "All regions are consistent with static definitions.");
+                    } else {
+                        this.conn.SendMessage(
+                            "Whisper",
+                            `Region validation found ${warnings.length} issue(s):\n${warnings.join("\n")}`,
+                            sender.MemberNumber,
+                        );
+                    }
+                } catch (e: any) {
+                    this.conn.reply(
+                        msg,
+                        `Failed to validate regions: ${e.message || "Unknown error"}`,
+                    );
+                }
+                break;
+            }
+
+            default:
+                this.conn.reply(
+                    msg,
+                    "Usage: !location region <add|get|update|delete|list|validate> [args...]",
+                );
+        }
+    };
     // the base64 map bundle's original casing survives - see the comment
     // in registerCommands() for why.
     private onRawMessage = async (ev: API_Message) => {

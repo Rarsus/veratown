@@ -38,6 +38,7 @@ import { VeratownFeatureSystem } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
 import { VeratownLocationStore } from "./veratown/veratownLocationStore";
 import { VeratownAdminCommands } from "./veratown/adminCommands";
+import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -48,6 +49,7 @@ import {
     SHOWER_BOT2_HOME_POSITION,
     PET_EARS,
     VERATOWN_LOCATIONS_FALLBACK,
+    FEATURE_REGIONS_STATIC,
 } from "./veratown/veratownConfig";
 
 // Re-exported for callers importing map layout/items from this module (kept
@@ -60,6 +62,9 @@ export {
     PET_EARS,
     VERATOWN_LOCATIONS_FALLBACK,
 };
+
+export type { VeratownRegion } from "./veratown/regionManager";
+export { RegionManager } from "./veratown/regionManager";
 
 export class Veratown {
     public static description = [
@@ -109,6 +114,7 @@ export class Veratown {
     ].join("\n");
 
     private commandParser: CommandParser;
+    private regionManager: RegionManager;
 
     private dare?: Dare;
     private casino?: Casino;
@@ -146,6 +152,7 @@ export class Veratown {
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
         ]);
+        this.regionManager = new RegionManager();
 
         if (db) {
             const effectiveDareConfig: DareConfig | undefined =
@@ -268,6 +275,7 @@ export class Veratown {
             this.features,
             this.mapStore,
             this.locationStore,
+            this.regionManager,
             (character) => this.freeCharacter(character),
             this.conn2,
         ).registerCommands();
@@ -306,6 +314,18 @@ export class Veratown {
                     VERATOWN_LOCATIONS_FALLBACK,
                 );
                 console.log("[Veratown] Location store initialized and ready");
+                
+                // Load regions from database and add static fallbacks
+                await this.regionManager.loadRegions(this.locationStore);
+                for (const [key, region] of FEATURE_REGIONS_STATIC) {
+                    this.regionManager.addStaticRegion(region);
+                }
+                
+                // Validate regions - warn if database conflicts with static definitions
+                const warnings = this.regionManager.validateRegions(FEATURE_REGIONS_STATIC);
+                for (const warning of warnings) {
+                    console.warn(warning);
+                }
             } catch (e) {
                 console.error(
                     "[Veratown] Failed to initialize location store",
@@ -316,6 +336,10 @@ export class Veratown {
 
         await this.setupRoom();
         await this.setupCharacter();
+    }
+
+    public getRegionManager(): RegionManager {
+        return this.regionManager;
     }
 
     private onChatRoomCreated = async () => {

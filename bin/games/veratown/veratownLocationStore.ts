@@ -34,9 +34,22 @@ export interface VeratownLocationDoc {
         | "game_region"
         | "cage_info_region"
         | "bot_position"
+        | "region"
         | "other";
-    x: number;
-    y: number;
+    // Point-based locations use x/y
+    x?: number;
+    y?: number;
+    // Region-based locations use region with TopLeft/BottomRight
+    region?: {
+        TopLeft: { X: number; Y: number };
+        BottomRight: { X: number; Y: number };
+    };
+    // Region type (for filtering multi-tile regions)
+    regionType?: "game" | "dare" | "feature" | "custom";
+    // Human-readable label
+    label?: string;
+    // Description for admins
+    description?: string;
     data?: Record<string, unknown>; // Extra metadata: code, message, etc.
     enabled: boolean;
     createdAt: number;
@@ -135,6 +148,14 @@ export class VeratownLocationStore {
         return this.locations
             .find({ type: type as any, enabled: true })
             .toArray();
+    }
+
+    /**
+     * Get all locations from the database (used by RegionManager for bulk loading).
+     */
+    public async getAllLocations(): Promise<VeratownLocationDoc[]> {
+        await this.init();
+        return this.locations.find({}).toArray();
     }
 
     /**

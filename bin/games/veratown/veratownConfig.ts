@@ -19,6 +19,7 @@
 
 import { MapRegion, API_Character, BC_AppearanceItem } from "bc-bot";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { VeratownRegion } from "./regionManager";
 
 export const RECEPTIONIST_POSITION = { X: 10, Y: 8 };
 
@@ -47,6 +48,38 @@ export const DARE_LOCATION: MapRegion = {
     TopLeft: { X: 4, Y: 6 },
     BottomRight: { X: 16, Y: 14 },
 };
+
+// --- Feature Regions (Multi-Tile Areas) ---
+//
+// These regions span multiple tiles and should trigger commands only once per
+// region entry, not once per tile. Stored in database with type="region" for
+// easy management via /bot location commands. Static definitions here serve as
+// fallback if database is empty or unavailable.
+
+export const FEATURE_REGIONS_STATIC: Map<string, VeratownRegion> = new Map([
+    [
+        "game_region",
+        {
+            key: "game_region",
+            type: "region",
+            regionType: "game",
+            label: "Casino Game Area",
+            region: GAME_LOCATION,
+            description: "Main casino/gambling area - commands only trigger once per entry",
+        } as VeratownRegion,
+    ],
+    [
+        "dare_region",
+        {
+            key: "dare_region",
+            type: "region",
+            regionType: "dare",
+            label: "Dare Challenge Area",
+            region: DARE_LOCATION,
+            description: "Dare game zone - commands only trigger once per entry",
+        } as VeratownRegion,
+    ],
+]);
 
 // --- Cages ---
 
