@@ -38,9 +38,37 @@ const SERVER_URL = {
 };
 
 /**
+ * Helper function to parse boolean environment variables
+ */
+function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
+    if (value === undefined) return defaultValue;
+    return value === "true" || value === "1" || value === "yes" || value.toLowerCase() === "true";
+}
+
+/**
+ * Helper function to safely parse JSON arrays from env vars
+ */
+function parseJsonArray(value: string | undefined, fieldName: string): any[] | undefined {
+    if (!value) return undefined;
+    try {
+        const parsed = JSON.parse(value);
+        if (!Array.isArray(parsed)) {
+            console.warn(`[Config] ${fieldName} is not a valid JSON array, ignoring`);
+            return undefined;
+        }
+        return parsed;
+    } catch {
+        console.warn(`[Config] Failed to parse ${fieldName} as JSON array: ${value}`);
+        return undefined;
+    }
+}
+
+/**
  * Load configuration from file and environment variables.
  * Environment variables take precedence over file settings.
  * Supports both local development (config.json) and cloud deployment (env vars).
+ * 
+ * Priority: env vars > config.json > defaults
  */
 async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     let fileConfig: any = {};
@@ -58,10 +86,12 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         console.log(`[Config] No config file found at ${configFilePath}, using environment variables`);
     }
 
-    // Merge environment variables (take precedence over file config)
+    // Start with file config as base
     const config: any = { ...fileConfig };
 
-    // Core bot credentials
+    // ============================================================================
+    // CORE BOT CREDENTIALS
+    // ============================================================================
     if (process.env.BOT_USER) config.user = process.env.BOT_USER;
     if (process.env.BOT_PASSWORD) config.password = process.env.BOT_PASSWORD;
     if (process.env.BOT_USER2) config.user2 = process.env.BOT_USER2;
@@ -69,47 +99,77 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     if (process.env.BOT_USER3) config.user3 = process.env.BOT_USER3;
     if (process.env.BOT_PASSWORD3) config.password3 = process.env.BOT_PASSWORD3;
 
-    // Environment and game settings
+    // ============================================================================
+    // ENVIRONMENT AND GAME SETTINGS
+    // ============================================================================
     if (process.env.BOT_ENV) config.env = process.env.BOT_ENV;
     if (process.env.BOT_GAME) config.game = process.env.BOT_GAME;
     if (process.env.BC_SERVER_URL) config.url = process.env.BC_SERVER_URL;
 
-    // MongoDB configuration
+    // ============================================================================
+    // MONGODB CONFIGURATION
+    // ============================================================================
     if (process.env.MONGODB_URI) config.mongo_uri = process.env.MONGODB_URI;
     if (process.env.MONGODB_DB) config.mongo_db = process.env.MONGODB_DB;
     if (process.env.MONGODB_TLS !== undefined) {
-        config.mongo_tls = process.env.MONGODB_TLS === "true";
+        config.mongo_tls = parseBoolean(process.env.MONGODB_TLS, true);
     }
 
-    // Room configuration (can be partially overridden via env vars)
+    // ============================================================================
+    // ADMIN AND MEMBER LISTS (JSON arrays)
+    // ============================================================================
+    const superusersArray = parseJsonArray(process.env.SUPERUSERS, "SUPERUSERS");
+    if (superusersArray) config.superusers = superusersArray;
+
+    const membersArray = parseJsonArray(process.env.MEMBERS, "MEMBERS");
+    if (membersArray) config.members = membersArray;
+
+    // ============================================================================
+    // ROOM CONFIGURATION (falls back to config.json defaults)
+    // ============================================================================
     if (!config.room) config.room = {};
+
+    // Basic room properties
     if (process.env.ROOM_NAME) config.room.Name = process.env.ROOM_NAME;
     if (process.env.ROOM_DESCRIPTION) config.room.Description = process.env.ROOM_DESCRIPTION;
     if (process.env.ROOM_SPACE) config.room.Space = process.env.ROOM_SPACE;
-    if (process.env.ROOM_LIMIT) config.room.Limit = parseInt(process.env.ROOM_LIMIT);
+    if (process.env.ROOM_LIMIT) config.room.Limit = parseInt(process.env.ROOM_LIMIT, 10);
 
-    // Admin/member lists (JSON arrays in env vars)
-    if (process.env.SUPERUSERS) {
-        try {
-            config.superusers = JSON.parse(process.env.SUPERUSERS);
-        } catch {
-            console.warn("[Config] Failed to parse SUPERUSERS as JSON");
-        }
+    // Advanced room properties
+    if (process.env.ROOM_BACKGROUND) config.room.Background = process.env.ROOM_BACKGROUND;
+    if (process.env.ROOM_LANGUAGE) config.room.Language = process.env.ROOM_LANGUAGE;
+    if (process.env.ROOM_GAME) config.room.Game = process.env.ROOM_GAME;
+
+    // Boolean room properties
+    if (process.env.ROOM_PRIVATE !== undefined) {
+        config.room.Private = parseBoolean(process.env.ROOM_PRIVATE, false);
     }
-    if (process.env.MEMBERS) {
-        try {
-            config.members = JSON.parse(process.env.MEMBERS);
-        } catch {
-            console.warn("[Config] Failed to parse MEMBERS as JSON");
-        }
+    if (process.env.ROOM_LOCKED !== undefined) {
+        config.room.Locked = parseBoolean(process.env.ROOM_LOCKED, false);
     }
 
-    // Log what configuration source was used (for debugging)
+    // Room admin list (JSON array)
+    const roomAdminArray = parseJsonArray(process.env.ROOM_ADMIN, "ROOM_ADMIN");
+    if (roomAdminArray) config.room.Admin = roomAdminArray;
+
+    // Room ban and block lists (JSON arrays)
+    const roomBanArray = parseJsonArray(process.env.ROOM_BAN, "ROOM_BAN");
+    if (roomBanArray) config.room.Ban = roomBanArray;
+
+    const blockCategoryArray = parseJsonArray(process.env.ROOM_BLOCK_CATEGORY, "ROOM_BLOCK_CATEGORY");
+    if (blockCategoryArray) config.room.BlockCategory = blockCategoryArray;
+
+    // ============================================================================
+    // CONFIGURATION LOGGING (for debugging)
+    // ============================================================================
     console.log("[Config] Configuration sources:");
     console.log(`  - Bot: ${config.user || "<missing>"}`);
     console.log(`  - Game: ${config.game || "<missing>"}`);
     console.log(`  - MongoDB: ${config.mongo_uri ? "configured" : "<missing>"}`);
     console.log(`  - Environment: ${config.env || "live"}`);
+    console.log(`  - Room: ${config.room?.Name || "<default>"}`);
+    if (config.superusers?.length) console.log(`  - Superusers: ${config.superusers.length} configured`);
+    if (config.room?.Admin?.length) console.log(`  - Room admins: ${config.room.Admin.length} configured`);
 
     return config as ConfigFile;
 }

@@ -1,0 +1,271 @@
+================================================================================
+RAILWAY ENVIRONMENT VARIABLES - COMPLETE COPY-PASTE LIST
+================================================================================
+
+Updated: 2026-08-04
+For Railway.app deployment with all environment variable support
+
+INSTRUCTIONS:
+1. Go to railway.app dashboard
+2. Open your project → Variables tab
+3. Click "Raw Editor"
+4. Copy-paste the section you want (MINIMAL or FULL)
+5. Click "Save"
+6. Railway will auto-restart with new configuration
+
+================================================================================
+SECTION A: MINIMAL REQUIRED (Bot works with just these)
+================================================================================
+
+BOT_USER=VeraBot1
+BOT_PASSWORD=YourBotPassword123!
+BOT_GAME=veratown
+BOT_ENV=live
+MONGODB_URI=mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot
+MONGODB_DB=ropeybot
+MONGODB_TLS=true
+
+================================================================================
+SECTION B: RECOMMENDED (Adds multi-bot support)
+================================================================================
+
+BOT_USER=VeraBot1
+BOT_PASSWORD=YourBotPassword123!
+BOT_USER2=VeraBot2
+BOT_PASSWORD2=YourBotPassword456!
+BOT_USER3=VeraBot3
+BOT_PASSWORD3=YourBotPassword789!
+BOT_GAME=veratown
+BOT_ENV=live
+MONGODB_URI=mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot
+MONGODB_DB=ropeybot
+MONGODB_TLS=true
+SUPERUSERS=[250927]
+MEMBERS=[251024]
+ROOM_ADMIN=[250927,254890]
+
+================================================================================
+SECTION C: FULL CONFIGURATION (All available options)
+================================================================================
+
+# Core Bot Credentials (Required)
+BOT_USER=VeraBot1
+BOT_PASSWORD=YourBotPassword123!
+
+# Secondary Bots (Optional - for Veratown shower narration and casino)
+BOT_USER2=VeraBot2
+BOT_PASSWORD2=YourBotPassword456!
+BOT_USER3=VeraBot3
+BOT_PASSWORD3=YourBotPassword789!
+
+# Game & Environment (Required)
+BOT_GAME=veratown
+BOT_ENV=live
+
+# MongoDB Configuration (Required)
+MONGODB_URI=mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot
+MONGODB_DB=ropeybot
+MONGODB_TLS=true
+
+# Room Configuration - Basic (Optional, uses defaults from config.json if not set)
+ROOM_NAME=Veratown
+ROOM_DESCRIPTION=[Romantic][Roleplay][Relaxation]\n\nWelcome to Veratown!\nA place to explore, enjoy, and discover surprises.\nDon't get trapped!\n\nFeatures:\n• Interactive games and challenges\n• Dynamic environment with locations and regions\n• Admin-managed rooms and features\n\nA Bot patrols the town.
+ROOM_SPACE=X
+ROOM_LIMIT=20
+ROOM_LANGUAGE=EN
+
+# Room Configuration - Advanced (Optional)
+ROOM_BACKGROUND=PartyBasement
+ROOM_PRIVATE=false
+ROOM_LOCKED=false
+ROOM_GAME=
+
+# Admin & Members (JSON arrays - Optional)
+SUPERUSERS=[250927]
+MEMBERS=[251024]
+ROOM_ADMIN=[250927,254890]
+
+# Optional: Advanced Server Configuration
+# BC_SERVER_URL=https://bondage-club-server.herokuapp.com/
+
+================================================================================
+SECTION D: CUSTOMIZE YOUR VALUES
+================================================================================
+
+Replace these values with your actual configuration:
+
+1. BOT_USER & BOT_PASSWORD
+   - Your main bot's username and password
+   - Get from Bondage Club game
+
+2. BOT_USER2 & BOT_PASSWORD2 (optional)
+   - Secondary bot account (shower narrator in Veratown)
+   - Only needed if you want shower narration feature
+   - Leave empty to disable
+
+3. BOT_USER3 & BOT_PASSWORD3 (optional)
+   - Tertiary bot account (casino in Veratown)
+   - Only needed if you want dedicated casino bot
+   - Leave empty to disable
+
+4. MONGODB_URI
+   - Your MongoDB Atlas connection string
+   - Format: mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/DATABASE
+   - Get from: MongoDB Atlas → Cluster → Connect → Connection String
+
+5. ROOM_NAME & ROOM_DESCRIPTION
+   - Display name and description of your BC room
+   - ROOM_DESCRIPTION can include \n for line breaks
+
+6. SUPERUSERS, MEMBERS, ROOM_ADMIN
+   - Member numbers as JSON array: [250927, 254890]
+   - One member per number
+   - Find your member number in BC profile
+
+================================================================================
+SECTION E: QUICK REFERENCE TABLE
+================================================================================
+
+Variable Name           | Type    | Required | Example
+------------------------+---------+----------+--------------------------------------------
+BOT_USER               | string  | Yes      | VeraBot1
+BOT_PASSWORD           | string  | Yes      | MySecurePassword123!
+BOT_USER2              | string  | No       | VeraBot2
+BOT_PASSWORD2          | string  | No       | Password456!
+BOT_USER3              | string  | No       | VeraBot3
+BOT_PASSWORD3          | string  | No       | Password789!
+BOT_GAME               | string  | Yes      | veratown
+BOT_ENV                | string  | Yes      | live (or test)
+MONGODB_URI            | string  | Yes      | mongodb+srv://user:pass@cluster.net/db
+MONGODB_DB             | string  | Yes      | ropeybot
+MONGODB_TLS            | boolean | Yes      | true
+ROOM_NAME              | string  | No       | Veratown
+ROOM_DESCRIPTION       | string  | No       | A roleplay room...
+ROOM_SPACE             | string  | No       | X
+ROOM_LIMIT             | number  | No       | 20
+ROOM_LANGUAGE          | string  | No       | EN
+ROOM_BACKGROUND        | string  | No       | PartyBasement
+ROOM_PRIVATE           | boolean | No       | false
+ROOM_LOCKED            | boolean | No       | false
+ROOM_GAME              | string  | No       | (empty string)
+SUPERUSERS             | array   | No       | [250927]
+MEMBERS                | array   | No       | [251024]
+ROOM_ADMIN             | array   | No       | [250927,254890]
+
+================================================================================
+SECTION F: HOW TO GET YOUR VALUES
+================================================================================
+
+1. MongoDB URI
+   - Log in to mongodb.org/atlas
+   - Go to your cluster
+   - Click "Connect"
+   - Select "Drivers"
+   - Copy the connection string
+   - It looks like: mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/DATABASE
+
+2. Bot Credentials
+   - Log into Bondage Club at www.bondageprojects.elementfx.com
+   - Create bot character(s)
+   - Use character name as BOT_USER
+   - Use character password as BOT_PASSWORD
+
+3. Member Numbers
+   - In Bondage Club, click on a player
+   - Their member number shows in the profile
+   - Use in arrays: [250927, 251024]
+
+4. Room Name
+   - This is the display name of your BC room
+   - Can be anything you want
+   - Default: Veratown
+
+================================================================================
+SECTION G: DEPLOYMENT STEPS
+================================================================================
+
+1. Open Railway dashboard → Your project
+
+2. Click "Variables" tab
+
+3. Click "Raw Editor" (top right)
+
+4. Clear existing content
+
+5. Paste one of the sections:
+   - Use SECTION A (Minimal) for fastest setup
+   - Use SECTION B (Recommended) for full features
+   - Use SECTION C (Full) for complete control
+
+6. Replace placeholder values with your actual data
+
+7. Click "Save"
+
+8. Railway will auto-restart (watch "Deployments" tab)
+
+9. Check logs to verify configuration:
+   Look for:
+   ```
+   [Config] Loaded from file: ./config.json
+   [Config] Configuration sources:
+     - Bot: VeraBot1
+     - Game: veratown
+     - MongoDB: configured
+     - Environment: live
+     - Room: Veratown
+     - Superusers: 1 configured
+     - Room admins: 2 configured
+   ```
+
+10. Test bot in game with `/bot help`
+
+================================================================================
+SECTION H: IMPORTANT NOTES
+================================================================================
+
+✅ DO:
+- Use environment variables for sensitive data (passwords)
+- Store passwords in Railway secrets (not visible in logs)
+- Use JSON array format for member lists: [250927, 254890]
+- Set MONGODB_TLS=true for MongoDB Atlas
+- Keep ROOM_LIMIT reasonable (20-50 recommended)
+
+❌ DON'T:
+- Hardcode passwords in git
+- Use special characters in MONGODB_URI (URL encode if needed)
+- Leave brackets empty in arrays: use [250927] not []
+- Mix old config.json AND environment variables (env vars override)
+
+⚠️ ARRAYS:
+- SUPERUSERS, MEMBERS, ROOM_ADMIN must be JSON arrays
+- Correct: [250927,254890]
+- Correct: [250927, 254890]
+- Wrong: 250927,254890
+- Wrong: [250927] [254890]
+
+================================================================================
+SECTION I: TROUBLESHOOTING
+================================================================================
+
+Bot not starting?
+→ Check logs in Railway → Deployments → View Logs
+→ Look for [Config] messages
+→ Verify MONGODB_URI is correct
+→ Verify BOT_USER and BOT_PASSWORD are set
+
+Bot connects but doesn't respond?
+→ Check BOT_GAME is set to "veratown"
+→ Verify ROOM_ADMIN includes the bot's account number
+
+Configuration not applying?
+→ Make sure you're in "Raw Editor" mode
+→ Click "Save" after pasting variables
+→ Wait for Railway to restart (watch Deployments tab)
+→ Check logs show [Config] messages
+
+MongoDB connection error?
+→ Verify MONGODB_URI is correct (copy from Atlas)
+→ Check IP whitelist in MongoDB Atlas (add 0.0.0.0/0)
+→ Verify MONGODB_TLS=true for Atlas
+
+================================================================================
