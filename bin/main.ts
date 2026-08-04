@@ -255,10 +255,6 @@ export async function startBot(): Promise<RopeyBot> {
                 );
             }
             break;
-        case "casino":
-            console.log("Starting game: Casino");
-            new Casino(connector, db, config.casino);
-            break;
         default:
             console.log("No such game " + config.game);
             process.exit(1);
