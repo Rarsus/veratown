@@ -28,6 +28,7 @@ import {
     VeratownLocationStore,
     VeratownLocationDoc,
 } from "./veratownLocationStore";
+import { NarratorBot } from "./veratownNarrationUtils";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -132,20 +133,16 @@ export class ShowerSystem implements VeratownFeatureSystem {
         // send each narrated line, then immediately hop back.
         const broadcastPos = showerBroadcastPos(character.MapPos);
 
-        // Prefer a dedicated second bot (conn2) for narration, parked at
+        // Use NarratorBot to manage narration with optional dual-bot support:
+        // prefer a dedicated second bot (conn2) for narration, parked at
         // showerBotHomePos between lines, so the main bot never has
         // to leave its post. Falls back to blipping the main bot if no
         // second bot is configured.
-        const narratorConn = this.conn2 ?? this.conn;
-        const homePos = this.conn2
-            ? this.showerBotHomePos
-            : { ...this.conn.Player.MapPos };
-
-        const sayNear = (type: "Emote" | "Chat", msg: string) => {
-            narratorConn.moveOnMap(broadcastPos.X, broadcastPos.Y);
-            narratorConn.SendMessage(type, msg);
-            narratorConn.moveOnMap(homePos.X, homePos.Y);
-        };
+        const narrator = new NarratorBot(
+            this.conn,
+            this.conn2,
+            this.conn2 ? this.showerBotHomePos : undefined,
+        );
 
         const abortShower = () => {
             this.showeringCharacters.delete(character.MemberNumber);
@@ -163,7 +160,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
             "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
         );
 
-        sayNear("Emote", `*${character} is taking a shower*`);
+        narrator.sayAt(broadcastPos, "Emote", `*${character} is taking a shower*`);
 
         const clothingItems =
             character.Appearance.getAppearanceData().filter(isClothing);
@@ -174,19 +171,19 @@ export class ShowerSystem implements VeratownFeatureSystem {
         }
 
         if (!isInShower()) return abortShower();
-        sayNear("Emote", `*${character} turns on the shower*`);
+        narrator.sayAt(broadcastPos, "Emote", `*${character} turns on the shower*`);
 
         await wait(SHOWER_STEP_DELAY_MS);
         if (!isInShower()) return abortShower();
 
         const song =
             SHOWER_SONGS[Math.floor(Math.random() * SHOWER_SONGS.length)];
-        sayNear("Chat", `${character} sings: ${song}`);
+        narrator.sayAt(broadcastPos, "Chat", `${character} sings: ${song}`);
 
         await wait(SHOWER_SING_DELAY_MS);
         if (!isInShower()) return abortShower();
 
-        sayNear("Emote", `*${character} dries off with a towel*`);
+        narrator.sayAt(broadcastPos, "Emote", `*${character} dries off with a towel*`);
 
         await wait(SHOWER_STEP_DELAY_MS);
         if (!isInShower()) return abortShower();
