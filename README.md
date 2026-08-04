@@ -38,12 +38,14 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 
 **New documentation files**:
 - [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Navigation index for all docs
-- [docs/MONGODB_ATLAS_SETUP.md](docs/MONGODB_ATLAS_SETUP.md) - **Cloud MongoDB setup guide** (free tier, auto-backups, zero DevOps)
+- [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) - **Environment variable configuration** (required for cloud deployment)
+- [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) - **Easiest cloud deployment** (10 min setup, $5/month, GitHub auto-deploy)
+- [docs/MONGODB_ATLAS_SETUP.md](docs/MONGODB_ATLAS_SETUP.md) - Cloud MongoDB setup guide (free tier, auto-backups, zero DevOps)
 - [docs/VERATOWN_COMPLETE_GUIDE.md](docs/VERATOWN_COMPLETE_GUIDE.md) - Comprehensive guide (everything in one place)
 - [docs/VERATOWN_ARCHITECTURE.md](docs/VERATOWN_ARCHITECTURE.md) - Technical deep dive (systems, design decisions, patterns)
 - [docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md) - Map layout, regions, and future improvements
-- [docs/GOOGLE_CLOUD_QUICK_START.md](docs/GOOGLE_CLOUD_QUICK_START.md) - **Deploy to Google Cloud in 30 minutes** (Compute Engine + GitHub Actions + persistent MongoDB)
-- [docs/GOOGLE_CLOUD_DEPLOYMENT.md](docs/GOOGLE_CLOUD_DEPLOYMENT.md) - Complete Google Cloud deployment options (Compute Engine, GKE, Cloud Run)
+- [docs/GOOGLE_CLOUD_QUICK_START.md](docs/GOOGLE_CLOUD_QUICK_START.md) - Deploy to Google Cloud in 30 minutes (Compute Engine + GitHub Actions)
+- [docs/GOOGLE_CLOUD_DEPLOYMENT.md](docs/GOOGLE_CLOUD_DEPLOYMENT.md) - Complete Google Cloud options (Compute Engine, GKE, Cloud Run)
 
 ## Other Reference Documentation
 

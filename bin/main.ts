@@ -30,11 +30,89 @@ import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNigh
 import { Casino } from "./games/casino";
 import { CasinoStore } from "./games/casino/casinostore";
 import { VeratownLocationStore } from "./games/veratown/veratownLocationStore";
+import { existsSync } from "fs";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
     test: "https://bondage-club-server-test.herokuapp.com/",
 };
+
+/**
+ * Load configuration from file and environment variables.
+ * Environment variables take precedence over file settings.
+ * Supports both local development (config.json) and cloud deployment (env vars).
+ */
+async function loadConfig(configFilePath: string): Promise<ConfigFile> {
+    let fileConfig: any = {};
+
+    // Try to load config from file if it exists
+    if (existsSync(configFilePath)) {
+        try {
+            const configString = await readFile(configFilePath, "utf-8");
+            fileConfig = JSON.parse(configString);
+            console.log(`[Config] Loaded from file: ${configFilePath}`);
+        } catch (err) {
+            console.warn(`[Config] Failed to read ${configFilePath}, using environment variables`);
+        }
+    } else {
+        console.log(`[Config] No config file found at ${configFilePath}, using environment variables`);
+    }
+
+    // Merge environment variables (take precedence over file config)
+    const config: any = { ...fileConfig };
+
+    // Core bot credentials
+    if (process.env.BOT_USER) config.user = process.env.BOT_USER;
+    if (process.env.BOT_PASSWORD) config.password = process.env.BOT_PASSWORD;
+    if (process.env.BOT_USER2) config.user2 = process.env.BOT_USER2;
+    if (process.env.BOT_PASSWORD2) config.password2 = process.env.BOT_PASSWORD2;
+    if (process.env.BOT_USER3) config.user3 = process.env.BOT_USER3;
+    if (process.env.BOT_PASSWORD3) config.password3 = process.env.BOT_PASSWORD3;
+
+    // Environment and game settings
+    if (process.env.BOT_ENV) config.env = process.env.BOT_ENV;
+    if (process.env.BOT_GAME) config.game = process.env.BOT_GAME;
+    if (process.env.BC_SERVER_URL) config.url = process.env.BC_SERVER_URL;
+
+    // MongoDB configuration
+    if (process.env.MONGODB_URI) config.mongo_uri = process.env.MONGODB_URI;
+    if (process.env.MONGODB_DB) config.mongo_db = process.env.MONGODB_DB;
+    if (process.env.MONGODB_TLS !== undefined) {
+        config.mongo_tls = process.env.MONGODB_TLS === "true";
+    }
+
+    // Room configuration (can be partially overridden via env vars)
+    if (!config.room) config.room = {};
+    if (process.env.ROOM_NAME) config.room.Name = process.env.ROOM_NAME;
+    if (process.env.ROOM_DESCRIPTION) config.room.Description = process.env.ROOM_DESCRIPTION;
+    if (process.env.ROOM_SPACE) config.room.Space = process.env.ROOM_SPACE;
+    if (process.env.ROOM_LIMIT) config.room.Limit = parseInt(process.env.ROOM_LIMIT);
+
+    // Admin/member lists (JSON arrays in env vars)
+    if (process.env.SUPERUSERS) {
+        try {
+            config.superusers = JSON.parse(process.env.SUPERUSERS);
+        } catch {
+            console.warn("[Config] Failed to parse SUPERUSERS as JSON");
+        }
+    }
+    if (process.env.MEMBERS) {
+        try {
+            config.members = JSON.parse(process.env.MEMBERS);
+        } catch {
+            console.warn("[Config] Failed to parse MEMBERS as JSON");
+        }
+    }
+
+    // Log what configuration source was used (for debugging)
+    console.log("[Config] Configuration sources:");
+    console.log(`  - Bot: ${config.user || "<missing>"}`);
+    console.log(`  - Game: ${config.game || "<missing>"}`);
+    console.log(`  - MongoDB: ${config.mongo_uri ? "configured" : "<missing>"}`);
+    console.log(`  - Environment: ${config.env || "live"}`);
+
+    return config as ConfigFile;
+}
 
 // Promotes a secondary bot account (eg. Veratown's shower-narration or pool
 // roulette bot) to room admin, using the primary bot connection - which
@@ -95,9 +173,7 @@ export async function startBot(): Promise<RopeyBot> {
     });
 
     const cfgFile = process.argv[2] ?? "./config.json";
-
-    const configString = await readFile(cfgFile, "utf-8");
-    const config = JSON.parse(configString) as ConfigFile;
+    const config = await loadConfig(cfgFile);
 
     const serverUrl = config.url ?? SERVER_URL[config.env];
 

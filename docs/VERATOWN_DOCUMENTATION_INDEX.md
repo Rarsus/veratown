@@ -9,7 +9,11 @@ Complete documentation suite for Veratown+, a persistent-world roleplay bot with
 
 ## Quick Navigation
 
-### � For Deployment & Operations- **[MongoDB Atlas Setup](MONGODB_ATLAS_SETUP.md)** - Cloud database guide (recommended, free tier available)- **[Google Cloud Quick Start](GOOGLE_CLOUD_QUICK_START.md)** - 30-minute setup for Compute Engine + GitHub Actions (recommended)
+### 🚀 For Deployment & Operations
+- **[Railway Deployment](RAILWAY_DEPLOYMENT.md)** - **Easiest option** (10 min, $5/month, auto-deploy from GitHub)
+- **[Environment Variables](ENVIRONMENT_VARIABLES.md)** - Configure bot via env vars (required for cloud deployment)
+- **[MongoDB Atlas Setup](MONGODB_ATLAS_SETUP.md)** - Cloud database guide (recommended, free tier available)
+- **[Google Cloud Quick Start](GOOGLE_CLOUD_QUICK_START.md)** - 30-minute setup for Compute Engine + GitHub Actions
 - **[Google Cloud Deployment Guide](GOOGLE_CLOUD_DEPLOYMENT.md)** - Complete options (Compute Engine, GKE, Cloud Run) with detailed configuration
 - **[docs/BUILD_SETUP.md](BUILD_SETUP.md)** - Local build and Docker setup guide
 
