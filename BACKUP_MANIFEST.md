@@ -38,6 +38,20 @@ Since mongodump is not available in this environment, backups are managed throug
 - **Status**: Documentation and tests
 - **Rollback**: `git revert [commit-hash]`
 
+### Phase 6: Region Management System
+- **Date**: 2026-08-04 14:20 CEST
+- **Commit**: 13752f8
+- **Status**: Complete - Database persistence with fallback
+- **Rollback**: `git revert 13752f8 && docker-compose restart ropeybot`
+- **Changes**:
+  - RegionManager class with in-memory region tracking
+  - VeratownLocationStore extended to support region boundaries
+  - Admin commands for region CRUD: !location region add/get/update/delete/list/validate
+  - Static region fallbacks (game_region, dare_region)
+  - Conflict detection between database and static definitions
+  - Character entry/exit tracking with NEW entry detection
+- **Database**: No schema changes, regions stored as type="region" documents with region boundaries
+
 ---
 
 ## How to Restore from Git
