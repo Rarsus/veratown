@@ -34,6 +34,7 @@ import {
     VeratownLocationStore,
     VeratownLocationDoc,
 } from "./veratown/veratownLocationStore";
+import { loadRegionFromDatabase } from "./shared/locationUtils";
 
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
@@ -297,42 +298,16 @@ Game Overview
     }
 
     private async loadLocations(): Promise<void> {
-        try {
-            // Load dare region from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const dareRegionDoc = locations.find(
-                        (loc) => loc.type === "dare_region",
-                    );
-                    if (
-                        dareRegionDoc &&
-                        dareRegionDoc.data?.bottomRightX &&
-                        dareRegionDoc.data?.bottomRightY
-                    ) {
-                        this.dareRegion = {
-                            TopLeft: { X: dareRegionDoc.x, Y: dareRegionDoc.y },
-                            BottomRight: {
-                                X: dareRegionDoc.data.bottomRightX as number,
-                                Y: dareRegionDoc.data.bottomRightY as number,
-                            },
-                        };
-                    }
-                } catch (e) {
-                    console.error(
-                        "[dare] Failed to load dare_region from database",
-                        e,
-                    );
-                }
-            }
-            console.log(
-                `[dare] Loaded dare region: ${this.dareRegion ? "from database" : "using config fallback or none"}`,
+        if (this.locationStore && this.fallbackLocations) {
+            this.dareRegion = await loadRegionFromDatabase(
+                this.locationStore,
+                "dare_region",
+                this.fallbackLocations,
             );
-        } catch (e) {
-            console.error("[dare] Unexpected error during location loading", e);
         }
+        console.log(
+            `[dare] Loaded dare region: ${this.dareRegion ? "from database" : "using config fallback or none"}`,
+        );
     }
 
     private whisper = (memberNumber: number, text: string): void => {

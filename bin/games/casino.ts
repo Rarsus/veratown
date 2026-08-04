@@ -42,6 +42,7 @@ import {
     VeratownLocationStore,
     VeratownLocationDoc,
 } from "./veratown/veratownLocationStore";
+import { loadRegionFromDatabase } from "./shared/locationUtils";
 
 const FREE_CHIPS = 20;
 
@@ -58,7 +59,7 @@ export const makeBio = (
     leaderBoard: string,
     exampleString: string,
     helpString: string,
-) => `🎰🎰🎰 Welcome to the Casino! 🎰🎰🎰
+) => `🎰🎰🎰 Welcome to the Veratown Casino! 🎰🎰🎰
 
 All visitors will automatically ber awarded ${FREE_CHIPS} chips every day!
 You can bet with either chips or forefeits. If you win when betting with a forfeit, you gain the corresponding
@@ -208,47 +209,23 @@ export class Casino {
         locationStore: VeratownLocationStore,
         fallbackLocations: VeratownLocationDoc[],
     ): Promise<void> {
-        try {
-            // Load game region from database (or use fallback)
-            try {
-                const locations =
-                    await locationStore.loadLocations(fallbackLocations);
-                const gameRegionDoc = locations.find(
-                    (loc) => loc.type === "game_region",
-                );
-                if (
-                    gameRegionDoc &&
-                    gameRegionDoc.data?.bottomRightX &&
-                    gameRegionDoc.data?.bottomRightY
-                ) {
-                    this.gameRegion = {
-                        TopLeft: { X: gameRegionDoc.x, Y: gameRegionDoc.y },
-                        BottomRight: {
-                            X: gameRegionDoc.data.bottomRightX as number,
-                            Y: gameRegionDoc.data.bottomRightY as number,
-                        },
-                    };
-                    // Register enter trigger with loaded region
-                    this.conn.chatRoom.map.addEnterRegionTrigger(
-                        this.gameRegion,
-                        this.onCharacterEnterCasinoRegion,
-                    );
-                }
-            } catch (e) {
-                console.error(
-                    "[casino] Failed to load game_region from database",
-                    e,
-                );
-            }
-            console.log(
-                `[casino] Loaded game region: ${this.gameRegion ? "from database" : "using config or none"}`,
-            );
-        } catch (e) {
-            console.error(
-                "[casino] Unexpected error during location loading",
-                e,
+        this.gameRegion = await loadRegionFromDatabase(
+            locationStore,
+            "game_region",
+            fallbackLocations,
+        );
+
+        if (this.gameRegion) {
+            // Register enter trigger with loaded region
+            this.conn.chatRoom.map.addEnterRegionTrigger(
+                this.gameRegion,
+                this.onCharacterEnterCasinoRegion,
             );
         }
+
+        console.log(
+            `[casino] Loaded game region: ${this.gameRegion ? "from database" : "using config or none"}`,
+        );
     }
 
     private onCharacterEnterCasinoRegion = async (character: API_Character) => {
