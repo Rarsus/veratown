@@ -1,22 +1,10 @@
 services:
-    mongo:
-        image: mongo:7
-        container_name: ropeybot-mongo
-        restart: unless-stopped
-        volumes:
-            - mongo-data:/data/db
-        # Not published to the host; only reachable from other containers on this
-        # compose network, e.g. by the ropeybot service via mongo_uri
-        # "mongodb://mongo:27017".
-
     ropeybot:
         build:
             context: .
             dockerfile: Dockerfile
         container_name: ropeybot
         restart: unless-stopped
-        depends_on:
-            - mongo
         volumes:
             - ./config.json:/bot/cfg/config.json:ro
             # Optional: Uncomment to map logs to host directory
@@ -25,6 +13,3 @@ services:
             NODE_ENV: production
         stdin_open: true
         tty: true
-
-volumes:
-    mongo-data:

@@ -2,10 +2,10 @@
     "user": "your_bot_user_name",
     "password": "your_bot_password",
     "env": "live",
-    "game": "dare",
-    "mongo_uri": "mongodb://mongo:27017",
+    "game": "veratown",
+    "mongo_uri": "mongodb+srv://username:password@cluster.xxx.mongodb.net/ropeybot",
     "mongo_db": "ropeybot",
-    "mongo_tls": false,
+    "mongo_tls": true,
     "dare": {
         "region": {
             "TopLeft": { "X": 0, "Y": 0 },

@@ -1,0 +1,36 @@
+# Production docker-compose for Cloud Run or Compute Engine
+# Uses MongoDB Atlas for persistence (stateless containers)
+
+version: '3.8'
+
+services:
+  ropeybot:
+    image: ${IMAGE_TAG:-us-central1-docker.pkg.dev/PROJECT/docker-repo/ropeybot:latest}
+    container_name: ropeybot
+    restart: always
+    
+    # Read-only config mount (config.json contains Atlas connection string)
+    volumes:
+      - ./config.json:/bot/cfg/config.json:ro
+    
+    environment:
+      NODE_ENV: production
+      # Optional: Override MongoDB Atlas URI here if needed
+      # MONGO_URI: mongodb+srv://...
+    
+    stdin_open: true
+    tty: true
+    
+    # Resource limits (optional, for Cloud Run compatibility)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+# No MongoDB service - uses MongoDB Atlas (mongodb+srv://...)
+# No volumes - stateless container
+# Config must contain mongo_uri pointing to Atlas cluster

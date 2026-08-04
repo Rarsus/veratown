@@ -38,6 +38,7 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 
 **New documentation files**:
 - [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Navigation index for all docs
+- [docs/MONGODB_ATLAS_SETUP.md](docs/MONGODB_ATLAS_SETUP.md) - **Cloud MongoDB setup guide** (free tier, auto-backups, zero DevOps)
 - [docs/VERATOWN_COMPLETE_GUIDE.md](docs/VERATOWN_COMPLETE_GUIDE.md) - Comprehensive guide (everything in one place)
 - [docs/VERATOWN_ARCHITECTURE.md](docs/VERATOWN_ARCHITECTURE.md) - Technical deep dive (systems, design decisions, patterns)
 - [docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md) - Map layout, regions, and future improvements
@@ -109,19 +110,23 @@ The bot can either be run locally or via the Docker image.
 - And then run said container with the config file mapped in
   `docker run --rm -it -v ${PWD}/config.json:/bot/cfg/config.json ropeybot`
 
-### Running with Docker Compose (bot + MongoDB)
+### Running with Docker Compose (bot + MongoDB Atlas)
 
-The Casino game (see below) needs a MongoDB database to store player chip
-balances. `docker-compose.yml` bundles the bot together with a local `mongo`
-container:
+The bot uses MongoDB to store game data (player records, dares, locations, etc).
 
-- Create `config.json` as above. To use the bundled Mongo container, set
-  `mongo_uri` to `mongodb://mongo:27017`, pick a `mongo_db` name, and set
-  `mongo_tls` to `false` (the local container doesn't have TLS enabled; leave
-  `mongo_tls` unset/`true` if you're pointing at a hosted/managed Mongo
-  instead).
+**Recommended**: Use **MongoDB Atlas** (free cloud-hosted MongoDB):
+- Create a free MongoDB Atlas cluster: [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
+- Get your connection string: `mongodb+srv://user:pass@cluster.xxx.mongodb.net/ropeybot`
+- Update `config.json` with `mongo_uri` and set `mongo_tls` to `true`
 - Run `docker compose up -d --build`
 - Check logs with `docker compose logs ropeybot`
+
+**Setup**: See [docs/MONGODB_ATLAS_SETUP.md](docs/MONGODB_ATLAS_SETUP.md) for detailed instructions.
+
+**Alternative**: For local development with local MongoDB container, use `docker-compose.local.yml`:
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
 
 ## Games
 

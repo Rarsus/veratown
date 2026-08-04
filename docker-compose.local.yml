@@ -1,0 +1,48 @@
+# Local development docker-compose with local MongoDB container
+# Use this file instead of docker-compose.yml if you want MongoDB running locally
+#
+# Usage: docker-compose -f docker-compose.local.yml up -d
+#
+# For production, use:
+# - docker-compose.yml with MongoDB Atlas (cloud-hosted)
+# - docker-compose.prod.yml for Cloud Run deployment
+
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: ropeybot-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    # Not published to the host; only reachable from other containers on this
+    # compose network, via mongo_uri "mongodb://mongo:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ropeybot
+    ports:
+      # Optional: Uncomment to access MongoDB from host machine
+      # - "27017:27017"
+
+  ropeybot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ropeybot
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    volumes:
+      - ./config.json:/bot/cfg/config.json:ro
+      # Optional: Uncomment to map logs to host directory
+      # - ./logs:/bot/logs
+    environment:
+      NODE_ENV: production
+      # Override MongoDB URI for local development
+      MONGO_URI: "mongodb://mongo:27017/ropeybot"
+    stdin_open: true
+    tty: true
+
+volumes:
+  mongo-data:
+    driver: local
