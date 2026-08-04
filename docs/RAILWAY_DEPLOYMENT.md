@@ -44,59 +44,119 @@ Deploy Veratown+ to Railway with automatic Docker container support and MongoDB 
 
 Railway dashboard → Your project → Variables
 
-Add these variables:
+### All Configuration Variables
 
-### Core Bot Credentials
+**Complete mapping of config.json to environment variables:**
+
+| Config.json | Environment Variable | Example | Required |
+|---|---|---|---|
+| **Bot 1** |
+| `user` | `BOT_USER` | `VeraBot1` | ✅ Yes |
+| `password` | `BOT_PASSWORD` | `VeraBotVeraBot123` | ✅ Yes |
+| **Bot 2 (Optional)** |
+| `user2` | `BOT_USER2` | `VeraBot2` | ⚠️ If using |
+| `password2` | `BOT_PASSWORD2` | `VeraBot2Password` | ⚠️ If using |
+| **Bot 3 (Optional)** |
+| `user3` | `BOT_USER3` | `VeraBot3` | ⚠️ If using |
+| `password3` | `BOT_PASSWORD3` | `mafqeZwadfos5vejby` | ⚠️ If using |
+| **Database (MongoDB Atlas)** |
+| `mongo_uri` | `MONGODB_URI` | `mongodb+srv://user:pass@cluster.xxx.mongodb.net/ropeybot` | ✅ Yes |
+| `mongo_db` | `MONGODB_DB` | `ropeybot` | ✅ Yes |
+| `mongo_tls` | `MONGODB_TLS` | `true` | ✅ Yes |
+| **Game & Server** |
+| `game` | `BOT_GAME` | `veratown` | ✅ Yes |
+| `env` | `BOT_ENV` | `live` | ✅ Yes |
+| (bcserverurl) | `BC_SERVER_URL` | `https://client.bdsm-chat.com/` | ⚠️ If custom |
+| **Room Configuration** |
+| `room.Name` | `ROOM_NAME` | `Veratown` | ⚠️ Optional |
+| `room.Description` | `ROOM_DESCRIPTION` | `A roleplay room...` | ⚠️ Optional |
+| `room.Limit` | `ROOM_LIMIT` | `20` | ⚠️ Optional |
+| `room.Space` | `ROOM_SPACE` | `X` | ⚠️ Optional |
+| `room.Language` | `ROOM_LANGUAGE` | `EN` | ⚠️ Optional |
+| `room.Private` | `ROOM_PRIVATE` | `false` | ⚠️ Optional |
+| `room.Locked` | `ROOM_LOCKED` | `false` | ⚠️ Optional |
+| `room.Background` | `ROOM_BACKGROUND` | `PartyBasement` | ⚠️ Optional |
+| `room.Game` | `ROOM_GAME` | `""` (empty) | ⚠️ Optional |
+| **Admin & Members** |
+| `superusers` | `SUPERUSERS` | `[250927]` | ⚠️ Optional |
+| `members` | `MEMBERS` | `[251024]` | ⚠️ Optional |
+| `room.Admin` | `ROOM_ADMIN` | `[250927,254890]` | ⚠️ Optional |
+
+---
+
+### How to Set Variables in Railway
+
+1. **Railway dashboard** → Your project → Variables tab
+2. **Add variable** button
+3. **Key**: `BOT_USER`
+4. **Value**: `VeraBot1`
+5. **Click**: Add
+6. **Repeat** for each variable
+
+OR: **Copy-paste all at once**
+
+Click **Raw Editor** and paste:
 
 ```
-BOT_USER = VeraBot1
-BOT_PASSWORD = YourBotPassword123!
-BOT_USER2 = VeraBot2
-BOT_PASSWORD2 = YourBotPassword456!
-BOT_USER3 = VeraBot3
-BOT_PASSWORD3 = YourBotPassword789!
+BOT_USER=VeraBot1
+BOT_PASSWORD=YourBotPassword123!
+BOT_USER2=VeraBot2
+BOT_PASSWORD2=YourBotPassword456!
+BOT_USER3=VeraBot3
+BOT_PASSWORD3=YourBotPassword789!
+BOT_GAME=veratown
+BOT_ENV=live
+MONGODB_URI=mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot
+MONGODB_DB=ropeybot
+MONGODB_TLS=true
+ROOM_NAME=Veratown
+ROOM_LIMIT=20
+ROOM_SPACE=X
+ROOM_LANGUAGE=EN
+ROOM_PRIVATE=false
+ROOM_LOCKED=false
+ROOM_BACKGROUND=PartyBasement
+SUPERUSERS=[250927]
+MEMBERS=[251024]
+ROOM_ADMIN=[250927,254890]
+NODE_ENV=production
 ```
 
-### Database
+---
 
-```
-MONGODB_URI = mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot
-MONGODB_DB = ropeybot
-MONGODB_TLS = true
-```
+### Minimum Required Variables
 
-### Game Configuration
-
-```
-BOT_GAME = veratown
-BOT_ENV = live
-```
-
-### Room Settings (optional)
-
-```
-ROOM_NAME = Veratown
-ROOM_LIMIT = 20
-```
-
-### Full Variable List
-
-Copy-paste template (replace with your values):
+If you only want to set essentials (bot works with defaults for room):
 
 ```
 BOT_USER=VeraBot1
 BOT_PASSWORD=your_password_here
-BOT_USER2=VeraBot2
-BOT_PASSWORD2=your_password_here
-BOT_USER3=VeraBot3
-BOT_PASSWORD3=your_password_here
 BOT_GAME=veratown
 BOT_ENV=live
 MONGODB_URI=mongodb+srv://user:pass@cluster.xxx.mongodb.net/ropeybot
 MONGODB_DB=ropeybot
 MONGODB_TLS=true
-NODE_ENV=production
 ```
+
+---
+
+### Advanced: JSON Arrays for Admin
+
+For arrays (superusers, members, admin):
+
+**Option A: JSON format** (strict)
+```
+SUPERUSERS=[250927,250928]
+MEMBERS=[251024,251025]
+ROOM_ADMIN=[250927,254890]
+```
+
+**Option B: Single value**
+```
+SUPERUSERS=250927
+```
+
+The bot parses both formats. JSON arrays are recommended.
 
 ---
 

@@ -100,19 +100,97 @@ ROOM_LIMIT="20"
 
 ---
 
+## Advanced Room Configuration
+
+These variables control room appearance and behavior:
+
+| Variable | Description | Example | Config.json |
+|----------|-------------|---------|-------------|
+| `ROOM_BACKGROUND` | Room background image | `PartyBasement` | `room.Background` |
+| `ROOM_PRIVATE` | Private room (yes/no) | `false` | `room.Private` |
+| `ROOM_LOCKED` | Locked room (yes/no) | `false` | `room.Locked` |
+| `ROOM_LANGUAGE` | Room language | `EN` | `room.Language` |
+| `ROOM_GAME` | Game type (special feature) | `""` | `room.Game` |
+
+### Example
+
+```bash
+ROOM_BACKGROUND="PartyBasement"
+ROOM_PRIVATE="false"
+ROOM_LOCKED="false"
+ROOM_LANGUAGE="EN"
+ROOM_GAME=""
+```
+
+---
+
 ## Admin & Member Lists
 
-| Variable | Description | Format |
-|----------|-------------|--------|
-| `SUPERUSERS` | List of superuser member numbers | JSON array: `[250927, 251000]` |
-| `MEMBERS` | List of allowed member numbers | JSON array: `[251024, 251025]` |
+| Variable | Description | Format | Config.json |
+|----------|-------------|--------|-------------|
+| `SUPERUSERS` | List of superuser member numbers | JSON array: `[250927, 251000]` | `superusers` |
+| `MEMBERS` | List of allowed member numbers | JSON array: `[251024, 251025]` | `members` |
+| `ROOM_ADMIN` | Room admins (can manage room) | JSON array: `[250927, 254890]` | `room.Admin` |
 
 ### Example
 
 ```bash
 SUPERUSERS='[250927]'
 MEMBERS='[251024, 251025, 251026]'
+ROOM_ADMIN='[250927, 254890]'
 ```
+
+### Important: JSON Array Format
+
+For these variables, use strict JSON array format:
+
+```bash
+# ✅ Correct
+SUPERUSERS=[250927]
+MEMBERS=[251024,251025]
+
+# ✅ Also correct (with spaces)
+SUPERUSERS=[250927, 251000]
+MEMBERS=[251024, 251025, 251026]
+
+# ❌ Wrong (will be ignored)
+SUPERUSERS=250927
+```
+
+---
+
+## Complete Variable Reference Table
+
+### Mapping: config.json → Environment Variables
+
+| Category | config.json Key | Environment Variable | Type | Required | Default |
+|----------|---|---|---|---|---|
+| **Bot 1** | `user` | `BOT_USER` | string | ✅ | (none) |
+| | `password` | `BOT_PASSWORD` | string | ✅ | (none) |
+| **Bot 2** | `user2` | `BOT_USER2` | string | ⚠️ | (none) |
+| | `password2` | `BOT_PASSWORD2` | string | ⚠️ | (none) |
+| **Bot 3** | `user3` | `BOT_USER3` | string | ⚠️ | (none) |
+| | `password3` | `BOT_PASSWORD3` | string | ⚠️ | (none) |
+| **Database** | `mongo_uri` | `MONGODB_URI` | string | ✅ | (none) |
+| | `mongo_db` | `MONGODB_DB` | string | ✅ | `ropeybot` |
+| | `mongo_tls` | `MONGODB_TLS` | boolean | ✅ | `true` |
+| **Game** | `game` | `BOT_GAME` | string | ✅ | `veratown` |
+| | `env` | `BOT_ENV` | string | ✅ | `live` |
+| | (none) | `BC_SERVER_URL` | string | ⚠️ | auto-detect |
+| **Room Basic** | `room.Name` | `ROOM_NAME` | string | ⚠️ | `Veratown` |
+| | `room.Description` | `ROOM_DESCRIPTION` | string | ⚠️ | (none) |
+| | `room.Limit` | `ROOM_LIMIT` | number | ⚠️ | `20` |
+| | `room.Space` | `ROOM_SPACE` | string | ⚠️ | `X` |
+| **Room Advanced** | `room.Background` | `ROOM_BACKGROUND` | string | ⚠️ | `PartyBasement` |
+| | `room.Private` | `ROOM_PRIVATE` | boolean | ⚠️ | `false` |
+| | `room.Locked` | `ROOM_LOCKED` | boolean | ⚠️ | `false` |
+| | `room.Language` | `ROOM_LANGUAGE` | string | ⚠️ | `EN` |
+| | `room.Game` | `ROOM_GAME` | string | ⚠️ | `""` |
+| **Admin** | `superusers` | `SUPERUSERS` | JSON array | ⚠️ | `[250927]` |
+| | `members` | `MEMBERS` | JSON array | ⚠️ | `[251024]` |
+| | `room.Admin` | `ROOM_ADMIN` | JSON array | ⚠️ | `[250927,254890]` |
+
+**Legend**: ✅ Required | ⚠️ Optional (safe to omit)
 
 ---
 
