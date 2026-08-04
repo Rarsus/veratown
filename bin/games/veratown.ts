@@ -25,6 +25,7 @@ import { Dare } from "./dare";
 import { DareConfig } from "./dare";
 import { DareStore } from "./dareStore";
 import { Casino } from "./casino";
+import { CasinoConfig } from "./casino";
 import { CasinoStore } from "./casino/casinostore";
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
@@ -140,6 +141,7 @@ export class Veratown {
         private conn2?: API_Connector,
         db?: Db,
         dareConfig?: DareConfig,
+        casinoConfig?: CasinoConfig,
     ) {
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
@@ -169,6 +171,7 @@ export class Veratown {
                         this.conn,
                         db,
                         {
+                            ...casinoConfig,
                             region: GAME_LOCATION,
                             locationStore: this.locationStore,
                             fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,

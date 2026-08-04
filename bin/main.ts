@@ -214,6 +214,7 @@ export async function startBot(): Promise<RopeyBot> {
                 veratownConn2,
                 db,
                 config.dare,
+                config.casino,
             );
             await veratownGame.init();
             connector.setBotDescription(Veratown.description);

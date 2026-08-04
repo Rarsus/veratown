@@ -139,9 +139,9 @@ export class Casino implements VeratownFeatureSystem {
         this.commandParser =
             commandParser ?? new CommandParser(conn, config?.region);
         this.game =
-            config?.game === "roulette"
-                ? new RouletteGame(conn, this)
-                : new BlackjackGame(conn, this);
+            config?.game === "blackjack"
+                ? new BlackjackGame(conn, this)
+                : new RouletteGame(conn, this);
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
