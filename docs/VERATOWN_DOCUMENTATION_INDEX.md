@@ -9,7 +9,12 @@ Complete documentation suite for Veratown+, a persistent-world roleplay bot with
 
 ## Quick Navigation
 
-### 📘 For Players & Game Masters
+### � For Deployment & Operations
+- **[Google Cloud Quick Start](GOOGLE_CLOUD_QUICK_START.md)** - 30-minute setup for Compute Engine + GitHub Actions (recommended)
+- **[Google Cloud Deployment Guide](GOOGLE_CLOUD_DEPLOYMENT.md)** - Complete options (Compute Engine, GKE, Cloud Run) with detailed configuration
+- **[docs/BUILD_SETUP.md](BUILD_SETUP.md)** - Local build and Docker setup guide
+
+### �📘 For Players & Game Masters
 - **[Quick Start Guide](#quick-start-guide)** - Get running in 5 minutes
 - **[Game Features](#game-features)** - What you can do in Veratown
 - **[Commands Reference](#commands-reference)** - All player & admin commands
