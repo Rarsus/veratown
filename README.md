@@ -24,16 +24,36 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) for the results of an in-depth code review
 (fixes made and proposals for further work).
 
-Further reference documentation (all under [`docs/`](docs)):
+## Veratown+ Documentation
+
+**Veratown+** is a persistent-world roleplay bot with integrated games, multi-bot architecture, and region management. 
+
+**Start here**: [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Complete documentation suite with quick start, features, commands, development guide, and troubleshooting.
+
+**For different roles**:
+- **Players & Game Masters**: [Quick Start Guide](docs/VERATOWN_DOCUMENTATION_INDEX.md#quick-start-guide), [Commands Reference](docs/VERATOWN_DOCUMENTATION_INDEX.md#commands-reference), [Troubleshooting](docs/VERATOWN_DOCUMENTATION_INDEX.md#troubleshooting)
+- **Developers**: [Architecture Deep Dive](docs/VERATOWN_ARCHITECTURE.md), [Development Guide](docs/VERATOWN_COMPLETE_GUIDE.md#development-guide), [Database Design](docs/VERATOWN_ARCHITECTURE.md#database-design)
+- **Map Designers**: [Map & Regions](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md), [Region Definitions](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#region-definitions), [Planned Improvements](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#planned-improvements)
+
+**New documentation files**:
+- [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Navigation index for all docs
+- [docs/VERATOWN_COMPLETE_GUIDE.md](docs/VERATOWN_COMPLETE_GUIDE.md) - Comprehensive guide (everything in one place)
+- [docs/VERATOWN_ARCHITECTURE.md](docs/VERATOWN_ARCHITECTURE.md) - Technical deep dive (systems, design decisions, patterns)
+- [docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md) - Map layout, regions, and future improvements
+
+## Other Reference Documentation
+
+All under [`docs/`](docs):
 
 - [docs/LOCKS.md](docs/LOCKS.md) - lock types and the locking API.
 - [docs/BONDAGE.md](docs/BONDAGE.md) - bondage item categories/catalogs and how to apply/remove them.
 - [docs/CLOTHING.md](docs/CLOTHING.md) - clothing classification, applying/saving/restoring/recolouring outfits.
-- [docs/VERATOWN.md](docs/VERATOWN.md) - current feature set of the Veratown room bot.
+- [docs/VERATOWN.md](docs/VERATOWN.md) - original feature set documentation (now superseded by VERATOWN_COMPLETE_GUIDE.md).
 - [docs/HOWTOS.md](docs/HOWTOS.md) - patterns for tile/region triggers, command construction, and building a new bot.
 - [docs/ITEMS.md](docs/ITEMS.md) - generated, exhaustive catalog of every asset group/item in `src/bcdata`, with per-group "how to add" snippets and extended-item customization options.
 - [docs/BUILD_SETUP.md](docs/BUILD_SETUP.md) - step-by-step build/run/Docker setup guide.
 - [docs/REPOSITORY_ANALYSIS.md](docs/REPOSITORY_ANALYSIS.md) - architecture/repo-structure deep dive.
+- [docs/REGION_MANAGEMENT.md](docs/REGION_MANAGEMENT.md) - region system overview (now part of VERATOWN_ARCHITECTURE.md).
 
 ## Code layout
 
