@@ -259,10 +259,110 @@ export class VeratownAdminCommands {
                     'Map data is case-sensitive - send exactly: !map import <data> (as its own whisper/chat message, not via "/bot").',
                 );
                 break;
+            case "backups": {
+                if (!this.requireAdmin(sender, msg)) return;
+
+                if (!this.mapStore) {
+                    this.conn.reply(
+                        msg,
+                        "mongo_uri/mongo_db isn't configured, so backups aren't available.",
+                    );
+                    return;
+                }
+
+                const backups = await this.mapStore.getBackups();
+                if (backups.length === 0) {
+                    this.conn.reply(msg, "No map backups available yet.");
+                    return;
+                }
+
+                const lines = backups.map((b) => {
+                    const date = new Date(b.backedUpAt).toLocaleString();
+                    const byName = b.backedUpBy ? `by member #${b.backedUpBy}` : "automatically";
+                    return `[${b.version}] ${date} ${byName} - ${b._id}`;
+                });
+
+                this.conn.reply(
+                    msg,
+                    `Map backups (use "!map restore <id>" to restore):\n${lines.join("\n")}`,
+                );
+                break;
+            }
+            case "restore": {
+                if (!this.requireAdmin(sender, msg)) return;
+
+                if (!this.mapStore) {
+                    this.conn.reply(
+                        msg,
+                        "mongo_uri/mongo_db isn't configured, so backups aren't available.",
+                    );
+                    return;
+                }
+
+                const backupId = args[1];
+                if (!backupId) {
+                    this.conn.reply(msg, "Usage: !map restore <backup_id>");
+                    this.conn.reply(
+                        msg,
+                        "Use '!map backups' to see available backup IDs.",
+                    );
+                    return;
+                }
+
+                try {
+                    await this.mapStore.restoreBackup(backupId);
+                    const restoredMapData = await this.mapStore.load();
+                    if (restoredMapData) {
+                        this.conn.chatRoom.map.setMapFromData(restoredMapData);
+                    }
+                    this.conn.reply(msg, `Map restored from backup: ${backupId}`);
+                } catch (err) {
+                    this.conn.reply(msg, `Failed to restore backup: ${err}`);
+                }
+                break;
+            }
+            case "history": {
+                if (!this.requireAdmin(sender, msg)) return;
+
+                if (!this.mapStore) {
+                    this.conn.reply(
+                        msg,
+                        "mongo_uri/mongo_db isn't configured, so history isn't available.",
+                    );
+                    return;
+                }
+
+                const backups = await this.mapStore.getBackups();
+                if (backups.length === 0) {
+                    this.conn.reply(msg, "No map history available yet.");
+                    return;
+                }
+
+                const lines = backups
+                    .slice(0, 5) // Show last 5
+                    .map((b) => {
+                        const date = new Date(b.backedUpAt).toLocaleString();
+                        const byName = b.backedUpBy
+                            ? `by member #${b.backedUpBy}`
+                            : "automatically";
+                        return `v${b.version}: ${date} ${byName}`;
+                    });
+
+                const moreBackups = backups.length > 5;
+                const moreMsg = moreBackups
+                    ? `\n(${backups.length - 5} older backups - use "!map backups" for complete list)`
+                    : "";
+
+                this.conn.reply(
+                    msg,
+                    `Recent map changes:\n${lines.join("\n")}${moreMsg}`,
+                );
+                break;
+            }
             default:
                 this.conn.reply(
                     msg,
-                    "Usage: !map <update|reset|export|import <data>>",
+                    "Usage: !map <update|reset|export|import <data>|backups|restore <id>|history>",
                 );
         }
     };
