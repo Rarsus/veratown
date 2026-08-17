@@ -66,6 +66,12 @@ export {
 export type { VeratownRegion } from "./veratown/regionManager";
 export { RegionManager } from "./veratown/regionManager";
 
+export interface VeratownConnections {
+    main: API_Connector;
+    shower?: API_Connector;
+    casino?: API_Connector;
+}
+
 export class Veratown {
     public static description = [
         "=== WELCOME TO VERATOWN ===",
@@ -116,6 +122,10 @@ export class Veratown {
     private commandParser: CommandParser;
     private regionManager: RegionManager;
 
+    private conn: API_Connector;
+    private conn2?: API_Connector;
+    private conn3?: API_Connector;
+
     private dare?: Dare;
     private casino?: Casino;
 
@@ -143,13 +153,15 @@ export class Veratown {
     private locationStore?: VeratownLocationStore;
 
     public constructor(
-        private conn: API_Connector,
-        private conn2?: API_Connector,
+        connections: VeratownConnections,
         db?: Db,
         dareConfig?: DareConfig,
-        private conn3?: API_Connector,
         private casinoConfig?: CasinoConfig,
     ) {
+        this.conn = connections.main;
+        this.conn2 = connections.shower;
+        this.conn3 = connections.casino;
+
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
         ]);

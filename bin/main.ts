@@ -22,6 +22,7 @@ import { ConfigFile } from "./config";
 import { Db, MongoClient } from "mongodb";
 import {
     Veratown,
+    VeratownConnections,
     GAME_LOCATION,
     GAME_MISTRESS_POSITION,
     VERATOWN_LOCATIONS_FALLBACK,
@@ -206,6 +207,8 @@ export interface RopeyBot {
     game: string;
 }
 
+type BotConnections = VeratownConnections;
+
 export async function startBot(): Promise<RopeyBot> {
     process.on("SIGINT", () => {
         console.log("SIGINT received, exiting");
@@ -261,38 +264,40 @@ export async function startBot(): Promise<RopeyBot> {
         console.log("...ping successful!");
     }
 
-    const connector = new API_Connector(
+    const mainBotConn = new API_Connector(
         serverUrl,
         config.user,
         config.password,
         config.env,
     );
-    await connector.joinOrCreateRoom(config.room);
+    await mainBotConn.joinOrCreateRoom(config.room);
 
-    if (!connector.Player.IsRoomAdmin()) {
+    if (!mainBotConn.Player.IsRoomAdmin()) {
         console.log(
-            `${connector.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
+            `${mainBotConn.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
         );
     }
+
+    const botConnections: BotConnections = { main: mainBotConn };
 
     switch (config.game) {
         case undefined:
             break;
         case "kidnappers":
             console.log("Starting game: Kidnappers");
-            const kidnappersGame = new KidnappersGameRoom(connector, config);
-            connector.accountUpdate({ Nickname: "Kidnappers Bot" });
-            connector.setBotDescription(KidnappersGameRoom.description);
-            connector.startBot(kidnappersGame);
+            const kidnappersGame = new KidnappersGameRoom(mainBotConn, config);
+            mainBotConn.accountUpdate({ Nickname: "Kidnappers Bot" });
+            mainBotConn.setBotDescription(KidnappersGameRoom.description);
+            mainBotConn.startBot(kidnappersGame);
             break;
         case "roleplay":
             console.log("Starting game: Roleplay challenge");
             const roleplayGame = new RoleplaychallengeGameRoom(
-                connector,
+                mainBotConn,
                 config,
             );
-            connector.setBotDescription(RoleplaychallengeGameRoom.description);
-            connector.startBot(roleplayGame);
+            mainBotConn.setBotDescription(RoleplaychallengeGameRoom.description);
+            mainBotConn.startBot(roleplayGame);
             break;
         case "maidspartynight":
             console.log("Starting game: Maid's Party Night");
@@ -300,15 +305,15 @@ export async function startBot(): Promise<RopeyBot> {
                 console.log("Need user2 and password2 for Maid's Party Night");
                 process.exit(1);
             }
-            const connector2 = new API_Connector(
+            const secondaryBotConn = new API_Connector(
                 serverUrl,
                 config.user2,
                 config.password2,
                 config.env,
             );
             const maidsPartyNightGame =
-                new MaidsPartyNightSinglePlayerAdventure(connector, connector2);
-            connector.startBot(maidsPartyNightGame);
+                new MaidsPartyNightSinglePlayerAdventure(mainBotConn, secondaryBotConn);
+            mainBotConn.startBot(maidsPartyNightGame);
             break;
         case "dare":
             console.log("Starting game: dare");
@@ -318,71 +323,77 @@ export async function startBot(): Promise<RopeyBot> {
                 );
                 process.exit(1);
             }
-            connector.accountUpdate({ Nickname: "Dare Bot" });
+            mainBotConn.accountUpdate({ Nickname: "Dare Bot" });
             new Dare(
-                connector,
+                mainBotConn,
                 new DareStore(db),
                 undefined,
                 new CasinoStore(db),
                 config.dare,
             ).registerTriggers();
-            connector.setBotDescription(Dare.description);
+            mainBotConn.setBotDescription(Dare.description);
             break;
         case "veratown":
             console.log("Starting game: Veratown");
-            let veratownConn2: API_Connector | undefined;
+            let showerBotConn: API_Connector | undefined;
             if (config.user2 && config.password2) {
-                veratownConn2 = new API_Connector(
+                showerBotConn = new API_Connector(
                     serverUrl,
                     config.user2,
                     config.password2,
                     config.env,
                 );
-                await veratownConn2.joinOrCreateRoom(config.room);
-                ensureBotIsRoomAdmin(connector, veratownConn2);
+                await showerBotConn.joinOrCreateRoom(config.room);
+                ensureBotIsRoomAdmin(mainBotConn, showerBotConn);
+                botConnections.shower = showerBotConn;
             } else {
                 console.log(
-                    "No user2/password2 configured; Veratown will narrate the shower using the main bot instead of a second bot.",
+                    "No user2/password2 configured; the shower role will use the main bot connection.",
                 );
             }
 
-            let poolRouletteConn: API_Connector | undefined;
+            let casinoBotConn: API_Connector | undefined;
             if (config.user3 && config.password3) {
                 if (!db) {
                     console.log(
                         "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
                     );
                 } else {
-                    poolRouletteConn = new API_Connector(
+                    casinoBotConn = new API_Connector(
                         serverUrl,
                         config.user3,
                         config.password3,
                         config.env,
                     );
-                    await poolRouletteConn.joinOrCreateRoom(config.room);
-                    ensureBotIsRoomAdmin(connector, poolRouletteConn);
+                    await casinoBotConn.joinOrCreateRoom(config.room);
+                    ensureBotIsRoomAdmin(mainBotConn, casinoBotConn);
+                    botConnections.casino = casinoBotConn;
 
-                    poolRouletteConn.moveOnMap(
+                    casinoBotConn.moveOnMap(
                         GAME_MISTRESS_POSITION.X,
                         GAME_MISTRESS_POSITION.Y,
                     );
                 }
             } else {
                 console.log(
-                    "No user3/password3 configured; Casino will be unavailable.",
+                    "No user3/password3 configured; the casino role is unavailable.",
                 );
             }
 
+            console.log(
+                `[Startup] Bot roles active: main=${botConnections.main.Player.Name}, ` +
+                    `shower=${botConnections.shower?.Player.Name ?? "main (fallback)"}, ` +
+                    `casino=${botConnections.casino?.Player.Name ?? "disabled"}`,
+            );
+
             const veratownGame = new Veratown(
-                connector,
-                veratownConn2,
+                botConnections,
                 db,
                 config.dare,
-                poolRouletteConn,
                 config.casino,
             );
             await veratownGame.init();
-            connector.setBotDescription(Veratown.description);
+            mainBotConn.setBotDescription(Veratown.description);
             break;
         default:
             console.log("No such game " + config.game);
@@ -390,7 +401,7 @@ export async function startBot(): Promise<RopeyBot> {
     }
 
     return {
-        connector,
+        connector: mainBotConn,
         config,
         db,
         game: config.game,
