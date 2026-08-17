@@ -25,7 +25,7 @@ export interface VeratownRegion extends VeratownLocationDoc {
         TopLeft: { X: number; Y: number };
         BottomRight: { X: number; Y: number };
     };
-    regionType: "game" | "dare" | "feature" | "custom";
+    regionType: "game" | "dare" | "feature" | "custom" | "admin" | "park";
 }
 
 /**
@@ -79,7 +79,7 @@ export class RegionManager {
     /**
      * Get all regions of a specific type
      */
-    public getRegionsByType(regionType: "game" | "dare" | "feature" | "custom"): VeratownRegion[] {
+    public getRegionsByType(regionType: "game" | "dare" | "feature" | "custom" | "admin" | "park"): VeratownRegion[] {
         return Array.from(this.regions.values()).filter(r => r.regionType === regionType);
     }
 
