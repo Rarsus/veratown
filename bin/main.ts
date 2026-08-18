@@ -245,11 +245,38 @@ async function connectBotAccount(
     return connection;
 }
 
+function validateBotAccountConfiguration(config: ConfigFile): void {
+    const accounts = new Map<string, string>();
+    const addAccount = (role: string, username: string | undefined): void => {
+        if (!username) return;
+
+        const normalizedUsername = username.trim().toLowerCase();
+        const previousRole = accounts.get(normalizedUsername);
+        if (previousRole) {
+            throw new Error(
+                `Bot account "${username}" is configured for both ${previousRole} and ${role}; each logged-in bot role must use a different account.`,
+            );
+        }
+        accounts.set(normalizedUsername, role);
+    };
+
+    addAccount("main", config.user);
+
+    if (config.game === "maidspartynight") {
+        addAccount("secondary", config.user2);
+    } else if (config.game === "veratown") {
+        addAccount("shower", config.user2);
+        if (config.user3 && config.password3) addAccount("casino", config.user3);
+    }
+}
+
 async function createBotConnections(
     serverUrl: string,
     config: ConfigFile,
     db?: Db,
 ): Promise<BotConnections> {
+    validateBotAccountConfiguration(config);
+
     const main = await connectBotAccount(
         serverUrl,
         config,
