@@ -67,6 +67,10 @@ const LZSTRING_MAGIC = "╬";
 
 const ServerChatMessageMaxLength = 2000; // from bc-server
 
+export function normalizeWhisperContent(message: string): string {
+    return message.replaceAll("(", "[").replaceAll(")", "]");
+}
+
 class PromiseResolve<T> {
     public prom: Promise<T>;
     public resolve!: (x: T) => void;
@@ -225,6 +229,10 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         target?: number,
         dict?: Record<string, any>[],
     ): void {
+        if (type === "Whisper") {
+            msg = normalizeWhisperContent(msg);
+        }
+
         if (msg.length > ServerChatMessageMaxLength) {
             console.error("Message too long, truncating");
             msg = msg.substring(0, ServerChatMessageMaxLength);

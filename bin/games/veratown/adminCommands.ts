@@ -368,14 +368,14 @@ export class VeratownAdminCommands {
                         return [
                             `ID: ${b._id}`,
                             `Version: v${b.version}`,
-                            `Saved: ${date} (${byName})`,
+                            `Saved: ${date}, ${byName}`,
                             `Restore: !map restore ${b._id}`,
                         ].join(" | ");
                     });
 
                 const moreBackups = backups.length > 5;
                 const moreMsg = moreBackups
-                    ? `\n(${backups.length - 5} older backups - use "!map backups" for complete list)`
+                    ? `\n${backups.length - 5} older backups. Use "!map backups" for the complete list.`
                     : "";
 
                 this.conn.reply(

@@ -5,6 +5,7 @@ import {
     validateBotAccountConfiguration,
 } from "./botConnections";
 import { ConfigFile } from "./config";
+import { normalizeWhisperContent } from "bc-bot";
 
 function config(overrides: Partial<ConfigFile>): ConfigFile {
     return {
@@ -60,4 +61,13 @@ test("duplicate active bot accounts are rejected", () => {
             config({ user2: "MAIN", password2: "password" }),
         ),
     );
+});
+
+test("whisper content replaces parentheses with readable brackets", () => {
+    const content = normalizeWhisperContent(
+        "Position: (12, 34) and metadata (enabled)",
+    );
+
+    assert.equal(content, "Position: [12, 34] and metadata [enabled]");
+    assert.doesNotMatch(content, /[()]/);
 });
