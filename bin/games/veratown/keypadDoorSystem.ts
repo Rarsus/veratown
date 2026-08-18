@@ -264,6 +264,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 msg.sender,
                 door.config.whitelistMemberNumbers,
             );
+            if (!door.config.codes[group]) {
+                this.conn.reply(
+                    msg.message,
+                    `${group} access is not enabled for this keypad.`,
+                );
+                return;
+            }
             if (door.config.codes[group] !== code) {
                 this.conn.reply(msg.message, "Invalid keypad code.");
                 return;
@@ -303,6 +310,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             msg.sender,
             door.config.whitelistMemberNumbers,
         );
+        if (!door.config.codes[group]) {
+            this.conn.reply(
+                msg.message,
+                `${group} access is not enabled for this keypad.`,
+            );
+            return;
+        }
         if (door.config.codes[group] !== match[1]) {
             this.conn.reply(msg.message, "Invalid keypad code.");
             return;

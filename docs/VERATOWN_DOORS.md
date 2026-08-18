@@ -55,8 +55,7 @@ and `enabled` set to `true`.
     "unlockDurationMs": 10000,
     "codes": {
       "admin": "ADMIN-CODE",
-      "whitelist": "STAFF-CODE",
-      "guest": "GUEST-CODE"
+      "whitelist": "STAFF-CODE"
     },
     "whitelistMemberNumbers": [250927],
     "insideTopLeftX": 21,
@@ -95,8 +94,9 @@ Access is selected in this order:
 2. `whitelist`: the user's member number is in `whitelistMemberNumbers`.
 3. `guest`: everyone else.
 
-A group can be disabled by omitting its code. For example, omitting `guest`
-means guests cannot unlock that keypad. The code comparison is exact after the
+A group can be disabled by omitting its code. The example above makes guest
+access optional by omitting `guest`, so only admins and configured whitelist
+members can unlock that keypad. The code comparison is exact after the
 incoming whisper wrapper is removed and surrounding whitespace is trimmed.
 
 The legacy `data.code` field is accepted as the guest code when
