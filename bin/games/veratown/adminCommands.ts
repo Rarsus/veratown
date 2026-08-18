@@ -85,11 +85,6 @@ export class VeratownAdminCommands {
             "location",
             guardHandler("admin:location", this.onCommandLocation),
         );
-        this.commandParser.register(
-            "status",
-            guardHandler("admin:status", this.onCommandStatus),
-        );
-
         // "!map import <data>" is handled separately from the other "map"
         // subcommands above: CommandParser lowercases the *entire* message
         // before any handler sees it (including command arguments), but
@@ -473,6 +468,10 @@ export class VeratownAdminCommands {
             "!feature <list|enable|disable> [name]",
             "  Manage room features. Use '!feature list' to see available features.",
             "",
+            "!door <help|change-code|add-user|remove-user|list|lock|unlock>",
+            "  Manage the keypad door at the current keypad tile.",
+            "  Change codes, manage whitelist members, inspect status, or lock and unlock the door.",
+            "",
             "!status",
             "  Show bot connection, location, and feature status.",
             "",
@@ -486,6 +485,7 @@ export class VeratownAdminCommands {
             "!location <add|get|update|delete|list|enable|disable>",
             "  Manage database locations:",
             "    - add <key> <name> <type> <x> <y> [metadata_json]",
+            "    - keypad_door metadata also requires insideTopLeftX, insideTopLeftY, insideBottomRightX, insideBottomRightY for directional exit protection",
             "    - get <key>: View location details",
             "    - update <key> <field> <value>: Update name/type/x/y/data",
             "    - delete <key>: Remove location",

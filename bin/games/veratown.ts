@@ -34,6 +34,7 @@ import { BedSystem } from "./veratown/bedSystem";
 import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
+import { KeypadDoorSystem } from "./veratown/keypadDoorSystem";
 import { VeratownFeatureSystem } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
 import {
@@ -86,7 +87,8 @@ export class Veratown {
         "/bot freeandleave - Remove all restraints and exit the room",
         "/bot changelog - View recent map changes",
             "/bot status - View bot connection, location, and feature status",
-        "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, dare, casino",
+        "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, keypadDoor, dare, casino",
+        "Keypad doors accept group codes at configured keypad locations.",
         "",
         "DARE GAME WHEN ENABLED:",
         "/bot dare join - Enter the dare game lobby",
@@ -140,6 +142,7 @@ export class Veratown {
     private bunnyParkSystem?: BunnyParkSystem;
     private windowSystem?: WindowSystem;
     private trashcanSystem?: TrashcanSystem;
+    private keypadDoorSystem?: KeypadDoorSystem;
 
     // Every successfully-initialized room feature, in registration order.
     // Backs the "/bot feature list|enable|disable" command; systems that
@@ -243,6 +246,15 @@ export class Veratown {
             () =>
                 new TrashcanSystem(
                     this.conn,
+                ),
+        );
+        this.keypadDoorSystem = this.initFeature(
+            () =>
+                new KeypadDoorSystem(
+                    this.conn,
+                    this.commandParser,
+                    this.locationStore,
+                    () => this.reloadLocations(),
                 ),
         );
 

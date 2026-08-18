@@ -31,6 +31,7 @@ Complete documentation suite for Veratown+, a persistent-world roleplay bot with
 
 ### 🗺️ For Map Designers
 - **[Map & Regions Reference](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md)** - Complete map layout
+- **[Door System](VERATOWN_DOORS.md)** - Keypad doors, group codes, tile styles, and exit protection
 - **[Region Definitions](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#region-definitions)** - All regions with coordinates
 - **[Map Tools](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#map-editor--tools)** - Edit, export, import
 - **[Planned Improvements](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#planned-improvements)** - Future features
