@@ -246,7 +246,10 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
                 this.SendMessage("Emote", "*" + prefix + reply);
             }
         } else {
-            this.SendMessage("Whisper", prefix + reply, orig.Sender);
+            // Map-room parentheses are a public-chat convention. They must
+            // not be added to private whispers, where they become visible
+            // message content and can prevent the whisper from rendering.
+            this.SendMessage("Whisper", reply, orig.Sender);
         }
     }
 

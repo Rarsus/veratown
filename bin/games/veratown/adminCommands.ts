@@ -365,7 +365,12 @@ export class VeratownAdminCommands {
                         const byName = b.backedUpBy
                             ? `by member #${b.backedUpBy}`
                             : "automatically";
-                        return `v${b.version}: ${date} ${byName}`;
+                        return [
+                            `ID: ${b._id}`,
+                            `Version: v${b.version}`,
+                            `Saved: ${date} (${byName})`,
+                            `Restore: !map restore ${b._id}`,
+                        ].join(" | ");
                     });
 
                 const moreBackups = backups.length > 5;

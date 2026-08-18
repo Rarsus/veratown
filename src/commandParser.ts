@@ -57,8 +57,13 @@ export class CommandParser {
     }
 
     private onMessage = (ev: API_Message) => {
-        // trim any leading or trailing parentheses from the message
-        const msg = ev.message.Content.replace(/^\(+/, "").replace(/\)+$/, "");
+        // BC wraps private whispers in one pair of parentheses. Remove only
+        // that protocol wrapper so ordinary message punctuation is preserved.
+        const msg =
+            ev.message.Content.startsWith("(") &&
+            ev.message.Content.endsWith(")")
+                ? ev.message.Content.slice(1, -1)
+                : ev.message.Content;
 
         let cmdString: string | undefined;
         if (

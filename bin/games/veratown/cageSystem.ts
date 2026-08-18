@@ -346,7 +346,7 @@ export class CageSystem implements VeratownFeatureSystem {
         }
 
         if (this.cagedCharacters.size === 0) {
-            character.Tell("Whisper", "(All cages are currently empty.");
+            character.Tell("Whisper", "All cages are currently empty.");
             return;
         }
 
@@ -357,6 +357,6 @@ export class CageSystem implements VeratownFeatureSystem {
             })
             .join("\n");
 
-        character.Tell("Whisper", `(Cage occupancy:\n${info}`);
+        character.Tell("Whisper", `Cage occupancy:\n${info}`);
     };
 }
