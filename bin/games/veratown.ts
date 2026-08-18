@@ -88,6 +88,7 @@ export class Veratown {
         "/bot changelog - View recent map changes",
             "/bot status - View bot connection, location, and feature status",
         "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, keypadDoor, dare, casino",
+        "/bot code <code> - Open the keypad door while standing on a keypad",
         "Keypad doors accept group codes at configured keypad locations.",
         "",
         "DARE GAME WHEN ENABLED:",

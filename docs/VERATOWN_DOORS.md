@@ -11,6 +11,16 @@ coordinates. A user whispers a configured code while standing on that keypad.
 The bot identifies the user's group, changes the configured door tile to its
 open style, and restores the locked style after the unlock period.
 
+Users can enter the code in either of these ways while standing on the keypad:
+
+```text
+<code>
+/bot code <code>
+```
+
+The `/bot code` form is useful for hidden bot commands and preserves the code's
+original casing. Both forms use the same group validation and unlock behavior.
+
 The unlock is group-based and global. Once a code is accepted, every user can
 use the open door until the timer expires. This is intentional and is different
 from per-user door permissions.
@@ -18,6 +28,11 @@ from per-user door permissions.
 The door remains open while any non-bot character is inside the configured
 `insideRegion`. This prevents the timer from locking people inside. When the
 inside region becomes empty, the door returns to its locked tile.
+
+After a player remains on the keypad for 1500 milliseconds, the bot whispers a
+short prompt explaining that they can try `/bot code <code>`. The prompt is
+cancelled if they leave before the delay completes and is restarted when they
+step onto the keypad again.
 
 ## Location Schema
 

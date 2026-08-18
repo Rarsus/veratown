@@ -44,6 +44,8 @@ interface KeypadDoor {
     timer?: ReturnType<typeof setTimeout>;
 }
 
+const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
+
 export function getKeypadAccessGroup(
     character: API_Character,
     whitelistMemberNumbers: readonly number[],
@@ -142,20 +144,32 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private doors: KeypadDoor[] = [];
+    private readonly keypadTrigger: ReturnType<typeof guardHandler>;
+    private notificationTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     public constructor(
         private conn: API_Connector,
         private commandParser?: CommandParser,
         private locationStore?: VeratownLocationStore,
         private reloadLocationsCallback?: () => Promise<void>,
-    ) {}
+    ) {
+        this.keypadTrigger = guardHandler(
+            this.key,
+            this.onCharacterAtKeypad,
+        );
+    }
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));
         this.commandParser?.register("door", this.onDoorCommandPlaceholder);
+        this.commandParser?.register("code", this.onCodeCommandPlaceholder);
         this.conn.on(
             "Message",
             guardHandler(`${this.key}:admin`, this.onAdminMessage),
+        );
+        this.conn.on(
+            "Message",
+            guardHandler(`${this.key}:code`, this.onCodeMessage),
         );
     }
 
@@ -164,6 +178,20 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> {
         for (const door of this.doors) {
             if (door.timer) clearTimeout(door.timer);
+        }
+        for (const timer of this.notificationTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.notificationTimers.clear();
+
+        for (const door of this.doors) {
+            if (door.location.x !== undefined && door.location.y !== undefined) {
+                this.conn.chatRoom?.map.removeTileTrigger(
+                    door.location.x,
+                    door.location.y,
+                    this.keypadTrigger,
+                );
+            }
         }
 
         this.doors = locations
@@ -175,6 +203,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             .filter((door): door is KeypadDoor => door !== undefined);
 
         for (const door of this.doors) {
+            if (door.location.x !== undefined && door.location.y !== undefined) {
+                this.conn.chatRoom?.map.addTileTrigger(
+                    { X: door.location.x, Y: door.location.y },
+                    this.keypadTrigger,
+                );
+            }
             if (this.hasInsideOccupants(door)) {
                 this.setDoorTile(door, door.config.unlockedTile);
                 this.scheduleLockWhenEmpty(door);
@@ -186,6 +220,30 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             );
         }
     }
+
+    private onCharacterAtKeypad = (character: API_Character): void => {
+        const door = this.findDoorAt(character);
+        if (!door) return;
+
+        const notificationKey = `${door.location.key}:${character.MemberNumber}`;
+        const existingTimer = this.notificationTimers.get(notificationKey);
+        if (existingTimer) clearTimeout(existingTimer);
+
+        const timer = setTimeout(() => {
+            this.notificationTimers.delete(notificationKey);
+            const stillAtKeypad =
+                character.MapPos.X === door.location.x &&
+                character.MapPos.Y === door.location.y;
+            if (!stillAtKeypad) return;
+
+            character.Tell(
+                "Whisper",
+                "You are standing at a keypad. Whisper /bot code followed by your access code to try this door.",
+            );
+        }, KEYPAD_NOTIFICATION_DELAY_MS);
+
+        this.notificationTimers.set(notificationKey, timer);
+    };
 
     private onMessage = async (msg: API_Message): Promise<void> => {
         if (!this.enabled || msg.message.Type !== "Whisper") return;
@@ -218,6 +276,39 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     private onDoorCommandPlaceholder = async (): Promise<void> => {
         // The raw listener below handles this command so code casing is kept.
+    };
+
+    private onCodeCommandPlaceholder = async (): Promise<void> => {
+        // The raw listener below handles this command so code casing is kept.
+    };
+
+    private onCodeMessage = async (msg: API_Message): Promise<void> => {
+        if (msg.message.Type !== "Hidden") return;
+
+        const match = /^ChatRoomBot\s+code\s+(\S+)\s*$/i.exec(
+            msg.message.Content,
+        );
+        if (!match) return;
+
+        const door = this.findDoorAt(msg.sender);
+        if (!door) {
+            this.conn.reply(
+                msg.message,
+                "Stand on a configured keypad tile to use the code command.",
+            );
+            return;
+        }
+
+        const group = getKeypadAccessGroup(
+            msg.sender,
+            door.config.whitelistMemberNumbers,
+        );
+        if (door.config.codes[group] !== match[1]) {
+            this.conn.reply(msg.message, "Invalid keypad code.");
+            return;
+        }
+
+        this.unlockDoor(door, group, msg.sender);
     };
 
     private onAdminMessage = async (msg: API_Message): Promise<void> => {
