@@ -5,7 +5,7 @@ import {
     validateBotAccountConfiguration,
 } from "./botConnections";
 import { ConfigFile } from "./config";
-import { normalizeWhisperContent } from "bc-bot";
+import { formatWhisperContent, normalizeWhisperContent } from "bc-bot";
 
 function config(overrides: Partial<ConfigFile>): ConfigFile {
     return {
@@ -70,4 +70,12 @@ test("whisper content replaces parentheses with readable brackets", () => {
 
     assert.equal(content, "Position: [12, 34] and metadata [enabled]");
     assert.doesNotMatch(content, /[()]/);
+});
+
+test("map whispers use a transport wrapper around clean content", () => {
+    const content = formatWhisperContent("Position: (12, 34)", true);
+
+    assert.equal(content, "(Position: [12, 34])");
+    assert.equal(content.slice(1, -1).includes("("), false);
+    assert.equal(content.slice(1, -1).includes(")"), false);
 });

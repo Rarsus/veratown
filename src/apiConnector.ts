@@ -71,6 +71,14 @@ export function normalizeWhisperContent(message: string): string {
     return message.replaceAll("(", "[").replaceAll(")", "]");
 }
 
+export function formatWhisperContent(
+    message: string,
+    acrossMap: boolean,
+): string {
+    const content = normalizeWhisperContent(message);
+    return acrossMap ? `(${content})` : content;
+}
+
 class PromiseResolve<T> {
     public prom: Promise<T>;
     public resolve!: (x: T) => void;
@@ -230,7 +238,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         dict?: Record<string, any>[],
     ): void {
         if (type === "Whisper") {
-            msg = normalizeWhisperContent(msg);
+            msg = formatWhisperContent(msg, this.chatRoom?.usesMaps() ?? false);
         }
 
         if (msg.length > ServerChatMessageMaxLength) {
