@@ -493,7 +493,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     private setDoorTile(door: KeypadDoor, tile: string): void {
-        this.conn.chatRoom?.map.setTile(
+        this.conn.chatRoom?.map.setObject(
             { X: door.config.doorX, Y: door.config.doorY },
             tile,
         );

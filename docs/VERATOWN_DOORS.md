@@ -75,8 +75,8 @@ and `enabled` set to `true`.
 | `y` | number | Keypad Y coordinate. |
 | `doorX` | number | Door tile X coordinate. |
 | `doorY` | number | Door tile Y coordinate. |
-| `lockedTile` | string | Map tile style used while locked. |
-| `unlockedTile` | string | Map tile style used while unlocked. |
+| `lockedTile` | string | Map object style used while locked. |
+| `unlockedTile` | string | Map object style used while unlocked. |
 | `unlockDurationMs` | number | Initial unlock duration in milliseconds. Defaults to 10 seconds. |
 | `codes` | object | Group-to-code mapping. At least one code is required. |
 | `insideTopLeftX` | number | Top-left X coordinate of the protected room. |
@@ -104,8 +104,8 @@ The legacy `data.code` field is accepted as the guest code when
 
 ## Supported Door Tiles
 
-`lockedTile` and `unlockedTile` must be styles known by the map tile
-catalogue. The normal door pairs are:
+`lockedTile` and `unlockedTile` must be styles known by the map object
+catalogue. Door styles are `WallPath` objects, not floor tiles. The normal door pairs are:
 
 | Locked or closed style | Open style |
 | --- | --- |
