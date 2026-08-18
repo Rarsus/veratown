@@ -14,7 +14,7 @@ This refactoring consolidates the Veratown game architecture around the `Veratow
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
-| CommandParser instances | 3 | 1 | -66% |
+| CommandParser instances | 3 | 2 | Main parser plus the dedicated casino-connector parser |
 | Duplicate code (region loading) | ~40 lines | 0 | -40 lines |
 | Features implementing FeatureSystem | 7/8 (87%) | 8/8 (100%) | +1 (Casino) |
 | Initialization patterns | 3+ | 1 unified | Standardized |
@@ -24,6 +24,14 @@ This refactoring consolidates the Veratown game architecture around the `Veratow
 ---
 
 ## Architecture: Before vs After
+
+### Current Lifecycle Guarantees
+
+- Bot account and database connections are owned by `bin/botConnections.ts`.
+- Veratown loads one location snapshot and shares it with all location-backed features.
+- Administrative location and region changes invalidate that snapshot and replace dynamic triggers.
+- Intentional shutdown disconnects bot sockets before closing MongoDB.
+- `/bot status` reports connection, persistence, and feature state.
 
 ### Before Refactoring
 
@@ -66,13 +74,14 @@ main.ts
 │       └── Casino ← [NOW INTEGRATED]
 │           └── Implements VeratownFeatureSystem ✓
 │           └── Uses shared locationUtils
-│           └── Receives shared CommandParser
+│           └── Uses a parser bound to the dedicated casino connection
 └── conn3 (pool roulette, if configured)
     └── Casino (separate instance for advanced multi-bot deployments)
 ```
 
 **Improvements**:
-- 1 CommandParser instance shared by all features
+- 1 main CommandParser shared by main-connection features
+- Casino uses its own parser because it runs on a separate connector and region
 - Casino fully participates in `/bot feature` commands
 - All features follow identical initialization pattern
 - Unified enable/disable control for all features
@@ -142,14 +151,14 @@ private async loadLocations() {
    - Import Casino class
    - Add `private casino?: Casino;` field
    - Initialize Casino in constructor using `initFeature()` pattern
-   - Pass `this.commandParser` (shared) to Casino
+    - Keep Casino's parser bound to the dedicated casino connection
    - Pass `this.locationStore` (shared) to Casino
    - Casino now participates in feature lifecycle
 
 **Benefits**:
 - `/bot feature list` includes casino
 - `/bot feature disable casino` works (respected by all handlers)
-- Single CommandParser processes all casino commands
+- Dedicated casino CommandParser processes casino-connector messages
 - Casino errors isolated via guardHandler (won't crash bot)
 - Consistent error handling pattern across all features
 

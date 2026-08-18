@@ -36,7 +36,10 @@ import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { VeratownFeatureSystem } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
-import { VeratownLocationStore } from "./veratown/veratownLocationStore";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratown/veratownLocationStore";
 import { VeratownAdminCommands } from "./veratown/adminCommands";
 import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import {
@@ -82,6 +85,7 @@ export class Veratown {
         "/bot help - Display this help message",
         "/bot freeandleave - Remove all restraints and exit the room",
         "/bot changelog - View recent map changes",
+            "/bot status - View bot connection, location, and feature status",
         "/bot feature list - See available room features (cage, kennel, shower, bed, bunnyPark, window, trashcan, dare, casino)",
         "",
         "DARE GAME (if available):",
@@ -142,6 +146,9 @@ export class Veratown {
     // failed to construct or register (see initFeature()) are simply
     // absent from this list rather than crashing Veratown's startup.
     private features: VeratownFeatureSystem[] = [];
+    private pendingFeatureRegistrations: Promise<void>[] = [];
+    private locationSnapshot: VeratownLocationDoc[] = [];
+    private locationReload?: Promise<void>;
 
     // Only set when mongo_uri/mongo_db are configured; without it, the map
     // layout falls back to the built-in default (MAP, from veratownConfig.ts)
@@ -180,8 +187,6 @@ export class Veratown {
                         this.commandParser,
                         new CasinoStore(db),
                         effectiveDareConfig,
-                        this.locationStore,
-                        VERATOWN_LOCATIONS_FALLBACK,
                     ),
             );
             this.mapStore = new VeratownMapStore(db);
@@ -201,16 +206,12 @@ export class Veratown {
             () =>
                 new CageSystem(
                     this.conn,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
         this.kennelSystem = this.initFeature(
             () =>
                 new KennelSystem(
                     this.conn,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
         this.showerSystem = this.initFeature(
@@ -218,40 +219,30 @@ export class Veratown {
                 new ShowerSystem(
                     this.conn,
                     this.conn2,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
         this.bedSystem = this.initFeature(
             () =>
                 new BedSystem(
                     this.conn,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
         this.bunnyParkSystem = this.initFeature(
             () =>
                 new BunnyParkSystem(
                     this.conn,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
         this.windowSystem = this.initFeature(
             () =>
                 new WindowSystem(
                     this.conn,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
         this.trashcanSystem = this.initFeature(
             () =>
                 new TrashcanSystem(
                     this.conn,
-                    this.locationStore,
-                    VERATOWN_LOCATIONS_FALLBACK,
                 ),
         );
 
@@ -295,6 +286,8 @@ export class Veratown {
             this.regionManager,
             (character) => this.freeCharacter(character),
             this.conn2,
+            () => this.reloadLocations(),
+            () => this.getStatus(),
         ).registerCommands();
     }
 
@@ -310,8 +303,16 @@ export class Veratown {
         let system: T | undefined;
         try {
             system = factory();
-            system.registerTriggers();
-            this.features.push(system);
+            const registration = system.registerTriggers();
+            if (registration instanceof Promise) {
+                this.pendingFeatureRegistrations.push(
+                    registration.then(() => {
+                        this.features.push(system!);
+                    }),
+                );
+            } else {
+                this.features.push(system);
+            }
             return system;
         } catch (e) {
             console.error(
@@ -324,35 +325,68 @@ export class Veratown {
     }
 
     public async init(): Promise<void> {
-        // Load location data from database (or seed from config fallback)
-        if (this.locationStore) {
-            try {
-                await this.locationStore.loadLocations(
-                    VERATOWN_LOCATIONS_FALLBACK,
-                );
-                console.log("[Veratown] Location store initialized and ready");
-                
-                // Load regions from database and add static fallbacks
-                await this.regionManager.loadRegions(this.locationStore);
-                for (const [key, region] of FEATURE_REGIONS_STATIC) {
-                    this.regionManager.addStaticRegion(region);
-                }
-                
-                // Validate regions - warn if database conflicts with static definitions
-                const warnings = this.regionManager.validateRegions(FEATURE_REGIONS_STATIC);
-                for (const warning of warnings) {
-                    console.warn(warning);
-                }
-            } catch (e) {
-                console.error(
-                    "[Veratown] Failed to initialize location store",
-                    e,
-                );
-            }
-        }
+        await Promise.all(this.pendingFeatureRegistrations);
+        await this.reloadLocations();
 
         await this.setupRoom();
         await this.setupCharacter();
+    }
+
+    public async reloadLocations(): Promise<void> {
+        if (this.locationReload) return this.locationReload;
+
+        this.locationReload = (async () => {
+            try {
+                this.locationSnapshot = this.locationStore
+                    ? await this.locationStore.reloadLocations(
+                          VERATOWN_LOCATIONS_FALLBACK,
+                      )
+                    : [];
+
+                if (this.locationStore) {
+                    await this.regionManager.loadRegions(this.locationStore);
+                    for (const [key, region] of FEATURE_REGIONS_STATIC) {
+                        this.regionManager.addStaticRegion(region);
+                    }
+
+                    for (const warning of this.regionManager.validateRegions(
+                        FEATURE_REGIONS_STATIC,
+                    )) {
+                        console.warn(warning);
+                    }
+                }
+
+                await Promise.all(
+                    this.features
+                        .filter((feature) => feature.reloadLocations)
+                        .map((feature) =>
+                            feature.reloadLocations!(this.locationSnapshot),
+                        ),
+                );
+                console.log(
+                    `[Veratown] Loaded ${this.locationSnapshot.length} locations`,
+                );
+            } catch (e) {
+                console.error("[Veratown] Failed to reload locations", e);
+                throw e;
+            } finally {
+                this.locationReload = undefined;
+            }
+        })();
+
+        return this.locationReload;
+    }
+
+    public getStatus(): string {
+        const features = this.features
+            .map((feature) => `${feature.key}=${feature.enabled ? "on" : "off"}`)
+            .join(", ");
+        return [
+            `Veratown: ${this.conn.isConnected() ? "connected" : "disconnected"}`,
+            `locations=${this.locationSnapshot.length}`,
+            `database=${this.locationStore ? "configured" : "fallback"}`,
+            `features=${features || "none"}`,
+        ].join("\n");
     }
 
     public getRegionManager(): RegionManager {

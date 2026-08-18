@@ -22,10 +22,7 @@ import {
     BUNNY_ROPE_COLOR,
     BUNNY_ROPE_CRAFT_DESCRIPTION,
 } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 
 // Owns the bunny park: warns visitors on entry, then punishes anyone who
 // steps on one of the protected bunnies with a randomly-chosen rope
@@ -41,78 +38,68 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
 
     private bunnyPositions: Array<{ X: number; Y: number }> = [];
     private parkRegion: MapRegion = PARK;
+    private readonly bunnyTrigger: ReturnType<typeof guardHandler>;
+    private readonly parkTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
-    ) {}
-
-    public registerTriggers(): void {
-        this.conn.chatRoom.map.addEnterRegionTrigger(
-            this.parkRegion,
-            guardHandler(this.key, this.onCharacterEnterPark),
+    ) {
+        this.bunnyTrigger = guardHandler(
+            this.key,
+            this.onCharacterStepOnBunny,
         );
-
-        // Fire async location loading in the background
-        this.loadLocations();
+        this.parkTrigger = guardHandler(this.key, this.onCharacterEnterPark);
     }
 
-    private async loadLocations(): Promise<void> {
-        try {
-            // Load bunny locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const bunnies = locations.filter(
-                        (loc) => loc.type === "bunny",
-                    );
-                    this.bunnyPositions = bunnies.map((bunny) => ({
-                        X: bunny.x,
-                        Y: bunny.y,
-                    }));
+    public registerTriggers(): void {
+        // Location-backed triggers are registered by reloadLocations().
+    }
 
-                    // Also load park region if present
-                    const park = locations.find(
-                        (loc) => loc.type === "park_region",
-                    );
-                    if (
-                        park &&
-                        park.data?.bottomRightX &&
-                        park.data?.bottomRightY
-                    ) {
-                        this.parkRegion = {
-                            TopLeft: { X: park.x, Y: park.y },
-                            BottomRight: {
-                                X: park.data.bottomRightX as number,
-                                Y: park.data.bottomRightY as number,
-                            },
-                        };
-                    }
-                } catch (e) {
-                    console.error(
-                        "[BunnyParkSystem] Failed to load locations from database",
-                        e,
-                    );
-                }
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        try {
+            this.conn.chatRoom.map.removeEnterRegionTrigger(this.parkTrigger);
+            for (const bunnyPos of this.bunnyPositions) {
+                this.conn.chatRoom.map.removeTileTrigger(
+                    bunnyPos.X,
+                    bunnyPos.Y,
+                    this.bunnyTrigger,
+                );
+            }
+            this.bunnyPositions = locations
+                .filter((loc) => loc.type === "bunny" && loc.enabled)
+                .map((bunny) => ({ X: bunny.x!, Y: bunny.y! }));
+
+            const park = locations.find(
+                (loc) => loc.type === "park_region" && loc.enabled,
+            );
+            if (park && park.data?.bottomRightX && park.data?.bottomRightY) {
+                this.parkRegion = {
+                    TopLeft: { X: park.x!, Y: park.y! },
+                    BottomRight: {
+                        X: park.data.bottomRightX as number,
+                        Y: park.data.bottomRightY as number,
+                    },
+                };
+            } else {
+                this.parkRegion = PARK;
             }
 
-            // If no database locations loaded, fall back to hardcoded BUNNY_POSITIONS
-            if (this.bunnyPositions.length === 0) {
+            if (locations.length === 0) {
                 this.bunnyPositions = [...BUNNY_POSITIONS];
             }
 
-            // Register tile triggers for bunny positions
-            const onCharacterStepOnBunny = guardHandler(
-                this.key,
-                this.onCharacterStepOnBunny,
+            this.conn.chatRoom.map.addEnterRegionTrigger(
+                this.parkRegion,
+                this.parkTrigger,
             );
+
+            // Register tile triggers for bunny positions
             for (const bunnyPos of this.bunnyPositions) {
                 this.conn.chatRoom.map.addTileTrigger(
                     bunnyPos,
-                    onCharacterStepOnBunny,
+                    this.bunnyTrigger,
                 );
             }
 

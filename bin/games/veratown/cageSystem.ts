@@ -25,10 +25,7 @@ import {
     CAGE_INFORMATION_SCREEN,
     CRATE_LOCK_PASSWORD,
 } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -65,24 +62,29 @@ export class CageSystem implements VeratownFeatureSystem {
             durationDescription: string;
         }
     >();
+    private readonly cageTrigger: ReturnType<typeof guardHandler>;
+    private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
+    private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
-    ) {}
+    ) {
+        this.cageTrigger = guardHandler(this.key, this.onCharacterEnterCage);
+        this.cageEntryTrigger = guardHandler(
+            this.key,
+            this.onCharacterEnterCageEntry,
+        );
+        this.cageInformationTrigger = guardHandler(
+            this.key,
+            this.onCharacterViewCageInformation,
+        );
+    }
 
     public registerTriggers(): void {
-        // Fire async location loading in the background. This allows the
-        // system to be registered synchronously while the database is queried
-        // asynchronously. By the time actual triggers fire, the loading should
-        // have completed.
-        this.loadLocations();
-
         // Register region trigger for cage information screen (doesn't depend on locations)
         this.conn.chatRoom.map.addEnterRegionTrigger(
             CAGE_INFORMATION_SCREEN,
-            guardHandler(this.key, this.onCharacterViewCageInformation),
+            this.cageInformationTrigger,
         );
     }
 
@@ -90,51 +92,51 @@ export class CageSystem implements VeratownFeatureSystem {
      * Load cage locations from the database and register tile triggers.
      * Called asynchronously so it doesn't block system initialization.
      */
-    private async loadLocations(): Promise<void> {
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
         try {
-            // Load cage locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const cages = locations.filter(
-                        (loc) => loc.type === "cage",
-                    );
+            for (const posKey of this.cagesByPos.keys()) {
+                const [x, y] = posKey.split(",").map(Number);
+                this.conn.chatRoom.map.removeTileTrigger(x, y, this.cageTrigger);
+            }
+            for (const posKey of this.cageEntriesByPos.keys()) {
+                const [x, y] = posKey.split(",").map(Number);
+                this.conn.chatRoom.map.removeTileTrigger(
+                    x,
+                    y,
+                    this.cageEntryTrigger,
+                );
+            }
+            this.cagesByPos.clear();
+            this.cageEntriesByPos.clear();
 
-                    for (const cage of cages) {
-                        if (!cage.enabled) continue;
+            const cages = locations.filter(
+                (loc) => loc.type === "cage" && loc.enabled,
+            );
+            for (const cage of cages) {
+                const posKey = `${cage.x},${cage.y}`;
+                const entryPosKey = `${cage.data?.entryX ?? cage.x},${cage.data?.entryY ?? cage.y}`;
+                const durationMs =
+                    (cage.data?.durationMs as number) ?? 5 * 60 * 1000;
+                const durationDescription =
+                    (cage.data?.durationDescription as string) ??
+                    "an undetermined length of time";
 
-                        const posKey = `${cage.x},${cage.y}`;
-                        const entryPosKey = `${cage.data?.entryX ?? cage.x},${cage.data?.entryY ?? cage.y}`;
-                        const durationMs =
-                            (cage.data?.durationMs as number) ?? 5 * 60 * 1000;
-                        const durationDescription =
-                            (cage.data?.durationDescription as string) ??
-                            "an undetermined length of time";
-
-                        this.cagesByPos.set(posKey, {
-                            doc: cage,
-                            durationMs,
-                            durationDescription,
-                        });
-                        this.cageEntriesByPos.set(entryPosKey, {
-                            doc: cage,
-                            durationMs,
-                            durationDescription,
-                        });
-                    }
-                } catch (e) {
-                    console.error(
-                        "[CageSystem] Failed to load locations from database",
-                        e,
-                    );
-                    // Fall through to use CAGES fallback below
-                }
+                this.cagesByPos.set(posKey, {
+                    doc: cage,
+                    durationMs,
+                    durationDescription,
+                });
+                this.cageEntriesByPos.set(entryPosKey, {
+                    doc: cage,
+                    durationMs,
+                    durationDescription,
+                });
             }
 
             // If no database locations loaded, fall back to hardcoded CAGES
-            if (this.cagesByPos.size === 0) {
+            if (locations.length === 0) {
                 for (const cage of CAGES) {
                     const posKey = `${cage.pos.X},${cage.pos.Y}`;
                     const entryPosKey = `${cage.entryPos.X},${cage.entryPos.Y}`;
@@ -182,28 +184,20 @@ export class CageSystem implements VeratownFeatureSystem {
             }
 
             // Register tile triggers for cage positions
-            const onCharacterEnterCage = guardHandler(
-                this.key,
-                this.onCharacterEnterCage,
-            );
             for (const posKey of this.cagesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
                 this.conn.chatRoom.map.addTileTrigger(
                     { X: x, Y: y },
-                    onCharacterEnterCage,
+                    this.cageTrigger,
                 );
             }
 
             // Register tile triggers for cage entry positions
-            const onCharacterEnterCageEntry = guardHandler(
-                this.key,
-                this.onCharacterEnterCageEntry,
-            );
             for (const posKey of this.cageEntriesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
                 this.conn.chatRoom.map.addTileTrigger(
                     { X: x, Y: y },
-                    onCharacterEnterCageEntry,
+                    this.cageEntryTrigger,
                 );
             }
 

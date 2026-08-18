@@ -30,11 +30,7 @@ import {
     lockInForfeitKennel,
 } from "./casino/forfeits";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratown/veratownLocationStore";
-import { loadRegionFromDatabase } from "./shared/locationUtils";
+import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
 
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
@@ -250,6 +246,7 @@ Game Overview
 
     private region?: MapRegion;
     private dareRegion?: MapRegion;
+    private configuredRegion?: MapRegion;
 
     public constructor(
         private conn: API_Connector,
@@ -257,12 +254,11 @@ Game Overview
         commandParser?: CommandParser,
         private casinoStore?: CasinoStore,
         config?: DareConfig,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
     ) {
         this.commandParser =
             commandParser ?? new CommandParser(conn, config?.region);
         this.region = config?.region;
+        this.configuredRegion = config?.region;
         this.ready = this.loadState().catch((e) => {
             console.error("[dare] Failed to load persisted state", e);
         });
@@ -293,17 +289,30 @@ Game Overview
             STRIP_ENFORCE_INTERVAL_MS,
         );
 
-        // Fire async location loading in the background
-        this.loadLocations();
     }
 
-    private async loadLocations(): Promise<void> {
-        if (this.locationStore && this.fallbackLocations) {
-            this.dareRegion = await loadRegionFromDatabase(
-                this.locationStore,
-                "dare_region",
-                this.fallbackLocations,
-            );
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        this.dareRegion = undefined;
+        this.region = this.configuredRegion;
+        const region = locations.find(
+            (location) =>
+                location.type === "dare_region" && location.enabled &&
+                typeof location.x === "number" &&
+                typeof location.y === "number" &&
+                typeof location.data?.bottomRightX === "number" &&
+                typeof location.data?.bottomRightY === "number",
+        );
+        if (region) {
+            this.dareRegion = {
+                TopLeft: { X: region.x!, Y: region.y! },
+                BottomRight: {
+                    X: region.data!.bottomRightX as number,
+                    Y: region.data!.bottomRightY as number,
+                },
+            };
+            this.region = this.dareRegion;
         }
         console.log(
             `[dare] Loaded dare region: ${this.dareRegion ? "from database" : "using config fallback or none"}`,

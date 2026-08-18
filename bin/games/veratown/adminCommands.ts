@@ -56,6 +56,8 @@ export class VeratownAdminCommands {
         // used only to exclude it from the maintenance shutdown's
         // free/kick pass, since it's a bot, not a room member.
         private conn2?: API_Connector,
+        private reloadLocations?: () => Promise<void>,
+        private getStatus?: () => string,
     ) {}
 
     public registerCommands(): void {
@@ -83,10 +85,18 @@ export class VeratownAdminCommands {
             "location",
             guardHandler("admin:location", this.onCommandLocation),
         );
+        this.commandParser.register(
+            "status",
+            guardHandler("admin:status", this.onCommandStatus),
+        );
 
         // "!map import <data>" is handled separately from the other "map"
         // subcommands above: CommandParser lowercases the *entire* message
         // before any handler sees it (including command arguments), but
+        this.commandParser.register(
+            "status",
+            guardHandler("admin:status", this.onCommandStatus),
+        );
         // the base64 map bundle produced by "!map export" is case-
         // sensitive, so routing "import" through CommandParser the normal
         // way would silently corrupt every import. This raw listener reads
@@ -96,6 +106,16 @@ export class VeratownAdminCommands {
             guardHandler("admin:map-import", this.onRawMessage),
         );
     }
+
+    private onCommandStatus = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+    ) => {
+        this.conn.reply(
+            msg,
+            this.getStatus?.() ?? "Veratown status unavailable.",
+        );
+    };
 
     private requireAdmin(
         sender: API_Character,
@@ -448,6 +468,9 @@ export class VeratownAdminCommands {
             "!feature <list|enable|disable> [name]",
             "  Manage room features. Use '!feature list' to see available features.",
             "",
+            "!status",
+            "  Show bot connection, location, and feature status.",
+            "",
             "!map <update|reset|export|import <data>>",
             "  Manage room layout:",
             "    - update: Save current layout as new default",
@@ -536,6 +559,7 @@ export class VeratownAdminCommands {
                         msg,
                         `Location "${key}" added successfully.`,
                     );
+                    await this.reloadLocations?.();
                 } catch (e: any) {
                     this.conn.reply(
                         msg,
@@ -642,6 +666,7 @@ export class VeratownAdminCommands {
                             msg,
                             `Location "${key}" updated successfully.`,
                         );
+                        await this.reloadLocations?.();
                     } else {
                         this.conn.reply(msg, `Location "${key}" not found.`);
                     }
@@ -669,6 +694,7 @@ export class VeratownAdminCommands {
                             msg,
                             `Location "${args[1]}" deleted successfully.`,
                         );
+                        await this.reloadLocations?.();
                     } else {
                         this.conn.reply(
                             msg,
@@ -739,6 +765,7 @@ export class VeratownAdminCommands {
                     );
                     if (success) {
                         this.conn.reply(msg, `Location "${args[1]}" enabled.`);
+                        await this.reloadLocations?.();
                     } else {
                         this.conn.reply(
                             msg,
@@ -767,6 +794,7 @@ export class VeratownAdminCommands {
                     );
                     if (success) {
                         this.conn.reply(msg, `Location "${args[1]}" disabled.`);
+                        await this.reloadLocations?.();
                     } else {
                         this.conn.reply(
                             msg,
@@ -847,6 +875,7 @@ export class VeratownAdminCommands {
 
                 try {
                     await this.regionManager!.updateRegion(this.locationStore!, region);
+                    await this.reloadLocations?.();
                     this.conn.reply(
                         msg,
                         `Region "${key}" added successfully.`,
@@ -942,6 +971,7 @@ export class VeratownAdminCommands {
                     };
 
                     await this.regionManager!.updateRegion(this.locationStore!, updated);
+                    await this.reloadLocations?.();
                     this.conn.reply(
                         msg,
                         `Region "${key}" updated successfully.`,
@@ -963,6 +993,7 @@ export class VeratownAdminCommands {
 
                 try {
                     await this.regionManager!.deleteRegion(this.locationStore!, args[1]);
+                    await this.reloadLocations?.();
                     this.conn.reply(
                         msg,
                         `Region "${args[1]}" deleted successfully.`,

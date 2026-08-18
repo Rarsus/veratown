@@ -21,10 +21,7 @@ import {
     TRASHCAN_FOUND_ITEMS,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 
 // The trashcan easter egg: searching the trash (an "Emote" containing both
 // "search" and "trash") while standing at one of the trashcan tiles finds a
@@ -44,41 +41,20 @@ export class TrashcanSystem implements VeratownFeatureSystem {
 
     public constructor(
         private conn: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
     ) {}
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));
-        // Fire async location loading in the background
-        this.loadLocations();
     }
 
-    private async loadLocations(): Promise<void> {
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
         try {
-            // Load trashcan locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const trashcans = locations.filter(
-                        (loc) => loc.type === "trashcan",
-                    );
-                    this.trashcanPositions = trashcans.map((trashcan) => ({
-                        X: trashcan.x,
-                        Y: trashcan.y,
-                    }));
-                } catch (e) {
-                    console.error(
-                        "[TrashcanSystem] Failed to load locations from database",
-                        e,
-                    );
-                }
-            }
-
-            // If no database locations loaded, fall back to hardcoded TRASHCAN_SEARCH_LOCATIONS
-            if (this.trashcanPositions.length === 0) {
+            this.trashcanPositions = locations
+                .filter((loc) => loc.type === "trashcan" && loc.enabled)
+                .map((trashcan) => ({ X: trashcan.x!, Y: trashcan.y! }));
+            if (locations.length === 0) {
                 this.trashcanPositions = [...TRASHCAN_SEARCH_LOCATIONS];
             }
 

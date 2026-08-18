@@ -21,10 +21,7 @@ import {
     BED_CHECK_INTERVAL_MS,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 
 // While a character remains on a bed tile, keeps checking whether they have
 // the "Sleep" Emoticon expression active: equips a Bed device while both are
@@ -42,54 +39,40 @@ export class BedSystem implements VeratownFeatureSystem {
 
     private sleepingCharacters = new Set<number>();
     private bedPositions: Array<{ X: number; Y: number }> = [];
+    private readonly bedTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
-    ) {}
-
-    public registerTriggers(): void {
-        // Fire async location loading in the background
-        this.loadLocations();
+    ) {
+        this.bedTrigger = guardHandler(this.key, this.onCharacterEnterBed);
     }
 
-    private async loadLocations(): Promise<void> {
-        try {
-            // Load bed locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const beds = locations.filter((loc) => loc.type === "bed");
-                    this.bedPositions = beds.map((bed) => ({
-                        X: bed.x,
-                        Y: bed.y,
-                    }));
-                } catch (e) {
-                    console.error(
-                        "[BedSystem] Failed to load locations from database",
-                        e,
-                    );
-                }
-            }
+    public registerTriggers(): void {
+        // Location-backed triggers are registered by reloadLocations() once
+        // Veratown has loaded the shared location snapshot.
+    }
 
-            // If no database locations loaded, fall back to hardcoded BED_POSITIONS
-            if (this.bedPositions.length === 0) {
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        try {
+            for (const bedPos of this.bedPositions) {
+                this.conn.chatRoom.map.removeTileTrigger(
+                    bedPos.X,
+                    bedPos.Y,
+                    this.bedTrigger,
+                );
+            }
+            this.bedPositions = locations
+                .filter((loc) => loc.type === "bed" && loc.enabled)
+                .map((bed) => ({ X: bed.x!, Y: bed.y! }));
+
+            if (locations.length === 0) {
                 this.bedPositions = [...BED_POSITIONS];
             }
 
-            // Register tile triggers for bed positions
-            const onCharacterEnterBed = guardHandler(
-                this.key,
-                this.onCharacterEnterBed,
-            );
             for (const bedPos of this.bedPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
-                    bedPos,
-                    onCharacterEnterBed,
-                );
+                this.conn.chatRoom.map.addTileTrigger(bedPos, this.bedTrigger);
             }
 
             console.log(

@@ -24,10 +24,7 @@ import {
     showerBroadcastPos,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
@@ -43,68 +40,50 @@ export class ShowerSystem implements VeratownFeatureSystem {
     private showerPositions: Array<{ X: number; Y: number }> = [];
     private showerBotHomePos: { X: number; Y: number } =
         SHOWER_BOT2_HOME_POSITION;
+    private readonly showerTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
         private conn2?: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
-    ) {}
-
-    public registerTriggers(): void {
-        // Fire async location loading in the background
-        this.loadLocations();
+    ) {
+        this.showerTrigger = guardHandler(
+            this.key,
+            this.onCharacterEnterShower,
+        );
     }
 
-    private async loadLocations(): Promise<void> {
+    public registerTriggers(): void {
+        // Location-backed triggers are registered by reloadLocations().
+    }
+
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
         try {
-            // Load shower locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const showers = locations.filter(
-                        (loc) => loc.type === "shower",
-                    );
-                    this.showerPositions = showers.map((shower) => ({
-                        X: shower.x,
-                        Y: shower.y,
-                    }));
-
-                    // Also load shower bot home position if present
-                    const showerBotHome = locations.find(
-                        (loc) => loc.type === "shower_bot_home",
-                    );
-                    if (showerBotHome) {
-                        this.showerBotHomePos = {
-                            X: showerBotHome.x,
-                            Y: showerBotHome.y,
-                        };
-                    }
-                } catch (e) {
-                    console.error(
-                        "[ShowerSystem] Failed to load locations from database",
-                        e,
-                    );
-                }
+            for (const showerPos of this.showerPositions) {
+                this.conn.chatRoom.map.removeTileTrigger(
+                    showerPos.X,
+                    showerPos.Y,
+                    this.showerTrigger,
+                );
             }
+            this.showerPositions = locations
+                .filter((loc) => loc.type === "shower" && loc.enabled)
+                .map((shower) => ({ X: shower.x!, Y: shower.y! }));
 
-            // If no database locations loaded, fall back to hardcoded SHOWER_POSITIONS
-            if (this.showerPositions.length === 0) {
+            const showerBotHome = locations.find(
+                (loc) => loc.type === "shower_bot_home" && loc.enabled,
+            );
+            this.showerBotHomePos = showerBotHome
+                ? { X: showerBotHome.x!, Y: showerBotHome.y! }
+                : SHOWER_BOT2_HOME_POSITION;
+
+            if (locations.length === 0) {
                 this.showerPositions = [...SHOWER_POSITIONS];
             }
 
-            // Register tile triggers for shower positions
-            const onCharacterEnterShower = guardHandler(
-                this.key,
-                this.onCharacterEnterShower,
-            );
             for (const showerPos of this.showerPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
-                    showerPos,
-                    onCharacterEnterShower,
-                );
+                this.conn.chatRoom.map.addTileTrigger(showerPos, this.showerTrigger);
             }
 
             console.log(

@@ -17,10 +17,7 @@ import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 
 // Owns the kennel tiles: equips a Kennel device (door open, padded) on
 // entry, then automatically closes the door after a short delay as long as
@@ -35,56 +32,42 @@ export class KennelSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private kennelPositions: Array<{ X: number; Y: number }> = [];
+    private readonly kennelTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
-    ) {}
-
-    public registerTriggers(): void {
-        // Fire async location loading in the background
-        this.loadLocations();
+    ) {
+        this.kennelTrigger = guardHandler(
+            this.key,
+            this.onCharacterEnterKennel,
+        );
     }
 
-    private async loadLocations(): Promise<void> {
-        try {
-            // Load kennel locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const kennels = locations.filter(
-                        (loc) => loc.type === "kennel",
-                    );
-                    this.kennelPositions = kennels.map((kennel) => ({
-                        X: kennel.x,
-                        Y: kennel.y,
-                    }));
-                } catch (e) {
-                    console.error(
-                        "[KennelSystem] Failed to load locations from database",
-                        e,
-                    );
-                }
-            }
+    public registerTriggers(): void {
+        // Location-backed triggers are registered by reloadLocations().
+    }
 
-            // If no database locations loaded, fall back to hardcoded KENNEL_POSITIONS
-            if (this.kennelPositions.length === 0) {
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        try {
+            for (const kennelPos of this.kennelPositions) {
+                this.conn.chatRoom.map.removeTileTrigger(
+                    kennelPos.X,
+                    kennelPos.Y,
+                    this.kennelTrigger,
+                );
+            }
+            this.kennelPositions = locations
+                .filter((loc) => loc.type === "kennel" && loc.enabled)
+                .map((kennel) => ({ X: kennel.x!, Y: kennel.y! }));
+
+            if (locations.length === 0) {
                 this.kennelPositions = [...KENNEL_POSITIONS];
             }
 
-            // Register tile triggers for kennel positions
-            const onCharacterEnterKennel = guardHandler(
-                this.key,
-                this.onCharacterEnterKennel,
-            );
             for (const kennelPos of this.kennelPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
-                    kennelPos,
-                    onCharacterEnterKennel,
-                );
+                this.conn.chatRoom.map.addTileTrigger(kennelPos, this.kennelTrigger);
             }
 
             console.log(

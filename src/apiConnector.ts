@@ -117,6 +117,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     public _chatRoom: API_Chatroom | undefined;
 
     private started = false;
+    private shuttingDown = false;
     private roomJoined: RoomDefinition | undefined;
 
     private loggedIn = new PromiseResolve<void>();
@@ -335,13 +336,18 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         this.loggedIn = new PromiseResolve<void>();
         this.roomSynced = new PromiseResolve<void>();
 
-        if (!this.sock.active) {
+        if (!this.shuttingDown && !this.sock.active) {
             console.log(
                 `Socket inactive due to "${reason}" disconnect, manual reconnect triggered`,
             );
             this.sock.connect();
         }
     };
+
+    public disconnect(): void {
+        this.shuttingDown = true;
+        this.sock.disconnect();
+    }
 
     private onServerInfo = (info: ServerInfoMessage) => {
         // Fires frequently as a heartbeat; intentionally not logged.

@@ -17,10 +17,7 @@ import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownLocationDoc } from "./veratownLocationStore";
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
@@ -35,56 +32,42 @@ export class WindowSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private windowPositions: Array<{ X: number; Y: number }> = [];
+    private readonly windowTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
-        private locationStore?: VeratownLocationStore,
-        private fallbackLocations?: VeratownLocationDoc[],
-    ) {}
-
-    public registerTriggers(): void {
-        // Fire async location loading in the background
-        this.loadLocations();
+    ) {
+        this.windowTrigger = guardHandler(
+            this.key,
+            this.onCharacterPeepThroughWindow,
+        );
     }
 
-    private async loadLocations(): Promise<void> {
-        try {
-            // Load window locations from database (or use fallback)
-            if (this.locationStore && this.fallbackLocations) {
-                try {
-                    const locations = await this.locationStore.loadLocations(
-                        this.fallbackLocations,
-                    );
-                    const windows = locations.filter(
-                        (loc) => loc.type === "window",
-                    );
-                    this.windowPositions = windows.map((window) => ({
-                        X: window.x,
-                        Y: window.y,
-                    }));
-                } catch (e) {
-                    console.error(
-                        "[WindowSystem] Failed to load locations from database",
-                        e,
-                    );
-                }
-            }
+    public registerTriggers(): void {
+        // Location-backed triggers are registered by reloadLocations().
+    }
 
-            // If no database locations loaded, fall back to hardcoded WINDOW_LOCATIONS
-            if (this.windowPositions.length === 0) {
+    public async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        try {
+            for (const windowPos of this.windowPositions) {
+                this.conn.chatRoom.map.removeTileTrigger(
+                    windowPos.X,
+                    windowPos.Y,
+                    this.windowTrigger,
+                );
+            }
+            this.windowPositions = locations
+                .filter((loc) => loc.type === "window" && loc.enabled)
+                .map((window) => ({ X: window.x!, Y: window.y! }));
+
+            if (locations.length === 0) {
                 this.windowPositions = [...WINDOW_LOCATIONS];
             }
 
-            // Register tile triggers for window positions
-            const onCharacterPeepThroughWindow = guardHandler(
-                this.key,
-                this.onCharacterPeepThroughWindow,
-            );
             for (const windowPos of this.windowPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
-                    windowPos,
-                    onCharacterPeepThroughWindow,
-                );
+                this.conn.chatRoom.map.addTileTrigger(windowPos, this.windowTrigger);
             }
 
             console.log(

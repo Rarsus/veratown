@@ -18,15 +18,19 @@
 // (Veratown) talk to all of them uniformly is what makes the
 // "/bot feature list|enable|disable" admin command possible without it
 // needing to know about each system's internals.
+import type { VeratownLocationDoc } from "./veratownLocationStore";
+
 export interface VeratownFeatureSystem {
     // Stable, lowercase identifier used in admin commands, eg. "cage".
     readonly key: string;
     // Human-readable name shown in "/bot feature list" output.
     readonly label: string;
     // Registers this system's map/message triggers. Called once during
-    // Veratown startup. May be called asynchronously by the implementing
-    // class (e.g., using void Promises for background loading).
-    registerTriggers(): void;
+    // Veratown startup and awaited before the room is considered ready.
+    registerTriggers(): void | Promise<void>;
+    // Refreshes database-backed positions and replaces any dynamic triggers.
+    // Features without location-backed triggers may omit this method.
+    reloadLocations?(locations: readonly VeratownLocationDoc[]): Promise<void>;
     // Whether this feature is currently active. Handlers should check this
     // and no-op (optionally telling the character it's disabled) when
     // false, rather than the orchestrator trying to physically add/remove

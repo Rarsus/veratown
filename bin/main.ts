@@ -12,22 +12,24 @@
  * limitations under the License.
  */
 
-import { API_Connector } from "bc-bot";
 import { KidnappersGameRoom } from "./hub/logic/kidnappersGameRoom";
 import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom";
 import { Dare } from "./games/dare";
 import { DareStore } from "./games/dareStore";
 import { readFile } from "fs/promises";
+import type { API_Connector } from "bc-bot";
 import { ConfigFile } from "./config";
-import { Db, MongoClient } from "mongodb";
-import {
-    Veratown,
-    VeratownConnections,
-    GAME_MISTRESS_POSITION,
-} from "./games/veratown";
+import { Db } from "mongodb";
+import { Veratown } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { CasinoStore } from "./games/casino/casinostore";
 import { existsSync } from "fs";
+import {
+    BotConnections,
+    closeBotConnections,
+    connectDatabase,
+    createBotConnections,
+} from "./botConnections";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -171,40 +173,11 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     return config as ConfigFile;
 }
 
-// Promotes a secondary bot account (eg. Veratown's shower-narration or pool
-// roulette bot) to room admin, using the primary bot connection - which
-// must already be a room admin itself, since only admins can promote
-// others. Without this, any bot account that didn't happen to be the one
-// that originally created the room would never become an admin, and could
-// get locked out of the room entirely by admin-only features (eg.
-// Veratown's "!maintenance" command, which locks room Access to admins
-// only).
-function ensureBotIsRoomAdmin(
-    adminConn: API_Connector,
-    botConn: API_Connector,
-): void {
-    if (!adminConn.Player.IsRoomAdmin()) {
-        console.log(
-            `${adminConn.Player.Name} isn't a room admin, so it can't promote ${botConn.Player.Name} to admin; a human admin will need to do this manually.`,
-        );
-        return;
-    }
-
-    if (botConn.Player.IsRoomAdmin()) return;
-
-    console.log(`Promoting ${botConn.Player.Name} to room admin.`);
-    adminConn.chatRoom!.promoteAdmin(botConn.Player.MemberNumber);
-}
-
 export interface RopeyBot {
     connector: API_Connector;
     config: ConfigFile;
     db?: Db;
     game: string;
-}
-
-interface BotConnections extends VeratownConnections {
-    secondary?: API_Connector;
 }
 
 interface BootstrapContext {
@@ -213,151 +186,21 @@ interface BootstrapContext {
     db?: Db;
 }
 
-async function connectDatabase(config: ConfigFile): Promise<Db | undefined> {
-    if (!config.mongo_uri || !config.mongo_db) return undefined;
+let activeConnections: BotConnections | undefined;
+let activeDatabase: { close(): Promise<void> } | undefined;
+let shutdownPromise: Promise<void> | undefined;
 
-    // Defaults to true for managed/hosted Mongo (eg. Atlas), which requires
-    // TLS. Set to false for a plain local mongo container without TLS.
-    const useTls = config.mongo_tls ?? true;
-    const mongoClient = new MongoClient(config.mongo_uri, {
-        ssl: useTls,
-        tls: useTls,
-    });
-    console.log("Connecting to mongo...");
-    await mongoClient.connect();
-    console.log("...connected!");
+async function shutdown(): Promise<void> {
+    if (shutdownPromise) return shutdownPromise;
 
-    const db = mongoClient.db(config.mongo_db);
-    await db.command({ ping: 1 });
-    console.log("...ping successful!");
-    return db;
-}
+    shutdownPromise = (async () => {
+        console.log("Shutting down bot connections and database...");
+        await closeBotConnections(activeConnections);
+        await activeDatabase?.close();
+        console.log("Shutdown complete.");
+    })();
 
-async function connectBotAccount(
-    serverUrl: string,
-    config: ConfigFile,
-    user: string,
-    password: string,
-    joinRoom: boolean,
-): Promise<API_Connector> {
-    const connection = new API_Connector(serverUrl, user, password, config.env);
-    if (joinRoom) await connection.joinOrCreateRoom(config.room);
-    return connection;
-}
-
-function validateBotAccountConfiguration(config: ConfigFile): void {
-    const accounts = new Map<string, string>();
-    const addAccount = (role: string, username: string | undefined): void => {
-        if (!username) return;
-
-        const normalizedUsername = username.trim().toLowerCase();
-        const previousRole = accounts.get(normalizedUsername);
-        if (previousRole) {
-            throw new Error(
-                `Bot account "${username}" is configured for both ${previousRole} and ${role}; each logged-in bot role must use a different account.`,
-            );
-        }
-        accounts.set(normalizedUsername, role);
-    };
-
-    addAccount("main", config.user);
-
-    if (config.game === "maidspartynight") {
-        addAccount("secondary", config.user2);
-    } else if (config.game === "veratown") {
-        addAccount("shower", config.user2);
-        if (config.user3 && config.password3) addAccount("casino", config.user3);
-    }
-}
-
-async function createBotConnections(
-    serverUrl: string,
-    config: ConfigFile,
-    db?: Db,
-): Promise<BotConnections> {
-    validateBotAccountConfiguration(config);
-
-    const main = await connectBotAccount(
-        serverUrl,
-        config,
-        config.user,
-        config.password,
-        true,
-    );
-
-    if (!main.Player.IsRoomAdmin()) {
-        console.log(
-            `${main.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
-        );
-    }
-
-    const connections: BotConnections = { main };
-
-    if (config.game === "maidspartynight") {
-        if (!config.user2 || !config.password2) {
-            console.log("Need user2 and password2 for Maid's Party Night");
-            process.exit(1);
-        }
-
-        // This game moves its secondary character between rooms itself.
-        connections.secondary = await connectBotAccount(
-            serverUrl,
-            config,
-            config.user2,
-            config.password2,
-            false,
-        );
-    }
-
-    if (config.game !== "veratown") return connections;
-
-    if (config.user2 && config.password2) {
-        connections.shower = await connectBotAccount(
-            serverUrl,
-            config,
-            config.user2,
-            config.password2,
-            true,
-        );
-        ensureBotIsRoomAdmin(main, connections.shower);
-    } else {
-        console.log(
-            "No user2/password2 configured; the shower role will use the main bot connection.",
-        );
-    }
-
-    if (config.user3 && config.password3) {
-        if (!db) {
-            console.log(
-                "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
-            );
-        } else {
-            connections.casino = await connectBotAccount(
-                serverUrl,
-                config,
-                config.user3,
-                config.password3,
-                true,
-            );
-            ensureBotIsRoomAdmin(main, connections.casino);
-            connections.casino.moveOnMap(
-                GAME_MISTRESS_POSITION.X,
-                GAME_MISTRESS_POSITION.Y,
-            );
-        }
-    } else {
-        console.log(
-            "No user3/password3 configured; the casino role is unavailable.",
-        );
-    }
-
-    console.log(
-        `[Startup] Bot roles active: main=${connections.main.Player.Name}, ` +
-            `shower=${connections.shower?.Player.Name ?? "main (fallback)"}, ` +
-            `casino=${connections.casino?.Player.Name ?? "disabled"}`,
-    );
-
-    return connections;
+    return shutdownPromise;
 }
 
 async function startConfiguredGame({
@@ -435,14 +278,14 @@ async function startConfiguredGame({
 }
 
 export async function startBot(): Promise<RopeyBot> {
-    process.on("SIGINT", () => {
+    process.once("SIGINT", () => {
         console.log("SIGINT received, exiting");
-        process.exit(0);
+        void shutdown().then(() => process.exit(0));
     });
 
-    process.on("SIGTERM", () => {
+    process.once("SIGTERM", () => {
         console.log("SIGTERM received, exiting");
-        process.exit(0);
+        void shutdown().then(() => process.exit(0));
     });
 
     // Last-resort safety net: an uncaught error or unhandled promise
@@ -470,8 +313,11 @@ export async function startBot(): Promise<RopeyBot> {
         process.exit(1);
     }
 
-    const db = await connectDatabase(config);
-    const connections = await createBotConnections(serverUrl, config, db);
+    const database = await connectDatabase(config);
+    const db = database?.db;
+    activeDatabase = database;
+    const connections = await createBotConnections(serverUrl, config, database);
+    activeConnections = connections;
     await startConfiguredGame({ config, connections, db });
 
     return {
@@ -491,7 +337,8 @@ async function main() {
     }
 }
 
-main().catch((e) => {
+main().catch(async (e) => {
     console.error(e);
+    await shutdown();
     process.exit(1);
 });

@@ -41,6 +41,8 @@ export class RegionManager {
      */
     public async loadRegions(locationStore: VeratownLocationStore): Promise<void> {
         try {
+            this.regions.clear();
+            this.charactersInRegion.clear();
             const allLocations = await locationStore.getAllLocations();
 
             const regionDocs = allLocations.filter(

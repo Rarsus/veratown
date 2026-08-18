@@ -59,6 +59,8 @@ export interface VeratownLocationDoc {
 export class VeratownLocationStore {
     private locations: Collection<VeratownLocationDoc>;
     private inited = false;
+    private cachedLocations?: VeratownLocationDoc[];
+    private loadingLocations?: Promise<VeratownLocationDoc[]>;
 
     constructor(private db: Db) {
         this.locations =
@@ -78,6 +80,29 @@ export class VeratownLocationStore {
      * config is provided).
      */
     public async loadLocations(
+        fallbackConfig?: VeratownLocationDoc[],
+    ): Promise<VeratownLocationDoc[]> {
+        if (this.cachedLocations) return this.cachedLocations;
+        if (this.loadingLocations) return this.loadingLocations;
+
+        this.loadingLocations = this.loadLocationsFromDatabase(fallbackConfig);
+        try {
+            this.cachedLocations = await this.loadingLocations;
+            return this.cachedLocations;
+        } finally {
+            this.loadingLocations = undefined;
+        }
+    }
+
+    /** Reload the shared snapshot after an administrative database change. */
+    public async reloadLocations(
+        fallbackConfig?: VeratownLocationDoc[],
+    ): Promise<VeratownLocationDoc[]> {
+        this.cachedLocations = undefined;
+        return this.loadLocations(fallbackConfig);
+    }
+
+    private async loadLocationsFromDatabase(
         fallbackConfig?: VeratownLocationDoc[],
     ): Promise<VeratownLocationDoc[]> {
         await this.init();
