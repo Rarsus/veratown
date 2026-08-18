@@ -23,14 +23,10 @@ import { Db, MongoClient } from "mongodb";
 import {
     Veratown,
     VeratownConnections,
-    GAME_LOCATION,
     GAME_MISTRESS_POSITION,
-    VERATOWN_LOCATIONS_FALLBACK,
 } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
-import { Casino } from "./games/casino";
 import { CasinoStore } from "./games/casino/casinostore";
-import { VeratownLocationStore } from "./games/veratown/veratownLocationStore";
 import { existsSync } from "fs";
 
 const SERVER_URL = {
@@ -207,7 +203,209 @@ export interface RopeyBot {
     game: string;
 }
 
-type BotConnections = VeratownConnections;
+interface BotConnections extends VeratownConnections {
+    secondary?: API_Connector;
+}
+
+interface BootstrapContext {
+    config: ConfigFile;
+    connections: BotConnections;
+    db?: Db;
+}
+
+async function connectDatabase(config: ConfigFile): Promise<Db | undefined> {
+    if (!config.mongo_uri || !config.mongo_db) return undefined;
+
+    // Defaults to true for managed/hosted Mongo (eg. Atlas), which requires
+    // TLS. Set to false for a plain local mongo container without TLS.
+    const useTls = config.mongo_tls ?? true;
+    const mongoClient = new MongoClient(config.mongo_uri, {
+        ssl: useTls,
+        tls: useTls,
+    });
+    console.log("Connecting to mongo...");
+    await mongoClient.connect();
+    console.log("...connected!");
+
+    const db = mongoClient.db(config.mongo_db);
+    await db.command({ ping: 1 });
+    console.log("...ping successful!");
+    return db;
+}
+
+async function connectBotAccount(
+    serverUrl: string,
+    config: ConfigFile,
+    user: string,
+    password: string,
+    joinRoom: boolean,
+): Promise<API_Connector> {
+    const connection = new API_Connector(serverUrl, user, password, config.env);
+    if (joinRoom) await connection.joinOrCreateRoom(config.room);
+    return connection;
+}
+
+async function createBotConnections(
+    serverUrl: string,
+    config: ConfigFile,
+    db?: Db,
+): Promise<BotConnections> {
+    const main = await connectBotAccount(
+        serverUrl,
+        config,
+        config.user,
+        config.password,
+        true,
+    );
+
+    if (!main.Player.IsRoomAdmin()) {
+        console.log(
+            `${main.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
+        );
+    }
+
+    const connections: BotConnections = { main };
+
+    if (config.game === "maidspartynight") {
+        if (!config.user2 || !config.password2) {
+            console.log("Need user2 and password2 for Maid's Party Night");
+            process.exit(1);
+        }
+
+        // This game moves its secondary character between rooms itself.
+        connections.secondary = await connectBotAccount(
+            serverUrl,
+            config,
+            config.user2,
+            config.password2,
+            false,
+        );
+    }
+
+    if (config.game !== "veratown") return connections;
+
+    if (config.user2 && config.password2) {
+        connections.shower = await connectBotAccount(
+            serverUrl,
+            config,
+            config.user2,
+            config.password2,
+            true,
+        );
+        ensureBotIsRoomAdmin(main, connections.shower);
+    } else {
+        console.log(
+            "No user2/password2 configured; the shower role will use the main bot connection.",
+        );
+    }
+
+    if (config.user3 && config.password3) {
+        if (!db) {
+            console.log(
+                "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
+            );
+        } else {
+            connections.casino = await connectBotAccount(
+                serverUrl,
+                config,
+                config.user3,
+                config.password3,
+                true,
+            );
+            ensureBotIsRoomAdmin(main, connections.casino);
+            connections.casino.moveOnMap(
+                GAME_MISTRESS_POSITION.X,
+                GAME_MISTRESS_POSITION.Y,
+            );
+        }
+    } else {
+        console.log(
+            "No user3/password3 configured; the casino role is unavailable.",
+        );
+    }
+
+    console.log(
+        `[Startup] Bot roles active: main=${connections.main.Player.Name}, ` +
+            `shower=${connections.shower?.Player.Name ?? "main (fallback)"}, ` +
+            `casino=${connections.casino?.Player.Name ?? "disabled"}`,
+    );
+
+    return connections;
+}
+
+async function startConfiguredGame({
+    config,
+    connections,
+    db,
+}: BootstrapContext): Promise<void> {
+    const main = connections.main;
+
+    switch (config.game) {
+        case undefined:
+            return;
+        case "kidnappers": {
+            console.log("Starting game: Kidnappers");
+            const game = new KidnappersGameRoom(main, config);
+            main.accountUpdate({ Nickname: "Kidnappers Bot" });
+            main.setBotDescription(KidnappersGameRoom.description);
+            main.startBot(game);
+            return;
+        }
+        case "roleplay": {
+            console.log("Starting game: Roleplay challenge");
+            const game = new RoleplaychallengeGameRoom(main, config);
+            main.setBotDescription(RoleplaychallengeGameRoom.description);
+            main.startBot(game);
+            return;
+        }
+        case "maidspartynight": {
+            console.log("Starting game: Maid's Party Night");
+            if (!connections.secondary) {
+                console.log("Need user2 and password2 for Maid's Party Night");
+                process.exit(1);
+            }
+            const game = new MaidsPartyNightSinglePlayerAdventure(
+                main,
+                connections.secondary,
+            );
+            main.startBot(game);
+            return;
+        }
+        case "dare":
+            console.log("Starting game: dare");
+            if (!db) {
+                console.log(
+                    "mongo_uri/mongo_db must be configured to run the dare game; exiting.",
+                );
+                process.exit(1);
+            }
+            main.accountUpdate({ Nickname: "Dare Bot" });
+            new Dare(
+                main,
+                new DareStore(db),
+                undefined,
+                new CasinoStore(db),
+                config.dare,
+            ).registerTriggers();
+            main.setBotDescription(Dare.description);
+            return;
+        case "veratown": {
+            console.log("Starting game: Veratown");
+            const game = new Veratown(
+                connections,
+                db,
+                config.dare,
+                config.casino,
+            );
+            await game.init();
+            main.setBotDescription(Veratown.description);
+            return;
+        }
+        default:
+            console.log("No such game " + config.game);
+            process.exit(1);
+    }
+}
 
 export async function startBot(): Promise<RopeyBot> {
     process.on("SIGINT", () => {
@@ -245,163 +443,12 @@ export async function startBot(): Promise<RopeyBot> {
         process.exit(1);
     }
 
-    let db;
-    if (config.mongo_uri && config.mongo_db) {
-        // Defaults to true for managed/hosted Mongo (eg. Atlas), which
-        // requires TLS. Set to false for a plain local mongo container
-        // (eg. the "mongo" service in docker-compose.yml) that doesn't have
-        // TLS enabled.
-        const useTls = config.mongo_tls ?? true;
-        const mongoClient = new MongoClient(config.mongo_uri, {
-            ssl: useTls,
-            tls: useTls,
-        });
-        console.log("Connecting to mongo...");
-        await mongoClient.connect();
-        console.log("...connected!");
-        db = mongoClient.db(config.mongo_db);
-        await db.command({ ping: 1 });
-        console.log("...ping successful!");
-    }
-
-    const mainBotConn = new API_Connector(
-        serverUrl,
-        config.user,
-        config.password,
-        config.env,
-    );
-    await mainBotConn.joinOrCreateRoom(config.room);
-
-    if (!mainBotConn.Player.IsRoomAdmin()) {
-        console.log(
-            `${mainBotConn.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
-        );
-    }
-
-    const botConnections: BotConnections = { main: mainBotConn };
-
-    switch (config.game) {
-        case undefined:
-            break;
-        case "kidnappers":
-            console.log("Starting game: Kidnappers");
-            const kidnappersGame = new KidnappersGameRoom(mainBotConn, config);
-            mainBotConn.accountUpdate({ Nickname: "Kidnappers Bot" });
-            mainBotConn.setBotDescription(KidnappersGameRoom.description);
-            mainBotConn.startBot(kidnappersGame);
-            break;
-        case "roleplay":
-            console.log("Starting game: Roleplay challenge");
-            const roleplayGame = new RoleplaychallengeGameRoom(
-                mainBotConn,
-                config,
-            );
-            mainBotConn.setBotDescription(RoleplaychallengeGameRoom.description);
-            mainBotConn.startBot(roleplayGame);
-            break;
-        case "maidspartynight":
-            console.log("Starting game: Maid's Party Night");
-            if (!config.user2 || !config.password2) {
-                console.log("Need user2 and password2 for Maid's Party Night");
-                process.exit(1);
-            }
-            const secondaryBotConn = new API_Connector(
-                serverUrl,
-                config.user2,
-                config.password2,
-                config.env,
-            );
-            const maidsPartyNightGame =
-                new MaidsPartyNightSinglePlayerAdventure(mainBotConn, secondaryBotConn);
-            mainBotConn.startBot(maidsPartyNightGame);
-            break;
-        case "dare":
-            console.log("Starting game: dare");
-            if (!db) {
-                console.log(
-                    "mongo_uri/mongo_db must be configured to run the dare game; exiting.",
-                );
-                process.exit(1);
-            }
-            mainBotConn.accountUpdate({ Nickname: "Dare Bot" });
-            new Dare(
-                mainBotConn,
-                new DareStore(db),
-                undefined,
-                new CasinoStore(db),
-                config.dare,
-            ).registerTriggers();
-            mainBotConn.setBotDescription(Dare.description);
-            break;
-        case "veratown":
-            console.log("Starting game: Veratown");
-            let showerBotConn: API_Connector | undefined;
-            if (config.user2 && config.password2) {
-                showerBotConn = new API_Connector(
-                    serverUrl,
-                    config.user2,
-                    config.password2,
-                    config.env,
-                );
-                await showerBotConn.joinOrCreateRoom(config.room);
-                ensureBotIsRoomAdmin(mainBotConn, showerBotConn);
-                botConnections.shower = showerBotConn;
-            } else {
-                console.log(
-                    "No user2/password2 configured; the shower role will use the main bot connection.",
-                );
-            }
-
-            let casinoBotConn: API_Connector | undefined;
-            if (config.user3 && config.password3) {
-                if (!db) {
-                    console.log(
-                        "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
-                    );
-                } else {
-                    casinoBotConn = new API_Connector(
-                        serverUrl,
-                        config.user3,
-                        config.password3,
-                        config.env,
-                    );
-                    await casinoBotConn.joinOrCreateRoom(config.room);
-                    ensureBotIsRoomAdmin(mainBotConn, casinoBotConn);
-                    botConnections.casino = casinoBotConn;
-
-                    casinoBotConn.moveOnMap(
-                        GAME_MISTRESS_POSITION.X,
-                        GAME_MISTRESS_POSITION.Y,
-                    );
-                }
-            } else {
-                console.log(
-                    "No user3/password3 configured; the casino role is unavailable.",
-                );
-            }
-
-            console.log(
-                `[Startup] Bot roles active: main=${botConnections.main.Player.Name}, ` +
-                    `shower=${botConnections.shower?.Player.Name ?? "main (fallback)"}, ` +
-                    `casino=${botConnections.casino?.Player.Name ?? "disabled"}`,
-            );
-
-            const veratownGame = new Veratown(
-                botConnections,
-                db,
-                config.dare,
-                config.casino,
-            );
-            await veratownGame.init();
-            mainBotConn.setBotDescription(Veratown.description);
-            break;
-        default:
-            console.log("No such game " + config.game);
-            process.exit(1);
-    }
+    const db = await connectDatabase(config);
+    const connections = await createBotConnections(serverUrl, config, db);
+    await startConfiguredGame({ config, connections, db });
 
     return {
-        connector: mainBotConn,
+        connector: connections.main,
         config,
         db,
         game: config.game,
