@@ -45,7 +45,7 @@ export interface VeratownLocationDoc {
         BottomRight: { X: number; Y: number };
     };
     // Region type (for filtering multi-tile regions)
-    regionType?: "game" | "dare" | "feature" | "custom";
+    regionType?: "game" | "dare" | "feature" | "custom" | "admin" | "park";
     // Human-readable label
     label?: string;
     // Description for admins

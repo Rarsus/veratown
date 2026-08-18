@@ -13,7 +13,8 @@
  */
 
 import { API_Connector } from "bc-bot";
-import { ChatRoomMapPos } from "bc-bot";
+
+type ChatRoomMapPos = { X: number; Y: number };
 
 /**
  * Veratown Narration Utilities
