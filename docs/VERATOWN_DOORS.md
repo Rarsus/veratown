@@ -50,7 +50,7 @@ and `enabled` set to `true`.
   "data": {
     "doorX": 20,
     "doorY": 10,
-    "lockedTile": "SteelDoor",
+    "lockedTile": "MetalDown",
     "unlockedTile": "SteelDoorOpen",
     "unlockDurationMs": 10000,
     "codes": {
@@ -74,17 +74,21 @@ and `enabled` set to `true`.
 | `y` | number | Keypad Y coordinate. |
 | `doorX` | number | Door tile X coordinate. |
 | `doorY` | number | Door tile Y coordinate. |
-| `lockedTile` | string | Map object style used while locked. |
+| `lockedTile` | string | Visible `WallPath` map object used while locked. |
 | `unlockedTile` | string | Map object style used while unlocked. |
 | `unlockDurationMs` | number | Initial unlock duration in milliseconds. Defaults to 10 seconds. |
 | `codes` | object | Group-to-code mapping. At least one code is required. |
-| `insideTopLeftX` | number | Top-left X coordinate of the protected room. |
-| `insideTopLeftY` | number | Top-left Y coordinate of the protected room. |
-| `insideBottomRightX` | number | Bottom-right X coordinate of the protected room. |
-| `insideBottomRightY` | number | Bottom-right Y coordinate of the protected room. |
+| `insideTopLeftX` | number | Optional top-left X coordinate of the protected room. |
+| `insideTopLeftY` | number | Optional top-left Y coordinate of the protected room. |
+| `insideBottomRightX` | number | Optional bottom-right X coordinate of the protected room. |
+| `insideBottomRightY` | number | Optional bottom-right Y coordinate of the protected room. |
 
 `whitelistMemberNumbers` is optional. It is an array of member numbers that
 should use the `whitelist` group code.
+
+The four `inside*` fields are optional as a group. Omit all four for a simple
+timer-based door. Provide all four to enable directional exit protection. A
+partial inside region is invalid and the keypad location will not load.
 
 ## Access Groups
 
@@ -104,36 +108,48 @@ The legacy `data.code` field is accepted as the guest code when
 
 ## Supported Door Tiles
 
-`lockedTile` and `unlockedTile` must be styles known by the map object
-catalogue. Door styles are `WallPath` objects, not floor tiles. The normal door pairs are:
+`unlockedTile` must be a style known by the map object catalogue. Door styles
+are `WallPath` objects, not floor tiles.
 
-| Locked or closed style | Open style |
-| --- | --- |
-| `WoodClosed` | `WoodOpen` |
-| `WoodLocked` | `WoodOpen` |
-| `WoodLockedBronze` | `WoodOpen` |
-| `WoodLockedSilver` | `WoodOpen` |
-| `WoodLockedGold` | `WoodOpen` |
-| `Metal` | `MetalOpen` |
-| `MetalUp` | `MetalOpen` |
-| `MetalDown` | `MetalOpen` |
-| `MetalLockedBronze` | `MetalOpen` |
-| `MetalLockedSilver` | `MetalOpen` |
-| `MetalLockedGold` | `MetalOpen` |
-| `BrownDoor` | `BrownDoorOpen` |
-| `RoyalDoor` | `RoyalDoorOpen` |
-| `SteelDoor` | `SteelDoorOpen` |
-| `GrayDoor` | `GrayDoorOpen` |
+### Visible Locked Doors and Direction
 
-The map also contains `WoodOpen`, `MetalOpen`, and the individual locked
-variants as valid styles. The system does not validate that a selected pair is
-visually compatible, so use matching styles from the table.
+The bot restores `lockedTile` whenever the door is locked and replaces it with
+`unlockedTile` during an unlock window. Both styles must be `WallPath` map
+objects. Their movement rules are enforced by the Bondage Club map client.
+
+| Locked style | Open style | Access rule while locked |
+| --- | --- | --- |
+| `WoodClosed` | `WoodOpen` | Users who can interact with the map. |
+| `WoodLocked` | `WoodOpen` | Room admins only. |
+| `WoodLockedBronze` | `WoodOpen` | Users holding the bronze map key. |
+| `WoodLockedSilver` | `WoodOpen` | Users holding the silver map key. |
+| `WoodLockedGold` | `WoodOpen` | Users holding the gold map key. |
+| `Metal` | `MetalOpen` | Everyone. |
+| `MetalUp` | `MetalOpen` | Upward movement into the door only. |
+| `MetalDown` | `MetalOpen` | Downward movement into the door only. |
+| `MetalLockedBronze` | `MetalOpen` | Users holding the bronze map key. |
+| `MetalLockedSilver` | `MetalOpen` | Users holding the silver map key. |
+| `MetalLockedGold` | `MetalOpen` | Users holding the gold map key. |
+| `BrownDoor` | `BrownDoorOpen` | Users who can interact with the map. |
+| `RoyalDoor` | `RoyalDoorOpen` | Users who can interact with the map. |
+| `SteelDoor` | `SteelDoorOpen` | Users who can interact with the map. |
+| `GrayDoor` | `GrayDoorOpen` | Users who can interact with the map. |
+
+For a keypad outside a room that is below the door, use `MetalDown` as the
+locked style. It permits exit from the room above down toward the keypad, while
+rejecting entry from the keypad side, giving occupants a directional exit
+route. Use `WoodLocked` when you want room admins to bypass the keypad while
+everyone else needs a code.
+
+For the inverse layout, where the keypad is above the door and the protected
+room is below it, use `MetalUp`. It permits upward exit from the room below
+toward the keypad, while rejecting entry from the keypad side.
 
 ## Directional Exit Protection
 
-The keypad is normally outside the room. Set `insideRegion` using the four
-`insideTopLeft*` and `insideBottomRight*` fields so it covers the room beyond
-the door.
+The keypad is normally outside the room. This protection is optional. Set the
+four `insideTopLeft*` and `insideBottomRight*` fields so the region covers the
+room beyond the door.
 
 When the unlock timer expires:
 
@@ -145,6 +161,9 @@ When the unlock timer expires:
 The Veratown bot itself is excluded from the occupant check. Keep the region
 limited to the room protected by that door. Overlapping regions can cause one
 door to remain open because a character is inside another door's region.
+
+If no inside region is configured, the door locks as soon as its unlock timer
+expires.
 
 ## Reload and Administration
 
@@ -164,7 +183,8 @@ registered, and `/bot status` to confirm that the location snapshot loaded.
 
 ### Keypad-Local Admin Commands
 
-Room admins must stand on the related keypad tile before using these whispers:
+Room admins must stand on the related keypad tile before using these commands.
+Both `!door ...` whispers and `/bot door ...` commands are supported:
 
 | Command | Purpose |
 | --- | --- |

@@ -15,11 +15,13 @@ import {
 // {
 //   doorX: 20,
 //   doorY: 10,
-//   lockedTile: "SteelDoor",
+//   lockedTile: "MetalDown",
 //   unlockedTile: "SteelDoorOpen",
 //   unlockDurationMs: 10000,
 //   codes: { admin: "...", whitelist: "...", guest: "..." },
-//   whitelistMemberNumbers: [12345],
+//   whitelistMemberNumbers: [12345]
+//   Optional directional exit protection:
+//   insideTopLeftX: 21,
 //   insideTopLeftX: 21,
 //   insideTopLeftY: 9,
 //   insideBottomRightX: 39,
@@ -35,7 +37,7 @@ interface KeypadDoorConfig {
     unlockDurationMs: number;
     codes: Partial<Record<KeypadAccessGroup, string>>;
     whitelistMemberNumbers: number[];
-    insideRegion: MapRegion;
+    insideRegion?: MapRegion;
 }
 
 interface KeypadDoor {
@@ -84,12 +86,21 @@ function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined
         doorY === undefined ||
         !lockedTile ||
         !unlockedTile ||
-        unlockDurationMs <= 0 ||
-        insideTopLeftX === undefined ||
-        insideTopLeftY === undefined ||
-        insideBottomRightX === undefined ||
-        insideBottomRightY === undefined
+        unlockDurationMs <= 0
     ) {
+        return undefined;
+    }
+
+    const insideCoordinates = [
+        insideTopLeftX,
+        insideTopLeftY,
+        insideBottomRightX,
+        insideBottomRightY,
+    ];
+    const hasInsideRegion = insideCoordinates.some(
+        (coordinate) => coordinate !== undefined,
+    );
+    if (hasInsideRegion && insideCoordinates.some((coordinate) => coordinate === undefined)) {
         return undefined;
     }
 
@@ -125,10 +136,15 @@ function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined
         unlockDurationMs,
         codes,
         whitelistMemberNumbers,
-        insideRegion: {
-            TopLeft: { X: insideTopLeftX, Y: insideTopLeftY },
-            BottomRight: { X: insideBottomRightX, Y: insideBottomRightY },
-        },
+        insideRegion: hasInsideRegion
+            ? {
+                  TopLeft: { X: insideTopLeftX!, Y: insideTopLeftY! },
+                  BottomRight: {
+                      X: insideBottomRightX!,
+                      Y: insideBottomRightY!,
+                  },
+              }
+            : undefined,
     };
 }
 
@@ -213,7 +229,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 this.setDoorTile(door, door.config.unlockedTile);
                 this.scheduleLockWhenEmpty(door);
             } else {
-                this.setDoorTile(door, door.config.lockedTile);
+                this.setDoorLocked(door);
             }
             console.log(
                 `[KeypadDoorSystem] Loaded keypad ${door.location.key} for door at ${door.config.doorX},${door.config.doorY}`,
@@ -326,12 +342,20 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     };
 
     private onAdminMessage = async (msg: API_Message): Promise<void> => {
-        if (msg.message.Type !== "Whisper" || !msg.sender.IsRoomAdmin()) {
+        if (!msg.sender.IsRoomAdmin()) {
             return;
         }
 
-        const content = unwrapWhisper(msg.message.Content).trim();
-        const match = /^!door(?:\s+(.+))?$/i.exec(content);
+        const content =
+            msg.message.Type === "Whisper"
+                ? unwrapWhisper(msg.message.Content).trim()
+                : msg.message.Content;
+        const match =
+            msg.message.Type === "Whisper"
+                ? /^!door(?:\s+(.+))?$/i.exec(content)
+                : msg.message.Type === "Hidden"
+                  ? /^ChatRoomBot\s+door(?:\s+(.+))?$/i.exec(content)
+                  : undefined;
         if (!match) return;
 
         const door = this.findDoorAt(msg.sender);
@@ -407,7 +431,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             case "lock":
                 if (door.timer) clearTimeout(door.timer);
                 door.timer = undefined;
-                this.setDoorTile(door, door.config.lockedTile);
+                this.setDoorLocked(door);
                 this.replyAdmin(msg.message, "The door was locked immediately.");
                 return;
             case "unlock": {
@@ -502,8 +526,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             return;
         }
 
-        this.setDoorTile(door, door.config.lockedTile);
+        this.setDoorLocked(door);
         door.timer = undefined;
+    }
+
+    private setDoorLocked(door: KeypadDoor): void {
+        this.setDoorTile(door, door.config.lockedTile);
     }
 
     private setDoorTile(door: KeypadDoor, tile: string): void {
@@ -514,6 +542,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     private hasInsideOccupants(door: KeypadDoor): boolean {
+        if (!door.config.insideRegion) return false;
+
         const characters = this.conn.chatRoom?.characters ?? [];
         return characters.some(
             (character) =>
