@@ -22,10 +22,12 @@ import {
 //   whitelistMemberNumbers: [12345]
 //   Optional directional exit protection:
 //   insideTopLeftX: 21,
-//   insideTopLeftX: 21,
 //   insideTopLeftY: 9,
 //   insideBottomRightX: 39,
-//   insideBottomRightY: 20
+//   insideBottomRightY: 20,
+//   Optional auto-open tile (only when insideRegion not defined):
+//   autoOpenTileX: 25,
+//   autoOpenTileY: 15
 // }
 export type KeypadAccessGroup = "admin" | "whitelist" | "guest";
 
@@ -38,6 +40,7 @@ interface KeypadDoorConfig {
     codes: Partial<Record<KeypadAccessGroup, string>>;
     whitelistMemberNumbers: number[];
     insideRegion?: MapRegion;
+    autoOpenTile?: { X: number; Y: number };
 }
 
 interface KeypadDoor {
@@ -47,6 +50,7 @@ interface KeypadDoor {
 }
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
+const AUTO_OPEN_TRIGGER_DELAY_MS = 1000;
 
 export function getKeypadAccessGroup(
     character: API_Character,
@@ -104,6 +108,14 @@ function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined
         return undefined;
     }
 
+    const autoOpenTileX = readNumber(data.autoOpenTileX);
+    const autoOpenTileY = readNumber(data.autoOpenTileY);
+    const hasAutoOpenTile = autoOpenTileX !== undefined && autoOpenTileY !== undefined;
+
+    if (hasAutoOpenTile && hasInsideRegion) {
+        return undefined;
+    }
+
     const rawCodes = data.codes;
     const codes: Partial<Record<KeypadAccessGroup, string>> = {};
     if (rawCodes && typeof rawCodes === "object" && !Array.isArray(rawCodes)) {
@@ -145,6 +157,9 @@ function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined
                   },
               }
             : undefined,
+        autoOpenTile: hasAutoOpenTile
+            ? { X: autoOpenTileX!, Y: autoOpenTileY! }
+            : undefined,
     };
 }
 
@@ -161,7 +176,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     private doors: KeypadDoor[] = [];
     private readonly keypadTrigger: ReturnType<typeof guardHandler>;
+    private readonly autoOpenTrigger: ReturnType<typeof guardHandler>;
     private notificationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private autoOpenTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     public constructor(
         private conn: API_Connector,
@@ -172,6 +189,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         this.keypadTrigger = guardHandler(
             this.key,
             this.onCharacterAtKeypad,
+        );
+        this.autoOpenTrigger = guardHandler(
+            this.key,
+            this.onCharacterAtAutoOpenTile,
         );
     }
 
@@ -199,6 +220,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             clearTimeout(timer);
         }
         this.notificationTimers.clear();
+        for (const timer of this.autoOpenTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.autoOpenTimers.clear();
 
         for (const door of this.doors) {
             if (door.location.x !== undefined && door.location.y !== undefined) {
@@ -206,6 +231,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                     door.location.x,
                     door.location.y,
                     this.keypadTrigger,
+                );
+            }
+            if (door.config.autoOpenTile) {
+                this.conn.chatRoom?.map.removeTileTrigger(
+                    door.config.autoOpenTile.X,
+                    door.config.autoOpenTile.Y,
+                    this.autoOpenTrigger,
                 );
             }
         }
@@ -223,6 +255,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 this.conn.chatRoom?.map.addTileTrigger(
                     { X: door.location.x, Y: door.location.y },
                     this.keypadTrigger,
+                );
+            }
+            if (door.config.autoOpenTile) {
+                this.conn.chatRoom?.map.addTileTrigger(
+                    door.config.autoOpenTile,
+                    this.autoOpenTrigger,
                 );
             }
             if (this.hasInsideOccupants(door)) {
@@ -259,6 +297,27 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }, KEYPAD_NOTIFICATION_DELAY_MS);
 
         this.notificationTimers.set(notificationKey, timer);
+    };
+
+    private onCharacterAtAutoOpenTile = (character: API_Character): void => {
+        const door = this.findDoorAtAutoOpenTile(character);
+        if (!door || door.config.insideRegion) return;
+
+        const autoOpenKey = `${door.location.key}:auto:${character.MemberNumber}`;
+        const existingTimer = this.autoOpenTimers.get(autoOpenKey);
+        if (existingTimer) clearTimeout(existingTimer);
+
+        const timer = setTimeout(() => {
+            this.autoOpenTimers.delete(autoOpenKey);
+            const stillAtAutoOpenTile =
+                character.MapPos.X === door.config.autoOpenTile?.X &&
+                character.MapPos.Y === door.config.autoOpenTile?.Y;
+            if (!stillAtAutoOpenTile) return;
+
+            this.unlockDoor(door, "admin", character, door.config.unlockDurationMs);
+        }, AUTO_OPEN_TRIGGER_DELAY_MS);
+
+        this.autoOpenTimers.set(autoOpenKey, timer);
     };
 
     private onMessage = async (msg: API_Message): Promise<void> => {
@@ -342,7 +401,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     };
 
     private onAdminMessage = async (msg: API_Message): Promise<void> => {
+        console.log(
+            `[KeypadDoorSystem] Admin message handler triggered: type=${msg.message.Type}, sender=${msg.sender.Name}, admin=${msg.sender.IsRoomAdmin()}`,
+        );
+        
         if (!msg.sender.IsRoomAdmin()) {
+            console.log(`[KeypadDoorSystem] Sender is not a room admin, ignoring`);
             return;
         }
 
@@ -356,10 +420,20 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 : msg.message.Type === "Hidden"
                   ? /^ChatRoomBot\s+door(?:\s+(.+))?$/i.exec(content)
                   : undefined;
-        if (!match) return;
+        
+        console.log(
+            `[KeypadDoorSystem] Admin message content="${content}", pattern match=${match ? "yes" : "no"}`,
+        );
+        
+        if (!match) {
+            return;
+        }
 
         const door = this.findDoorAt(msg.sender);
         if (!door) {
+            console.log(
+                `[KeypadDoorSystem] Admin command from ${msg.sender.Name} at (${msg.sender.MapPos.X},${msg.sender.MapPos.Y}) but no door found. Available doors: ${this.doors.map((d) => `${d.location.key}@(${d.location.x},${d.location.y})`).join(", ") || "none"}`,
+            );
             this.conn.reply(
                 msg.message,
                 "Stand on a configured keypad tile to manage its door.",
@@ -453,6 +527,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             (door) =>
                 door.location.x === character.MapPos.X &&
                 door.location.y === character.MapPos.Y,
+        );
+    }
+
+    private findDoorAtAutoOpenTile(character: API_Character): KeypadDoor | undefined {
+        return this.doors.find(
+            (door) =>
+                door.config.autoOpenTile &&
+                door.config.autoOpenTile.X === character.MapPos.X &&
+                door.config.autoOpenTile.Y === character.MapPos.Y,
         );
     }
 

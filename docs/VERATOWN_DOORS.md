@@ -66,6 +66,31 @@ and `enabled` set to `true`.
 }
 ```
 
+Example without directional exit protection but with auto-open from inside:
+
+```json
+{
+  "key": "secure_room_door",
+  "name": "Secure room door",
+  "type": "keypad_door",
+  "x": 30,
+  "y": 15,
+  "enabled": true,
+  "data": {
+    "doorX": 30,
+    "doorY": 16,
+    "lockedTile": "WoodLocked",
+    "unlockedTile": "WoodOpen",
+    "unlockDurationMs": 8000,
+    "codes": {
+      "admin": "ADMIN-CODE"
+    },
+    "autoOpenTileX": 31,
+    "autoOpenTileY": 15
+  }
+}
+```
+
 ### Required Fields
 
 | Field | Type | Description |
@@ -82,6 +107,8 @@ and `enabled` set to `true`.
 | `insideTopLeftY` | number | Optional top-left Y coordinate of the protected room. |
 | `insideBottomRightX` | number | Optional bottom-right X coordinate of the protected room. |
 | `insideBottomRightY` | number | Optional bottom-right Y coordinate of the protected room. |
+| `autoOpenTileX` | number | Optional X coordinate of a tile inside the room that auto-opens the door. |
+| `autoOpenTileY` | number | Optional Y coordinate of a tile inside the room that auto-opens the door. |
 
 `whitelistMemberNumbers` is optional. It is an array of member numbers that
 should use the `whitelist` group code.
@@ -89,6 +116,9 @@ should use the `whitelist` group code.
 The four `inside*` fields are optional as a group. Omit all four for a simple
 timer-based door. Provide all four to enable directional exit protection. A
 partial inside region is invalid and the keypad location will not load.
+
+The `autoOpenTile*` fields are optional and can only be configured when
+`insideRegion` is not defined. See [Auto-Open Tiles](#auto-open-tiles) below.
 
 ## Access Groups
 
@@ -144,6 +174,30 @@ everyone else needs a code.
 For the inverse layout, where the keypad is above the door and the protected
 room is below it, use `MetalUp`. It permits upward exit from the room below
 toward the keypad, while rejecting entry from the keypad side.
+
+## Auto-Open Tiles
+
+An auto-open tile allows players inside a room to open the door automatically by
+standing on a configured tile for 1 second. This is useful for emergency exits or
+internal buttons.
+
+### Configuration
+
+Set `autoOpenTileX` and `autoOpenTileY` to place the auto-open tile inside the
+room. The auto-open feature is incompatible with directional exit protection
+(`insideRegion`), so it can only be configured when all four `inside*` fields
+are omitted.
+
+When triggered:
+
+- The door opens for the duration configured in `unlockDurationMs`.
+- The unlock happens immediately after a player stands on the tile for 1 second.
+- No code is required.
+- The door reverts to its locked state when the timer expires (no directional
+  exit protection applies).
+
+Example use case: a secure room with an exterior keypad for admins and an
+interior auto-open tile for occupants to exit.
 
 ## Directional Exit Protection
 

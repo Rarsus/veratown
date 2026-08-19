@@ -12,7 +12,8 @@
  * limitations under the License.
  */
 
-import { Collection, Db } from "mongodb";
+import { Collection, Db, ChangeStream, ChangeStreamDocument } from "mongodb";
+import { EventEmitter } from "events";
 
 export interface VeratownLocationDoc {
     _id?: string; // e.g. "cage_entrance", "basement_keypad"
@@ -56,13 +57,15 @@ export interface VeratownLocationDoc {
     updatedAt: number;
 }
 
-export class VeratownLocationStore {
+export class VeratownLocationStore extends EventEmitter {
     private locations: Collection<VeratownLocationDoc>;
     private inited = false;
     private cachedLocations?: VeratownLocationDoc[];
     private loadingLocations?: Promise<VeratownLocationDoc[]>;
+    private changeStream?: ChangeStream<VeratownLocationDoc>;
 
     constructor(private db: Db) {
+        super();
         this.locations =
             this.db.collection<VeratownLocationDoc>("veratownLocations");
     }
@@ -208,5 +211,37 @@ export class VeratownLocationStore {
     public async clearAllLocations(): Promise<void> {
         await this.init();
         await this.locations.deleteMany({});
+    }
+
+    /**
+     * Start watching the locations collection for changes and emit events.
+     * Automatically invalidates the cache and signals listeners when changes occur.
+     */
+    public async watchLocations(): Promise<void> {
+        if (this.changeStream) return;
+        await this.init();
+
+        this.changeStream = this.locations.watch();
+        this.changeStream.on(
+            "change",
+            (change: ChangeStreamDocument<VeratownLocationDoc>) => {
+                this.cachedLocations = undefined;
+                this.emit("locationChanged", change.operationType);
+            },
+        );
+        this.changeStream.on("error", (error) => {
+            console.error("[VeratownLocationStore] Change stream error", error);
+            this.changeStream = undefined;
+        });
+    }
+
+    /**
+     * Stop watching the locations collection for changes.
+     */
+    public async unwatchLocations(): Promise<void> {
+        if (this.changeStream) {
+            await this.changeStream.close();
+            this.changeStream = undefined;
+        }
     }
 }

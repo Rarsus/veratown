@@ -341,6 +341,17 @@ export class Veratown {
         await Promise.all(this.pendingFeatureRegistrations);
         await this.reloadLocations();
 
+        // Watch for database changes and automatically reload affected locations
+        if (this.locationStore) {
+            await this.locationStore.watchLocations();
+            this.locationStore.on("locationChanged", async (operationType) => {
+                console.log(
+                    `[Veratown] Database change detected (${operationType}), reloading locations...`,
+                );
+                await this.reloadLocations();
+            });
+        }
+
         await this.setupRoom();
         await this.setupCharacter();
     }
