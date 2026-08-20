@@ -198,8 +198,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));
-        this.commandParser?.register("door", this.onDoorCommandPlaceholder);
-        this.commandParser?.register("code", this.onCodeCommandPlaceholder);
+        // Register raw listeners for both !door and /bot door formats
+        // This ensures !door whisper commands are properly routed
         this.conn.on(
             "Message",
             guardHandler(`${this.key}:admin`, this.onAdminMessage),
@@ -354,14 +354,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             this.unlockDoor(door, group, msg.sender);
             return;
         }
-    };
-
-    private onDoorCommandPlaceholder = async (): Promise<void> => {
-        // The raw listener below handles this command so code casing is kept.
-    };
-
-    private onCodeCommandPlaceholder = async (): Promise<void> => {
-        // The raw listener below handles this command so code casing is kept.
     };
 
     private onCodeMessage = async (msg: API_Message): Promise<void> => {
