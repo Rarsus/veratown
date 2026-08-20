@@ -235,23 +235,62 @@ A malformed or incomplete keypad location is ignored and logged as part of the
 normal location reload. Use `/bot feature list` to confirm that `keypadDoor` is
 registered, and `/bot status` to confirm that the location snapshot loaded.
 
+## Door Management Access Control
+
+There are two levels of door management access:
+
+### Room Admins
+Room admins have full control over all keypads. They can:
+- Change any access code (admin, whitelist, guest)
+- Add and remove whitelist members
+- Manually lock/unlock doors
+- Enable/disable keypads
+- View all configuration
+
+### Whitelist Members
+Players on a keypad's whitelist have restricted management access. While on the
+keypad, they can:
+- Change the whitelist and guest codes (but NOT the admin code)
+- Add and remove other whitelist members
+- View the configuration and whitelist members
+
+Whitelist members cannot lock, unlock, enable, or disable keypads — only admins
+can perform these administrative actions.
+
+### Non-Whitelist Players
+Players who are not admins or on the whitelist cannot execute any door commands.
+They can only unlock the door by providing the correct code for their access group.
+
 ### Keypad-Local Admin Commands
 
-Room admins must stand on the related keypad tile before using these commands.
-Both `!door ...` whispers and `/bot door ...` commands are supported:
+Both room admins and whitelist members can manage keypads while standing on the
+related keypad tile. Both `!door ...` whispers and `/bot door ...` commands are
+supported. Whitelist members have restricted access to certain admin-only
+operations.
+
+#### Admin-Only Commands (Room Admins)
 
 | Command | Purpose |
 | --- | --- |
-| `!door help` | Show the keypad command reference. |
-| `!door change-code <group> <code>` | Change the `admin`, `whitelist`, or `guest` code. |
-| `!door add-user <member number>` | Add a member number to the whitelist group. |
-| `!door remove-user <member number>` | Remove a member number from the whitelist group. |
-| `!door list` | Show configured groups, whitelist members, and unlock duration without revealing codes. |
-| `!door lock` | Lock the door immediately. This can leave occupants inside, so use it only when the room is empty. |
-| `!door unlock [seconds]` | Open the door manually for the requested duration. Exit protection still applies. |
+| `!door change-code admin <code>` | Change the admin access code. |
+| `!door lock` | Lock the door immediately. |
+| `!door unlock [seconds]` | Manually unlock the door for a duration. |
+| `!door enable` | Enable a disabled keypad. |
+| `!door disable` | Disable a keypad without deleting it. |
 
-Codes are not displayed by `!door list`. Code changes are persisted in the
-location's `data` field and trigger a location reload.
+#### Whitelist Member & Admin Commands
+
+| Command | Purpose |
+| --- | --- |
+| `!door help` | Show available commands for your access level. |
+| `!door change-code <whitelist\|guest> <code>` | Change whitelist or guest code. |
+| `!door add-user <member number>` | Add a member number to the whitelist. |
+| `!door remove-user <member number>` | Remove a member number from the whitelist. |
+| `!door list` | Show configured groups, whitelist members, and unlock duration. |
+| `!door list-whitelist` | Show all whitelist member numbers for this keypad. |
+
+Codes are not displayed by `!door list`. Code changes and whitelist modifications
+are persisted in the location document and trigger a location reload.
 
 ## Limitations
 

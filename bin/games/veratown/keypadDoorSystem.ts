@@ -401,15 +401,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     };
 
     private onAdminMessage = async (msg: API_Message): Promise<void> => {
-        console.log(
-            `[KeypadDoorSystem] Admin message handler triggered: type=${msg.message.Type}, sender=${msg.sender.Name}, admin=${msg.sender.IsRoomAdmin()}`,
-        );
-        
-        if (!msg.sender.IsRoomAdmin()) {
-            console.log(`[KeypadDoorSystem] Sender is not a room admin, ignoring`);
-            return;
-        }
-
         const content =
             msg.message.Type === "Whisper"
                 ? unwrapWhisper(msg.message.Content).trim()
@@ -421,10 +412,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                   ? /^ChatRoomBot\s+door(?:\s+(.+))?$/i.exec(content)
                   : undefined;
         
-        console.log(
-            `[KeypadDoorSystem] Admin message content="${content}", pattern match=${match ? "yes" : "no"}`,
-        );
-        
         if (!match) {
             return;
         }
@@ -432,7 +419,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const door = this.findDoorAt(msg.sender);
         if (!door) {
             console.log(
-                `[KeypadDoorSystem] Admin command from ${msg.sender.Name} at (${msg.sender.MapPos.X},${msg.sender.MapPos.Y}) but no door found. Available doors: ${this.doors.map((d) => `${d.location.key}@(${d.location.x},${d.location.y})`).join(", ") || "none"}`,
+                `[KeypadDoorSystem] User '${msg.sender.Name}' at (${msg.sender.MapPos.X},${msg.sender.MapPos.Y}) tried door command but no keypad found. Available: ${this.doors.map((d) => `${d.location.key}@(${d.location.x},${d.location.y})`).join(", ") || "none"}`,
             );
             this.conn.reply(
                 msg.message,
@@ -444,34 +431,74 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const args = match[1]?.trim().split(/\s+/) ?? ["help"];
         const action = args[0].toLowerCase();
 
-        switch (action) {
-            case "help":
-                this.replyAdmin(
+        // Determine access level
+        const isAdmin = msg.sender.IsRoomAdmin();
+        const isWhitelisted = door.config.whitelistMemberNumbers.includes(
+            msg.sender.MemberNumber,
+        );
+
+        // Help is available to everyone
+        if (action === "help") {
+            if (isAdmin) {
+                this.replyDoor(
                     msg.message,
-                    "Door commands: !door change-code <admin|whitelist|guest> <code>; !door add-user <member number>; !door remove-user <member number>; !door list; !door lock; !door unlock [seconds]",
+                    "Admin commands: !door change-code <admin|whitelist|guest> <code>; !door add-user <member>; !door remove-user <member>; !door list; !door list-whitelist; !door lock; !door unlock [sec]; !door enable; !door disable",
                 );
-                return;
+            } else if (isWhitelisted) {
+                this.replyDoor(
+                    msg.message,
+                    "Whitelist commands: !door change-code <whitelist|guest> <code>; !door add-user <member>; !door remove-user <member>; !door list; !door list-whitelist",
+                );
+            } else {
+                this.replyDoor(
+                    msg.message,
+                    "You do not have permission to manage this door. (Requires admin or whitelist access)",
+                );
+            }
+            return;
+        }
+
+        // All other commands require admin or whitelist access
+        if (!isAdmin && !isWhitelisted) {
+            this.replyDoor(
+                msg.message,
+                "You do not have permission to manage this door. (Requires admin or whitelist access)",
+            );
+            return;
+        }
+
+        switch (action) {
             case "change-code":
             case "code":
             case "change": {
                 const offset = action === "change" ? 1 : 0;
                 const group = args[1 + offset]?.toLowerCase() as KeypadAccessGroup;
                 const code = args[2 + offset];
+
+                // Whitelist members can only change whitelist and guest codes
+                if (!isAdmin && group === "admin") {
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can change the admin code.",
+                    );
+                    return;
+                }
+
                 if (
                     !["admin", "whitelist", "guest"].includes(group) ||
                     !code ||
                     code.includes("(") ||
                     code.includes(")")
                 ) {
-                    this.replyAdmin(
+                    this.replyDoor(
                         msg.message,
-                        "Usage: !door change-code <admin|whitelist|guest> <code>",
+                        `Usage: !door change-code <${isAdmin ? "admin|" : ""}whitelist|guest> <code>`,
                     );
                     return;
                 }
                 door.config.codes[group] = code;
                 await this.persistDoor(door);
-                this.replyAdmin(msg.message, `The ${group} door code was changed.`);
+                this.replyDoor(msg.message, `The ${group} door code was changed.`);
                 return;
             }
             case "add-user":
@@ -496,29 +523,82 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 const groups = ["admin", "whitelist", "guest"]
                     .filter((group) => door.config.codes[group as KeypadAccessGroup])
                     .join(", ");
-                this.replyAdmin(
+                this.replyDoor(
                     msg.message,
                     `Door ${door.location.key}. Configured groups: ${groups || "none"}. Whitelist member numbers: ${door.config.whitelistMemberNumbers.join(", ") || "none"}. Unlock duration: ${door.config.unlockDurationMs / 1000} seconds.`,
                 );
                 return;
             }
-            case "lock":
+            case "list-whitelist": {
+                if (door.config.whitelistMemberNumbers.length === 0) {
+                    this.replyDoor(msg.message, "No whitelist members configured for this door.");
+                } else {
+                    this.replyDoor(
+                        msg.message,
+                        `Whitelist members for ${door.location.key}: ${door.config.whitelistMemberNumbers.join(", ")}`,
+                    );
+                }
+                return;
+            }
+            // Admin-only commands
+            case "enable": {
+                if (!isAdmin) {
+                    this.replyDoor(msg.message, "Only room admins can enable/disable keypads.");
+                    return;
+                }
+                if (door.location.enabled) {
+                    this.replyDoor(msg.message, "This keypad is already enabled.");
+                    return;
+                }
+                await this.locationStore?.updateLocation(door.location.key, {
+                    enabled: true,
+                });
+                await this.reloadLocationsCallback?.();
+                this.replyDoor(msg.message, `Keypad ${door.location.key} has been enabled.`);
+                return;
+            }
+            case "disable": {
+                if (!isAdmin) {
+                    this.replyDoor(msg.message, "Only room admins can enable/disable keypads.");
+                    return;
+                }
+                if (!door.location.enabled) {
+                    this.replyDoor(msg.message, "This keypad is already disabled.");
+                    return;
+                }
+                await this.locationStore?.updateLocation(door.location.key, {
+                    enabled: false,
+                });
+                await this.reloadLocationsCallback?.();
+                this.replyDoor(msg.message, `Keypad ${door.location.key} has been disabled.`);
+                return;
+            }
+            case "lock": {
+                if (!isAdmin) {
+                    this.replyDoor(msg.message, "Only room admins can lock doors.");
+                    return;
+                }
                 if (door.timer) clearTimeout(door.timer);
                 door.timer = undefined;
                 this.setDoorLocked(door);
-                this.replyAdmin(msg.message, "The door was locked immediately.");
+                this.replyDoor(msg.message, "The door was locked immediately.");
                 return;
+            }
             case "unlock": {
+                if (!isAdmin) {
+                    this.replyDoor(msg.message, "Only room admins can manually unlock doors.");
+                    return;
+                }
                 const seconds = args[1] ? Number(args[1]) : door.config.unlockDurationMs / 1000;
                 if (!Number.isFinite(seconds) || seconds <= 0) {
-                    this.replyAdmin(msg.message, "Usage: !door unlock [seconds]");
+                    this.replyDoor(msg.message, "Usage: !door unlock [seconds]");
                     return;
                 }
                 this.unlockDoor(door, "admin", msg.sender, seconds * 1000);
                 return;
             }
             default:
-                this.replyAdmin(msg.message, "Unknown door command. Use !door help.");
+                this.replyDoor(msg.message, "Unknown door command. Use !door help.");
         }
     };
 
@@ -539,7 +619,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         );
     }
 
-    private replyAdmin(message: API_Message["message"], text: string): void {
+    private replyDoor(message: API_Message["message"], text: string): void {
         this.conn.reply(message, text);
     }
 
@@ -551,7 +631,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> {
         const memberNumber = Number(rawMemberNumber);
         if (!Number.isInteger(memberNumber) || memberNumber <= 0) {
-            this.replyAdmin(
+            this.replyDoor(
                 message,
                 `Usage: !door ${add ? "add-user" : "remove-user"} <member number>`,
             );
@@ -563,7 +643,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         else members.delete(memberNumber);
         door.config.whitelistMemberNumbers = [...members].sort((a, b) => a - b);
         await this.persistDoor(door);
-        this.replyAdmin(
+        this.replyDoor(
             message,
             `${memberNumber} was ${add ? "added to" : "removed from"} the door whitelist.`,
         );

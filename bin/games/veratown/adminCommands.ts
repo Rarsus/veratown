@@ -29,6 +29,13 @@ import {
     VeratownLocationDoc,
 } from "./veratownLocationStore";
 import { RegionManager, VeratownRegion } from "./regionManager";
+import {
+    getLocationTemplate,
+    getAllLocationTemplates,
+    getLocationTypesByKeyword,
+    formatTemplateExample,
+    listLocationTypesHelp,
+} from "./locationTemplates";
 
 // Owns every admin-only Veratown command: "strip", "feature
 // enable/disable", "map update/reset/import/export", and "maintenance".
@@ -827,10 +834,126 @@ export class VeratownAdminCommands {
                 break;
             }
 
+            case "types": {
+                const help = listLocationTypesHelp();
+                this.conn.SendMessage(
+                    "Whisper",
+                    `Available location types:\n${help.join("\n")}\n\nUse: !location template <type> for details, or !location search <keyword>`,
+                    sender.MemberNumber,
+                );
+                break;
+            }
+
+            case "search": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location search <keyword>");
+                    return;
+                }
+
+                const results = getLocationTypesByKeyword(args[1]);
+                if (results.length === 0) {
+                    this.conn.reply(
+                        msg,
+                        `No location types found matching keyword: "${args[1]}"`,
+                    );
+                    return;
+                }
+
+                const lines = results.map(
+                    (t) =>
+                        `${t.type.padEnd(20)} - ${t.label} (${t.keywords.join(", ")})`,
+                );
+                this.conn.SendMessage(
+                    "Whisper",
+                    `Location types matching "${args[1]}":\n${lines.join("\n")}`,
+                    sender.MemberNumber,
+                );
+                break;
+            }
+
+            case "template": {
+                if (!args[1]) {
+                    this.conn.reply(msg, "Usage: !location template <type>");
+                    return;
+                }
+
+                const template = getLocationTemplate(args[1]);
+                if (!template) {
+                    this.conn.reply(
+                        msg,
+                        `Unknown location type: "${args[1]}". Use !location types to see available types.`,
+                    );
+                    return;
+                }
+
+                const details = [
+                    `=== ${template.label} ===`,
+                    `Type: ${template.type}`,
+                    `Description: ${template.description}`,
+                    `Required Fields: ${template.fields.join(", ")}`,
+                    `Keywords: ${template.keywords.join(", ")}`,
+                    "",
+                    `JSON Template:`,
+                    formatTemplateExample(template),
+                    "",
+                    `Usage: !location add <key> <name> ${template.type} <x> <y> <data_json>`,
+                ];
+
+                this.conn.SendMessage(
+                    "Whisper",
+                    details.join("\n"),
+                    sender.MemberNumber,
+                );
+                break;
+            }
+
+            case "help": {
+                const helpText = [
+                    "=== Location Management Commands ===",
+                    "",
+                    "!location add <key> <name> <type> <x> <y> [data_json]",
+                    "  Create a new location. Use !location template <type> for examples.",
+                    "",
+                    "!location get <key>",
+                    "  Show details of a location.",
+                    "",
+                    "!location update <key> <field> <value>",
+                    "  Update a location field (name, type, x, y, data).",
+                    "",
+                    "!location delete <key>",
+                    "  Delete a location.",
+                    "",
+                    "!location list [type]",
+                    "  List all locations, optionally filtered by type.",
+                    "",
+                    "!location enable <key> | !location disable <key>",
+                    "  Toggle location active state.",
+                    "",
+                    "!location types",
+                    "  Show all available location types.",
+                    "",
+                    "!location search <keyword>",
+                    "  Search location types by keyword (e.g., 'door', 'cage').",
+                    "",
+                    "!location template <type>",
+                    "  Show template and examples for a location type.",
+                    "",
+                    "!location region <add|update|delete|list> [args]",
+                    "  Manage multi-tile region locations.",
+                ];
+
+                this.conn.SendMessage(
+                    "Whisper",
+                    helpText.join("\n"),
+                    sender.MemberNumber,
+                );
+                break;
+            }
+
             default:
                 this.conn.reply(
                     msg,
-                    "Usage: !location <add|get|update|delete|list|enable|disable|region> [args...]",
+                    "Unknown location subcommand. Use: !location help",
                 );
         }
     };
