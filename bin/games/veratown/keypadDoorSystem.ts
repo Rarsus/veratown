@@ -198,6 +198,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));
+        // Register "code" command with CommandParser so BC knows it's valid.
+        // The actual handling is done by the raw message listener below, which
+        // preserves casing and format.
+        this.commandParser?.register("code", guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser));
         // Register raw listeners for both !door and /bot door formats
         // This ensures !door whisper commands are properly routed
         this.conn.on(
@@ -318,6 +322,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }, AUTO_OPEN_TRIGGER_DELAY_MS);
 
         this.autoOpenTimers.set(autoOpenKey, timer);
+    };
+
+    private onCodeCommandParser = async (): Promise<void> => {
+        // This handler exists only to tell BC that "code" is a valid command.
+        // The actual code entry handling is done by the raw message listeners
+        // (onMessage for direct codes and onCodeMessage for /bot code and !code formats).
+        // We don't do anything here to avoid interfering with raw listeners.
     };
 
     private onMessage = async (msg: API_Message): Promise<void> => {
