@@ -108,6 +108,32 @@ Displays an emote or narration when the character steps on the tile.
 }
 ```
 
+**Important: Bot Connector Requirement for Visibility**
+
+For emotes to be visible to the player, a bot connector must be configured:
+
+- **With bot connector (e.g., showerbot)**: 
+  - Bot teleports to the player's exact location using `mapTeleport()`
+  - Emote is sent from bot's new position (guaranteed in range)
+  - Bot teleports back to home location
+  - Emotes are always visible to the player
+  - Look for logs: `[CatDogSystem] Bot teleported to (X, Y)` 
+
+- **Without bot connector**:
+  - Emote is sent from wherever the tile system executes
+  - Visibility depends on range and line-of-sight
+  - Emote may not display if player is out of range
+  - Look for logs: `[CatDogSystem] No bot connector, sending emote normally`
+
+**Configuration:**
+```typescript
+// With bot connector (emotes always visible)
+const catDog = new CatDogSystem(primaryConn, botConn);
+
+// Without bot connector (may not be visible)
+const catDog = new CatDogSystem(primaryConn);
+```
+
 ### 2. Bondage Action
 
 Automatically adds restraint items to the character when they step on the tile.
@@ -309,9 +335,21 @@ The cat/dog system includes comprehensive logging for troubleshooting. Enable de
 [CatDogSystem] Character position: (x, y)
 [CatDogSystem] Found matching tile: cat with N actions
 [CatDogSystem] Executing action: emote|bondage|vibrator
+[CatDogSystem] performEmoteAction: botConn=true|false, text="..."
+[CatDogSystem] Bot connector available, attempting teleport
+[CatDogSystem] Teleporting bot to player (X, Y)
+[CatDogSystem] ✓ Bot teleported to (X, Y)
+[CatDogSystem] Sending emote from bot location
+[CatDogSystem] Teleporting bot back to (X, Y)
 [CatDogSystem] Found N vibrator(s)
 [CatDogSystem] Detected vibrator: AssetName in ItemVulva
 ```
+
+**Key Log Messages to Look For:**
+- `botConn=true` = bot connector is configured (good for emote visibility)
+- `botConn=false` = no bot connector (emotes may not be visible)
+- `✓ Bot teleported` = teleport succeeded, emote will be visible
+- `No bot connector` = fallback emote send (may not be visible)
 
 If you don't see these logs when stepping on a tile, the tile trigger isn't firing.
 Check bot console output for error messages.
@@ -329,6 +367,21 @@ Check bot console output for error messages.
 - Check that character position exactly matches `x` and `y` coordinates
 - Confirm `data.actions` array is not empty and has valid action objects
 - Look for `[CatDogSystem] onCharacterStepOnPet triggered` in console
+
+**Emote not displaying in chat:**
+- Check bot console for `[CatDogSystem] performEmoteAction:`
+- **If `botConn=false`**: No bot connector configured
+  - Solution: Pass a bot connector to CatDogSystem constructor (e.g., showerbot)
+  - Example: `new CatDogSystem(primaryConn, showerBotConn)`
+  - Without this, emotes may not display if player is out of range
+- **If `botConn=true` but no teleport logs**: Bot connector exists but isn't being used
+  - Check for: `[CatDogSystem] Bot connector available, attempting teleport`
+  - If missing, the condition `if (this.botConn)` may not be evaluating correctly
+- **If teleport logs show failure**: `mapTeleport` may not be available
+  - Check for: `[CatDogSystem] ✓ Bot teleported` (success) or `Failed to teleport bot` (failure)
+  - If failure, verify bot is in the same room and has valid MapPos
+- **Verify emote is actually sent**: Look for `Tell (Emote) CharacterName:` in logs
+  - If this log is missing, the emote action itself isn't executing
 
 **Bondage items not appearing:**
 - Verify the asset group and name are correct (check ItemGroup documentation)

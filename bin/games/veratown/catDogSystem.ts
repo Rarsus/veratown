@@ -308,10 +308,16 @@ export class CatDogSystem implements VeratownFeatureSystem {
         petType: "cat" | "dog",
     ): Promise<void> {
         try {
+            console.log(`[CatDogSystem] performEmoteAction: botConn=${!!this.botConn}, text="${action.text}"`);
+            
             // If bot connector is provided, teleport bot to player for emote visibility
             if (this.botConn) {
+                console.log("[CatDogSystem] Bot connector available, attempting teleport");
                 const botChar = this.botConn.Player;
+                console.log(`[CatDogSystem] botChar: ${botChar?.Name}, MapPos: (${botChar?.MapPos?.X}, ${botChar?.MapPos?.Y})`);
+                
                 if (!botChar?.MapPos) {
+                    console.log("[CatDogSystem] Bot char or MapPos missing, using fallback emote");
                     // Fallback: just send emote normally
                     character.Tell(
                         "Emote",
@@ -323,12 +329,15 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 // Save current bot position
                 const currentX = botChar.MapPos.X ?? 0;
                 const currentY = botChar.MapPos.Y ?? 0;
+                console.log(`[CatDogSystem] Saved bot position: (${currentX}, ${currentY})`);
 
                 // Teleport bot to player's location for emote visibility
+                console.log(`[CatDogSystem] Teleporting bot to player (${character.MapPos.X}, ${character.MapPos.Y})`);
                 await this.teleportBot(botChar, character.MapPos.X, character.MapPos.Y);
                 await this.wait(100); // Brief delay for teleport to complete
 
                 // Send emote (now in range of player)
+                console.log(`[CatDogSystem] Sending emote from bot location`);
                 character.Tell(
                     "Emote",
                     action.text || `*A ${petType} nuzzles you adorably*`,
@@ -337,9 +346,12 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 await this.wait(500); // Let emote display before returning
 
                 // Teleport bot back to original position
+                console.log(`[CatDogSystem] Teleporting bot back to (${currentX}, ${currentY})`);
                 await this.teleportBot(botChar, currentX, currentY);
+                console.log(`[CatDogSystem] ✓ Bot returned to home position (${currentX}, ${currentY})`);
             } else {
                 // No bot connector: send emote normally
+                console.log("[CatDogSystem] No bot connector, sending emote normally (may not be visible if out of range)");
                 character.Tell(
                     "Emote",
                     action.text || `*A ${petType} nuzzles you adorably*`,
@@ -365,10 +377,24 @@ export class CatDogSystem implements VeratownFeatureSystem {
         y: number,
     ): Promise<void> {
         try {
-            if (!botChar?.MapPos) return;
-            // Update bot's map position
-            botChar.MapPos.X = x;
-            botChar.MapPos.Y = y;
+            if (!botChar?.MapPos) {
+                console.warn(`[CatDogSystem] Cannot teleport: botChar.MapPos is ${botChar?.MapPos}`);
+                return;
+            }
+            
+            console.log(`[CatDogSystem] teleportBot: current (${botChar.MapPos.X}, ${botChar.MapPos.Y}) -> target (${x}, ${y})`);
+            
+            // Use the proper mapTeleport() method to actually move the character
+            if (typeof botChar.mapTeleport === "function") {
+                botChar.mapTeleport({ X: x, Y: y });
+                console.log(`[CatDogSystem] ✓ Bot teleported to (${x}, ${y})`);
+            } else {
+                console.warn("[CatDogSystem] ⚠️  botChar.mapTeleport is not a function, attempting fallback");
+                // Fallback: directly modify MapPos (may not work)
+                botChar.MapPos.X = x;
+                botChar.MapPos.Y = y;
+                console.log(`[CatDogSystem] Fallback: set MapPos to (${x}, ${y})`);
+            }
         } catch (e) {
             console.warn(`[CatDogSystem] Failed to teleport bot to (${x}, ${y})`, e);
         }
@@ -420,35 +446,50 @@ export class CatDogSystem implements VeratownFeatureSystem {
     ): void {
         try {
             // Find vibrator items in character's appearance
-            // Vibrators are typically in ItemVulva, ItemPelvis groups with "Vibrator" in the name
-            // BUT some custom vibrators don't have "Vibra*" in the name, so we also check
-            // for items in these groups that have Extended properties (mode/type support)
+            // Vibrators can have many custom names, so we detect by:
+            // 1. Location (ItemVulva, ItemPelvis groups)
+            // 2. Properties (Extended.Type, TypeRecord, Property, Mode, Intensity, etc.)
+            
             const vibrators: any[] = [];
             const appearance = character.Appearance.Appearance || [];
+            
+            console.log(`[CatDogSystem] Scanning ${appearance.length} appearance items for vibrators`);
             
             for (const item of appearance) {
                 try {
                     const assetName = (item as any)?.Asset?.Name as string | undefined;
                     const groupName = (item as any)?.Group as string | undefined;
                     
-                    // Skip non-vulva/pelvis items
+                    // Only check items in these intimate groups
                     if (groupName !== "ItemVulva" && groupName !== "ItemPelvis") {
                         continue;
                     }
 
-                    // Check multiple detection methods:
-                    // 1. Name-based: "Vibrator" in asset name (traditional vibrators)
-                    // 2. Property-based: Has Extended.Type or TypeRecord (custom vibrators with modes)
-                    // 3. Custom name patterns: Some vibrators have special names
-                    
+                    console.log(`[CatDogSystem]   Item in ${groupName}: "${assetName}"`);
+
+                    // Analyze all properties of this item to detect if it's a vibrator
                     const hasVibratorName = assetName?.includes("Vibrator") || assetName?.includes("Vibrat");
                     const hasExtendedType = (item as any)?.Extended?.Type !== undefined;
                     const hasTypeProperty = typeof (item as any)?.getProperty === "function" &&
                         (item as any)?.getProperty("TypeRecord") !== undefined;
+                    const hasProperty = (item as any)?.Property !== undefined;
+                    const hasMode = (item as any)?.Mode !== undefined;
+                    const hasIntensity = (item as any)?.Intensity !== undefined;
                     
-                    if (hasVibratorName || hasExtendedType || hasTypeProperty) {
-                        console.log(`[CatDogSystem] Detected vibrator: ${assetName} in ${groupName} (name: ${hasVibratorName}, extended: ${hasExtendedType}, property: ${hasTypeProperty})`);
+                    // Log all detected properties
+                    if (hasExtendedType) console.log(`[CatDogSystem]     ✓ Has Extended.Type: ${(item as any)?.Extended?.Type}`);
+                    if (hasTypeProperty) console.log(`[CatDogSystem]     ✓ Has TypeRecord property`);
+                    if (hasProperty) console.log(`[CatDogSystem]     ✓ Has Property: ${(item as any)?.Property}`);
+                    if (hasMode) console.log(`[CatDogSystem]     ✓ Has Mode: ${(item as any)?.Mode}`);
+                    if (hasIntensity) console.log(`[CatDogSystem]     ✓ Has Intensity: ${(item as any)?.Intensity}`);
+                    
+                    // Check if this is a vibrator item
+                    // Detect by name OR by presence of mode/intensity properties
+                    if (hasVibratorName || hasExtendedType || hasTypeProperty || hasMode || hasIntensity) {
+                        console.log(`[CatDogSystem]     → Detected as vibrator! (name: ${hasVibratorName}, extended: ${hasExtendedType}, typeRec: ${hasTypeProperty}, mode: ${hasMode}, intensity: ${hasIntensity})`);
                         vibrators.push(item);
+                    } else {
+                        console.log(`[CatDogSystem]     → Not a vibrator (no vibrator name or properties)`);
                     }
                 } catch (e) {
                     // Skip items that cause errors during inspection
