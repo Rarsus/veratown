@@ -11,15 +11,16 @@ coordinates. A user whispers a configured code while standing on that keypad.
 The bot identifies the user's group, changes the configured door tile to its
 open style, and restores the locked style after the unlock period.
 
-Users can enter the code in either of these ways while standing on the keypad:
+Users can enter the code in any of these ways while standing on the keypad:
 
 ```text
 <code>
+!code <code>
 /bot code <code>
 ```
 
 The `/bot code` form is useful for hidden bot commands and preserves the code's
-original casing. Both forms use the same group validation and unlock behavior.
+original casing. All three forms use the same group validation and unlock behavior.
 
 The unlock is group-based and global. Once a code is accepted, every user can
 use the open door until the timer expires. This is intentional and is different
@@ -267,6 +268,9 @@ Both room admins and whitelist members can manage keypads while standing on the
 related keypad tile. Both `!door ...` whispers and `/bot door ...` commands are
 supported. Whitelist members have restricted access to certain admin-only
 operations.
+
+**All players** (admin, whitelist, and guest) can enter codes using any of these
+formats: `<code>`, `!code <code>`, or `/bot code <code>`.
 
 #### Admin-Only Commands (Room Admins)
 

@@ -30,6 +30,8 @@ export interface VeratownLocationDoc {
         | "window"
         | "trashcan"
         | "bunny"
+        | "cat"
+        | "dog"
         | "park_region"
         | "dare_region"
         | "game_region"

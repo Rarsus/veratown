@@ -35,6 +35,7 @@ import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { KeypadDoorSystem } from "./veratown/keypadDoorSystem";
+import { CatDogSystem } from "./veratown/catDogSystem";
 import { VeratownFeatureSystem } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
 import {
@@ -147,6 +148,7 @@ export class Veratown {
     private windowSystem?: WindowSystem;
     private trashcanSystem?: TrashcanSystem;
     private keypadDoorSystem?: KeypadDoorSystem;
+    private catDogSystem?: CatDogSystem;
 
     // Every successfully-initialized room feature, in registration order.
     // Backs the "/bot feature list|enable|disable" command; systems that
@@ -259,6 +261,12 @@ export class Veratown {
                     this.commandParser,
                     this.locationStore,
                     () => this.reloadLocations(),
+                ),
+        );
+        this.catDogSystem = this.initFeature(
+            () =>
+                new CatDogSystem(
+                    this.conn,
                 ),
         );
 

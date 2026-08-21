@@ -25,6 +25,8 @@ export type LocationType =
     | "window"
     | "trashcan"
     | "bunny"
+    | "cat"
+    | "dog"
     | "park_region"
     | "dare_region"
     | "game_region"
@@ -194,6 +196,71 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
             enabled: true,
         },
         keywords: ["bunny", "park", "rabbit"],
+    },
+    cat: {
+        type: "cat",
+        label: "Cat Tile",
+        description: "A tile with a cat that performs configurable actions",
+        fields: ["x", "y", "data.actions (array)"],
+        example: {
+            key: "cat_tile_main",
+            name: "Cat Tile",
+            type: "cat",
+            x: 30,
+            y: 40,
+            enabled: true,
+            data: {
+                actions: [
+                    {
+                        type: "emote",
+                        text: "*A fluffy cat rubs against you purring*",
+                    },
+                    {
+                        type: "vibrator",
+                        message: "to increase in intensity",
+                        intensityIncrease: 2,
+                    },
+                ],
+            },
+        },
+        keywords: ["cat", "pet", "tile", "action"],
+    },
+    dog: {
+        type: "dog",
+        label: "Dog Tile",
+        description: "A tile with a dog that performs configurable actions",
+        fields: ["x", "y", "data.actions (array)"],
+        example: {
+            key: "dog_tile_main",
+            name: "Dog Tile",
+            type: "dog",
+            x: 25,
+            y: 35,
+            enabled: true,
+            data: {
+                actions: [
+                    {
+                        type: "emote",
+                        text: "*A playful dog wags its tail and nuzzles you*",
+                    },
+                    {
+                        type: "bondage",
+                        pieces: [
+                            {
+                                group: "ItemMouth",
+                                asset: "BallGag",
+                                extendedType: "Tight",
+                                color: "#FF69B4",
+                            },
+                        ],
+                        difficulty: 15,
+                        color: "#FF69B4",
+                        craftDescription: "Dog toy treat",
+                    },
+                ],
+            },
+        },
+        keywords: ["dog", "pet", "tile", "action"],
     },
     park_region: {
         type: "park_region",
