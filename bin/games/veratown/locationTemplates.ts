@@ -27,6 +27,7 @@ export type LocationType =
     | "bunny"
     | "cat"
     | "dog"
+    | "furniture"
     | "park_region"
     | "dare_region"
     | "game_region"
@@ -261,6 +262,45 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
             },
         },
         keywords: ["dog", "pet", "tile", "action"],
+    },
+    furniture: {
+        type: "furniture",
+        label: "Bondage Furniture",
+        description: "Configurable bondage furniture with restraints and optional duration",
+        fields: ["x", "y", "data.furnitureAsset", "data.restraints (array)", "data.durationMs (optional)"],
+        example: {
+            key: "furniture_bondage_bed",
+            name: "Bondage Bed",
+            type: "furniture",
+            x: 35,
+            y: 45,
+            enabled: true,
+            data: {
+                furnitureAsset: "Bed",
+                furnitureGroup: "ItemDevices",
+                furnitureExtendedType: "Soft",
+                furnitureColor: "#000000",
+                craftDescription: "Restraint furniture",
+                restraints: [
+                    {
+                        group: "ItemArms",
+                        asset: "LeatherCuffs",
+                        extendedType: "Cuffs",
+                        difficulty: 20,
+                        color: "#000000",
+                    },
+                    {
+                        group: "ItemLegs",
+                        asset: "NylonRope",
+                        difficulty: 18,
+                        color: "#FF69B4",
+                    },
+                ],
+                applyDelayMs: 0,
+                durationMs: 60000,
+            },
+        },
+        keywords: ["furniture", "bondage", "restraint", "configurable"],
     },
     park_region: {
         type: "park_region",

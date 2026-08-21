@@ -32,6 +32,7 @@ export interface VeratownLocationDoc {
         | "bunny"
         | "cat"
         | "dog"
+        | "furniture"
         | "park_region"
         | "dare_region"
         | "game_region"

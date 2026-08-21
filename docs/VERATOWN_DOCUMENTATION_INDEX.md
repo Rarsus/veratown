@@ -102,12 +102,13 @@ pnpm start
 
 ## Game Features
 
-### 9 Core Features
+### 10 Core Features
 
 | Feature | Type | Players | Commands | Status |
 |---------|------|---------|----------|--------|
 | **Cages** | Restraint | 1/cage | N/A (auto) | ✅ Full |
 | **Kennels** | Roleplay | 1/kennel | N/A (auto) | ✅ Full |
+| **Furniture Bondage** | Configurable | Varies | `/bot location` | ✅ Full |
 | **Showers** | Sequence | 1 at a time | N/A (auto) | ✅ Full |
 | **Beds** | Auto-equip | 1/bed | N/A (emotion-based) | ✅ Full |
 | **Bunny Park** | Punishment | Unlimited | N/A (auto) | ✅ Full |
@@ -119,6 +120,8 @@ pnpm start
 ### Feature Highlights
 
 **Cages**: 3 locations with automatic timer-based release. Consent-based with detailed entry notice.
+
+**Furniture Bondage**: Fully configurable bondage furniture with customizable restraints, optional durations, and admin management.
 
 **Dare Game**: 10-round turn-based game with forfeits. Integrated with Casino chip economy.
 
