@@ -18,7 +18,34 @@ To create a simple bondage bed at coordinates (50, 20):
 **→ See [FURNITURE_MAP_OBJECTS.md](FURNITURE_MAP_OBJECTS.md) for a complete catalog of 13 furniture types with map objects, commands for each, and detailed examples.**
 
 For more complex examples here, see [Examples](#examples) section below.
+## New Features
 
+### !bindme Command
+
+Players can now **manually activate bondage furniture** instead of automatic triggering:
+
+```
+!bindme
+```
+
+When a player stands on a furniture location and types `!bindme`, the furniture is activated immediately. Players are informed **once per session** that this option exists when they first step on a furniture tile.
+
+### Auto-Unlock Fixed
+
+The duration-based automatic unlock now works correctly:
+- When `durationMs` is set, furniture and restraints are automatically removed after the timer expires
+- Timer is properly tracked and cleaned up
+- Character receives a notification when released
+
+### Configuration Notes
+
+**Case Sensitivity**: All configuration values preserve their original case (especially important for asset names and JSON data).
+
+**Disable Auto-Apply**: To disable automatic activation (require `!bindme`), add this to your location config:
+
+```
+!location update my_bed data.furnitureProperties '{"disableAutoApply":true}'
+```
 ## Overview
 
 The furniture bondage system allows admins to create highly configurable bondage

@@ -14,6 +14,26 @@ The location update command now supports **dot notation** for nested fields! You
 
 All examples in this document use this dot notation format and are now fully supported.
 
+## ✅ New Features
+
+### !bindme Command
+
+Players can now manually activate bondage furniture:
+
+```
+!bindme
+```
+
+Stand on a furniture tile and type `!bindme` to activate it. Players receive a **one-time per session** notification about this feature when they first step on furniture.
+
+### Auto-Unlock Timer
+
+Duration-based auto-removal now works correctly. Set `durationMs` to automatically remove furniture and restraints after the timer expires.
+
+### Case Preservation
+
+All configuration values preserve their original case (important for asset names like `"X-Cross"` and `"LeatherCuffs"`).
+
 ## Quick Start Example
 
 Create and configure a bondage bed in 5 commands:

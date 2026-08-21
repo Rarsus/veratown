@@ -74,13 +74,19 @@ interface FurnitureTile {
     config: FurnitureActionConfig;
 }
 
+interface CharacterTimerState {
+    timer: ReturnType<typeof setTimeout>;
+    config: FurnitureActionConfig;
+}
+
 export class FurnitureBondageSystem implements VeratownFeatureSystem {
     public readonly key = "furnitureBondage";
     public readonly label = "Bondage furniture";
     public enabled = true;
 
     private tiles: FurnitureTile[] = [];
-    private activeTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    private activeTimers = new Map<number, CharacterTimerState>();
+    private notifiedPlayers = new Set<number>();
     private readonly furnitureTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(private conn: API_Connector) {
@@ -91,14 +97,56 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
     }
 
     public registerTriggers(): void {
-        // Location-backed triggers are registered by reloadLocations().
+        // Register tile triggers via reloadLocations()
+        // Register raw message listener for !bindme command
+        this.conn.on("Message", (msg) => this.onMessage(msg));
     }
+
+    private onMessage = (msg: any): void => {
+        if (!this.enabled) return;
+
+        const sender = msg.Sender;
+        const content = msg.Content?.trim() ?? "";
+
+        // Check for !bindme command
+        if (content.toLowerCase() === "!bindme") {
+            const character = this.conn.chatRoom.getCharacter(sender);
+            if (!character) return;
+
+            // Find if character is on a furniture tile
+            const tile = this.tiles.find(
+                (t) =>
+                    character.MapPos.X === t.location.x &&
+                    character.MapPos.Y === t.location.y,
+            );
+
+            if (!tile) {
+                character.Tell(
+                    "Whisper",
+                    "(You are not standing on any bondage furniture.)",
+                );
+                return;
+            }
+
+            // Notify player once per session about this feature
+            if (!this.notifiedPlayers.has(sender)) {
+                character.Tell(
+                    "Whisper",
+                    `(You can use !bindme to manually activate bondage furniture instead of automatic triggering.)`,
+                );
+                this.notifiedPlayers.add(sender);
+            }
+
+            character.Tell("Whisper", `(Activating ${tile.location.name}...)`);
+            this.activateFurniture(character, tile);
+        }
+    };
 
     public async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
         try {
-            // Clean up old triggers and timers
+            // Clean up old triggers
             for (const tile of this.tiles) {
                 this.conn.chatRoom.map.removeTileTrigger(
                     tile.location.x,
@@ -107,11 +155,14 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 );
             }
 
-            // Clear active timers
-            for (const timer of this.activeTimers.values()) {
-                clearTimeout(timer);
+            // Clear active timers properly
+            for (const entry of this.activeTimers.values()) {
+                clearTimeout(entry.timer);
             }
             this.activeTimers.clear();
+
+            // Reset session notifications
+            this.notifiedPlayers.clear();
 
             // Load new furniture locations
             this.tiles = [];
@@ -200,6 +251,25 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
 
         if (!tile) return;
 
+        // Notify player once per session about !bindme option
+        if (!this.notifiedPlayers.has(character.MemberNumber)) {
+            character.Tell(
+                "Whisper",
+                `(Tip: You can use !bindme to manually activate ${tile.location.name} or use other bondage furniture. Type !bindme when standing on furniture to activate it.)`,
+            );
+            this.notifiedPlayers.add(character.MemberNumber);
+        }
+
+        // Auto-activate if not disabled
+        if (tile.config.furnitureProperties?.disableAutoApply !== true) {
+            this.activateFurniture(character, tile);
+        }
+    };
+
+    private activateFurniture = async (
+        character: API_Character,
+        tile: FurnitureTile,
+    ): Promise<void> => {
         try {
             // Add furniture item
             const furniture = character.Appearance.AddItem(
@@ -241,9 +311,13 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
 
             // Set up duration timer if configured
             if (tile.config.durationMs && tile.config.durationMs > 0) {
-                const timerId = Math.random();
-                this.activeTimers.set(character.MemberNumber, undefined as any);
+                // Clear any existing timer for this character
+                const existing = this.activeTimers.get(character.MemberNumber);
+                if (existing) {
+                    clearTimeout(existing.timer);
+                }
 
+                // Create new timer
                 const timer = setTimeout(() => {
                     try {
                         this.removeRestraints(character, tile.config);
@@ -256,7 +330,8 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                     }
                 }, tile.config.durationMs);
 
-                this.activeTimers.set(character.MemberNumber, timer);
+                // Store the timer with config for later cleanup
+                this.activeTimers.set(character.MemberNumber, { timer, config: tile.config });
             }
         } catch (e) {
             console.error(
@@ -298,10 +373,14 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
         config: FurnitureActionConfig,
     ): void {
         try {
-            // Remove furniture
-            character.Appearance.RemoveItem(
-                (config.furnitureGroup ?? "ItemDevices") as any,
-            );
+            // Remove furniture item by group (safe to remove as it's the only ItemDevices-like item typically)
+            try {
+                character.Appearance.RemoveItem(
+                    (config.furnitureGroup ?? "ItemDevices") as any,
+                );
+            } catch (e) {
+                // Silently ignore if item wasn't found
+            }
 
             // Remove restraints
             if (config.restraints) {
