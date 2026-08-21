@@ -457,7 +457,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
             
             for (const item of appearance) {
                 try {
-                    const assetName = (item as any)?.Asset?.Name as string | undefined;
+                    const assetName = (item as any)?.Name as string | undefined;
                     const groupName = (item as any)?.Group as string | undefined;
                     
                     // Only check items in these intimate groups

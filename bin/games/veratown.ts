@@ -269,6 +269,7 @@ export class Veratown {
             () =>
                 new CatDogSystem(
                     this.conn,
+                    this.conn2, // Optional: shower bot for emote delivery (if configured)
                 ),
         );
         this.furnitureBondageSystem = this.initFeature(

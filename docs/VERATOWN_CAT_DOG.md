@@ -206,17 +206,74 @@ The character receives a whisper like:
 
 ## Vibrator Detection
 
-The system detects vibrators using multiple methods:
+The system detects vibrators using multiple methods to support standard and custom vibrators:
 
 1. **Name-based detection**: Items with "Vibrator" or "Vibrat" in the asset name
-2. **Property-based detection**: Items in ItemVulva/ItemPelvis with Extended.Type property (custom vibrators)
-3. **Extended detection**: Items with TypeRecord property for additional custom vibrators
+2. **Extended.Type property**: Custom vibrators using Extended.Type for intensity levels
+3. **TypeRecord property**: Custom vibrators using TypeRecord for intensity storage
+4. **Mode property**: Custom vibrators with Mode property (e.g., "Lara's latex panties")
+5. **Intensity property**: Custom vibrators with Intensity property for direct intensity storage
+6. **Property field**: Custom vibrators using generic Property field for intensity
 
-This means custom vibrating equipment with any name will be detected as long as it:
+This comprehensive detection means custom vibrating equipment will be detected as long as it:
 - Is placed in the ItemVulva or ItemPelvis group
-- Has Extended.Type or TypeRecord properties to store intensity levels
+- Has ANY of the above properties to store intensity levels
+- Does NOT require "Vibrator" in the asset name
 
 ## Configuration
+
+### Bot Connector Setup
+
+For emotes to be delivered with full visibility (bot teleports to player), you need to configure additional bot accounts in your `config.json`:
+
+**config.json (with showerbot for cat/dog emotes):**
+```json
+{
+  "accounts": [
+    {
+      "name": "BotName1",
+      "password": "password1",
+      "role": "main"
+    },
+    {
+      "name": "ShowerBot",
+      "password": "showerbot_password",
+      "role": "shower"
+    }
+  ]
+}
+```
+
+**Roles:**
+- `main`: Primary bot account (required)
+- `shower`: Secondary bot for shower emotes and cat/dog tiles
+- `casino`: Tertiary bot for casino game management
+
+When a `shower` role bot is configured:
+- The cat/dog system will use it for emote delivery (teleport to player, send emote, return)
+- Emotes are guaranteed to be visible regardless of the bot's home position
+- The shower bot also provides other features (shower system, etc.)
+
+### Code Configuration
+
+The cat/dog system is automatically configured in [bin/games/veratown.ts](../bin/games/veratown.ts):
+
+```typescript
+this.catDogSystem = this.initFeature(
+    () =>
+        new CatDogSystem(
+            this.conn,      // Main bot connection
+            this.conn2,     // Optional: shower bot for emote delivery
+        ),
+);
+```
+
+**Current Implementation:**
+- `this.conn2` (shower bot) is automatically used for emote delivery if configured
+- If no shower bot is configured, emotes are sent normally (may not be visible at range)
+- The system gracefully handles missing bot connectors
+
+### Immersive Emote Delivery
 
 The cat/dog system can be configured with an optional bot connector for immersive emote delivery:
 
@@ -235,6 +292,8 @@ When a bot connector (typically showerbot) is provided, emotes are delivered wit
 - Process takes ~600ms total (100ms travel + 500ms display time)
 
 Without a bot connector, emotes are sent normally but may not be visible to out-of-range players.
+
+### Creating Cat/Dog Locations
 
 ```
 /bot location add cat "My Cat Tile"
@@ -391,9 +450,25 @@ Check bot console output for error messages.
 **Vibrators not escalating:**
 - Character must be wearing an active vibrator item (not disabled/at intensity 0)
 - Vibrator must be in `ItemVulva` or `ItemPelvis` group
-- **Custom vibrators without "Vibrator" in name are now supported** if they have Extended.Type or TypeRecord properties
+- **Custom vibrators without "Vibrator" in name are now supported** if they have:
+  - Extended.Type property, OR
+  - TypeRecord property, OR
+  - Mode property (e.g., "Lara's latex panties"), OR
+  - Intensity property, OR
+  - Property field
 - Check for `[CatDogSystem] Detected vibrator:` in logs
 - If log shows "Found 0 vibrator(s)", the equipment isn't being recognized as a vibrator
+
+**Custom vibrator detection troubleshooting:**
+- Look for logs like:
+  ```
+  [CatDogSystem]   Item in ItemVulva: "Lara's latex panties"
+  [CatDogSystem]     ✓ Has Mode: 1
+  [CatDogSystem]     → Detected as vibrator!
+  ```
+- If the item name shows "undefined", verify the item is in ItemVulva or ItemPelvis
+- If the item name is correct but no properties show, the vibrator type may need additional detection logic
+- Report the item name and visible properties to help add support for new vibrator types
 
 **Intensity stays at 0 (disabled):**
 - The vibrator might not be properly activated/enabled
