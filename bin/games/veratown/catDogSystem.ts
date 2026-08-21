@@ -394,34 +394,43 @@ export class CatDogSystem implements VeratownFeatureSystem {
         petType: "cat" | "dog",
     ): void {
         try {
-            // Find vibrator items in character's appearance by checking asset names
-            const vibrators = (character.Appearance.Appearance || []).filter(
-                (item) => {
+            // Find vibrator items in character's appearance
+            // Vibrators are typically in ItemVulva, ItemPelvis groups with "Vibrator" in the name
+            const vibrators: any[] = [];
+            const appearance = character.Appearance.Appearance || [];
+            
+            for (const item of appearance) {
+                try {
                     const assetName = (item as any)?.Asset?.Name as string | undefined;
                     const groupName = (item as any)?.Group as string | undefined;
-                    return (
-                        (assetName && assetName.includes("Vibrator")) ||
-                        (groupName && (groupName.includes("ItemVulva") || groupName.includes("ItemPelvis")))
-                    );
-                },
-            );
+                    
+                    // Check if this is a vibrator item
+                    if (
+                        assetName?.includes("Vibrator") ||
+                        (groupName === "ItemVulva" && assetName?.includes("Vibrat")) ||
+                        (groupName === "ItemPelvis" && assetName?.includes("Vibrat"))
+                    ) {
+                        vibrators.push(item);
+                    }
+                } catch (e) {
+                    // Skip items that cause errors during inspection
+                    console.debug("[CatDogSystem] Skipped item during vibrator detection", e);
+                }
+            }
 
-            if (vibrators && vibrators.length > 0) {
+            if (vibrators.length > 0) {
                 // Send whisper with custom message
                 character.Tell(
                     "Whisper",
                     `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`,
                 );
 
-                // Attempt to escalate each vibrator
+                // Escalate each vibrator
                 for (const vibrator of vibrators) {
                     try {
-                        this.escalateVibrator(vibrator as any, action.intensityIncrease);
+                        this.escalateVibrator(character, vibrator, action.intensityIncrease);
                     } catch (e) {
-                        console.error(
-                            `[CatDogSystem] Failed to escalate vibrator`,
-                            e,
-                        );
+                        console.error("[CatDogSystem] Failed to escalate vibrator:", e);
                     }
                 }
             }
@@ -430,26 +439,61 @@ export class CatDogSystem implements VeratownFeatureSystem {
         }
     }
 
-    private escalateVibrator(item: any, intensityIncrease: number): void {
-        // Get current extended type if it exists
-        const currentType = item?.Extended?.Type ?? 0;
-        const newType = Math.min(
-            7,
-            Math.max(0, (currentType as number) + intensityIncrease),
-        );
+    private escalateVibrator(
+        character: API_Character,
+        vibratorItem: any,
+        intensityIncrease: number,
+    ): void {
+        try {
+            if (!vibratorItem) return;
 
-        if (item?.Extended && typeof item.Extended.SetType === "function") {
-            item.Extended.SetType(newType);
-        } else if (
-            item &&
-            typeof item.setProperty === "function"
-        ) {
-            // Fallback: try to set via TypeRecord property
-            const typeRecord = item.getProperty?.("TypeRecord") ?? {};
-            item.setProperty("TypeRecord", {
-                ...typeRecord,
-                v: Math.min(7, (typeRecord.v ?? 0) + intensityIncrease),
-            });
+            // Get current intensity/type
+            let currentIntensity = 0;
+            
+            // Try Extended.Type first (for typed vibrators)
+            if (vibratorItem?.Extended?.Type !== undefined) {
+                currentIntensity = parseInt(vibratorItem.Extended.Type) || 0;
+            }
+            // Fallback: try TypeRecord property
+            else if (typeof vibratorItem?.getProperty === "function") {
+                const typeRecord = vibratorItem.getProperty("TypeRecord");
+                currentIntensity = typeRecord?.v ?? 0;
+            }
+
+            // Calculate new intensity (0-7 range)
+            const newIntensity = Math.min(
+                7,
+                Math.max(0, currentIntensity + intensityIncrease),
+            );
+
+            // Apply new intensity
+            if (vibratorItem?.Extended && typeof vibratorItem.Extended.SetType === "function") {
+                // Use Extended.SetType for typed vibrators
+                vibratorItem.Extended.SetType(newIntensity);
+                console.log(
+                    `[CatDogSystem] Escalated vibrator intensity ${currentIntensity} → ${newIntensity} via Extended.SetType`,
+                );
+            } else if (
+                typeof vibratorItem?.setProperty === "function" &&
+                typeof vibratorItem?.getProperty === "function"
+            ) {
+                // Use property-based approach as fallback
+                const typeRecord = vibratorItem.getProperty("TypeRecord") ?? { v: 0 };
+                const newTypeRecord = {
+                    ...typeRecord,
+                    v: newIntensity,
+                };
+                vibratorItem.setProperty("TypeRecord", newTypeRecord);
+                console.log(
+                    `[CatDogSystem] Escalated vibrator intensity ${currentIntensity} → ${newIntensity} via TypeRecord`,
+                );
+            } else {
+                console.warn(
+                    "[CatDogSystem] Vibrator item has no recognized SetType or setProperty method",
+                );
+            }
+        } catch (e) {
+            console.error("[CatDogSystem] Error in escalateVibrator:", e);
         }
     }
 }

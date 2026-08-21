@@ -171,6 +171,12 @@ The character receives a whisper like:
 *The cat cuddles you and by mistake triggers your device... to increase in intensity dramatically*
 ```
 
+**Requirements for vibrator escalation:**
+- Character must be wearing a vibrator item (e.g., `FuturisticVibrator`, `ClitAndDildoVibratorbelt`, `LoversVibrator`)
+- Vibrator must be active (intensity level 0-7, with 0 meaning disabled)
+- Vibrator must be in `ItemVulva` or `ItemPelvis` group
+- Vibrator intensity must support levels (not all vibrators do)
+
 ## Configuration
 
 The cat/dog system can be configured with an optional bot connector for immersive emote delivery:
@@ -290,9 +296,19 @@ Cat/dog locations are managed like other Veratown locations:
 - Confirm `difficulty` is between 0 and 50
 
 **Vibrators not escalating:**
-- Character must be wearing an active vibrator item
-- Common vibrator assets: `FuturisticVibrator`, `ClitAndDildoVibratorbelt`, `LoversVibrator`
+- Character must be wearing an active vibrator item (not disabled/at intensity 0)
+- Vibrator must be in `ItemVulva` or `ItemPelvis` group (e.g., vibrating panties, underwear)
+- Common vibrator assets: `FuturisticVibrator`, `ClitAndDildoVibratorbelt`, `LoversVibrator`, `VibrantPanties`
 - Verify `intensityIncrease` is between 1 and 7
+- Verify the vibrator supports intensity levels (some older assets don't)
+- Intensity range is 0 (disabled) to 7 (maximum) - if already at 7, it won't increase further
+- Message will always send, but intensity might not change if item doesn't support it
+
+**Intensity stays at 0 (disabled):**
+- The vibrator might not be properly activated/enabled
+- Try activating the vibrator manually first before using the tile
+- Some vibrators require explicit enablement before intensity changes will register
+- Check if the vibrator asset supports dynamic intensity modification
 
 **Duplicate actions:**
 - Actions may fire multiple times if the character's position oscillates
