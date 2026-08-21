@@ -15,7 +15,9 @@ To create a simple bondage bed at coordinates (50, 20):
 !location enable my_bed
 ```
 
-For more complex examples, see [Examples](#examples) section below.
+**→ See [FURNITURE_MAP_OBJECTS.md](FURNITURE_MAP_OBJECTS.md) for a complete catalog of 13 furniture types with map objects, commands for each, and detailed examples.**
+
+For more complex examples here, see [Examples](#examples) section below.
 
 ## Overview
 
@@ -137,17 +139,19 @@ Each restraint object in the array:
 
 ## Available Furniture Assets
 
-Common furniture items from ItemDevices group:
+**13 furniture types with dedicated map objects:**
+- Bed, Kennel, X-Cross, BondageBench, Trolley, Locker, WoodenBox
+- Coffin, TheDisplayFrame, Pole, MedicalBed, FuturisticCrate, Throne
 
-- **Bed** - Standard bed (supports extended types like "Soft")
-- **Kennel** - Pet kennel (supports door open/close via TypeRecord)
-- **FuturisticCrate** - High-tech containment crate
-- **Pole** - Stripper pole
-- **WoodenBox** - Wooden restraint box
-- **PilloryStock** - Pillory device
-- **Throne** - Decorative restraint throne
+**→ See [FURNITURE_MAP_OBJECTS.md](FURNITURE_MAP_OBJECTS.md) for the complete catalog with map IDs, properties, and examples.**
 
-For a complete list, refer to [ItemDevices.md](docs/items/ItemDevices.md).
+Additionally, any ItemDevices asset can be used as furniture (with or without a map object):
+- Cage, PersonalCage, LeatherCage
+- DisplayCase, SmallDisplayCase
+- VacBed, VacBedDeluxe
+- And 50+ others (see [ItemDevices.md](docs/items/ItemDevices.md) for full list)
+
+Furniture without dedicated map objects will still equip to the character but won't appear visually on the map.
 
 ## Common Restraint Combinations
 
