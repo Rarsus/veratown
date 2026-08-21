@@ -76,7 +76,9 @@ export class CatDogSystem implements VeratownFeatureSystem {
         private conn: API_Connector,
         private botConn?: API_Connector,
     ) {
+        console.log("[CatDogSystem] Initializing CatDogSystem");
         this.petTrigger = guardHandler(this.key, this.onCharacterStepOnPet);
+        console.log("[CatDogSystem] Trigger handler created:", typeof this.petTrigger);
         // Store bot's initial position if bot connector is provided
         if (this.botConn) {
             this.storeBotPosition();
@@ -103,9 +105,12 @@ export class CatDogSystem implements VeratownFeatureSystem {
     public async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
+        console.log(`[CatDogSystem] reloadLocations called with ${locations.length} locations`);
         try {
             // Clean up old triggers
+            console.log(`[CatDogSystem] Cleaning up ${this.tiles.length} old triggers`);
             for (const tile of this.tiles) {
+                console.log(`[CatDogSystem] Removing trigger at (${tile.location.x}, ${tile.location.y})`);
                 this.conn.chatRoom.map.removeTileTrigger(
                     tile.location.x,
                     tile.location.y,
@@ -116,23 +121,29 @@ export class CatDogSystem implements VeratownFeatureSystem {
             // Load cat and dog locations
             this.tiles = [];
             for (const location of locations) {
+                console.log(`[CatDogSystem] Checking location: ${location.key} type=${location.type} enabled=${location.enabled}`);
                 if (
                     (location.type === "cat" || location.type === "dog") &&
                     location.enabled
                 ) {
                     const config = this.parseConfig(location);
                     if (config) {
+                        console.log(`[CatDogSystem] Adding ${location.type} at (${location.x}, ${location.y})`);
                         this.tiles.push({
                             location,
                             config,
                             petType: location.type as "cat" | "dog",
                         });
+                    } else {
+                        console.log(`[CatDogSystem] Failed to parse config for ${location.key}`);
                     }
                 }
             }
 
             // Register tile triggers for pet positions
+            console.log(`[CatDogSystem] Registering ${this.tiles.length} new tile triggers`);
             for (const tile of this.tiles) {
+                console.log(`[CatDogSystem] Adding tile trigger at (${tile.location.x}, ${tile.location.y})`);
                 this.conn.chatRoom.map.addTileTrigger(
                     { X: tile.location.x, Y: tile.location.y },
                     this.petTrigger,
@@ -248,19 +259,33 @@ export class CatDogSystem implements VeratownFeatureSystem {
     }
 
     private onCharacterStepOnPet = async (character: API_Character) => {
-        if (!this.enabled) return;
+        console.log(`[CatDogSystem] onCharacterStepOnPet triggered for ${character.Name}, enabled=${this.enabled}, tiles count=${this.tiles.length}`);
+        if (!this.enabled) {
+            console.log(`[CatDogSystem] System disabled, ignoring trigger`);
+            return;
+        }
+
+        const characterPos = character.MapPos;
+        console.log(`[CatDogSystem] Character position: (${characterPos.X}, ${characterPos.Y})`);
+        console.log(`[CatDogSystem] Available tiles:`, this.tiles.map(t => `${t.petType} at (${t.location.x}, ${t.location.y})`));
 
         const tile = this.tiles.find(
             (t) =>
-                character.MapPos.X === t.location.x &&
-                character.MapPos.Y === t.location.y,
+                characterPos.X === t.location.x &&
+                characterPos.Y === t.location.y,
         );
 
-        if (!tile) return;
+        if (!tile) {
+            console.log(`[CatDogSystem] No matching tile found for position (${characterPos.X}, ${characterPos.Y})`);
+            return;
+        }
+
+        console.log(`[CatDogSystem] Found matching tile: ${tile.petType} with ${tile.config.actions.length} actions`);
 
         try {
             // Execute each action
             for (const action of tile.config.actions) {
+                console.log(`[CatDogSystem] Executing action: ${action.type}`);
                 if (action.type === "emote") {
                     await this.performEmoteAction(character, action, tile.petType);
                 } else if (action.type === "bondage") {
@@ -396,6 +421,8 @@ export class CatDogSystem implements VeratownFeatureSystem {
         try {
             // Find vibrator items in character's appearance
             // Vibrators are typically in ItemVulva, ItemPelvis groups with "Vibrator" in the name
+            // BUT some custom vibrators don't have "Vibra*" in the name, so we also check
+            // for items in these groups that have Extended properties (mode/type support)
             const vibrators: any[] = [];
             const appearance = character.Appearance.Appearance || [];
             
@@ -404,12 +431,23 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     const assetName = (item as any)?.Asset?.Name as string | undefined;
                     const groupName = (item as any)?.Group as string | undefined;
                     
-                    // Check if this is a vibrator item
-                    if (
-                        assetName?.includes("Vibrator") ||
-                        (groupName === "ItemVulva" && assetName?.includes("Vibrat")) ||
-                        (groupName === "ItemPelvis" && assetName?.includes("Vibrat"))
-                    ) {
+                    // Skip non-vulva/pelvis items
+                    if (groupName !== "ItemVulva" && groupName !== "ItemPelvis") {
+                        continue;
+                    }
+
+                    // Check multiple detection methods:
+                    // 1. Name-based: "Vibrator" in asset name (traditional vibrators)
+                    // 2. Property-based: Has Extended.Type or TypeRecord (custom vibrators with modes)
+                    // 3. Custom name patterns: Some vibrators have special names
+                    
+                    const hasVibratorName = assetName?.includes("Vibrator") || assetName?.includes("Vibrat");
+                    const hasExtendedType = (item as any)?.Extended?.Type !== undefined;
+                    const hasTypeProperty = typeof (item as any)?.getProperty === "function" &&
+                        (item as any)?.getProperty("TypeRecord") !== undefined;
+                    
+                    if (hasVibratorName || hasExtendedType || hasTypeProperty) {
+                        console.log(`[CatDogSystem] Detected vibrator: ${assetName} in ${groupName} (name: ${hasVibratorName}, extended: ${hasExtendedType}, property: ${hasTypeProperty})`);
                         vibrators.push(item);
                     }
                 } catch (e) {
@@ -417,6 +455,8 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     console.debug("[CatDogSystem] Skipped item during vibrator detection", e);
                 }
             }
+
+            console.log(`[CatDogSystem] Found ${vibrators.length} vibrator(s)`);
 
             if (vibrators.length > 0) {
                 // Send whisper with custom message
@@ -433,6 +473,8 @@ export class CatDogSystem implements VeratownFeatureSystem {
                         console.error("[CatDogSystem] Failed to escalate vibrator:", e);
                     }
                 }
+            } else {
+                console.log(`[CatDogSystem] No vibrators found for ${character.Name}`);
             }
         } catch (e) {
             console.error("[CatDogSystem] Failed to perform vibrator action", e);
@@ -447,49 +489,82 @@ export class CatDogSystem implements VeratownFeatureSystem {
         try {
             if (!vibratorItem) return;
 
+            const assetName = (vibratorItem as any)?.Asset?.Name as string | undefined;
+            console.log(`[CatDogSystem] Escalating vibrator: ${assetName}`);
+
             // Get current intensity/type
             let currentIntensity = 0;
             
-            // Try Extended.Type first (for typed vibrators)
+            // Try Extended.Type first (for typed vibrators with modes)
             if (vibratorItem?.Extended?.Type !== undefined) {
-                currentIntensity = parseInt(vibratorItem.Extended.Type) || 0;
+                const rawType = vibratorItem.Extended.Type;
+                currentIntensity = typeof rawType === "string" ? parseInt(rawType) : rawType;
+                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                console.log(`[CatDogSystem] Current intensity via Extended.Type: ${currentIntensity}`);
             }
             // Fallback: try TypeRecord property
             else if (typeof vibratorItem?.getProperty === "function") {
                 const typeRecord = vibratorItem.getProperty("TypeRecord");
-                currentIntensity = typeRecord?.v ?? 0;
+                currentIntensity = typeRecord?.v ?? typeRecord ?? 0;
+                console.log(`[CatDogSystem] Current intensity via TypeRecord: ${currentIntensity}`);
+            }
+            // Final fallback: try Property directly
+            else if (vibratorItem?.Property !== undefined) {
+                const prop = vibratorItem.Property;
+                currentIntensity = typeof prop === "string" ? parseInt(prop) : prop;
+                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                console.log(`[CatDogSystem] Current intensity via Property: ${currentIntensity}`);
             }
 
-            // Calculate new intensity (0-7 range)
-            const newIntensity = Math.min(
-                7,
-                Math.max(0, currentIntensity + intensityIncrease),
-            );
+            // Calculate new intensity (0-7 range for most vibrators, but can go higher for some)
+            const newIntensity = Math.max(0, currentIntensity + intensityIncrease);
 
-            // Apply new intensity
+            console.log(`[CatDogSystem] Setting vibrator intensity: ${currentIntensity} → ${newIntensity}`);
+
+            // Apply new intensity - try multiple methods
+            let success = false;
+
+            // Method 1: Extended.SetType for typed vibrators
             if (vibratorItem?.Extended && typeof vibratorItem.Extended.SetType === "function") {
-                // Use Extended.SetType for typed vibrators
-                vibratorItem.Extended.SetType(newIntensity);
-                console.log(
-                    `[CatDogSystem] Escalated vibrator intensity ${currentIntensity} → ${newIntensity} via Extended.SetType`,
-                );
-            } else if (
-                typeof vibratorItem?.setProperty === "function" &&
-                typeof vibratorItem?.getProperty === "function"
-            ) {
-                // Use property-based approach as fallback
-                const typeRecord = vibratorItem.getProperty("TypeRecord") ?? { v: 0 };
-                const newTypeRecord = {
-                    ...typeRecord,
-                    v: newIntensity,
-                };
-                vibratorItem.setProperty("TypeRecord", newTypeRecord);
-                console.log(
-                    `[CatDogSystem] Escalated vibrator intensity ${currentIntensity} → ${newIntensity} via TypeRecord`,
-                );
-            } else {
+                try {
+                    vibratorItem.Extended.SetType(newIntensity);
+                    console.log(`[CatDogSystem] ✓ Escalated via Extended.SetType`);
+                    success = true;
+                } catch (e) {
+                    console.warn(`[CatDogSystem] Extended.SetType failed:`, e);
+                }
+            }
+
+            // Method 2: setProperty for custom vibrators with TypeRecord
+            if (!success && typeof vibratorItem?.setProperty === "function" && typeof vibratorItem?.getProperty === "function") {
+                try {
+                    const typeRecord = vibratorItem.getProperty("TypeRecord") ?? { v: 0 };
+                    const newTypeRecord = {
+                        ...typeRecord,
+                        v: newIntensity,
+                    };
+                    vibratorItem.setProperty("TypeRecord", newTypeRecord);
+                    console.log(`[CatDogSystem] ✓ Escalated via TypeRecord property`);
+                    success = true;
+                } catch (e) {
+                    console.warn(`[CatDogSystem] TypeRecord setProperty failed:`, e);
+                }
+            }
+
+            // Method 3: Direct property assignment
+            if (!success && vibratorItem?.Property !== undefined) {
+                try {
+                    vibratorItem.Property = newIntensity;
+                    console.log(`[CatDogSystem] ✓ Escalated via direct Property assignment`);
+                    success = true;
+                } catch (e) {
+                    console.warn(`[CatDogSystem] Direct Property assignment failed:`, e);
+                }
+            }
+
+            if (!success) {
                 console.warn(
-                    "[CatDogSystem] Vibrator item has no recognized SetType or setProperty method",
+                    `[CatDogSystem] ⚠️  Could not escalate vibrator ${assetName} - no recognized method worked`,
                 );
             }
         } catch (e) {

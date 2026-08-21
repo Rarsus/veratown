@@ -172,10 +172,23 @@ The character receives a whisper like:
 ```
 
 **Requirements for vibrator escalation:**
-- Character must be wearing a vibrator item (e.g., `FuturisticVibrator`, `ClitAndDildoVibratorbelt`, `LoversVibrator`)
-- Vibrator must be active (intensity level 0-7, with 0 meaning disabled)
-- Vibrator must be in `ItemVulva` or `ItemPelvis` group
-- Vibrator intensity must support levels (not all vibrators do)
+- Character must be wearing a vibrator item in `ItemVulva` or `ItemPelvis` group
+- Vibrator must support intensity/mode levels (Extended.Type or TypeRecord property)
+- Vibrator should be active (intensity ≥ 0)
+- Works with standard vibrators (FuturisticVibrator, LoversVibrator, etc.)
+- Also works with custom vibrators that don't have "Vibrator" in the name
+
+## Vibrator Detection
+
+The system detects vibrators using multiple methods:
+
+1. **Name-based detection**: Items with "Vibrator" or "Vibrat" in the asset name
+2. **Property-based detection**: Items in ItemVulva/ItemPelvis with Extended.Type property (custom vibrators)
+3. **Extended detection**: Items with TypeRecord property for additional custom vibrators
+
+This means custom vibrating equipment with any name will be detected as long as it:
+- Is placed in the ItemVulva or ItemPelvis group
+- Has Extended.Type or TypeRecord properties to store intensity levels
 
 ## Configuration
 
@@ -285,10 +298,37 @@ Cat/dog locations are managed like other Veratown locations:
 
 ## Troubleshooting
 
+### Debug Logging
+
+The cat/dog system includes comprehensive logging for troubleshooting. Enable debug mode to see:
+
+```
+[CatDogSystem] reloadLocations called with X locations
+[CatDogSystem] Adding cat/dog at (x, y)
+[CatDogSystem] onCharacterStepOnPet triggered for PlayerName
+[CatDogSystem] Character position: (x, y)
+[CatDogSystem] Found matching tile: cat with N actions
+[CatDogSystem] Executing action: emote|bondage|vibrator
+[CatDogSystem] Found N vibrator(s)
+[CatDogSystem] Detected vibrator: AssetName in ItemVulva
+```
+
+If you don't see these logs when stepping on a tile, the tile trigger isn't firing.
+Check bot console output for error messages.
+
+### Common Issues
+
+**No tiles loading:**
+- Check `/bot feature list` - cat/dog should show as "enabled"
+- Run `/bot feature enable catDog` if disabled
+- Check bot console for `[CatDogSystem] Loaded X cat/dog location(s)`
+- If 0 tiles loaded, verify locations have `type: "cat"` or `type: "dog"` and `enabled: true`
+
 **Actions not firing:**
 - Verify the location is `enabled: true`
 - Check that character position exactly matches `x` and `y` coordinates
 - Confirm `data.actions` array is not empty and has valid action objects
+- Look for `[CatDogSystem] onCharacterStepOnPet triggered` in console
 
 **Bondage items not appearing:**
 - Verify the asset group and name are correct (check ItemGroup documentation)
@@ -297,18 +337,17 @@ Cat/dog locations are managed like other Veratown locations:
 
 **Vibrators not escalating:**
 - Character must be wearing an active vibrator item (not disabled/at intensity 0)
-- Vibrator must be in `ItemVulva` or `ItemPelvis` group (e.g., vibrating panties, underwear)
-- Common vibrator assets: `FuturisticVibrator`, `ClitAndDildoVibratorbelt`, `LoversVibrator`, `VibrantPanties`
-- Verify `intensityIncrease` is between 1 and 7
-- Verify the vibrator supports intensity levels (some older assets don't)
-- Intensity range is 0 (disabled) to 7 (maximum) - if already at 7, it won't increase further
-- Message will always send, but intensity might not change if item doesn't support it
+- Vibrator must be in `ItemVulva` or `ItemPelvis` group
+- **Custom vibrators without "Vibrator" in name are now supported** if they have Extended.Type or TypeRecord properties
+- Check for `[CatDogSystem] Detected vibrator:` in logs
+- If log shows "Found 0 vibrator(s)", the equipment isn't being recognized as a vibrator
 
 **Intensity stays at 0 (disabled):**
 - The vibrator might not be properly activated/enabled
 - Try activating the vibrator manually first before using the tile
 - Some vibrators require explicit enablement before intensity changes will register
-- Check if the vibrator asset supports dynamic intensity modification
+- Check logs for `[CatDogSystem] Escalating vibrator:` and `Current intensity via...`
+- If current intensity reads as 0, the item needs to be activated first
 
 **Duplicate actions:**
 - Actions may fire multiple times if the character's position oscillates
