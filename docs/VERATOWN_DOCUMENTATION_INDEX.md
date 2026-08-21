@@ -170,9 +170,9 @@ MAP MANAGEMENT
 /bot map export                       - Export layout for backup
 
 LOCATION DATABASE
-/bot location add <key> <x> <y>                              - Add point
+/bot location add <key> <name> <type> <x> <y> [data_json]   - Add location
 /bot location get <key>                                      - View location
-/bot location update <key> <x> <y> [label]                  - Update point
+/bot location update <key> <field> <value>                  - Update (dot notation: data.field)
 /bot location delete <key>                                   - Delete location
 /bot location list                                           - List all
 

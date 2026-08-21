@@ -4,6 +4,19 @@ This document describes the configurable bondage furniture system in Veratown.
 The feature is implemented by `bin/games/veratown/furnitureBondageSystem.ts` and is
 loaded and reloaded by the Veratown orchestrator.
 
+## Quick Start
+
+To create a simple bondage bed at coordinates (50, 20):
+
+```
+!location add my_bed "Bondage Bed" furniture 50 20
+!location update my_bed data.furnitureAsset "Bed"
+!location update my_bed data.durationMs 120000
+!location enable my_bed
+```
+
+For more complex examples, see [Examples](#examples) section below.
+
 ## Overview
 
 The furniture bondage system allows admins to create highly configurable bondage
@@ -332,14 +345,19 @@ Use standard location admin commands:
 1. Create the location:
    !location add my_bondage_bed "Bondage Bed" furniture 50 20
 
-2. Update with restraint configuration:
+2. Update with basic configuration:
    !location update my_bondage_bed data.furnitureAsset "Bed"
    !location update my_bondage_bed data.durationMs 120000
+
+3. Add a single restraint (easier than JSON):
    !location update my_bondage_bed data.restraints '[{"group":"ItemArms","asset":"LeatherCuffs","difficulty":20}]'
 
-3. Enable the location:
+4. Enable the location:
    !location enable my_bondage_bed
 ```
+
+**Note**: JSON in commands requires proper shell escaping. Use single quotes around JSON to avoid shell interpretation.
+If you encounter JSON parse errors, try using the database directly or splitting complex restraints across multiple update commands.
 
 ## Behavior Details
 
