@@ -2,9 +2,33 @@
 
 This document maps all BC bondage furniture items that have map objects to their usage in Veratown location commands.
 
-## Furniture with Map Objects (11 Types)
+## ✅ Dot Notation Support
 
-These furniture items have dedicated map object representations in BC:
+The location update command now supports **dot notation** for nested fields! You can update furniture configuration directly:
+
+```
+!location update my_furniture data.furnitureAsset "Bed"
+!location update my_furniture data.durationMs 120000
+!location update my_furniture data.restraints '[...]'
+```
+
+All examples in this document use this dot notation format and are now fully supported.
+
+## Quick Start Example
+
+Create and configure a bondage bed in 5 commands:
+
+```
+!location add my_bed "Bondage Bed" furniture 50 20
+!location update my_bed data.furnitureAsset "Bed"
+!location update my_bed data.durationMs 120000
+!location update my_bed data.restraints '[{"group":"ItemArms","asset":"LeatherCuffs","difficulty":20}]'
+!location enable my_bed
+```
+
+The character will now be equipped with a Bed and LeatherCuffs for 2 minutes when standing on that tile!
+
+## Furniture with Map Objects (13 Types)\n\nThese furniture items have dedicated map object representations in BC:
 
 | Asset Name | Map ID | Map Style | Height | Notes | Location Command |
 |---|---|---|---|---|---|
@@ -55,7 +79,10 @@ These are in ItemDevices but don't have dedicated map objects (character equipme
 
 ```
 !location add <key> "<name>" furniture <x> <y>
+!location update <key> data.fieldName value         # Supports dot notation for nested fields
 ```
+
+**Dot Notation Support**: You can update nested fields like `data.furnitureAsset` directly without needing to specify the entire data object.
 
 ### Examples for Each Furniture Type
 

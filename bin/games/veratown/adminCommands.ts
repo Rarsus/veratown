@@ -639,42 +639,99 @@ export class VeratownAdminCommands {
                 if (args.length < 4) {
                     this.conn.reply(
                         msg,
-                        "Usage: !location update <key> <field> <value>",
+                        "Usage: !location update <key> <field> <value>\n(Field can be: name, type, x, y, data, or nested like data.furnitureAsset)",
                     );
                     return;
                 }
 
                 const key = args[1];
-                const field = args[2];
+                const fieldPath = args[2];
                 const value = args.slice(3).join(" ");
 
                 try {
+                    // Check if it's a nested field (contains dot)
+                    const isNested = fieldPath.includes(".");
+                    const topLevelField = fieldPath.split(".")[0];
                     const validFields = ["name", "type", "x", "y", "data"];
-                    if (!validFields.includes(field)) {
+
+                    if (!validFields.includes(topLevelField)) {
                         this.conn.reply(
                             msg,
-                            `Invalid field. Valid fields: ${validFields.join(", ")}`,
+                            `Invalid field. Valid top-level fields: ${validFields.join(", ")}`,
                         );
                         return;
                     }
 
-                    let updateValue: any = value;
-                    if (field === "x" || field === "y") {
-                        updateValue = parseFloat(value);
-                        if (isNaN(updateValue)) {
+                    // Get the current location
+                    const currentLocation = await this.locationStore.getLocation(key);
+                    if (!currentLocation) {
+                        this.conn.reply(msg, `Location "${key}" not found.`);
+                        return;
+                    }
+
+                    // Parse the value based on context
+                    let parsedValue: any = value;
+                    if (topLevelField === "x" || topLevelField === "y") {
+                        if (isNested) {
+                            this.conn.reply(msg, `Cannot use nested path for ${topLevelField}.`);
+                            return;
+                        }
+                        parsedValue = parseFloat(value);
+                        if (isNaN(parsedValue)) {
                             this.conn.reply(
                                 msg,
-                                `${field} must be a valid number.`,
+                                `${topLevelField} must be a valid number.`,
                             );
                             return;
                         }
-                    } else if (field === "data") {
-                        updateValue = JSON.parse(value);
+                    } else if (topLevelField === "data" || isNested) {
+                        // Try to parse as JSON; if it fails, treat as string
+                        try {
+                            parsedValue = JSON.parse(value);
+                        } catch {
+                            // If JSON parse fails, keep as string (could be a simple value)
+                            parsedValue = value;
+                        }
+                    }
+
+                    // Build the update object
+                    let updateObj: Record<string, any> = {};
+
+                    if (isNested) {
+                        // Handle nested field updates (e.g., data.furnitureAsset)
+                        const parts = fieldPath.split(".");
+                        const target = parts[0]; // Should be "data"
+                        const path = parts.slice(1); // e.g., ["furnitureAsset"]
+
+                        if (target !== "data") {
+                            this.conn.reply(msg, `Nested paths only supported under "data".`);
+                            return;
+                        }
+
+                        // Deep clone current data and merge update
+                        const currentData = currentLocation.data ?? {};
+                        const updatedData = { ...currentData };
+
+                        // Navigate to the nested location
+                        let current: any = updatedData;
+                        for (let i = 0; i < path.length - 1; i++) {
+                            const key = path[i];
+                            if (!current[key]) {
+                                current[key] = {};
+                            }
+                            current = current[key];
+                        }
+                        current[path[path.length - 1]] = parsedValue;
+
+                        updateObj.data = updatedData;
+                    } else {
+                        // Top-level field update
+                        updateObj[fieldPath] = parsedValue;
                     }
 
                     const success = await this.locationStore.updateLocation(
                         key,
-                        { [field]: updateValue },
+                        updateObj,
                     );
                     if (success) {
                         this.conn.reply(

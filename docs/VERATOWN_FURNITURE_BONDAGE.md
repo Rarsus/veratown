@@ -349,19 +349,22 @@ Use standard location admin commands:
 1. Create the location:
    !location add my_bondage_bed "Bondage Bed" furniture 50 20
 
-2. Update with basic configuration:
+2. Update furniture asset (using dot notation):
    !location update my_bondage_bed data.furnitureAsset "Bed"
+
+3. Set duration in milliseconds (2 minutes = 120000 ms):
    !location update my_bondage_bed data.durationMs 120000
 
-3. Add a single restraint (easier than JSON):
+4. Add restraints as JSON:
    !location update my_bondage_bed data.restraints '[{"group":"ItemArms","asset":"LeatherCuffs","difficulty":20}]'
 
-4. Enable the location:
+5. Enable the location:
    !location enable my_bondage_bed
 ```
 
-**Note**: JSON in commands requires proper shell escaping. Use single quotes around JSON to avoid shell interpretation.
-If you encounter JSON parse errors, try using the database directly or splitting complex restraints across multiple update commands.
+**Dot Notation**: Fields like `data.furnitureAsset` now work directly with the update command. The bot automatically handles nested field updates.
+
+**JSON Values**: When your value contains JSON (like restraints array), wrap it in single quotes: `'[{...}]'`
 
 ## Behavior Details
 

@@ -173,9 +173,9 @@ MAP MANAGEMENT
 LOCATION DATABASE
 /bot location add <key> <name> <type> <x> <y> [data_json]   - Add location
 /bot location get <key>                                      - View location
-/bot location update <key> <field> <value>                  - Update (dot notation: data.field)
+/bot location update <key> <field> <value>                  - Update (supports dot notation: data.furnitureAsset)
 /bot location delete <key>                                   - Delete location
-/bot location list                                           - List all
+/bot location list                                           - List all locations (optionally filter by type)
 
 REGION MANAGEMENT
 /bot location region add <key> <x1> <y1> <x2> <y2> <type>   - Add region
