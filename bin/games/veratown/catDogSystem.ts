@@ -533,36 +533,61 @@ export class CatDogSystem implements VeratownFeatureSystem {
             const assetName = (vibratorItem as any)?.Asset?.Name as string | undefined;
             console.log(`[CatDogSystem] Escalating vibrator: ${assetName}`);
 
-            // Get current intensity/type
+            // Get current intensity/type - try multiple property paths
             let currentIntensity = 0;
+            let intensitySource = "unknown";
             
             // Try Extended.Type first (for typed vibrators with modes)
             if (vibratorItem?.Extended?.Type !== undefined) {
                 const rawType = vibratorItem.Extended.Type;
                 currentIntensity = typeof rawType === "string" ? parseInt(rawType) : rawType;
                 currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
-                console.log(`[CatDogSystem] Current intensity via Extended.Type: ${currentIntensity}`);
+                intensitySource = "Extended.Type";
+                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
             }
-            // Fallback: try TypeRecord property
+            // Try TypeRecord property
             else if (typeof vibratorItem?.getProperty === "function") {
                 const typeRecord = vibratorItem.getProperty("TypeRecord");
-                currentIntensity = typeRecord?.v ?? typeRecord ?? 0;
-                console.log(`[CatDogSystem] Current intensity via TypeRecord: ${currentIntensity}`);
+                if (typeRecord !== undefined) {
+                    currentIntensity = typeRecord?.v ?? typeRecord ?? 0;
+                    intensitySource = "TypeRecord";
+                    console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+                }
             }
-            // Final fallback: try Property directly
-            else if (vibratorItem?.Property !== undefined) {
+            
+            // Try Mode property (common in custom vibrators)
+            if (intensitySource === "unknown" && (vibratorItem as any)?.Mode !== undefined) {
+                const rawMode = (vibratorItem as any).Mode;
+                currentIntensity = typeof rawMode === "string" ? parseInt(rawMode) : rawMode;
+                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                intensitySource = "Mode";
+                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+            }
+            
+            // Try Intensity property
+            if (intensitySource === "unknown" && (vibratorItem as any)?.Intensity !== undefined) {
+                const rawIntensity = (vibratorItem as any).Intensity;
+                currentIntensity = typeof rawIntensity === "string" ? parseInt(rawIntensity) : rawIntensity;
+                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                intensitySource = "Intensity";
+                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+            }
+            
+            // Try Property directly
+            if (intensitySource === "unknown" && vibratorItem?.Property !== undefined) {
                 const prop = vibratorItem.Property;
                 currentIntensity = typeof prop === "string" ? parseInt(prop) : prop;
                 currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
-                console.log(`[CatDogSystem] Current intensity via Property: ${currentIntensity}`);
+                intensitySource = "Property";
+                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
             }
 
-            // Calculate new intensity (0-7 range for most vibrators, but can go higher for some)
+            // Calculate new intensity - no hardcoded max, let the item decide
             const newIntensity = Math.max(0, currentIntensity + intensityIncrease);
 
-            console.log(`[CatDogSystem] Setting vibrator intensity: ${currentIntensity} → ${newIntensity}`);
+            console.log(`[CatDogSystem] Setting vibrator intensity: ${currentIntensity} → ${newIntensity} (source: ${intensitySource})`);
 
-            // Apply new intensity - try multiple methods
+            // Apply new intensity - try multiple methods based on detected source
             let success = false;
 
             // Method 1: Extended.SetType for typed vibrators
@@ -592,7 +617,29 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 }
             }
 
-            // Method 3: Direct property assignment
+            // Method 3: Direct Mode assignment
+            if (!success && (vibratorItem as any)?.Mode !== undefined) {
+                try {
+                    (vibratorItem as any).Mode = newIntensity;
+                    console.log(`[CatDogSystem] ✓ Escalated via direct Mode assignment`);
+                    success = true;
+                } catch (e) {
+                    console.warn(`[CatDogSystem] Mode assignment failed:`, e);
+                }
+            }
+
+            // Method 4: Direct Intensity assignment
+            if (!success && (vibratorItem as any)?.Intensity !== undefined) {
+                try {
+                    (vibratorItem as any).Intensity = newIntensity;
+                    console.log(`[CatDogSystem] ✓ Escalated via direct Intensity assignment`);
+                    success = true;
+                } catch (e) {
+                    console.warn(`[CatDogSystem] Intensity assignment failed:`, e);
+                }
+            }
+
+            // Method 5: Direct property assignment
             if (!success && vibratorItem?.Property !== undefined) {
                 try {
                     vibratorItem.Property = newIntensity;
