@@ -10,9 +10,19 @@ A `cat` or `dog` location places a tile at the location's `x` and `y` coordinate
 When a character stands on that tile, the system performs a configurable sequence of
 actions from the location's `data.actions` array. Actions can include:
 
-- **Emote**: Display a custom emote/narration
+- **Emote**: Display a custom emote/narration (bot teleports to player for visibility)
 - **Bondage**: Automatically add restraint items to the character
 - **Vibrator**: Escalate active vibrators with a custom whisper message
+
+### Immersive Emotes (Bot Teleport)
+
+When a bot connector is configured (typically the showerbot), emotes are delivered via:
+1. Bot teleports to player's exact location
+2. Emote is sent (now in range and fully visible to player)
+3. Bot teleports back to home position
+
+This ensures emotes are always visible to players regardless of the bot's normal position.
+Without a bot connector, emotes are sent normally but may not be visible if out of range.
 
 ## Location Schema
 
@@ -161,9 +171,25 @@ The character receives a whisper like:
 *The cat cuddles you and by mistake triggers your device... to increase in intensity dramatically*
 ```
 
-## Creating Cat/Dog Tiles
+## Configuration
 
-Use the location admin commands to create a cat/dog tile:
+The cat/dog system can be configured with an optional bot connector for immersive emote delivery:
+
+```typescript
+// Without bot teleport (basic emotes)
+const catDog = new CatDogSystem(primaryConn);
+
+// With showerbot for immersive emotes (bot teleports to player)
+const catDog = new CatDogSystem(primaryConn, showerBotConn);
+```
+
+When a bot connector (typically showerbot) is provided, emotes are delivered with maximum immersion:
+- Bot appears at player's location
+- Emote is sent (fully visible in map view)
+- Bot returns to home position
+- Process takes ~600ms total (100ms travel + 500ms display time)
+
+Without a bot connector, emotes are sent normally but may not be visible to out-of-range players.
 
 ```
 /bot location add cat "My Cat Tile"

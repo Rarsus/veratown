@@ -69,9 +69,31 @@ export class CatDogSystem implements VeratownFeatureSystem {
 
     private tiles: CatDogTile[] = [];
     private readonly petTrigger: ReturnType<typeof guardHandler>;
+    private botOriginalX: number = 0;
+    private botOriginalY: number = 0;
 
-    public constructor(private conn: API_Connector) {
+    public constructor(
+        private conn: API_Connector,
+        private botConn?: API_Connector,
+    ) {
         this.petTrigger = guardHandler(this.key, this.onCharacterStepOnPet);
+        // Store bot's initial position if bot connector is provided
+        if (this.botConn) {
+            this.storeBotPosition();
+        }
+    }
+
+    private storeBotPosition(): void {
+        try {
+            if (!this.botConn?.chatRoom) return;
+            const botChar = this.botConn.Player;
+            if (botChar?.MapPos) {
+                this.botOriginalX = botChar.MapPos.X ?? 0;
+                this.botOriginalY = botChar.MapPos.Y ?? 0;
+            }
+        } catch (e) {
+            console.warn("[CatDogSystem] Could not store bot initial position", e);
+        }
     }
 
     public registerTriggers(): void {
@@ -240,7 +262,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
             // Execute each action
             for (const action of tile.config.actions) {
                 if (action.type === "emote") {
-                    this.performEmoteAction(character, action, tile.petType);
+                    await this.performEmoteAction(character, action, tile.petType);
                 } else if (action.type === "bondage") {
                     this.performBondageAction(character, action);
                 } else if (action.type === "vibrator") {
@@ -255,19 +277,80 @@ export class CatDogSystem implements VeratownFeatureSystem {
         }
     };
 
-    private performEmoteAction(
+    private async performEmoteAction(
         character: API_Character,
         action: CatDogEmoteAction,
         petType: "cat" | "dog",
-    ): void {
+    ): Promise<void> {
         try {
-            character.Tell(
-                "Emote",
-                action.text || `*A ${petType} nuzzles you adorably*`,
-            );
+            // If bot connector is provided, teleport bot to player for emote visibility
+            if (this.botConn) {
+                const botChar = this.botConn.Player;
+                if (!botChar?.MapPos) {
+                    // Fallback: just send emote normally
+                    character.Tell(
+                        "Emote",
+                        action.text || `*A ${petType} nuzzles you adorably*`,
+                    );
+                    return;
+                }
+
+                // Save current bot position
+                const currentX = botChar.MapPos.X ?? 0;
+                const currentY = botChar.MapPos.Y ?? 0;
+
+                // Teleport bot to player's location for emote visibility
+                await this.teleportBot(botChar, character.MapPos.X, character.MapPos.Y);
+                await this.wait(100); // Brief delay for teleport to complete
+
+                // Send emote (now in range of player)
+                character.Tell(
+                    "Emote",
+                    action.text || `*A ${petType} nuzzles you adorably*`,
+                );
+
+                await this.wait(500); // Let emote display before returning
+
+                // Teleport bot back to original position
+                await this.teleportBot(botChar, currentX, currentY);
+            } else {
+                // No bot connector: send emote normally
+                character.Tell(
+                    "Emote",
+                    action.text || `*A ${petType} nuzzles you adorably*`,
+                );
+            }
         } catch (e) {
             console.error("[CatDogSystem] Failed to perform emote action", e);
+            // Fallback: try sending emote anyway
+            try {
+                character.Tell(
+                    "Emote",
+                    action.text || `*A ${petType} nuzzles you adorably*`,
+                );
+            } catch (fallbackErr) {
+                console.error("[CatDogSystem] Fallback emote also failed", fallbackErr);
+            }
         }
+    }
+
+    private async teleportBot(
+        botChar: API_Character,
+        x: number,
+        y: number,
+    ): Promise<void> {
+        try {
+            if (!botChar?.MapPos) return;
+            // Update bot's map position
+            botChar.MapPos.X = x;
+            botChar.MapPos.Y = y;
+        } catch (e) {
+            console.warn(`[CatDogSystem] Failed to teleport bot to (${x}, ${y})`, e);
+        }
+    }
+
+    private wait(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     private performBondageAction(
