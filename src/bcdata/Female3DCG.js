@@ -32,7 +32,7 @@ const AssetLowerOverflowAlpha = [0, 1000, 500, 1000 + 150];
  *
  * @satisfies {Partial<Record<EffectName, EffectName>>}
  */
-const E = /** @type {const} */ ({
+export const E = /** @type {const} */ ({
 	/** Prevents walking and kneeling without the kneel/stand minigame. */
 	Freeze: "Freeze",
 	/** Prevents accessing the wardrobe. */
@@ -586,7 +586,7 @@ const AssetMaleChasityCagesList = [
  * 3D Custom Girl based assets
  * @type {AssetGroupDefinition[]}
  */
-var AssetFemale3DCG = [
+export var AssetFemale3DCG = [
 	// Appearance specific
 	// #region ClothOuter
 	{
@@ -75037,7 +75037,7 @@ var AssetFemale3DCG = [
 /** 3D Custom Girl based pose
  * @type {Pose[]}
  */
-var PoseFemale3DCG = [
+export var PoseFemale3DCG = [
 	{
 		Name: "BaseUpper",
 		Category: "BodyUpper",
@@ -75151,7 +75151,7 @@ var PoseFemale3DCG = [
  * List of all available pose names in the game
  * @constant {AssetPoseName[]}
  */
-var PoseFemale3DCGNames = PoseFemale3DCG.map((pose) => pose.Name);
+export var PoseFemale3DCGNames = PoseFemale3DCG.map((pose) => pose.Name);
 
 // #endregion
 
@@ -76288,6 +76288,6 @@ var FetishFemale3DCG = [
 /**
  * A set with all available fetish names.
  */
-const FetishFemale3DCGNames = new Set(FetishFemale3DCG.map((f) => f.Name));
+export const FetishFemale3DCGNames = new Set(FetishFemale3DCG.map((f) => f.Name));
 
 // #endregion

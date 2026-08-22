@@ -14,7 +14,7 @@
 
 import { API_Character } from "./apiCharacter.ts";
 import { AssetType } from "./appearance.ts";
-import { AssetFemale3DCG, PoseFemale3DCG } from "./bcdata/female3DCG.js";
+import { AssetFemale3DCG, PoseFemale3DCG } from "./bcdata/Female3DCG.js";
 import { AssetFemale3DCGExtended } from "./bcdata/Female3DCGExtended.ts";
 
 // An item as it appears on the wire (similar to Item but instead of the Asset

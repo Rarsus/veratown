@@ -16,7 +16,11 @@ import { AssetFemale3DCG } from "./bcdata/Female3DCG.js";
 import { BC_AppearanceItem, getAssetDef } from "./item.ts";
 
 function getAssetGroup(groupName: AssetGroupName): AssetGroupDefinition | null {
-    return AssetFemale3DCG.find((g) => g.Group === groupName) ?? null;
+    return (
+        AssetFemale3DCG.find(
+            (g: AssetGroupDefinition) => g.Group === groupName,
+        ) ?? null
+    );
 }
 
 export function isClothing(item: BC_AppearanceItem): boolean {
