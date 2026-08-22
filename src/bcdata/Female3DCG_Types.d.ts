@@ -735,7 +735,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	/** Enable the special color drawing mode used for eyes */
 	FullAlpha?: boolean;
 
-	MirrorExpression?: AssetGroupName;
+	MirrorExpression?: AssetGroupBodyName;
 
 	CustomBlindBackground?: string;
 
@@ -1331,6 +1331,7 @@ interface VibratingItemOption extends Omit<VibratingItemOptionConfig, "Archetype
 	ParentData: VibratingItemData;
 	Property: ItemProperties & Pick<Required<ItemProperties>, "TypeRecord" | "Intensity" | "Effect">;
 	ArchetypeData?: null;
+	Advanced: boolean;
 }
 
 /** An object defining all of the required configuration for registering a vibrator item */

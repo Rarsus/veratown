@@ -13,9 +13,7 @@
     },
     "extends": "@tsconfig/node18/tsconfig.json",
     "include": [
-        "node_modules/bc-stubs/bc/NativeDeclarations/Typedef.d.ts",
-        "node_modules/bc-stubs/bc/NativeDeclarations/Messages.d.ts",
-        "node_modules/bc-stubs/bc/NativeDeclarations/Female3DCG_Types.d.ts",
+        "node_modules/bc-stubs/bc/**/*.d.ts",
         "**/*"
     ],
     "ts-node": {

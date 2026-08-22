@@ -12,8 +12,8 @@ importers:
         specifier: link:src
         version: link:src
       bc-stubs:
-        specifier: 130.0.0
-        version: 130.0.0
+        specifier: 131.0.0
+        version: 131.0.0
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
@@ -231,8 +231,8 @@ packages:
   '@types/whatwg-url@11.0.5':
     resolution: {integrity: sha512-coYR071JRaHa+xoEvvYqvnIHaVqaYrLPbsufM9BF63HkwI5Lgmy2QR8Q5K/lYDYo5AK82wOvSOS0UsLTpTG7uQ==}
 
-  bc-stubs@130.0.0:
-    resolution: {integrity: sha512-WXbJz9nn6PraZReYPYrDBao5mF8Jtn4xo6hwagjyYeuwdH+e57WwMB8g20pKgTBcbzv2tt/OHgrJcrYfZR2lIA==}
+  bc-stubs@131.0.0:
+    resolution: {integrity: sha512-uGEX42Qims1iWgAp3Tc2EInsYtmbuw/KUk/kzx+0HBdxoW+6oj5ED84vlefxe9ko7yy8haOc/AIr1gAYg7Dvbw==}
 
   bintrees@1.0.2:
     resolution: {integrity: sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==}
@@ -495,7 +495,7 @@ snapshots:
     dependencies:
       '@types/webidl-conversions': 7.0.3
 
-  bc-stubs@130.0.0:
+  bc-stubs@131.0.0:
     dependencies:
       '@total-typescript/ts-reset': 0.6.1
       socket.io-client: 4.6.1
