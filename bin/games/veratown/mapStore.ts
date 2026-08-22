@@ -46,9 +46,8 @@ export class VeratownMapStore {
 
     public constructor(private db: Db) {
         this.collection = this.db.collection<VeratownMapDoc>("veratownMap");
-        this.backupCollection = this.db.collection<VeratownMapBackupDoc>(
-            "veratownMapBackups",
-        );
+        this.backupCollection =
+            this.db.collection<VeratownMapBackupDoc>("veratownMapBackups");
     }
 
     // Returns the stored map layout, or undefined if none has been saved

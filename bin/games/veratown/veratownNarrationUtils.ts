@@ -151,8 +151,7 @@ export class NarratorBot {
     ) {
         this.narratorConn = narratorConn ?? primaryConn;
         // If using primary bot for narration, save its current position as home
-        this.homePos =
-            homePos ?? { ...primaryConn.Player.MapPos };
+        this.homePos = homePos ?? { ...primaryConn.Player.MapPos };
     }
 
     /**

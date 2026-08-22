@@ -19,6 +19,7 @@ origin → https://gitgud.io/BondageProjects/Bondage-College.git
 ## Syncing Asset Files
 
 ### Quick Sync
+
 Run the asset sync script to copy the latest Female3DCG files:
 
 ```bash
@@ -27,6 +28,7 @@ cd /home/olav/repo/ropeybot
 ```
 
 **What it does:**
+
 - Copies `Female3DCG.js` from BC repo → ropeybot bcdata
 - Copies `Female3DCG_Types.d.ts` from BC repo → ropeybot bcdata
 - Copies `Female3DCGExtended.js` (preserves existing `.ts` wrapper)
@@ -34,6 +36,7 @@ cd /home/olav/repo/ropeybot
 - Reports sizes and sync status
 
 ### Custom BC Repo Location
+
 If your BC repo is in a different location, set the environment variable:
 
 ```bash
@@ -44,6 +47,7 @@ export BC_REPO=/path/to/your/Bondage-College
 ## Updating BC Repository
 
 ### Check Current Version
+
 ```bash
 cd /home/olav/repo/Bondage-College
 git log --oneline -1
@@ -51,12 +55,14 @@ git branch -a
 ```
 
 ### Fetch Latest Updates
+
 ```bash
 cd /home/olav/repo/Bondage-College
 git fetch origin
 ```
 
 ### Merge Updates
+
 ```bash
 # View incoming changes
 git log master..origin/master --oneline
@@ -66,6 +72,7 @@ git merge origin/master
 ```
 
 ### Update Specific BC Version
+
 For example, to get the latest R131 or wait for R132:
 
 ```bash
@@ -110,6 +117,7 @@ Asset files synced from local Bondage-College repository."
 ## Troubleshooting
 
 ### Script says "BC Assets directory not found"
+
 ```bash
 # Verify your BC repo path
 ls /home/olav/repo/Bondage-College/BondageClub/Assets/Female3DCG/
@@ -120,6 +128,7 @@ export BC_REPO=/your/correct/path
 ```
 
 ### Getting git merge conflicts
+
 ```bash
 cd /home/olav/repo/Bondage-College
 git status  # See conflicts
@@ -128,6 +137,7 @@ git merge --abort  # Cancel merge if needed
 ```
 
 ### Need to reset to a specific BC version
+
 ```bash
 cd /home/olav/repo/Bondage-College
 git fetch origin
@@ -139,20 +149,20 @@ git checkout abc1234  # Replace with commit hash
 
 The sync script handles these files:
 
-| BC Repo Location | ropeybot Location | Purpose |
-|-----------------|------------------|---------|
-| `BondageClub/Assets/Female3DCG/Female3DCG.js` | `src/bcdata/female3DCG.js` | Runtime game asset definitions (74K lines) |
-| `BondageClub/Assets/Female3DCG/Female3DCG_Types.d.ts` | `src/bcdata/Female3DCG_Types.d.ts` | TypeScript type definitions (1.4K lines) |
-| `BondageClub/Assets/Female3DCG/Female3DCGExtended.js` | `src/bcdata/Female3DCGExtended.ts`* | Extended item configurations (23K lines) |
+| BC Repo Location                                      | ropeybot Location                    | Purpose                                    |
+| ----------------------------------------------------- | ------------------------------------ | ------------------------------------------ |
+| `BondageClub/Assets/Female3DCG/Female3DCG.js`         | `src/bcdata/female3DCG.js`           | Runtime game asset definitions (74K lines) |
+| `BondageClub/Assets/Female3DCG/Female3DCG_Types.d.ts` | `src/bcdata/Female3DCG_Types.d.ts`   | TypeScript type definitions (1.4K lines)   |
+| `BondageClub/Assets/Female3DCG/Female3DCGExtended.js` | `src/bcdata/Female3DCGExtended.ts`\* | Extended item configurations (23K lines)   |
 
-*Note: The `.ts` wrapper in ropeybot is preserved to avoid breaking imports.
+\*Note: The `.ts` wrapper in ropeybot is preserved to avoid breaking imports.
 
 ## Bandwidth Savings
 
 Using your local BC repo:
 
 - **First clone:** Already done ✅ (no additional download)
-- **Updates:** `git fetch` + `git merge` only downloads *changes*, not the entire repo
+- **Updates:** `git fetch` + `git merge` only downloads _changes_, not the entire repo
 - **Typical update size:** 1-50 MB (vs. 400+ MB full clone)
 - **Time saved:** 10-20 minutes per update
 
@@ -168,6 +178,7 @@ git log origin/master --oneline -5  # Check for updates
 ```
 
 When you see a new BC version (R132, etc.):
+
 ```bash
 # Pull latest changes
 git merge origin/master
@@ -190,15 +201,15 @@ cd /home/olav/repo/ropeybot
 
 1. ✅ BC repo initialized and connected to upstream
 2. ⏳ When you're ready to update BC version:
-   ```bash
-   cd /home/olav/repo/Bondage-College
-   git merge origin/master
-   ```
+    ```bash
+    cd /home/olav/repo/Bondage-College
+    git merge origin/master
+    ```
 3. ⏳ Sync assets to ropeybot:
-   ```bash
-   cd /home/olav/repo/ropeybot
-   ./scripts/sync-bc-assets.sh
-   ```
+    ```bash
+    cd /home/olav/repo/ropeybot
+    ./scripts/sync-bc-assets.sh
+    ```
 4. ⏳ Test and commit changes
 
 ---

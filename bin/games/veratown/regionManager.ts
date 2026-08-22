@@ -12,7 +12,10 @@
  * limitations under the License.
  */
 
-import { VeratownLocationStore, VeratownLocationDoc } from "./veratownLocationStore";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 /**
  * Represents a multi-tile region where features should execute only once per
@@ -39,14 +42,16 @@ export class RegionManager {
     /**
      * Load all regions from the location store
      */
-    public async loadRegions(locationStore: VeratownLocationStore): Promise<void> {
+    public async loadRegions(
+        locationStore: VeratownLocationStore,
+    ): Promise<void> {
         try {
             this.regions.clear();
             this.charactersInRegion.clear();
             const allLocations = await locationStore.getAllLocations();
 
             const regionDocs = allLocations.filter(
-                (doc) => doc.type === "region" && doc.region
+                (doc) => doc.type === "region" && doc.region,
             ) as VeratownRegion[];
 
             for (const region of regionDocs) {
@@ -54,9 +59,14 @@ export class RegionManager {
                 this.charactersInRegion.set(region.key, new Set());
             }
 
-            console.log(`[RegionManager] Loaded ${regionDocs.length} regions from database`);
+            console.log(
+                `[RegionManager] Loaded ${regionDocs.length} regions from database`,
+            );
         } catch (e) {
-            console.error("[RegionManager] Failed to load regions from database", e);
+            console.error(
+                "[RegionManager] Failed to load regions from database",
+                e,
+            );
         }
     }
 
@@ -81,14 +91,21 @@ export class RegionManager {
     /**
      * Get all regions of a specific type
      */
-    public getRegionsByType(regionType: "game" | "dare" | "feature" | "custom" | "admin" | "park"): VeratownRegion[] {
-        return Array.from(this.regions.values()).filter(r => r.regionType === regionType);
+    public getRegionsByType(
+        regionType: "game" | "dare" | "feature" | "custom" | "admin" | "park",
+    ): VeratownRegion[] {
+        return Array.from(this.regions.values()).filter(
+            (r) => r.regionType === regionType,
+        );
     }
 
     /**
      * Check if a position is inside a region
      */
-    public isPositionInRegion(pos: { X: number; Y: number }, regionKey: string): boolean {
+    public isPositionInRegion(
+        pos: { X: number; Y: number },
+        regionKey: string,
+    ): boolean {
         const region = this.regions.get(regionKey);
         if (!region) return false;
 
@@ -106,7 +123,10 @@ export class RegionManager {
      * Returns true if this is a NEW entry (first time in this region on this session)
      * Returns false if they were already in this region
      */
-    public markCharacterEntered(regionKey: string, characterMemberNumber: number): boolean {
+    public markCharacterEntered(
+        regionKey: string,
+        characterMemberNumber: number,
+    ): boolean {
         const charactersInRegion = this.charactersInRegion.get(regionKey);
         if (!charactersInRegion) return false;
 
@@ -121,7 +141,10 @@ export class RegionManager {
     /**
      * Track that a character left a region
      */
-    public markCharacterLeft(regionKey: string, characterMemberNumber: number): void {
+    public markCharacterLeft(
+        regionKey: string,
+        characterMemberNumber: number,
+    ): void {
         const charactersInRegion = this.charactersInRegion.get(regionKey);
         if (charactersInRegion) {
             charactersInRegion.delete(characterMemberNumber);
@@ -131,7 +154,10 @@ export class RegionManager {
     /**
      * Check if character is currently in a region
      */
-    public isCharacterInRegion(regionKey: string, characterMemberNumber: number): boolean {
+    public isCharacterInRegion(
+        regionKey: string,
+        characterMemberNumber: number,
+    ): boolean {
         const charactersInRegion = this.charactersInRegion.get(regionKey);
         return charactersInRegion?.has(characterMemberNumber) ?? false;
     }
@@ -139,7 +165,9 @@ export class RegionManager {
     /**
      * Validate that database regions don't conflict with static region definitions
      */
-    public validateRegions(staticRegions: Map<string, VeratownRegion>): string[] {
+    public validateRegions(
+        staticRegions: Map<string, VeratownRegion>,
+    ): string[] {
         const warnings: string[] = [];
 
         for (const [key, staticRegion] of staticRegions) {
@@ -153,9 +181,9 @@ export class RegionManager {
             if (staticCoords !== dbCoords) {
                 warnings.push(
                     `[RegionManager] Region conflict for "${key}": ` +
-                    `Database region differs from static definition. ` +
-                    `Using database version. To resync, delete the database entry or redeploy. ` +
-                    `Static: ${staticCoords}, Database: ${dbCoords}`
+                        `Database region differs from static definition. ` +
+                        `Using database version. To resync, delete the database entry or redeploy. ` +
+                        `Static: ${staticCoords}, Database: ${dbCoords}`,
                 );
             }
         }
@@ -175,7 +203,7 @@ export class RegionManager {
      */
     public async updateRegion(
         locationStore: VeratownLocationStore,
-        region: VeratownRegion
+        region: VeratownRegion,
     ): Promise<void> {
         this.regions.set(region.key, region);
         if (!this.charactersInRegion.has(region.key)) {
@@ -190,9 +218,14 @@ export class RegionManager {
             } else {
                 await locationStore.addLocation(region);
             }
-            console.log(`[RegionManager] Region "${region.key}" updated in database`);
+            console.log(
+                `[RegionManager] Region "${region.key}" updated in database`,
+            );
         } catch (e) {
-            console.error(`[RegionManager] Failed to update region "${region.key}" in database`, e);
+            console.error(
+                `[RegionManager] Failed to update region "${region.key}" in database`,
+                e,
+            );
         }
     }
 
@@ -201,16 +234,21 @@ export class RegionManager {
      */
     public async deleteRegion(
         locationStore: VeratownLocationStore,
-        regionKey: string
+        regionKey: string,
     ): Promise<void> {
         this.regions.delete(regionKey);
         this.charactersInRegion.delete(regionKey);
 
         try {
             await locationStore.deleteLocation(regionKey);
-            console.log(`[RegionManager] Region "${regionKey}" deleted from database`);
+            console.log(
+                `[RegionManager] Region "${regionKey}" deleted from database`,
+            );
         } catch (e) {
-            console.error(`[RegionManager] Failed to delete region "${regionKey}" from database`, e);
+            console.error(
+                `[RegionManager] Failed to delete region "${regionKey}" from database`,
+                e,
+            );
         }
     }
 }

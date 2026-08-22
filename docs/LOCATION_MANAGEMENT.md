@@ -192,23 +192,24 @@ Complex locations like keypads require JSON metadata:
 
 ```json
 {
-  "doorX": 20,
-  "doorY": 10,
-  "lockedTile": "WoodLocked",
-  "unlockedTile": "WoodOpen",
-  "unlockDurationMs": 10000,
-  "codes": {
-    "admin": "CODE1",
-    "whitelist": "CODE2",
-    "guest": "CODE3"
-  },
-  "whitelistMemberNumbers": [123456, 789012]
+    "doorX": 20,
+    "doorY": 10,
+    "lockedTile": "WoodLocked",
+    "unlockedTile": "WoodOpen",
+    "unlockDurationMs": 10000,
+    "codes": {
+        "admin": "CODE1",
+        "whitelist": "CODE2",
+        "guest": "CODE3"
+    },
+    "whitelistMemberNumbers": [123456, 789012]
 }
 ```
 
 ### Database Synchronization
 
 All location changes are automatically:
+
 - Persisted to MongoDB
 - Detected via change streams
 - Synchronized across all bot features
@@ -217,23 +218,23 @@ No manual reload needed!
 
 ## Command Reference
 
-| Command | Purpose |
-| --- | --- |
-| `/bot location help` | Show all commands and usage |
-| `/bot location types` | List all location types |
-| `/bot location template <type>` | Show template for a type |
-| `/bot location search <keyword>` | Find types by keyword |
-| `/bot location add <key> <name> <type> <x> <y> [json]` | Create location |
-| `/bot location get <key>` | Show location details |
-| `/bot location update <key> <field> <value>` | Update a field |
-| `/bot location delete <key>` | Delete location |
-| `/bot location list [type]` | List locations |
-| `/bot location enable <key>` | Enable location |
-| `/bot location disable <key>` | Disable location |
-| `/bot location region add <key> <x1> <y1> <x2> <y2>` | Create region |
-| `/bot location region update <key> <x1> <y1> <x2> <y2>` | Update region |
-| `/bot location region delete <key>` | Delete region |
-| `/bot location region list` | List regions |
+| Command                                                 | Purpose                     |
+| ------------------------------------------------------- | --------------------------- |
+| `/bot location help`                                    | Show all commands and usage |
+| `/bot location types`                                   | List all location types     |
+| `/bot location template <type>`                         | Show template for a type    |
+| `/bot location search <keyword>`                        | Find types by keyword       |
+| `/bot location add <key> <name> <type> <x> <y> [json]`  | Create location             |
+| `/bot location get <key>`                               | Show location details       |
+| `/bot location update <key> <field> <value>`            | Update a field              |
+| `/bot location delete <key>`                            | Delete location             |
+| `/bot location list [type]`                             | List locations              |
+| `/bot location enable <key>`                            | Enable location             |
+| `/bot location disable <key>`                           | Disable location            |
+| `/bot location region add <key> <x1> <y1> <x2> <y2>`    | Create region               |
+| `/bot location region update <key> <x1> <y1> <x2> <y2>` | Update region               |
+| `/bot location region delete <key>`                     | Delete region               |
+| `/bot location region list`                             | List regions                |
 
 ## Troubleshooting
 
@@ -254,4 +255,3 @@ No manual reload needed!
 - Wrap JSON in single quotes: `'/bot location add ... '{"key":"value"}'`
 - Use proper JSON syntax (double quotes, no trailing commas)
 - For complex JSON, use file editors to validate syntax first
-

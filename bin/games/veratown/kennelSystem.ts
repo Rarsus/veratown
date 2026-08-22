@@ -34,9 +34,7 @@ export class KennelSystem implements VeratownFeatureSystem {
     private kennelPositions: Array<{ X: number; Y: number }> = [];
     private readonly kennelTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(
-        private conn: API_Connector,
-    ) {
+    public constructor(private conn: API_Connector) {
         this.kennelTrigger = guardHandler(
             this.key,
             this.onCharacterEnterKennel,
@@ -67,7 +65,10 @@ export class KennelSystem implements VeratownFeatureSystem {
             }
 
             for (const kennelPos of this.kennelPositions) {
-                this.conn.chatRoom.map.addTileTrigger(kennelPos, this.kennelTrigger);
+                this.conn.chatRoom.map.addTileTrigger(
+                    kennelPos,
+                    this.kennelTrigger,
+                );
             }
 
             console.log(

@@ -39,25 +39,40 @@ const SERVER_URL = {
 /**
  * Helper function to parse boolean environment variables
  */
-function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
+function parseBoolean(
+    value: string | undefined,
+    defaultValue: boolean,
+): boolean {
     if (value === undefined) return defaultValue;
-    return value === "true" || value === "1" || value === "yes" || value.toLowerCase() === "true";
+    return (
+        value === "true" ||
+        value === "1" ||
+        value === "yes" ||
+        value.toLowerCase() === "true"
+    );
 }
 
 /**
  * Helper function to safely parse JSON arrays from env vars
  */
-function parseJsonArray(value: string | undefined, fieldName: string): any[] | undefined {
+function parseJsonArray(
+    value: string | undefined,
+    fieldName: string,
+): any[] | undefined {
     if (!value) return undefined;
     try {
         const parsed = JSON.parse(value);
         if (!Array.isArray(parsed)) {
-            console.warn(`[Config] ${fieldName} is not a valid JSON array, ignoring`);
+            console.warn(
+                `[Config] ${fieldName} is not a valid JSON array, ignoring`,
+            );
             return undefined;
         }
         return parsed;
     } catch {
-        console.warn(`[Config] Failed to parse ${fieldName} as JSON array: ${value}`);
+        console.warn(
+            `[Config] Failed to parse ${fieldName} as JSON array: ${value}`,
+        );
         return undefined;
     }
 }
@@ -66,7 +81,7 @@ function parseJsonArray(value: string | undefined, fieldName: string): any[] | u
  * Load configuration from file and environment variables.
  * Environment variables take precedence over file settings.
  * Supports both local development (config.json) and cloud deployment (env vars).
- * 
+ *
  * Priority: env vars > config.json > defaults
  */
 async function loadConfig(configFilePath: string): Promise<ConfigFile> {
@@ -79,10 +94,14 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             fileConfig = JSON.parse(configString);
             console.log(`[Config] Loaded from file: ${configFilePath}`);
         } catch (err) {
-            console.warn(`[Config] Failed to read ${configFilePath}, using environment variables`);
+            console.warn(
+                `[Config] Failed to read ${configFilePath}, using environment variables`,
+            );
         }
     } else {
-        console.log(`[Config] No config file found at ${configFilePath}, using environment variables`);
+        console.log(
+            `[Config] No config file found at ${configFilePath}, using environment variables`,
+        );
     }
 
     // Start with file config as base
@@ -117,7 +136,10 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     // ============================================================================
     // ADMIN AND MEMBER LISTS (JSON arrays)
     // ============================================================================
-    const superusersArray = parseJsonArray(process.env.SUPERUSERS, "SUPERUSERS");
+    const superusersArray = parseJsonArray(
+        process.env.SUPERUSERS,
+        "SUPERUSERS",
+    );
     if (superusersArray) config.superusers = superusersArray;
 
     const membersArray = parseJsonArray(process.env.MEMBERS, "MEMBERS");
@@ -130,13 +152,17 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
 
     // Basic room properties
     if (process.env.ROOM_NAME) config.room.Name = process.env.ROOM_NAME;
-    if (process.env.ROOM_DESCRIPTION) config.room.Description = process.env.ROOM_DESCRIPTION;
+    if (process.env.ROOM_DESCRIPTION)
+        config.room.Description = process.env.ROOM_DESCRIPTION;
     if (process.env.ROOM_SPACE) config.room.Space = process.env.ROOM_SPACE;
-    if (process.env.ROOM_LIMIT) config.room.Limit = parseInt(process.env.ROOM_LIMIT, 10);
+    if (process.env.ROOM_LIMIT)
+        config.room.Limit = parseInt(process.env.ROOM_LIMIT, 10);
 
     // Advanced room properties
-    if (process.env.ROOM_BACKGROUND) config.room.Background = process.env.ROOM_BACKGROUND;
-    if (process.env.ROOM_LANGUAGE) config.room.Language = process.env.ROOM_LANGUAGE;
+    if (process.env.ROOM_BACKGROUND)
+        config.room.Background = process.env.ROOM_BACKGROUND;
+    if (process.env.ROOM_LANGUAGE)
+        config.room.Language = process.env.ROOM_LANGUAGE;
     if (process.env.ROOM_GAME) config.room.Game = process.env.ROOM_GAME;
 
     // Boolean room properties
@@ -155,7 +181,10 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     const roomBanArray = parseJsonArray(process.env.ROOM_BAN, "ROOM_BAN");
     if (roomBanArray) config.room.Ban = roomBanArray;
 
-    const blockCategoryArray = parseJsonArray(process.env.ROOM_BLOCK_CATEGORY, "ROOM_BLOCK_CATEGORY");
+    const blockCategoryArray = parseJsonArray(
+        process.env.ROOM_BLOCK_CATEGORY,
+        "ROOM_BLOCK_CATEGORY",
+    );
     if (blockCategoryArray) config.room.BlockCategory = blockCategoryArray;
 
     // ============================================================================
@@ -164,11 +193,15 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     console.log("[Config] Configuration sources:");
     console.log(`  - Bot: ${config.user || "<missing>"}`);
     console.log(`  - Game: ${config.game || "<missing>"}`);
-    console.log(`  - MongoDB: ${config.mongo_uri ? "configured" : "<missing>"}`);
+    console.log(
+        `  - MongoDB: ${config.mongo_uri ? "configured" : "<missing>"}`,
+    );
     console.log(`  - Environment: ${config.env || "live"}`);
     console.log(`  - Room: ${config.room?.Name || "<default>"}`);
-    if (config.superusers?.length) console.log(`  - Superusers: ${config.superusers.length} configured`);
-    if (config.room?.Admin?.length) console.log(`  - Room admins: ${config.room.Admin.length} configured`);
+    if (config.superusers?.length)
+        console.log(`  - Superusers: ${config.superusers.length} configured`);
+    if (config.room?.Admin?.length)
+        console.log(`  - Room admins: ${config.room.Admin.length} configured`);
 
     return config as ConfigFile;
 }

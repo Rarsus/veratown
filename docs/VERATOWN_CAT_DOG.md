@@ -17,6 +17,7 @@ actions from the location's `data.actions` array. Actions can include:
 ### Immersive Emotes (Bot Teleport)
 
 When a bot connector is configured (typically the showerbot), emotes are delivered via:
+
 1. Bot teleports to player's exact location
 2. Emote is sent (now in range and fully visible to player)
 3. Bot teleports back to home position
@@ -33,20 +34,20 @@ The location must have `type` set to `cat` or `dog`, valid tile coordinates,
 
 ```json
 {
-  "key": "cat_tile_main",
-  "name": "Playful Cat",
-  "type": "cat",
-  "x": 30,
-  "y": 40,
-  "enabled": true,
-  "data": {
-    "actions": [
-      {
-        "type": "emote",
-        "text": "*A fluffy cat rubs against you purring*"
-      }
-    ]
-  }
+    "key": "cat_tile_main",
+    "name": "Playful Cat",
+    "type": "cat",
+    "x": 30,
+    "y": 40,
+    "enabled": true,
+    "data": {
+        "actions": [
+            {
+                "type": "emote",
+                "text": "*A fluffy cat rubs against you purring*"
+            }
+        ]
+    }
 }
 ```
 
@@ -54,39 +55,39 @@ The location must have `type` set to `cat` or `dog`, valid tile coordinates,
 
 ```json
 {
-  "key": "dog_tile_playful",
-  "name": "Playful Dog",
-  "type": "dog",
-  "x": 25,
-  "y": 35,
-  "enabled": true,
-  "data": {
-    "actions": [
-      {
-        "type": "emote",
-        "text": "*A playful dog wags its tail excitedly*"
-      },
-      {
-        "type": "bondage",
-        "pieces": [
-          {
-            "group": "ItemMouth",
-            "asset": "BallGag",
-            "extendedType": "Tight",
-            "color": "#FF69B4"
-          }
-        ],
-        "difficulty": 15,
-        "color": "#FF69B4",
-        "craftDescription": "Playful pet toy"
-      },
-      {
-        "type": "vibrator",
-        "message": "to increase in intensity",
-        "intensityIncrease": 2
-      }
-    ]
-  }
+    "key": "dog_tile_playful",
+    "name": "Playful Dog",
+    "type": "dog",
+    "x": 25,
+    "y": 35,
+    "enabled": true,
+    "data": {
+        "actions": [
+            {
+                "type": "emote",
+                "text": "*A playful dog wags its tail excitedly*"
+            },
+            {
+                "type": "bondage",
+                "pieces": [
+                    {
+                        "group": "ItemMouth",
+                        "asset": "BallGag",
+                        "extendedType": "Tight",
+                        "color": "#FF69B4"
+                    }
+                ],
+                "difficulty": 15,
+                "color": "#FF69B4",
+                "craftDescription": "Playful pet toy"
+            },
+            {
+                "type": "vibrator",
+                "message": "to increase in intensity",
+                "intensityIncrease": 2
+            }
+        ]
+    }
 }
 ```
 
@@ -97,14 +98,16 @@ The location must have `type` set to `cat` or `dog`, valid tile coordinates,
 Displays an emote or narration when the character steps on the tile.
 
 **Fields:**
+
 - `type`: `"emote"`
 - `text`: The emote text to display
 
 **Example:**
+
 ```json
 {
-  "type": "emote",
-  "text": "*A mysterious creature lurks in the shadows*"
+    "type": "emote",
+    "text": "*A mysterious creature lurks in the shadows*"
 }
 ```
 
@@ -112,20 +115,21 @@ Displays an emote or narration when the character steps on the tile.
 
 For emotes to be visible to the player, a bot connector must be configured:
 
-- **With bot connector (e.g., showerbot)**: 
-  - Bot teleports to the player's exact location using `mapTeleport()`
-  - Emote is sent from bot's new position (guaranteed in range)
-  - Bot teleports back to home location
-  - Emotes are always visible to the player
-  - Look for logs: `[CatDogSystem] Bot teleported to (X, Y)` 
+- **With bot connector (e.g., showerbot)**:
+    - Bot teleports to the player's exact location using `mapTeleport()`
+    - Emote is sent from bot's new position (guaranteed in range)
+    - Bot teleports back to home location
+    - Emotes are always visible to the player
+    - Look for logs: `[CatDogSystem] Bot teleported to (X, Y)`
 
 - **Without bot connector**:
-  - Emote is sent from wherever the tile system executes
-  - Visibility depends on range and line-of-sight
-  - Emote may not display if player is out of range
-  - Look for logs: `[CatDogSystem] No bot connector, sending emote normally`
+    - Emote is sent from wherever the tile system executes
+    - Visibility depends on range and line-of-sight
+    - Emote may not display if player is out of range
+    - Look for logs: `[CatDogSystem] No bot connector, sending emote normally`
 
 **Configuration:**
+
 ```typescript
 // With bot connector (emotes always visible)
 const catDog = new CatDogSystem(primaryConn, botConn);
@@ -140,36 +144,38 @@ Automatically adds restraint items to the character when they step on the tile.
 Items are configured per-piece with optional extended types and colors.
 
 **Fields:**
+
 - `type`: `"bondage"`
 - `pieces`: Array of item configurations
-  - `group`: Asset group (e.g., "ItemMouth", "ItemArms", "ItemNeck")
-  - `asset`: Asset name (e.g., "BallGag", "HempRope", "LeatherCollar")
-  - `extendedType`: Optional. Type variant (e.g., "Tight", "Hogtied", "Frogtie")
-  - `color`: Optional. Override piece color (hex code)
+    - `group`: Asset group (e.g., "ItemMouth", "ItemArms", "ItemNeck")
+    - `asset`: Asset name (e.g., "BallGag", "HempRope", "LeatherCollar")
+    - `extendedType`: Optional. Type variant (e.g., "Tight", "Hogtied", "Frogtie")
+    - `color`: Optional. Override piece color (hex code)
 - `difficulty`: Lock difficulty (default: 20). Range: 0-50
 - `color`: Default color for all pieces (hex code, default: "#8B4513")
 - `craftDescription`: Craft description for the items (default: "Pet bondage")
 
 **Example:**
+
 ```json
 {
-  "type": "bondage",
-  "pieces": [
-    {
-      "group": "ItemMouth",
-      "asset": "BallGag",
-      "extendedType": "Tight",
-      "color": "#FF1493"
-    },
-    {
-      "group": "ItemNeck",
-      "asset": "LeatherCollar",
-      "color": "#000000"
-    }
-  ],
-  "difficulty": 18,
-  "color": "#8B4513",
-  "craftDescription": "Pet play outfit"
+    "type": "bondage",
+    "pieces": [
+        {
+            "group": "ItemMouth",
+            "asset": "BallGag",
+            "extendedType": "Tight",
+            "color": "#FF1493"
+        },
+        {
+            "group": "ItemNeck",
+            "asset": "LeatherCollar",
+            "color": "#000000"
+        }
+    ],
+    "difficulty": 18,
+    "color": "#8B4513",
+    "craftDescription": "Pet play outfit"
 }
 ```
 
@@ -179,25 +185,29 @@ Escalates active vibrators with a custom whisper message when the character
 steps on the tile.
 
 **Fields:**
+
 - `type`: `"vibrator"`
 - `message`: Custom message for the vibrator escalation event
 - `intensityIncrease`: How many power levels to increase (default: 1, range: 1-7)
 
 **Example:**
+
 ```json
 {
-  "type": "vibrator",
-  "message": "to increase in intensity dramatically",
-  "intensityIncrease": 3
+    "type": "vibrator",
+    "message": "to increase in intensity dramatically",
+    "intensityIncrease": 3
 }
 ```
 
 The character receives a whisper like:
+
 ```
 *The cat cuddles you and by mistake triggers your device... to increase in intensity dramatically*
 ```
 
 **Requirements for vibrator escalation:**
+
 - Character must be wearing a vibrator item in `ItemVulva` or `ItemPelvis` group
 - Vibrator must support intensity/mode levels (Extended.Type or TypeRecord property)
 - Vibrator should be active (intensity ≥ 0)
@@ -216,6 +226,7 @@ The system detects vibrators using multiple methods to support standard and cust
 6. **Property field**: Custom vibrators using generic Property field for intensity
 
 This comprehensive detection means custom vibrating equipment will be detected as long as it:
+
 - Is placed in the ItemVulva or ItemPelvis group
 - Has ANY of the above properties to store intensity levels
 - Does NOT require "Vibrator" in the asset name
@@ -227,29 +238,32 @@ This comprehensive detection means custom vibrating equipment will be detected a
 For emotes to be delivered with full visibility (bot teleports to player), you need to configure additional bot accounts in your `config.json`:
 
 **config.json (with showerbot for cat/dog emotes):**
+
 ```json
 {
-  "accounts": [
-    {
-      "name": "BotName1",
-      "password": "password1",
-      "role": "main"
-    },
-    {
-      "name": "ShowerBot",
-      "password": "showerbot_password",
-      "role": "shower"
-    }
-  ]
+    "accounts": [
+        {
+            "name": "BotName1",
+            "password": "password1",
+            "role": "main"
+        },
+        {
+            "name": "ShowerBot",
+            "password": "showerbot_password",
+            "role": "shower"
+        }
+    ]
 }
 ```
 
 **Roles:**
+
 - `main`: Primary bot account (required)
 - `shower`: Secondary bot for shower emotes and cat/dog tiles
 - `casino`: Tertiary bot for casino game management
 
 When a `shower` role bot is configured:
+
 - The cat/dog system will use it for emote delivery (teleport to player, send emote, return)
 - Emotes are guaranteed to be visible regardless of the bot's home position
 - The shower bot also provides other features (shower system, etc.)
@@ -262,13 +276,14 @@ The cat/dog system is automatically configured in [bin/games/veratown.ts](../bin
 this.catDogSystem = this.initFeature(
     () =>
         new CatDogSystem(
-            this.conn,      // Main bot connection
-            this.conn2,     // Optional: shower bot for emote delivery
+            this.conn, // Main bot connection
+            this.conn2, // Optional: shower bot for emote delivery
         ),
 );
 ```
 
 **Current Implementation:**
+
 - `this.conn2` (shower bot) is automatically used for emote delivery if configured
 - If no shower bot is configured, emotes are sent normally (may not be visible at range)
 - The system gracefully handles missing bot connectors
@@ -286,6 +301,7 @@ const catDog = new CatDogSystem(primaryConn, showerBotConn);
 ```
 
 When a bot connector (typically showerbot) is provided, emotes are delivered with maximum immersion:
+
 - Bot appears at player's location
 - Emote is sent (fully visible in map view)
 - Bot returns to home position
@@ -330,6 +346,7 @@ additional input required.
 Colors use hexadecimal format (e.g., `#FF69B4` for hot pink, `#8B4513` for brown).
 
 Extended types are item-specific variants. Common examples:
+
 - **ItemMouth gags**: "Tight", "Strict", "Relaxed"
 - **ItemArms rope**: "Cuffs", "Hogtied", "Reverse", "Frogtie"
 - **ItemNeck chains**: "Normal", "Tight", "Locked"
@@ -405,6 +422,7 @@ The cat/dog system includes comprehensive logging for troubleshooting. Enable de
 ```
 
 **Key Log Messages to Look For:**
+
 - `botConn=true` = bot connector is configured (good for emote visibility)
 - `botConn=false` = no bot connector (emotes may not be visible)
 - `✓ Bot teleported` = teleport succeeded, emote will be visible
@@ -416,61 +434,68 @@ Check bot console output for error messages.
 ### Common Issues
 
 **No tiles loading:**
+
 - Check `/bot feature list` - cat/dog should show as "enabled"
 - Run `/bot feature enable catDog` if disabled
 - Check bot console for `[CatDogSystem] Loaded X cat/dog location(s)`
 - If 0 tiles loaded, verify locations have `type: "cat"` or `type: "dog"` and `enabled: true`
 
 **Actions not firing:**
+
 - Verify the location is `enabled: true`
 - Check that character position exactly matches `x` and `y` coordinates
 - Confirm `data.actions` array is not empty and has valid action objects
 - Look for `[CatDogSystem] onCharacterStepOnPet triggered` in console
 
 **Emote not displaying in chat:**
+
 - Check bot console for `[CatDogSystem] performEmoteAction:`
 - **If `botConn=false`**: No bot connector configured
-  - Solution: Pass a bot connector to CatDogSystem constructor (e.g., showerbot)
-  - Example: `new CatDogSystem(primaryConn, showerBotConn)`
-  - Without this, emotes may not display if player is out of range
+    - Solution: Pass a bot connector to CatDogSystem constructor (e.g., showerbot)
+    - Example: `new CatDogSystem(primaryConn, showerBotConn)`
+    - Without this, emotes may not display if player is out of range
 - **If `botConn=true` but no teleport logs**: Bot connector exists but isn't being used
-  - Check for: `[CatDogSystem] Bot connector available, attempting teleport`
-  - If missing, the condition `if (this.botConn)` may not be evaluating correctly
+    - Check for: `[CatDogSystem] Bot connector available, attempting teleport`
+    - If missing, the condition `if (this.botConn)` may not be evaluating correctly
 - **If teleport logs show failure**: `mapTeleport` may not be available
-  - Check for: `[CatDogSystem] ✓ Bot teleported` (success) or `Failed to teleport bot` (failure)
-  - If failure, verify bot is in the same room and has valid MapPos
+    - Check for: `[CatDogSystem] ✓ Bot teleported` (success) or `Failed to teleport bot` (failure)
+    - If failure, verify bot is in the same room and has valid MapPos
 - **Verify emote is actually sent**: Look for `Tell (Emote) CharacterName:` in logs
-  - If this log is missing, the emote action itself isn't executing
+    - If this log is missing, the emote action itself isn't executing
 
 **Bondage items not appearing:**
+
 - Verify the asset group and name are correct (check ItemGroup documentation)
 - Check that the character appearance has room for the item
 - Confirm `difficulty` is between 0 and 50
 
 **Vibrators not escalating:**
+
 - Character must be wearing an active vibrator item (not disabled/at intensity 0)
 - Vibrator must be in `ItemVulva` or `ItemPelvis` group
 - **Custom vibrators without "Vibrator" in name are now supported** if they have:
-  - Extended.Type property, OR
-  - TypeRecord property, OR
-  - Mode property (e.g., "Lara's latex panties"), OR
-  - Intensity property, OR
-  - Property field
+    - Extended.Type property, OR
+    - TypeRecord property, OR
+    - Mode property (e.g., "Lara's latex panties"), OR
+    - Intensity property, OR
+    - Property field
 - Check for `[CatDogSystem] Detected vibrator:` in logs
 - If log shows "Found 0 vibrator(s)", the equipment isn't being recognized as a vibrator
 
 **Custom vibrator detection troubleshooting:**
+
 - Look for logs like:
-  ```
-  [CatDogSystem]   Item in ItemVulva: "Lara's latex panties"
-  [CatDogSystem]     ✓ Has Mode: 1
-  [CatDogSystem]     → Detected as vibrator!
-  ```
+    ```
+    [CatDogSystem]   Item in ItemVulva: "Lara's latex panties"
+    [CatDogSystem]     ✓ Has Mode: 1
+    [CatDogSystem]     → Detected as vibrator!
+    ```
 - If the item name shows "undefined", verify the item is in ItemVulva or ItemPelvis
 - If the item name is correct but no properties show, the vibrator type may need additional detection logic
 - Report the item name and visible properties to help add support for new vibrator types
 
 **Intensity stays at 0 (disabled):**
+
 - The vibrator might not be properly activated/enabled
 - Try activating the vibrator manually first before using the tile
 - Some vibrators require explicit enablement before intensity changes will register
@@ -478,84 +503,88 @@ Check bot console output for error messages.
 - If current intensity reads as 0, the item needs to be activated first
 
 **Duplicate actions:**
+
 - Actions may fire multiple times if the character's position oscillates
 - Keep actions idempotent (safe to run multiple times)
 
 ## Example Locations
 
 ### Cat Greeting Tile
+
 ```json
 {
-  "key": "cat_hello",
-  "name": "Cat Says Hello",
-  "type": "cat",
-  "x": 40,
-  "y": 50,
-  "enabled": true,
-  "data": {
-    "actions": [
-      {
-        "type": "emote",
-        "text": "*A curious cat looks up at you and meows*"
-      }
-    ]
-  }
+    "key": "cat_hello",
+    "name": "Cat Says Hello",
+    "type": "cat",
+    "x": 40,
+    "y": 50,
+    "enabled": true,
+    "data": {
+        "actions": [
+            {
+                "type": "emote",
+                "text": "*A curious cat looks up at you and meows*"
+            }
+        ]
+    }
 }
 ```
 
 ### Dog Punishment Tile
+
 ```json
 {
-  "key": "dog_punishment",
-  "name": "Playful Dog Punishment",
-  "type": "dog",
-  "x": 45,
-  "y": 55,
-  "enabled": true,
-  "data": {
-    "actions": [
-      {
-        "type": "emote",
-        "text": "*The dog playfully nips at you and wags its tail*"
-      },
-      {
-        "type": "bondage",
-        "pieces": [
-          {
-            "group": "ItemHead",
-            "asset": "PonyHood",
-            "color": "#FFB6C1"
-          }
-        ],
-        "difficulty": 12,
-        "craftDescription": "Dog play punishment"
-      }
-    ]
-  }
+    "key": "dog_punishment",
+    "name": "Playful Dog Punishment",
+    "type": "dog",
+    "x": 45,
+    "y": 55,
+    "enabled": true,
+    "data": {
+        "actions": [
+            {
+                "type": "emote",
+                "text": "*The dog playfully nips at you and wags its tail*"
+            },
+            {
+                "type": "bondage",
+                "pieces": [
+                    {
+                        "group": "ItemHead",
+                        "asset": "PonyHood",
+                        "color": "#FFB6C1"
+                    }
+                ],
+                "difficulty": 12,
+                "craftDescription": "Dog play punishment"
+            }
+        ]
+    }
 }
 ```
 
 ### Pet Escalation Tile
+
 ```json
 {
-  "key": "cat_mischief",
-  "name": "Mischievous Cat",
-  "type": "cat",
-  "x": 35,
-  "y": 45,
-  "enabled": true,
-  "data": {
-    "actions": [
-      {
-        "type": "emote",
-        "text": "*A mischievous cat brushes against your leg with a knowing purr*"
-      },
-      {
-        "type": "vibrator",
-        "message": "and it buzzes to life",
-        "intensityIncrease": 1
-      }
-    ]
-  }
+    "key": "cat_mischief",
+    "name": "Mischievous Cat",
+    "type": "cat",
+    "x": 35,
+    "y": 45,
+    "enabled": true,
+    "data": {
+        "actions": [
+            {
+                "type": "emote",
+                "text": "*A mischievous cat brushes against your leg with a knowing purr*"
+            },
+            {
+                "type": "vibrator",
+                "message": "and it buzzes to life",
+                "intensityIncrease": 1
+            }
+        ]
+    }
 }
 ```

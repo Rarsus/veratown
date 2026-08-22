@@ -300,7 +300,9 @@ export class VeratownAdminCommands {
 
                 const lines = backups.map((b) => {
                     const date = new Date(b.backedUpAt).toLocaleString();
-                    const byName = b.backedUpBy ? `by member #${b.backedUpBy}` : "automatically";
+                    const byName = b.backedUpBy
+                        ? `by member #${b.backedUpBy}`
+                        : "automatically";
                     return `[${b.version}] ${date} ${byName} - ${b._id}`;
                 });
 
@@ -337,7 +339,10 @@ export class VeratownAdminCommands {
                     if (restoredMapData) {
                         this.conn.chatRoom.map.setMapFromData(restoredMapData);
                     }
-                    this.conn.reply(msg, `Map restored from backup: ${backupId}`);
+                    this.conn.reply(
+                        msg,
+                        `Map restored from backup: ${backupId}`,
+                    );
                 } catch (err) {
                     this.conn.reply(msg, `Failed to restore backup: ${err}`);
                 }
@@ -663,7 +668,8 @@ export class VeratownAdminCommands {
                     }
 
                     // Get the current location
-                    const currentLocation = await this.locationStore.getLocation(key);
+                    const currentLocation =
+                        await this.locationStore.getLocation(key);
                     if (!currentLocation) {
                         this.conn.reply(msg, `Location "${key}" not found.`);
                         return;
@@ -673,7 +679,10 @@ export class VeratownAdminCommands {
                     let parsedValue: any = value;
                     if (topLevelField === "x" || topLevelField === "y") {
                         if (isNested) {
-                            this.conn.reply(msg, `Cannot use nested path for ${topLevelField}.`);
+                            this.conn.reply(
+                                msg,
+                                `Cannot use nested path for ${topLevelField}.`,
+                            );
                             return;
                         }
                         parsedValue = parseFloat(value);
@@ -704,7 +713,10 @@ export class VeratownAdminCommands {
                         const path = parts.slice(1); // e.g., ["furnitureAsset"]
 
                         if (target !== "data") {
-                            this.conn.reply(msg, `Nested paths only supported under "data".`);
+                            this.conn.reply(
+                                msg,
+                                `Nested paths only supported under "data".`,
+                            );
                             return;
                         }
 
@@ -1041,7 +1053,10 @@ export class VeratownAdminCommands {
                 const description = args.slice(7).join(" ") || undefined;
 
                 if (isNaN(tlX) || isNaN(tlY) || isNaN(brX) || isNaN(brY)) {
-                    this.conn.reply(msg, "All coordinates must be valid numbers.");
+                    this.conn.reply(
+                        msg,
+                        "All coordinates must be valid numbers.",
+                    );
                     return;
                 }
 
@@ -1062,12 +1077,12 @@ export class VeratownAdminCommands {
                 };
 
                 try {
-                    await this.regionManager!.updateRegion(this.locationStore!, region);
-                    await this.reloadLocations?.();
-                    this.conn.reply(
-                        msg,
-                        `Region "${key}" added successfully.`,
+                    await this.regionManager!.updateRegion(
+                        this.locationStore!,
+                        region,
                     );
+                    await this.reloadLocations?.();
+                    this.conn.reply(msg, `Region "${key}" added successfully.`);
                 } catch (e: any) {
                     this.conn.reply(
                         msg,
@@ -1086,10 +1101,7 @@ export class VeratownAdminCommands {
                 try {
                     const region = this.regionManager!.getRegion(args[1]);
                     if (!region) {
-                        this.conn.reply(
-                            msg,
-                            `Region "${args[1]}" not found.`,
-                        );
+                        this.conn.reply(msg, `Region "${args[1]}" not found.`);
                         return;
                     }
 
@@ -1138,7 +1150,10 @@ export class VeratownAdminCommands {
                 const brY = parseFloat(args[5]);
 
                 if (isNaN(tlX) || isNaN(tlY) || isNaN(brX) || isNaN(brY)) {
-                    this.conn.reply(msg, "All coordinates must be valid numbers.");
+                    this.conn.reply(
+                        msg,
+                        "All coordinates must be valid numbers.",
+                    );
                     return;
                 }
 
@@ -1158,7 +1173,10 @@ export class VeratownAdminCommands {
                         updatedAt: Date.now(),
                     };
 
-                    await this.regionManager!.updateRegion(this.locationStore!, updated);
+                    await this.regionManager!.updateRegion(
+                        this.locationStore!,
+                        updated,
+                    );
                     await this.reloadLocations?.();
                     this.conn.reply(
                         msg,
@@ -1175,12 +1193,18 @@ export class VeratownAdminCommands {
 
             case "delete": {
                 if (!args[1]) {
-                    this.conn.reply(msg, "Usage: !location region delete <key>");
+                    this.conn.reply(
+                        msg,
+                        "Usage: !location region delete <key>",
+                    );
                     return;
                 }
 
                 try {
-                    await this.regionManager!.deleteRegion(this.locationStore!, args[1]);
+                    await this.regionManager!.deleteRegion(
+                        this.locationStore!,
+                        args[1],
+                    );
                     await this.reloadLocations?.();
                     this.conn.reply(
                         msg,
@@ -1207,7 +1231,9 @@ export class VeratownAdminCommands {
                     let typeFilter = args[1];
                     let filtered = regions;
                     if (typeFilter) {
-                        filtered = regions.filter(r => r.regionType === typeFilter);
+                        filtered = regions.filter(
+                            (r) => r.regionType === typeFilter,
+                        );
                         if (filtered.length === 0) {
                             this.conn.reply(
                                 msg,
@@ -1241,18 +1267,30 @@ export class VeratownAdminCommands {
             case "validate": {
                 try {
                     const staticRegions = new Map([
-                        ["game_region", this.regionManager!.getRegion("game_region")],
-                        ["dare_region", this.regionManager!.getRegion("dare_region")],
+                        [
+                            "game_region",
+                            this.regionManager!.getRegion("game_region"),
+                        ],
+                        [
+                            "dare_region",
+                            this.regionManager!.getRegion("dare_region"),
+                        ],
                     ]);
 
                     // Filter out undefined values
                     const validStaticRegions = new Map(
-                        Array.from(staticRegions).filter(([_, v]) => v !== undefined)
+                        Array.from(staticRegions).filter(
+                            ([_, v]) => v !== undefined,
+                        ),
                     ) as Map<string, VeratownRegion>;
 
-                    const warnings = this.regionManager!.validateRegions(validStaticRegions);
+                    const warnings =
+                        this.regionManager!.validateRegions(validStaticRegions);
                     if (warnings.length === 0) {
-                        this.conn.reply(msg, "All regions are consistent with static definitions.");
+                        this.conn.reply(
+                            msg,
+                            "All regions are consistent with static definitions.",
+                        );
                     } else {
                         this.conn.SendMessage(
                             "Whisper",

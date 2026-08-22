@@ -204,11 +204,11 @@ In your GitHub repo: **Settings → Secrets and variables → Actions**
 
 Create these secrets:
 
-| Secret | Value |
-|--------|-------|
-| `GCP_PROJECT_ID` | Your GCP project ID |
-| `GCP_ZONE` | `us-central1-a` (or your zone) |
-| `GCP_VM_NAME` | `veratown-bot` |
+| Secret           | Value                          |
+| ---------------- | ------------------------------ |
+| `GCP_PROJECT_ID` | Your GCP project ID            |
+| `GCP_ZONE`       | `us-central1-a` (or your zone) |
+| `GCP_VM_NAME`    | `veratown-bot`                 |
 
 ### For Authentication: Option A - Service Account Key (Simpler, Less Secure)
 
@@ -236,6 +236,7 @@ cat key.json | base64 > gcp_key_base64.txt
 ```
 
 Add to GitHub secrets:
+
 - `GCP_SA_KEY` = (base64-encoded service account key)
 
 ### For Authentication: Option B - Workload Identity (More Secure)
@@ -252,73 +253,73 @@ Create `.github/workflows/deploy.yml`:
 name: Deploy to Google Cloud
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'  # Trigger on version tags like v1.0.0
+    push:
+        tags:
+            - "v*.*.*" # Trigger on version tags like v1.0.0
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  IMAGE_NAME: ropeybot
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  VM_NAME: ${{ secrets.GCP_VM_NAME }}
-  ZONE: ${{ secrets.GCP_ZONE }}
+    PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+    IMAGE_NAME: ropeybot
+    ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+    VM_NAME: ${{ secrets.GCP_VM_NAME }}
+    ZONE: ${{ secrets.GCP_ZONE }}
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+    build-and-deploy:
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+            - name: Authenticate to Google Cloud
+              uses: google-github-actions/auth@v1
+              with:
+                  credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+            - name: Set up Cloud SDK
+              uses: google-github-actions/setup-gcloud@v1
 
-      - name: Configure Docker for Artifact Registry
-        run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev
+            - name: Configure Docker for Artifact Registry
+              run: |
+                  gcloud auth configure-docker us-central1-docker.pkg.dev
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          IMAGE_TAG="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$IMAGE_NAME:$VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+            - name: Extract version from tag
+              id: version
+              run: |
+                  VERSION=${GITHUB_REF#refs/tags/}
+                  IMAGE_TAG="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$IMAGE_NAME:$VERSION"
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ steps.version.outputs.image_tag }} .
-          docker tag ${{ steps.version.outputs.image_tag }} us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$IMAGE_NAME:latest
+            - name: Build Docker image
+              run: |
+                  docker build -t ${{ steps.version.outputs.image_tag }} .
+                  docker tag ${{ steps.version.outputs.image_tag }} us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$IMAGE_NAME:latest
 
-      - name: Push to Artifact Registry
-        run: |
-          docker push ${{ steps.version.outputs.image_tag }}
-          docker push us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$IMAGE_NAME:latest
+            - name: Push to Artifact Registry
+              run: |
+                  docker push ${{ steps.version.outputs.image_tag }}
+                  docker push us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$IMAGE_NAME:latest
 
-      - name: Deploy to Compute Engine
-        run: |
-          gcloud compute ssh $VM_NAME \
-            --zone=$ZONE \
-            --project=$PROJECT_ID \
-            --command='
-              cd ~/veratown && \
-              git pull origin main && \
-              echo "VERSION=${{ steps.version.outputs.version }}" > .env && \
-              sed -i "s|image:.*ropeybot.*|image: us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/ropeybot:${{ steps.version.outputs.version }}|" docker-compose.yml && \
-              docker-compose pull && \
-              docker-compose up -d && \
-              echo "Deployment complete" && \
-              docker-compose logs -f --tail=20 ropeybot
-            '
+            - name: Deploy to Compute Engine
+              run: |
+                  gcloud compute ssh $VM_NAME \
+                    --zone=$ZONE \
+                    --project=$PROJECT_ID \
+                    --command='
+                      cd ~/veratown && \
+                      git pull origin main && \
+                      echo "VERSION=${{ steps.version.outputs.version }}" > .env && \
+                      sed -i "s|image:.*ropeybot.*|image: us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/ropeybot:${{ steps.version.outputs.version }}|" docker-compose.yml && \
+                      docker-compose pull && \
+                      docker-compose up -d && \
+                      echo "Deployment complete" && \
+                      docker-compose logs -f --tail=20 ropeybot
+                    '
 
-      - name: Print deployment status
-        run: echo "✅ Veratown+ deployed version ${{ steps.version.outputs.version }}"
+            - name: Print deployment status
+              run: echo "✅ Veratown+ deployed version ${{ steps.version.outputs.version }}"
 ```
 
 ---
@@ -344,9 +345,9 @@ gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID \
 - name: Authenticate to Google Cloud
   uses: google-github-actions/auth@v1
   with:
-    credentials_json: ${{ secrets.GCP_SA_KEY }}
-    skip_credentials_setup: false
-    cleanup_credentials: true
+      credentials_json: ${{ secrets.GCP_SA_KEY }}
+      skip_credentials_setup: false
+      cleanup_credentials: true
 ```
 
 ---
@@ -424,6 +425,7 @@ sudo systemctl status veratown
 ### View Logs from GitHub Actions
 
 After creating release, logs auto-stream to:
+
 - **GitHub**: Actions tab in repo
 - **Google Cloud**: Cloud Logging (if enabled)
 - **VM logs**: `docker logs ropeybot`
@@ -437,6 +439,7 @@ gcloud compute instances create $VM_NAME \
 ```
 
 View logs:
+
 ```bash
 gcloud logging read "resource.type=gce_instance AND resource.labels.instance_id=$VM_NAME" \
   --limit=50 --format=text
@@ -491,10 +494,12 @@ gcloud logging read "resource.type=gce_instance" \
 ### GitHub Actions Fails
 
 **Check logs**:
+
 - GitHub: **Actions tab → workflow run → build-and-deploy → deployment step**
 - Usually: SSH auth failed or image push failed
 
 **Fix SSH auth**:
+
 ```bash
 # Re-auth gcloud locally
 gcloud auth login
@@ -519,11 +524,13 @@ docker exec veratown-mongo-1 mongosh --eval "db.adminCommand('ping')"
 ### Bot Crashes After Update
 
 **Check logs**:
+
 ```bash
 docker-compose logs -f ropeybot | tail -50
 ```
 
 **Rollback to previous version**:
+
 ```bash
 cd ~/veratown
 git log --oneline | head -5
@@ -553,12 +560,14 @@ docker image prune -a
 5. ✅ First deployment tested
 
 **Now**:
+
 - Create releases via git tags
 - Each tag triggers auto-deployment
 - Monitor via GitHub Actions + Cloud Logging
 - Adjust MongoDB disk size as needed
 
 **Advanced**:
+
 - [Setup Workload Identity Federation](GOOGLE_CLOUD_DEPLOYMENT.md#step-3-setup-workload-identity-federation-recommended) (more secure)
 - [Enable Cloud Monitoring dashboard](GOOGLE_CLOUD_DEPLOYMENT.md#step-4-monitoring-dashboard)
 - [Setup Cloud SQL for managed MongoDB](GOOGLE_CLOUD_DEPLOYMENT.md#step-1-setup-cloud-sql-for-mongodb)

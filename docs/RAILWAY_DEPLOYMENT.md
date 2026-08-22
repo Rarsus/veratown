@@ -16,7 +16,7 @@ Deploy Veratown+ to Railway with automatic Docker container support and MongoDB 
 ✅ **Cheap** - $5/month for small containers  
 ✅ **Free tier available** - $5 credit/month  
 ✅ **Built-in monitoring** - Logs, metrics, auto-restarts  
-✅ **No infrastructure** - Railway manages everything  
+✅ **No infrastructure** - Railway manages everything
 
 ---
 
@@ -48,39 +48,39 @@ Railway dashboard → Your project → Variables
 
 **Complete mapping of config.json to environment variables:**
 
-| Config.json | Environment Variable | Example | Required |
-|---|---|---|---|
-| **Bot 1** |
-| `user` | `BOT_USER` | `VeraBot1` | ✅ Yes |
-| `password` | `BOT_PASSWORD` | `VeraBotVeraBot123` | ✅ Yes |
-| **Bot 2 (Optional)** |
-| `user2` | `BOT_USER2` | `VeraBot2` | ⚠️ If using |
-| `password2` | `BOT_PASSWORD2` | `VeraBot2Password` | ⚠️ If using |
-| **Bot 3 (Optional)** |
-| `user3` | `BOT_USER3` | `VeraBot3` | ⚠️ If using |
-| `password3` | `BOT_PASSWORD3` | `mafqeZwadfos5vejby` | ⚠️ If using |
+| Config.json                  | Environment Variable | Example                                                    | Required     |
+| ---------------------------- | -------------------- | ---------------------------------------------------------- | ------------ |
+| **Bot 1**                    |
+| `user`                       | `BOT_USER`           | `VeraBot1`                                                 | ✅ Yes       |
+| `password`                   | `BOT_PASSWORD`       | `VeraBotVeraBot123`                                        | ✅ Yes       |
+| **Bot 2 (Optional)**         |
+| `user2`                      | `BOT_USER2`          | `VeraBot2`                                                 | ⚠️ If using  |
+| `password2`                  | `BOT_PASSWORD2`      | `VeraBot2Password`                                         | ⚠️ If using  |
+| **Bot 3 (Optional)**         |
+| `user3`                      | `BOT_USER3`          | `VeraBot3`                                                 | ⚠️ If using  |
+| `password3`                  | `BOT_PASSWORD3`      | `mafqeZwadfos5vejby`                                       | ⚠️ If using  |
 | **Database (MongoDB Atlas)** |
-| `mongo_uri` | `MONGODB_URI` | `mongodb+srv://user:pass@cluster.xxx.mongodb.net/ropeybot` | ✅ Yes |
-| `mongo_db` | `MONGODB_DB` | `ropeybot` | ✅ Yes |
-| `mongo_tls` | `MONGODB_TLS` | `true` | ✅ Yes |
-| **Game & Server** |
-| `game` | `BOT_GAME` | `veratown` | ✅ Yes |
-| `env` | `BOT_ENV` | `live` | ✅ Yes |
-| (bcserverurl) | `BC_SERVER_URL` | `https://client.bdsm-chat.com/` | ⚠️ If custom |
-| **Room Configuration** |
-| `room.Name` | `ROOM_NAME` | `Veratown` | ⚠️ Optional |
-| `room.Description` | `ROOM_DESCRIPTION` | `A roleplay room...` | ⚠️ Optional |
-| `room.Limit` | `ROOM_LIMIT` | `20` | ⚠️ Optional |
-| `room.Space` | `ROOM_SPACE` | `X` | ⚠️ Optional |
-| `room.Language` | `ROOM_LANGUAGE` | `EN` | ⚠️ Optional |
-| `room.Private` | `ROOM_PRIVATE` | `false` | ⚠️ Optional |
-| `room.Locked` | `ROOM_LOCKED` | `false` | ⚠️ Optional |
-| `room.Background` | `ROOM_BACKGROUND` | `PartyBasement` | ⚠️ Optional |
-| `room.Game` | `ROOM_GAME` | `""` (empty) | ⚠️ Optional |
-| **Admin & Members** |
-| `superusers` | `SUPERUSERS` | `[250927]` | ⚠️ Optional |
-| `members` | `MEMBERS` | `[251024]` | ⚠️ Optional |
-| `room.Admin` | `ROOM_ADMIN` | `[250927,254890]` | ⚠️ Optional |
+| `mongo_uri`                  | `MONGODB_URI`        | `mongodb+srv://user:pass@cluster.xxx.mongodb.net/ropeybot` | ✅ Yes       |
+| `mongo_db`                   | `MONGODB_DB`         | `ropeybot`                                                 | ✅ Yes       |
+| `mongo_tls`                  | `MONGODB_TLS`        | `true`                                                     | ✅ Yes       |
+| **Game & Server**            |
+| `game`                       | `BOT_GAME`           | `veratown`                                                 | ✅ Yes       |
+| `env`                        | `BOT_ENV`            | `live`                                                     | ✅ Yes       |
+| (bcserverurl)                | `BC_SERVER_URL`      | `https://client.bdsm-chat.com/`                            | ⚠️ If custom |
+| **Room Configuration**       |
+| `room.Name`                  | `ROOM_NAME`          | `Veratown`                                                 | ⚠️ Optional  |
+| `room.Description`           | `ROOM_DESCRIPTION`   | `A roleplay room...`                                       | ⚠️ Optional  |
+| `room.Limit`                 | `ROOM_LIMIT`         | `20`                                                       | ⚠️ Optional  |
+| `room.Space`                 | `ROOM_SPACE`         | `X`                                                        | ⚠️ Optional  |
+| `room.Language`              | `ROOM_LANGUAGE`      | `EN`                                                       | ⚠️ Optional  |
+| `room.Private`               | `ROOM_PRIVATE`       | `false`                                                    | ⚠️ Optional  |
+| `room.Locked`                | `ROOM_LOCKED`        | `false`                                                    | ⚠️ Optional  |
+| `room.Background`            | `ROOM_BACKGROUND`    | `PartyBasement`                                            | ⚠️ Optional  |
+| `room.Game`                  | `ROOM_GAME`          | `""` (empty)                                               | ⚠️ Optional  |
+| **Admin & Members**          |
+| `superusers`                 | `SUPERUSERS`         | `[250927]`                                                 | ⚠️ Optional  |
+| `members`                    | `MEMBERS`            | `[251024]`                                                 | ⚠️ Optional  |
+| `room.Admin`                 | `ROOM_ADMIN`         | `[250927,254890]`                                          | ⚠️ Optional  |
 
 ---
 
@@ -145,6 +145,7 @@ MONGODB_TLS=true
 For arrays (superusers, members, admin):
 
 **Option A: JSON format** (strict)
+
 ```
 SUPERUSERS=[250927,250928]
 MEMBERS=[251024,251025]
@@ -152,6 +153,7 @@ ROOM_ADMIN=[250927,254890]
 ```
 
 **Option B: Single value**
+
 ```
 SUPERUSERS=250927
 ```
@@ -165,6 +167,7 @@ The bot parses both formats. JSON arrays are recommended.
 Click **Deploy** in Railway dashboard.
 
 Railway will:
+
 1. ✅ Detect Dockerfile
 2. ✅ Build Docker image
 3. ✅ Start container
@@ -180,6 +183,7 @@ Railway will:
 Railway dashboard → Deployments → Logs
 
 Look for:
+
 ```
 [Config] Configuration sources:
   - Bot: VeraBot1
@@ -219,6 +223,7 @@ git push origin main
 ```
 
 Railway automatically:
+
 1. Rebuilds Docker image
 2. Restarts container
 3. Bot updates live (no downtime)
@@ -250,6 +255,7 @@ Railway dashboard → Settings → Instance
 - **CPU**: 0.5 CPU default (sufficient)
 
 Increase if bot is slow:
+
 ```
 Memory: 1GB
 CPU: 1.0
@@ -259,12 +265,12 @@ CPU: 1.0
 
 ## Cost Breakdown
 
-| Item | Cost |
-|------|------|
+| Item                       | Cost                      |
+| -------------------------- | ------------------------- |
 | Base container (512MB RAM) | Free (included in credit) |
-| Outbound bandwidth | Free (included) |
-| Logs storage | Free (included) |
-| **Total** | **Free tier covers it** |
+| Outbound bandwidth         | Free (included)           |
+| Logs storage               | Free (included)           |
+| **Total**                  | **Free tier covers it**   |
 
 Or pay-as-you-go: ~$5/month for small container.
 
@@ -288,11 +294,13 @@ Or pay-as-you-go: ~$5/month for small container.
 Error: `Error: connect ECONNREFUSED` or `connect ETIMEDOUT`
 
 **Possible causes**:
+
 1. MONGODB_URI incorrect
 2. MongoDB Atlas IP whitelist
 3. Network issue
 
 **Solutions**:
+
 1. Verify MONGODB_URI in Railway variables
 2. In MongoDB Atlas: Network Access → Add your IP (or 0.0.0.0/0)
 3. Check MongoDB Atlas cluster is running
@@ -300,6 +308,7 @@ Error: `Error: connect ECONNREFUSED` or `connect ETIMEDOUT`
 ### Bot connects but no commands
 
 **Check game is set**:
+
 ```
 BOT_GAME=veratown
 ```
@@ -364,19 +373,20 @@ Store sensitive values in GitHub:
 
 1. GitHub repo → Settings → Secrets → Actions
 2. Add secrets:
-   - `BOT_USER`
-   - `BOT_PASSWORD`
-   - `MONGODB_URI`
-   - etc.
+    - `BOT_USER`
+    - `BOT_PASSWORD`
+    - `MONGODB_URI`
+    - etc.
 
 3. Reference in code/workflows:
-   ```yaml
-   BOT_USER=${{ secrets.BOT_USER }}
-   ```
+    ```yaml
+    BOT_USER=${{ secrets.BOT_USER }}
+    ```
 
 ### Option B: Railway Secrets
 
 Secrets in Railway dashboard:
+
 - Not shown in logs
 - Not visible to team members without permission
 - Auto-rotated
@@ -390,6 +400,7 @@ Secrets in Railway dashboard:
 Railway dashboard → Settings → Domains
 
 Add custom domain (only needed if exposing via HTTPS):
+
 ```
 ropeybot.example.com
 ```
@@ -397,6 +408,7 @@ ropeybot.example.com
 ### Environment-Specific Configs
 
 Create separate Railway projects:
+
 - `ropeybot-staging`
 - `ropeybot-production`
 
@@ -430,6 +442,7 @@ Railway dashboard → Deployments → Metrics
 Railway dashboard → Settings → Alerts
 
 Alerts for:
+
 - Deployment failures
 - High memory usage
 - Service crashes
@@ -438,6 +451,7 @@ Alerts for:
 ### Logs
 
 Stream logs locally:
+
 ```bash
 railway logs -f
 ```
@@ -465,6 +479,7 @@ Increase memory/CPU in Settings → Instance.
 ## Backups
 
 MongoDB Atlas handles all backups automatically:
+
 - Hourly snapshots (free tier)
 - 7-day retention
 - Point-in-time restore
@@ -491,12 +506,14 @@ Just deploy the same Docker container to another platform.
 ## When to Scale Beyond Railway
 
 Consider upgrading if:
+
 - ✅ Bot is reaching 1GB memory consistently
 - ✅ Multiple game instances needed
 - ✅ Need 99.99% uptime SLA
 - ✅ Want dedicated database
 
 Then migrate to:
+
 - **Cloud Run** (Google Cloud, $2-5/month)
 - **Kubernetes** (Scaling, multi-region)
 - **Managed Services** (ECS, App Engine)
@@ -508,4 +525,3 @@ Then migrate to:
 - [docs/ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) - All config options
 - [docs/MONGODB_ATLAS_SETUP.md](MONGODB_ATLAS_SETUP.md) - MongoDB Atlas guide
 - [docs/VERATOWN_COMPLETE_GUIDE.md](VERATOWN_COMPLETE_GUIDE.md) - Game features
-

@@ -78,7 +78,10 @@ export class CatDogSystem implements VeratownFeatureSystem {
     ) {
         console.log("[CatDogSystem] Initializing CatDogSystem");
         this.petTrigger = guardHandler(this.key, this.onCharacterStepOnPet);
-        console.log("[CatDogSystem] Trigger handler created:", typeof this.petTrigger);
+        console.log(
+            "[CatDogSystem] Trigger handler created:",
+            typeof this.petTrigger,
+        );
         // Store bot's initial position if bot connector is provided
         if (this.botConn) {
             this.storeBotPosition();
@@ -94,7 +97,10 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 this.botOriginalY = botChar.MapPos.Y ?? 0;
             }
         } catch (e) {
-            console.warn("[CatDogSystem] Could not store bot initial position", e);
+            console.warn(
+                "[CatDogSystem] Could not store bot initial position",
+                e,
+            );
         }
     }
 
@@ -105,12 +111,18 @@ export class CatDogSystem implements VeratownFeatureSystem {
     public async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
-        console.log(`[CatDogSystem] reloadLocations called with ${locations.length} locations`);
+        console.log(
+            `[CatDogSystem] reloadLocations called with ${locations.length} locations`,
+        );
         try {
             // Clean up old triggers
-            console.log(`[CatDogSystem] Cleaning up ${this.tiles.length} old triggers`);
+            console.log(
+                `[CatDogSystem] Cleaning up ${this.tiles.length} old triggers`,
+            );
             for (const tile of this.tiles) {
-                console.log(`[CatDogSystem] Removing trigger at (${tile.location.x}, ${tile.location.y})`);
+                console.log(
+                    `[CatDogSystem] Removing trigger at (${tile.location.x}, ${tile.location.y})`,
+                );
                 this.conn.chatRoom.map.removeTileTrigger(
                     tile.location.x,
                     tile.location.y,
@@ -121,29 +133,39 @@ export class CatDogSystem implements VeratownFeatureSystem {
             // Load cat and dog locations
             this.tiles = [];
             for (const location of locations) {
-                console.log(`[CatDogSystem] Checking location: ${location.key} type=${location.type} enabled=${location.enabled}`);
+                console.log(
+                    `[CatDogSystem] Checking location: ${location.key} type=${location.type} enabled=${location.enabled}`,
+                );
                 if (
                     (location.type === "cat" || location.type === "dog") &&
                     location.enabled
                 ) {
                     const config = this.parseConfig(location);
                     if (config) {
-                        console.log(`[CatDogSystem] Adding ${location.type} at (${location.x}, ${location.y})`);
+                        console.log(
+                            `[CatDogSystem] Adding ${location.type} at (${location.x}, ${location.y})`,
+                        );
                         this.tiles.push({
                             location,
                             config,
                             petType: location.type as "cat" | "dog",
                         });
                     } else {
-                        console.log(`[CatDogSystem] Failed to parse config for ${location.key}`);
+                        console.log(
+                            `[CatDogSystem] Failed to parse config for ${location.key}`,
+                        );
                     }
                 }
             }
 
             // Register tile triggers for pet positions
-            console.log(`[CatDogSystem] Registering ${this.tiles.length} new tile triggers`);
+            console.log(
+                `[CatDogSystem] Registering ${this.tiles.length} new tile triggers`,
+            );
             for (const tile of this.tiles) {
-                console.log(`[CatDogSystem] Adding tile trigger at (${tile.location.x}, ${tile.location.y})`);
+                console.log(
+                    `[CatDogSystem] Adding tile trigger at (${tile.location.x}, ${tile.location.y})`,
+                );
                 this.conn.chatRoom.map.addTileTrigger(
                     { X: tile.location.x, Y: tile.location.y },
                     this.petTrigger,
@@ -154,11 +176,16 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 `[CatDogSystem] Loaded ${this.tiles.length} cat/dog location(s)`,
             );
         } catch (e) {
-            console.error("[CatDogSystem] Unexpected error during initialization", e);
+            console.error(
+                "[CatDogSystem] Unexpected error during initialization",
+                e,
+            );
         }
     }
 
-    private parseConfig(location: VeratownLocationDoc): CatDogTileConfig | null {
+    private parseConfig(
+        location: VeratownLocationDoc,
+    ): CatDogTileConfig | null {
         const data = location.data ?? {};
 
         // Parse actions from data.actions array
@@ -195,9 +222,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
         };
     }
 
-    private parseAction(
-        action: unknown,
-    ): CatDogActionUnion | null {
+    private parseAction(action: unknown): CatDogActionUnion | null {
         if (typeof action !== "object" || action === null) return null;
 
         const obj = action as Record<string, unknown>;
@@ -221,12 +246,21 @@ export class CatDogSystem implements VeratownFeatureSystem {
                         const p = piece as Record<string, unknown>;
                         const group = p.group;
                         const asset = p.asset;
-                        if (typeof group === "string" && typeof asset === "string") {
+                        if (
+                            typeof group === "string" &&
+                            typeof asset === "string"
+                        ) {
                             validPieces.push({
                                 group,
                                 asset,
-                                extendedType: typeof p.extendedType === "string" ? p.extendedType : undefined,
-                                color: typeof p.color === "string" ? p.color : undefined,
+                                extendedType:
+                                    typeof p.extendedType === "string"
+                                        ? p.extendedType
+                                        : undefined,
+                                color:
+                                    typeof p.color === "string"
+                                        ? p.color
+                                        : undefined,
                             });
                         }
                     }
@@ -236,9 +270,13 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     return {
                         type: "bondage",
                         pieces: validPieces,
-                        difficulty: typeof difficulty === "number" ? difficulty : 20,
+                        difficulty:
+                            typeof difficulty === "number" ? difficulty : 20,
                         color: typeof color === "string" ? color : "#8B4513",
-                        craftDescription: typeof craftDescription === "string" ? craftDescription : "Pet bondage",
+                        craftDescription:
+                            typeof craftDescription === "string"
+                                ? craftDescription
+                                : "Pet bondage",
                     };
                 }
             }
@@ -250,7 +288,10 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 return {
                     type: "vibrator",
                     message,
-                    intensityIncrease: typeof intensityIncrease === "number" ? Math.max(1, intensityIncrease) : 1,
+                    intensityIncrease:
+                        typeof intensityIncrease === "number"
+                            ? Math.max(1, intensityIncrease)
+                            : 1,
                 };
             }
         }
@@ -259,15 +300,24 @@ export class CatDogSystem implements VeratownFeatureSystem {
     }
 
     private onCharacterStepOnPet = async (character: API_Character) => {
-        console.log(`[CatDogSystem] onCharacterStepOnPet triggered for ${character.Name}, enabled=${this.enabled}, tiles count=${this.tiles.length}`);
+        console.log(
+            `[CatDogSystem] onCharacterStepOnPet triggered for ${character.Name}, enabled=${this.enabled}, tiles count=${this.tiles.length}`,
+        );
         if (!this.enabled) {
             console.log(`[CatDogSystem] System disabled, ignoring trigger`);
             return;
         }
 
         const characterPos = character.MapPos;
-        console.log(`[CatDogSystem] Character position: (${characterPos.X}, ${characterPos.Y})`);
-        console.log(`[CatDogSystem] Available tiles:`, this.tiles.map(t => `${t.petType} at (${t.location.x}, ${t.location.y})`));
+        console.log(
+            `[CatDogSystem] Character position: (${characterPos.X}, ${characterPos.Y})`,
+        );
+        console.log(
+            `[CatDogSystem] Available tiles:`,
+            this.tiles.map(
+                (t) => `${t.petType} at (${t.location.x}, ${t.location.y})`,
+            ),
+        );
 
         const tile = this.tiles.find(
             (t) =>
@@ -276,18 +326,26 @@ export class CatDogSystem implements VeratownFeatureSystem {
         );
 
         if (!tile) {
-            console.log(`[CatDogSystem] No matching tile found for position (${characterPos.X}, ${characterPos.Y})`);
+            console.log(
+                `[CatDogSystem] No matching tile found for position (${characterPos.X}, ${characterPos.Y})`,
+            );
             return;
         }
 
-        console.log(`[CatDogSystem] Found matching tile: ${tile.petType} with ${tile.config.actions.length} actions`);
+        console.log(
+            `[CatDogSystem] Found matching tile: ${tile.petType} with ${tile.config.actions.length} actions`,
+        );
 
         try {
             // Execute each action
             for (const action of tile.config.actions) {
                 console.log(`[CatDogSystem] Executing action: ${action.type}`);
                 if (action.type === "emote") {
-                    await this.performEmoteAction(character, action, tile.petType);
+                    await this.performEmoteAction(
+                        character,
+                        action,
+                        tile.petType,
+                    );
                 } else if (action.type === "bondage") {
                     this.performBondageAction(character, action);
                 } else if (action.type === "vibrator") {
@@ -308,16 +366,24 @@ export class CatDogSystem implements VeratownFeatureSystem {
         petType: "cat" | "dog",
     ): Promise<void> {
         try {
-            console.log(`[CatDogSystem] performEmoteAction: botConn=${!!this.botConn}, text="${action.text}"`);
-            
+            console.log(
+                `[CatDogSystem] performEmoteAction: botConn=${!!this.botConn}, text="${action.text}"`,
+            );
+
             // If bot connector is provided, teleport bot to player for emote visibility
             if (this.botConn) {
-                console.log("[CatDogSystem] Bot connector available, attempting teleport");
+                console.log(
+                    "[CatDogSystem] Bot connector available, attempting teleport",
+                );
                 const botChar = this.botConn.Player;
-                console.log(`[CatDogSystem] botChar: ${botChar?.Name}, MapPos: (${botChar?.MapPos?.X}, ${botChar?.MapPos?.Y})`);
-                
+                console.log(
+                    `[CatDogSystem] botChar: ${botChar?.Name}, MapPos: (${botChar?.MapPos?.X}, ${botChar?.MapPos?.Y})`,
+                );
+
                 if (!botChar?.MapPos) {
-                    console.log("[CatDogSystem] Bot char or MapPos missing, using fallback emote");
+                    console.log(
+                        "[CatDogSystem] Bot char or MapPos missing, using fallback emote",
+                    );
                     // Fallback: just send emote normally
                     character.Tell(
                         "Emote",
@@ -329,11 +395,19 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 // Save current bot position
                 const currentX = botChar.MapPos.X ?? 0;
                 const currentY = botChar.MapPos.Y ?? 0;
-                console.log(`[CatDogSystem] Saved bot position: (${currentX}, ${currentY})`);
+                console.log(
+                    `[CatDogSystem] Saved bot position: (${currentX}, ${currentY})`,
+                );
 
                 // Teleport bot to player's location for emote visibility
-                console.log(`[CatDogSystem] Teleporting bot to player (${character.MapPos.X}, ${character.MapPos.Y})`);
-                await this.teleportBot(botChar, character.MapPos.X, character.MapPos.Y);
+                console.log(
+                    `[CatDogSystem] Teleporting bot to player (${character.MapPos.X}, ${character.MapPos.Y})`,
+                );
+                await this.teleportBot(
+                    botChar,
+                    character.MapPos.X,
+                    character.MapPos.Y,
+                );
                 await this.wait(100); // Brief delay for teleport to complete
 
                 // Send emote (now in range of player)
@@ -346,12 +420,18 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 await this.wait(500); // Let emote display before returning
 
                 // Teleport bot back to original position
-                console.log(`[CatDogSystem] Teleporting bot back to (${currentX}, ${currentY})`);
+                console.log(
+                    `[CatDogSystem] Teleporting bot back to (${currentX}, ${currentY})`,
+                );
                 await this.teleportBot(botChar, currentX, currentY);
-                console.log(`[CatDogSystem] ✓ Bot returned to home position (${currentX}, ${currentY})`);
+                console.log(
+                    `[CatDogSystem] ✓ Bot returned to home position (${currentX}, ${currentY})`,
+                );
             } else {
                 // No bot connector: send emote normally
-                console.log("[CatDogSystem] No bot connector, sending emote normally (may not be visible if out of range)");
+                console.log(
+                    "[CatDogSystem] No bot connector, sending emote normally (may not be visible if out of range)",
+                );
                 character.Tell(
                     "Emote",
                     action.text || `*A ${petType} nuzzles you adorably*`,
@@ -366,7 +446,10 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     action.text || `*A ${petType} nuzzles you adorably*`,
                 );
             } catch (fallbackErr) {
-                console.error("[CatDogSystem] Fallback emote also failed", fallbackErr);
+                console.error(
+                    "[CatDogSystem] Fallback emote also failed",
+                    fallbackErr,
+                );
             }
         }
     }
@@ -378,25 +461,36 @@ export class CatDogSystem implements VeratownFeatureSystem {
     ): Promise<void> {
         try {
             if (!botChar?.MapPos) {
-                console.warn(`[CatDogSystem] Cannot teleport: botChar.MapPos is ${botChar?.MapPos}`);
+                console.warn(
+                    `[CatDogSystem] Cannot teleport: botChar.MapPos is ${botChar?.MapPos}`,
+                );
                 return;
             }
-            
-            console.log(`[CatDogSystem] teleportBot: current (${botChar.MapPos.X}, ${botChar.MapPos.Y}) -> target (${x}, ${y})`);
-            
+
+            console.log(
+                `[CatDogSystem] teleportBot: current (${botChar.MapPos.X}, ${botChar.MapPos.Y}) -> target (${x}, ${y})`,
+            );
+
             // Use the proper mapTeleport() method to actually move the character
             if (typeof botChar.mapTeleport === "function") {
                 botChar.mapTeleport({ X: x, Y: y });
                 console.log(`[CatDogSystem] ✓ Bot teleported to (${x}, ${y})`);
             } else {
-                console.warn("[CatDogSystem] ⚠️  botChar.mapTeleport is not a function, attempting fallback");
+                console.warn(
+                    "[CatDogSystem] ⚠️  botChar.mapTeleport is not a function, attempting fallback",
+                );
                 // Fallback: directly modify MapPos (may not work)
                 botChar.MapPos.X = x;
                 botChar.MapPos.Y = y;
-                console.log(`[CatDogSystem] Fallback: set MapPos to (${x}, ${y})`);
+                console.log(
+                    `[CatDogSystem] Fallback: set MapPos to (${x}, ${y})`,
+                );
             }
         } catch (e) {
-            console.warn(`[CatDogSystem] Failed to teleport bot to (${x}, ${y})`, e);
+            console.warn(
+                `[CatDogSystem] Failed to teleport bot to (${x}, ${y})`,
+                e,
+            );
         }
     }
 
@@ -449,51 +543,92 @@ export class CatDogSystem implements VeratownFeatureSystem {
             // Vibrators can have many custom names, so we detect by:
             // 1. Location (ItemVulva, ItemPelvis groups)
             // 2. Properties (Extended.Type, TypeRecord, Property, Mode, Intensity, etc.)
-            
+
             const vibrators: any[] = [];
             const appearance = character.Appearance.Appearance || [];
-            
-            console.log(`[CatDogSystem] Scanning ${appearance.length} appearance items for vibrators`);
-            
+
+            console.log(
+                `[CatDogSystem] Scanning ${appearance.length} appearance items for vibrators`,
+            );
+
             for (const item of appearance) {
                 try {
                     const assetName = (item as any)?.Name as string | undefined;
-                    const groupName = (item as any)?.Group as string | undefined;
-                    
+                    const groupName = (item as any)?.Group as
+                        | string
+                        | undefined;
+
                     // Only check items in these intimate groups
-                    if (groupName !== "ItemVulva" && groupName !== "ItemPelvis") {
+                    if (
+                        groupName !== "ItemVulva" &&
+                        groupName !== "ItemPelvis"
+                    ) {
                         continue;
                     }
 
-                    console.log(`[CatDogSystem]   Item in ${groupName}: "${assetName}"`);
+                    console.log(
+                        `[CatDogSystem]   Item in ${groupName}: "${assetName}"`,
+                    );
 
                     // Analyze all properties of this item to detect if it's a vibrator
-                    const hasVibratorName = assetName?.includes("Vibrator") || assetName?.includes("Vibrat");
-                    const hasExtendedType = (item as any)?.Extended?.Type !== undefined;
-                    const hasTypeProperty = typeof (item as any)?.getProperty === "function" &&
+                    const hasVibratorName =
+                        assetName?.includes("Vibrator") ||
+                        assetName?.includes("Vibrat");
+                    const hasExtendedType =
+                        (item as any)?.Extended?.Type !== undefined;
+                    const hasTypeProperty =
+                        typeof (item as any)?.getProperty === "function" &&
                         (item as any)?.getProperty("TypeRecord") !== undefined;
                     const hasProperty = (item as any)?.Property !== undefined;
                     const hasMode = (item as any)?.Mode !== undefined;
                     const hasIntensity = (item as any)?.Intensity !== undefined;
-                    
+
                     // Log all detected properties
-                    if (hasExtendedType) console.log(`[CatDogSystem]     ✓ Has Extended.Type: ${(item as any)?.Extended?.Type}`);
-                    if (hasTypeProperty) console.log(`[CatDogSystem]     ✓ Has TypeRecord property`);
-                    if (hasProperty) console.log(`[CatDogSystem]     ✓ Has Property: ${(item as any)?.Property}`);
-                    if (hasMode) console.log(`[CatDogSystem]     ✓ Has Mode: ${(item as any)?.Mode}`);
-                    if (hasIntensity) console.log(`[CatDogSystem]     ✓ Has Intensity: ${(item as any)?.Intensity}`);
-                    
+                    if (hasExtendedType)
+                        console.log(
+                            `[CatDogSystem]     ✓ Has Extended.Type: ${(item as any)?.Extended?.Type}`,
+                        );
+                    if (hasTypeProperty)
+                        console.log(
+                            `[CatDogSystem]     ✓ Has TypeRecord property`,
+                        );
+                    if (hasProperty)
+                        console.log(
+                            `[CatDogSystem]     ✓ Has Property: ${(item as any)?.Property}`,
+                        );
+                    if (hasMode)
+                        console.log(
+                            `[CatDogSystem]     ✓ Has Mode: ${(item as any)?.Mode}`,
+                        );
+                    if (hasIntensity)
+                        console.log(
+                            `[CatDogSystem]     ✓ Has Intensity: ${(item as any)?.Intensity}`,
+                        );
+
                     // Check if this is a vibrator item
                     // Detect by name OR by presence of mode/intensity properties
-                    if (hasVibratorName || hasExtendedType || hasTypeProperty || hasMode || hasIntensity) {
-                        console.log(`[CatDogSystem]     → Detected as vibrator! (name: ${hasVibratorName}, extended: ${hasExtendedType}, typeRec: ${hasTypeProperty}, mode: ${hasMode}, intensity: ${hasIntensity})`);
+                    if (
+                        hasVibratorName ||
+                        hasExtendedType ||
+                        hasTypeProperty ||
+                        hasMode ||
+                        hasIntensity
+                    ) {
+                        console.log(
+                            `[CatDogSystem]     → Detected as vibrator! (name: ${hasVibratorName}, extended: ${hasExtendedType}, typeRec: ${hasTypeProperty}, mode: ${hasMode}, intensity: ${hasIntensity})`,
+                        );
                         vibrators.push(item);
                     } else {
-                        console.log(`[CatDogSystem]     → Not a vibrator (no vibrator name or properties)`);
+                        console.log(
+                            `[CatDogSystem]     → Not a vibrator (no vibrator name or properties)`,
+                        );
                     }
                 } catch (e) {
                     // Skip items that cause errors during inspection
-                    console.debug("[CatDogSystem] Skipped item during vibrator detection", e);
+                    console.debug(
+                        "[CatDogSystem] Skipped item during vibrator detection",
+                        e,
+                    );
                 }
             }
 
@@ -509,16 +644,28 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 // Escalate each vibrator
                 for (const vibrator of vibrators) {
                     try {
-                        this.escalateVibrator(character, vibrator, action.intensityIncrease);
+                        this.escalateVibrator(
+                            character,
+                            vibrator,
+                            action.intensityIncrease,
+                        );
                     } catch (e) {
-                        console.error("[CatDogSystem] Failed to escalate vibrator:", e);
+                        console.error(
+                            "[CatDogSystem] Failed to escalate vibrator:",
+                            e,
+                        );
                     }
                 }
             } else {
-                console.log(`[CatDogSystem] No vibrators found for ${character.Name}`);
+                console.log(
+                    `[CatDogSystem] No vibrators found for ${character.Name}`,
+                );
             }
         } catch (e) {
-            console.error("[CatDogSystem] Failed to perform vibrator action", e);
+            console.error(
+                "[CatDogSystem] Failed to perform vibrator action",
+                e,
+            );
         }
     }
 
@@ -530,20 +677,27 @@ export class CatDogSystem implements VeratownFeatureSystem {
         try {
             if (!vibratorItem) return;
 
-            const assetName = (vibratorItem as any)?.Asset?.Name as string | undefined;
+            const assetName = (vibratorItem as any)?.Asset?.Name as
+                | string
+                | undefined;
             console.log(`[CatDogSystem] Escalating vibrator: ${assetName}`);
 
             // Get current intensity/type - try multiple property paths
             let currentIntensity = 0;
             let intensitySource = "unknown";
-            
+
             // Try Extended.Type first (for typed vibrators with modes)
             if (vibratorItem?.Extended?.Type !== undefined) {
                 const rawType = vibratorItem.Extended.Type;
-                currentIntensity = typeof rawType === "string" ? parseInt(rawType) : rawType;
-                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                currentIntensity =
+                    typeof rawType === "string" ? parseInt(rawType) : rawType;
+                currentIntensity = isNaN(currentIntensity)
+                    ? 0
+                    : currentIntensity;
                 intensitySource = "Extended.Type";
-                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+                console.log(
+                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
+                );
             }
             // Try TypeRecord property
             else if (typeof vibratorItem?.getProperty === "function") {
@@ -551,50 +705,88 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 if (typeRecord !== undefined) {
                     currentIntensity = typeRecord?.v ?? typeRecord ?? 0;
                     intensitySource = "TypeRecord";
-                    console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+                    console.log(
+                        `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
+                    );
                 }
             }
-            
+
             // Try Mode property (common in custom vibrators)
-            if (intensitySource === "unknown" && (vibratorItem as any)?.Mode !== undefined) {
+            if (
+                intensitySource === "unknown" &&
+                (vibratorItem as any)?.Mode !== undefined
+            ) {
                 const rawMode = (vibratorItem as any).Mode;
-                currentIntensity = typeof rawMode === "string" ? parseInt(rawMode) : rawMode;
-                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                currentIntensity =
+                    typeof rawMode === "string" ? parseInt(rawMode) : rawMode;
+                currentIntensity = isNaN(currentIntensity)
+                    ? 0
+                    : currentIntensity;
                 intensitySource = "Mode";
-                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+                console.log(
+                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
+                );
             }
-            
+
             // Try Intensity property
-            if (intensitySource === "unknown" && (vibratorItem as any)?.Intensity !== undefined) {
+            if (
+                intensitySource === "unknown" &&
+                (vibratorItem as any)?.Intensity !== undefined
+            ) {
                 const rawIntensity = (vibratorItem as any).Intensity;
-                currentIntensity = typeof rawIntensity === "string" ? parseInt(rawIntensity) : rawIntensity;
-                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                currentIntensity =
+                    typeof rawIntensity === "string"
+                        ? parseInt(rawIntensity)
+                        : rawIntensity;
+                currentIntensity = isNaN(currentIntensity)
+                    ? 0
+                    : currentIntensity;
                 intensitySource = "Intensity";
-                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+                console.log(
+                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
+                );
             }
-            
+
             // Try Property directly
-            if (intensitySource === "unknown" && vibratorItem?.Property !== undefined) {
+            if (
+                intensitySource === "unknown" &&
+                vibratorItem?.Property !== undefined
+            ) {
                 const prop = vibratorItem.Property;
-                currentIntensity = typeof prop === "string" ? parseInt(prop) : prop;
-                currentIntensity = isNaN(currentIntensity) ? 0 : currentIntensity;
+                currentIntensity =
+                    typeof prop === "string" ? parseInt(prop) : prop;
+                currentIntensity = isNaN(currentIntensity)
+                    ? 0
+                    : currentIntensity;
                 intensitySource = "Property";
-                console.log(`[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`);
+                console.log(
+                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
+                );
             }
 
             // Calculate new intensity - no hardcoded max, let the item decide
-            const newIntensity = Math.max(0, currentIntensity + intensityIncrease);
+            const newIntensity = Math.max(
+                0,
+                currentIntensity + intensityIncrease,
+            );
 
-            console.log(`[CatDogSystem] Setting vibrator intensity: ${currentIntensity} → ${newIntensity} (source: ${intensitySource})`);
+            console.log(
+                `[CatDogSystem] Setting vibrator intensity: ${currentIntensity} → ${newIntensity} (source: ${intensitySource})`,
+            );
 
             // Apply new intensity - try multiple methods based on detected source
             let success = false;
 
             // Method 1: Extended.SetType for typed vibrators
-            if (vibratorItem?.Extended && typeof vibratorItem.Extended.SetType === "function") {
+            if (
+                vibratorItem?.Extended &&
+                typeof vibratorItem.Extended.SetType === "function"
+            ) {
                 try {
                     vibratorItem.Extended.SetType(newIntensity);
-                    console.log(`[CatDogSystem] ✓ Escalated via Extended.SetType`);
+                    console.log(
+                        `[CatDogSystem] ✓ Escalated via Extended.SetType`,
+                    );
                     success = true;
                 } catch (e) {
                     console.warn(`[CatDogSystem] Extended.SetType failed:`, e);
@@ -602,18 +794,29 @@ export class CatDogSystem implements VeratownFeatureSystem {
             }
 
             // Method 2: setProperty for custom vibrators with TypeRecord
-            if (!success && typeof vibratorItem?.setProperty === "function" && typeof vibratorItem?.getProperty === "function") {
+            if (
+                !success &&
+                typeof vibratorItem?.setProperty === "function" &&
+                typeof vibratorItem?.getProperty === "function"
+            ) {
                 try {
-                    const typeRecord = vibratorItem.getProperty("TypeRecord") ?? { v: 0 };
+                    const typeRecord = vibratorItem.getProperty(
+                        "TypeRecord",
+                    ) ?? { v: 0 };
                     const newTypeRecord = {
                         ...typeRecord,
                         v: newIntensity,
                     };
                     vibratorItem.setProperty("TypeRecord", newTypeRecord);
-                    console.log(`[CatDogSystem] ✓ Escalated via TypeRecord property`);
+                    console.log(
+                        `[CatDogSystem] ✓ Escalated via TypeRecord property`,
+                    );
                     success = true;
                 } catch (e) {
-                    console.warn(`[CatDogSystem] TypeRecord setProperty failed:`, e);
+                    console.warn(
+                        `[CatDogSystem] TypeRecord setProperty failed:`,
+                        e,
+                    );
                 }
             }
 
@@ -621,7 +824,9 @@ export class CatDogSystem implements VeratownFeatureSystem {
             if (!success && (vibratorItem as any)?.Mode !== undefined) {
                 try {
                     (vibratorItem as any).Mode = newIntensity;
-                    console.log(`[CatDogSystem] ✓ Escalated via direct Mode assignment`);
+                    console.log(
+                        `[CatDogSystem] ✓ Escalated via direct Mode assignment`,
+                    );
                     success = true;
                 } catch (e) {
                     console.warn(`[CatDogSystem] Mode assignment failed:`, e);
@@ -632,10 +837,15 @@ export class CatDogSystem implements VeratownFeatureSystem {
             if (!success && (vibratorItem as any)?.Intensity !== undefined) {
                 try {
                     (vibratorItem as any).Intensity = newIntensity;
-                    console.log(`[CatDogSystem] ✓ Escalated via direct Intensity assignment`);
+                    console.log(
+                        `[CatDogSystem] ✓ Escalated via direct Intensity assignment`,
+                    );
                     success = true;
                 } catch (e) {
-                    console.warn(`[CatDogSystem] Intensity assignment failed:`, e);
+                    console.warn(
+                        `[CatDogSystem] Intensity assignment failed:`,
+                        e,
+                    );
                 }
             }
 
@@ -643,10 +853,15 @@ export class CatDogSystem implements VeratownFeatureSystem {
             if (!success && vibratorItem?.Property !== undefined) {
                 try {
                     vibratorItem.Property = newIntensity;
-                    console.log(`[CatDogSystem] ✓ Escalated via direct Property assignment`);
+                    console.log(
+                        `[CatDogSystem] ✓ Escalated via direct Property assignment`,
+                    );
                     success = true;
                 } catch (e) {
-                    console.warn(`[CatDogSystem] Direct Property assignment failed:`, e);
+                    console.warn(
+                        `[CatDogSystem] Direct Property assignment failed:`,
+                        e,
+                    );
                 }
             }
 

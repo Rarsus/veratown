@@ -3,6 +3,7 @@
 Advanced implementation details, design decisions, and technical reference for developers working on Veratown+ features.
 
 **Table of Contents**
+
 1. [Architecture Overview](#architecture-overview)
 2. [Core Systems](#core-systems)
 3. [Multi-Bot Coordination](#multi-bot-coordination)
@@ -88,11 +89,11 @@ Advanced implementation details, design decisions, and technical reference for d
 
 ### Connection Types & Responsibilities
 
-| Connection | Variable | Credentials | Primary Use | Optional? |
-|-----------|----------|-------------|-------------|-----------|
-| **Main** | `conn` | user/password | Receptionist, feature coordination | No (required) |
-| **Shower Narrator** | `conn2` | user2/password2 | Shower sequence narration | Yes |
-| **Casino** | `conn3` | user3/password3 | Casino games, roulette/blackjack | Yes |
+| Connection          | Variable | Credentials     | Primary Use                        | Optional?     |
+| ------------------- | -------- | --------------- | ---------------------------------- | ------------- |
+| **Main**            | `conn`   | user/password   | Receptionist, feature coordination | No (required) |
+| **Shower Narrator** | `conn2`  | user2/password2 | Shower sequence narration          | Yes           |
+| **Casino**          | `conn3`  | user3/password3 | Casino games, roulette/blackjack   | Yes           |
 
 ### Initialization Sequence
 
@@ -242,17 +243,18 @@ private regionsAtPosition: Map<string, Set<string>> // For spatial queries
 ```typescript
 interface VeratownLocationDoc {
     _id?: ObjectId;
-    key: string;                    // Unique identifier
-    type: "point" | "region";       // Location type
-    x?: number;                     // Point: X coordinate
-    y?: number;                     // Point: Y coordinate
-    region?: {                      // Region: boundary box
-        TopLeft: {X: number, Y: number};
-        BottomRight: {X: number, Y: number};
+    key: string; // Unique identifier
+    type: "point" | "region"; // Location type
+    x?: number; // Point: X coordinate
+    y?: number; // Point: Y coordinate
+    region?: {
+        // Region: boundary box
+        TopLeft: { X: number; Y: number };
+        BottomRight: { X: number; Y: number };
     };
     regionType?: "game" | "dare" | "feature" | "custom";
-    label?: string;                 // Human-readable name
-    enabled?: boolean;              // Feature enabled?
+    label?: string; // Human-readable name
+    enabled?: boolean; // Feature enabled?
     metadata?: Record<string, any>; // Custom data
 }
 ```
@@ -330,7 +332,7 @@ this.commandParser = new CommandParser(
 
 // Casino bot - creates its own parser
 public constructor(private conn: API_Connector, ...) {
-    this.commandParser = 
+    this.commandParser =
         commandParser ?? new CommandParser(conn3, config?.region);
                            // Bound to casino connection
 }
@@ -382,15 +384,15 @@ Shower bot (conn2) is parked at `SHOWER_BOT2_HOME_POSITION` and temporarily move
 private async sayNear(character: API_Character, message: string): Promise<void> {
     // Decide which bot to use
     const narrator = this.conn2 ?? this.conn;
-    
+
     // Move next to character
     narrator.moveOnMap(character.Position.X - 1, character.Position.Y);
     await wait(100);
-    
+
     // Speak
     narrator.SendMessage("Whisper", character.MemberNumber, message);
     await wait(500);
-    
+
     // Return home (if conn2)
     if (this.conn2) {
         this.conn2.moveOnMap(
@@ -413,7 +415,7 @@ if (config.user3 && config.password3) {
     poolRouletteConn = new API_Connector(...);
     await poolRouletteConn.joinOrCreateRoom(config.room);
     ensureBotIsRoomAdmin(connector, poolRouletteConn);
-    
+
     // Move to casino position
     poolRouletteConn.moveOnMap(
         GAME_MISTRESS_POSITION.X,
@@ -434,13 +436,13 @@ Then stays at that position. All gameplay is via chat commands, not movement.
 interface VeratownFeatureSystem {
     // Unique identifier for this feature
     key: string;
-    
+
     // Human-readable label
     label: string;
-    
+
     // Enable/disable state
     enabled: boolean;
-    
+
     // Called once during bot startup
     // Register all triggers, commands, event handlers
     registerTriggers(): void;
@@ -479,6 +481,7 @@ this.cage = this.initFeature(
 ```
 
 **Benefits**:
+
 - If feature throws during init, others still load
 - Try-catch prevents bot crash on single feature error
 - Failed features not added to features array
@@ -491,57 +494,58 @@ export class MyFeatureSystem implements VeratownFeatureSystem {
     public key = "myfeature";
     public label = "My Feature";
     public enabled = true;
-    
+
     private myRegion?: MapRegion;
-    
+
     public constructor(
         private conn: API_Connector,
         private locationStore?: VeratownLocationStore,
         private fallback?: VeratownLocationDoc[],
     ) {}
-    
+
     public registerTriggers(): void {
         // Load region from DB
         if (this.locationStore) {
-            const loc = await this.locationStore.getLocation("my_feature_region");
+            const loc =
+                await this.locationStore.getLocation("my_feature_region");
             if (loc?.region) {
                 this.myRegion = loc.region;
             }
         }
-        
+
         // Fallback to static definition
         if (!this.myRegion && this.fallback) {
             const fallbackLoc = this.fallback.find(
-                l => l.key === "my_feature_region"
+                (l) => l.key === "my_feature_region",
             );
             if (fallbackLoc?.region) {
                 this.myRegion = fallbackLoc.region;
             }
         }
-        
+
         // Register region trigger
         if (this.myRegion) {
             this.conn.chatRoom.map.addEnterRegionTrigger(
                 this.myRegion,
-                guardHandler("myfeature:enter", this.onEnter)
+                guardHandler("myfeature:enter", this.onEnter),
             );
         }
-        
+
         // Register tile trigger
         this.conn.chatRoom.map.addTileTrigger(
-            {X: 10, Y: 10},
-            guardHandler("myfeature:tile", this.onTile)
+            { X: 10, Y: 10 },
+            guardHandler("myfeature:tile", this.onTile),
         );
     }
-    
+
     private onEnter = (character: API_Character): void => {
         this.conn.SendMessage(
             "Whisper",
             character.MemberNumber,
-            "Welcome to my feature!"
+            "Welcome to my feature!",
         );
     };
-    
+
     private onTile = (character: API_Character): void => {
         // Handle tile step
     };
@@ -560,15 +564,23 @@ export class MyFeatureSystem implements VeratownFeatureSystem {
 
 ```javascript
 // Unique index on key
-{ key: 1 } { unique: true }
+{
+    key: 1;
+}
+{
+    unique: true;
+}
 
 // Index on type for faster filtering
-{ type: 1 }
+{
+    type: 1;
+}
 ```
 
 ### Example Documents
 
 **Point Location**:
+
 ```json
 {
     "_id": ObjectId("507f1f77bcf86cd799439011"),
@@ -582,6 +594,7 @@ export class MyFeatureSystem implements VeratownFeatureSystem {
 ```
 
 **Region**:
+
 ```json
 {
     "_id": ObjectId("507f1f77bcf86cd799439012"),
@@ -604,33 +617,37 @@ export class MyFeatureSystem implements VeratownFeatureSystem {
 ### Query Patterns
 
 **Get all regions**:
+
 ```javascript
 db.veratownLocations.find({ type: "region" });
 ```
 
 **Get specific region**:
+
 ```javascript
 db.veratownLocations.findOne({ key: "dare_region" });
 ```
 
 **List all points**:
+
 ```javascript
-db.veratownLocations.find({ type: "point" }).sort({key: 1});
+db.veratownLocations.find({ type: "point" }).sort({ key: 1 });
 ```
 
 **Update region**:
+
 ```javascript
 db.veratownLocations.updateOne(
     { key: "game_region" },
     {
         $set: {
             region: {
-                TopLeft: {X: 30, Y: 25},
-                BottomRight: {X: 40, Y: 35}
+                TopLeft: { X: 30, Y: 25 },
+                BottomRight: { X: 40, Y: 35 },
             },
-            "metadata.updated": new Date()
-        }
-    }
+            "metadata.updated": new Date(),
+        },
+    },
 );
 ```
 
@@ -659,11 +676,11 @@ register(
 
 handleMessage(message: string, sender: API_Character): void {
     if (!message.startsWith("/bot")) return;
-    
+
     const parts = message.slice(4).trim().split(/\s+/);
     const command = parts[0]?.toLowerCase();
     const args = parts.slice(1);
-    
+
     if (this.handlers.has(command)) {
         this.handlers.get(command)!(sender, args);
     } else if (command) {
@@ -713,7 +730,7 @@ this.commandParser.register("help", (sender, args) => {
 // Parameterized command
 this.commandParser.register("dare", async (sender, args) => {
     const action = args[0] ?? "start";
-    
+
     switch (action) {
         case "start":
             await this.startDare(sender);
@@ -732,7 +749,7 @@ this.commandParser.register("maintenance", (sender, args) => {
         this.whisper(sender.MemberNumber, "Admin only");
         return;
     }
-    
+
     this.startMaintenance();
 });
 ```
@@ -745,10 +762,10 @@ this.commandParser.register("maintenance", (sender, args) => {
 
 ```typescript
 this.conn.chatRoom.map.addTileTrigger(
-    {X: 10, Y: 10},
+    { X: 10, Y: 10 },
     guardHandler("feature:onTile", (character: API_Character) => {
         // Execute when character steps on this tile
-    })
+    }),
 );
 ```
 
@@ -756,15 +773,15 @@ this.conn.chatRoom.map.addTileTrigger(
 
 ```typescript
 const region: MapRegion = {
-    TopLeft: {X: 5, Y: 5},
-    BottomRight: {X: 15, Y: 15}
+    TopLeft: { X: 5, Y: 5 },
+    BottomRight: { X: 15, Y: 15 },
 };
 
 this.conn.chatRoom.map.addEnterRegionTrigger(
     region,
     guardHandler("feature:onEnter", (character: API_Character) => {
         // Execute when character enters region boundary
-    })
+    }),
 );
 ```
 
@@ -773,9 +790,12 @@ this.conn.chatRoom.map.addEnterRegionTrigger(
 ```typescript
 // Main connection listens to all messages
 if (this.conn.chatRoom?.on) {
-    this.conn.chatRoom.on("message", (message: string, sender: API_Character) => {
-        this.commandParser.handleMessage(message, sender);
-    });
+    this.conn.chatRoom.on(
+        "message",
+        (message: string, sender: API_Character) => {
+            this.commandParser.handleMessage(message, sender);
+        },
+    );
 }
 ```
 
@@ -784,7 +804,7 @@ if (this.conn.chatRoom?.on) {
 ```typescript
 export function guardHandler<T extends any[]>(
     id: string,
-    handler: (...args: T) => void | Promise<void>
+    handler: (...args: T) => void | Promise<void>,
 ): (...args: T) => void {
     return async (...args: T) => {
         try {
@@ -798,6 +818,7 @@ export function guardHandler<T extends any[]>(
 ```
 
 **Benefits**:
+
 - All feature triggers wrapped in try-catch
 - Errors logged with context ID
 - Single handler error doesn't affect others
@@ -812,6 +833,7 @@ export function guardHandler<T extends any[]>(
 **Problem**: Too many message handlers cause lag
 
 **Solution**:
+
 ```typescript
 // BAD: Handler fires on every message
 conn.chatRoom.on("message", (msg, sender) => {
@@ -824,7 +846,7 @@ conn.chatRoom.on("message", (msg, sender) => {
     const now = Date.now();
     if (now - lastProcessTime < 500) return; // Throttle
     lastProcessTime = now;
-    
+
     this.processMessage(msg, sender);
 });
 ```
@@ -834,6 +856,7 @@ conn.chatRoom.on("message", (msg, sender) => {
 **Problem**: Hitting MongoDB on every command is slow
 
 **Solution**:
+
 ```typescript
 private regionCache: Map<string, VeratownRegion>;
 private cacheTime = Date.now();
@@ -843,13 +866,13 @@ async getRegion(key: string): Promise<VeratownRegion | null> {
     if (Date.now() - this.cacheTime < 5 * 60 * 1000) {
         return this.regionCache.get(key) ?? null;
     }
-    
+
     // Refresh cache
     const regions = await this.locationStore.getAllLocations();
     this.regionCache.clear();
     regions.forEach(r => this.regionCache.set(r.key, r));
     this.cacheTime = Date.now();
-    
+
     return this.regionCache.get(key) ?? null;
 }
 ```
@@ -859,6 +882,7 @@ async getRegion(key: string): Promise<VeratownRegion | null> {
 **Problem**: Checking region membership on every message is slow
 
 **Solution**:
+
 ```typescript
 // Maintain in-memory set per character
 private characterRegions: Map<number, Set<string>> = new Map();
@@ -867,13 +891,13 @@ markCharacterEntered(regionKey: string, memberNumber: number): boolean {
     if (!this.characterRegions.has(memberNumber)) {
         this.characterRegions.set(memberNumber, new Set());
     }
-    
+
     const regions = this.characterRegions.get(memberNumber)!;
-    
+
     if (regions.has(regionKey)) {
         return false; // Already in region
     }
-    
+
     regions.add(regionKey);
     return true; // First entry
 }
@@ -971,7 +995,7 @@ describe("CageSystem", () => {
     let cage: CageSystem;
     let conn: API_Connector;
     let testChar: API_Character;
-    
+
     beforeEach(() => {
         // Mock API_Connector
         conn = {
@@ -980,30 +1004,30 @@ describe("CageSystem", () => {
             chatRoom: {
                 map: {
                     addTileTrigger: jest.fn(),
-                }
-            }
+                },
+            },
         } as any;
-        
+
         cage = new CageSystem(conn);
     });
-    
+
     it("should initialize with 3 cage locations", () => {
         cage.registerTriggers();
         expect(conn.chatRoom.map.addTileTrigger).toHaveBeenCalledTimes(3);
     });
-    
+
     it("should send warning on cage entry", () => {
         cage.registerTriggers();
-        
-        testChar = {MemberNumber: 123, Name: "TestChar"} as any;
+
+        testChar = { MemberNumber: 123, Name: "TestChar" } as any;
         const handler = conn.chatRoom.map.addTileTrigger.mock.calls[0][1];
-        
+
         handler(testChar);
-        
+
         expect(conn.SendMessage).toHaveBeenCalledWith(
             "Whisper",
             123,
-            expect.stringContaining("containment protocol")
+            expect.stringContaining("containment protocol"),
         );
     });
 });
@@ -1016,26 +1040,26 @@ describe("Veratown Multi-Bot Coordination", () => {
     let veratown: Veratown;
     let mainConn: API_Connector;
     let casinoConn: API_Connector;
-    
+
     beforeEach(async () => {
         // Use real connections (integration test)
         mainConn = new API_Connector(SERVER_URL, "TestBot1", "pwd1");
         casinoConn = new API_Connector(SERVER_URL, "TestBot3", "pwd3");
-        
-        await mainConn.joinOrCreateRoom({Name: "Test"});
-        await casinoConn.joinOrCreateRoom({Name: "Test"});
-        
+
+        await mainConn.joinOrCreateRoom({ Name: "Test" });
+        await casinoConn.joinOrCreateRoom({ Name: "Test" });
+
         veratown = new Veratown(mainConn, undefined, db, undefined, casinoConn);
         await veratown.init();
     });
-    
+
     it("should route casino commands to casino bot", async () => {
         const response = await mainConn.SendMessage(
             "Whisper",
             casinoConn.Player.MemberNumber,
-            "/bot chips"
+            "/bot chips",
         );
-        
+
         // Response should come from casino bot
         expect(response).toContain("You have");
     });

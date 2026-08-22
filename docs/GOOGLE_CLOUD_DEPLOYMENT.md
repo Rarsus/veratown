@@ -3,6 +3,7 @@
 Complete guide for deploying Veratown+ to Google Cloud with persistent MongoDB and automated updates via GitHub releases.
 
 **Table of Contents**
+
 1. [Quick Start (Recommended)](#quick-start-recommended)
 2. [Option 1: Compute Engine + Docker Compose](#option-1-compute-engine--docker-compose)
 3. [Option 2: Kubernetes Engine (GKE)](#option-2-kubernetes-engine-gke)
@@ -19,6 +20,7 @@ Complete guide for deploying Veratown+ to Google Cloud with persistent MongoDB a
 **Best for**: Single bot instance, minimal DevOps complexity, low cost
 
 **Architecture**:
+
 ```
 GitHub Release (tag)
         ↓
@@ -144,44 +146,44 @@ EOF
 Create/update `docker-compose.prod.yml`:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
-  ropeybot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: gcr.io/YOUR_PROJECT/ropeybot:${VERSION}
-    restart: always
-    depends_on:
-      - mongo
-    volumes:
-      - ./config.json:/bot/cfg/config.json:ro
-    environment:
-      - NODE_ENV=production
-    networks:
-      - veratown-network
+    ropeybot:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: gcr.io/YOUR_PROJECT/ropeybot:${VERSION}
+        restart: always
+        depends_on:
+            - mongo
+        volumes:
+            - ./config.json:/bot/cfg/config.json:ro
+        environment:
+            - NODE_ENV=production
+        networks:
+            - veratown-network
 
-  mongo:
-    image: mongo:7
-    restart: always
-    volumes:
-      - /data/mongodb:/data/db
-      - mongo-config:/data/configdb
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
-    ports:
-      - "127.0.0.1:27017:27017"  # Local only
-    networks:
-      - veratown-network
+    mongo:
+        image: mongo:7
+        restart: always
+        volumes:
+            - /data/mongodb:/data/db
+            - mongo-config:/data/configdb
+        environment:
+            - MONGO_INITDB_ROOT_USERNAME=admin
+            - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+        ports:
+            - "127.0.0.1:27017:27017" # Local only
+        networks:
+            - veratown-network
 
 networks:
-  veratown-network:
-    driver: bridge
+    veratown-network:
+        driver: bridge
 
 volumes:
-  mongo-config:
+    mongo-config:
 ```
 
 ### Step 6: Deploy with Docker Compose
@@ -526,91 +528,91 @@ Create `.github/workflows/deploy.yml`:
 name: Deploy to Google Cloud
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'  # Trigger on version tags
+    push:
+        tags:
+            - "v*.*.*" # Trigger on version tags
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  IMAGE_NAME: ropeybot
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  VM_NAME: veratown-bot
-  ZONE: us-central1-a
+    PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+    IMAGE_NAME: ropeybot
+    ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+    VM_NAME: veratown-bot
+    ZONE: us-central1-a
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+    build-and-deploy:
+        runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      id-token: write
+        permissions:
+            contents: read
+            id-token: write
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+            - name: Authenticate to Google Cloud
+              uses: google-github-actions/auth@v1
+              with:
+                  workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+                  service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+            - name: Set up Cloud SDK
+              uses: google-github-actions/setup-gcloud@v1
 
-      - name: Configure Docker for Artifact Registry
-        run: |
-          gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+            - name: Configure Docker for Artifact Registry
+              run: |
+                  gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "image_tag=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/docker-repo/${{ env.IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
+            - name: Extract version from tag
+              id: version
+              run: |
+                  VERSION=${GITHUB_REF#refs/tags/}
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "image_tag=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/docker-repo/${{ env.IMAGE_NAME }}:$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ steps.version.outputs.image_tag }} .
-          docker tag ${{ steps.version.outputs.image_tag }} ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/docker-repo/${{ env.IMAGE_NAME }}:latest
+            - name: Build Docker image
+              run: |
+                  docker build -t ${{ steps.version.outputs.image_tag }} .
+                  docker tag ${{ steps.version.outputs.image_tag }} ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/docker-repo/${{ env.IMAGE_NAME }}:latest
 
-      - name: Push to Artifact Registry
-        run: |
-          docker push ${{ steps.version.outputs.image_tag }}
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/docker-repo/${{ env.IMAGE_NAME }}:latest
+            - name: Push to Artifact Registry
+              run: |
+                  docker push ${{ steps.version.outputs.image_tag }}
+                  docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/docker-repo/${{ env.IMAGE_NAME }}:latest
 
-      - name: Deploy to Compute Engine (Docker Compose)
-        run: |
-          gcloud compute ssh ${{ env.VM_NAME }} \
-            --zone=${{ env.ZONE }} \
-            --project=${{ env.PROJECT_ID }} \
-            --command='
-              cd ~/ropeybot && \
-              git pull origin main && \
-              echo "VERSION=${{ steps.version.outputs.version }}" > .env && \
-              docker-compose -f docker-compose.prod.yml pull && \
-              docker-compose -f docker-compose.prod.yml up -d && \
-              docker-compose -f docker-compose.prod.yml logs -f ropeybot
-            '
+            - name: Deploy to Compute Engine (Docker Compose)
+              run: |
+                  gcloud compute ssh ${{ env.VM_NAME }} \
+                    --zone=${{ env.ZONE }} \
+                    --project=${{ env.PROJECT_ID }} \
+                    --command='
+                      cd ~/ropeybot && \
+                      git pull origin main && \
+                      echo "VERSION=${{ steps.version.outputs.version }}" > .env && \
+                      docker-compose -f docker-compose.prod.yml pull && \
+                      docker-compose -f docker-compose.prod.yml up -d && \
+                      docker-compose -f docker-compose.prod.yml logs -f ropeybot
+                    '
 
-      - name: Notify Slack (optional)
-        if: always()
-        uses: slackapi/slack-github-action@v1
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "Veratown+ deployment: ${{ job.status }}",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Veratown+ Deployment*\nVersion: ${{ steps.version.outputs.version }}\nStatus: ${{ job.status }}"
-                  }
-                }
-              ]
-            }
+            - name: Notify Slack (optional)
+              if: always()
+              uses: slackapi/slack-github-action@v1
+              with:
+                  webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+                  payload: |
+                      {
+                        "text": "Veratown+ deployment: ${{ job.status }}",
+                        "blocks": [
+                          {
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": "*Veratown+ Deployment*\nVersion: ${{ steps.version.outputs.version }}\nStatus: ${{ job.status }}"
+                            }
+                          }
+                        ]
+                      }
 ```
 
 ### Step 2: Setup GitHub Secrets
@@ -809,38 +811,40 @@ EOF
 
 ### Estimated Costs (Monthly)
 
-| Option | Compute | Storage | Database | Total |
-|--------|---------|---------|----------|-------|
-| Compute Engine (e2-medium) | $20 | $5 | N/A | ~$25 |
-| GKE (1 node) | $25 | $5 | N/A | ~$30 |
-| Cloud Run + Cloud SQL | $0-50 | $0 | $15 | ~$15-65 |
+| Option                     | Compute | Storage | Database | Total   |
+| -------------------------- | ------- | ------- | -------- | ------- |
+| Compute Engine (e2-medium) | $20     | $5      | N/A      | ~$25    |
+| GKE (1 node)               | $25     | $5      | N/A      | ~$30    |
+| Cloud Run + Cloud SQL      | $0-50   | $0      | $15      | ~$15-65 |
 
 ### Cost Reduction Tips
 
 1. **Use Committed Use Discounts**:
-   ```bash
-   gcloud compute reservations create veratown-reservation \
-     --vm-count=1 \
-     --machine-type=e2-medium \
-     --zone=us-central1-a \
-     --commitment-plan=one-year
-   ```
+
+    ```bash
+    gcloud compute reservations create veratown-reservation \
+      --vm-count=1 \
+      --machine-type=e2-medium \
+      --zone=us-central1-a \
+      --commitment-plan=one-year
+    ```
 
 2. **Auto-shutdown during off-hours**:
-   ```bash
-   # Create scheduler job to stop VM at 2am
-   gcloud scheduler jobs create compute-engine stop-veratown \
-     --schedule='0 2 * * *' \
-     --location=us-central1 \
-     --http-method=POST \
-     --uri=https://compute.googleapis.com/compute/v1/projects/$PROJECT_ID/zones/$ZONE/instances/$VM_NAME/stop \
-     --oidc-service-account-email=...
-   ```
+
+    ```bash
+    # Create scheduler job to stop VM at 2am
+    gcloud scheduler jobs create compute-engine stop-veratown \
+      --schedule='0 2 * * *' \
+      --location=us-central1 \
+      --http-method=POST \
+      --uri=https://compute.googleapis.com/compute/v1/projects/$PROJECT_ID/zones/$ZONE/instances/$VM_NAME/stop \
+      --oidc-service-account-email=...
+    ```
 
 3. **Use shared core machines**:
-   ```bash
-   --machine-type=e2-small  # $10/month instead of e2-medium at $20/month
-   ```
+    ```bash
+    --machine-type=e2-small  # $10/month instead of e2-medium at $20/month
+    ```
 
 ---
 
@@ -849,6 +853,7 @@ EOF
 ### Deployment Issues
 
 **Container won't start**:
+
 ```bash
 # SSH into VM
 gcloud compute ssh $VM_NAME --zone=$ZONE
@@ -861,6 +866,7 @@ docker image ls | grep ropeybot
 ```
 
 **MongoDB connection fails**:
+
 ```bash
 # Test MongoDB connection
 docker-compose exec mongo mongosh -u admin -p --eval "db.adminCommand('ping')"
@@ -873,6 +879,7 @@ mount | grep /data/mongodb
 ```
 
 **GitHub Actions deployment hangs**:
+
 ```bash
 # Check SSH key permissions
 gcloud compute instances describe $VM_NAME \
@@ -886,6 +893,7 @@ gcloud compute ssh $VM_NAME --zone=$ZONE --command="echo 'SSH works'"
 ### Performance Issues
 
 **High CPU/Memory**:
+
 ```bash
 # Upgrade VM size
 gcloud compute instances set-machine-type $VM_NAME \
@@ -899,6 +907,7 @@ gcloud container clusters resize $CLUSTER_NAME \
 ```
 
 **Slow MongoDB queries**:
+
 ```bash
 # Enable profiling
 docker-compose exec mongo mongosh --eval "db.setProfilingLevel(1)"

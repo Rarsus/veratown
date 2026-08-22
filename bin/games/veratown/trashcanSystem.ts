@@ -39,9 +39,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
 
     private trashcanPositions: Array<{ X: number; Y: number }> = [];
 
-    public constructor(
-        private conn: API_Connector,
-    ) {}
+    public constructor(private conn: API_Connector) {}
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));

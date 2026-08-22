@@ -41,13 +41,8 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
     private readonly bunnyTrigger: ReturnType<typeof guardHandler>;
     private readonly parkTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(
-        private conn: API_Connector,
-    ) {
-        this.bunnyTrigger = guardHandler(
-            this.key,
-            this.onCharacterStepOnBunny,
-        );
+    public constructor(private conn: API_Connector) {
+        this.bunnyTrigger = guardHandler(this.key, this.onCharacterStepOnBunny);
         this.parkTrigger = guardHandler(this.key, this.onCharacterEnterPark);
     }
 

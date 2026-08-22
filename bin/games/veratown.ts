@@ -88,7 +88,7 @@ export class Veratown {
         "/bot help - Display this help message",
         "/bot freeandleave - Remove all restraints and exit the room",
         "/bot changelog - View recent map changes",
-            "/bot status - View bot connection, location, and feature status",
+        "/bot status - View bot connection, location, and feature status",
         "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, keypadDoor, dare, casino",
         "/bot code <code> - Open the keypad door while standing on a keypad",
         "Keypad doors accept group codes at configured keypad locations.",
@@ -213,48 +213,18 @@ export class Veratown {
         // Each system is constructed and registered independently: if one
         // fails (eg. a bug in a single feature), the others are unaffected
         // and Veratown still starts up with everything else working.
-        this.cageSystem = this.initFeature(
-            () =>
-                new CageSystem(
-                    this.conn,
-                ),
-        );
-        this.kennelSystem = this.initFeature(
-            () =>
-                new KennelSystem(
-                    this.conn,
-                ),
-        );
+        this.cageSystem = this.initFeature(() => new CageSystem(this.conn));
+        this.kennelSystem = this.initFeature(() => new KennelSystem(this.conn));
         this.showerSystem = this.initFeature(
-            () =>
-                new ShowerSystem(
-                    this.conn,
-                    this.conn2,
-                ),
+            () => new ShowerSystem(this.conn, this.conn2),
         );
-        this.bedSystem = this.initFeature(
-            () =>
-                new BedSystem(
-                    this.conn,
-                ),
-        );
+        this.bedSystem = this.initFeature(() => new BedSystem(this.conn));
         this.bunnyParkSystem = this.initFeature(
-            () =>
-                new BunnyParkSystem(
-                    this.conn,
-                ),
+            () => new BunnyParkSystem(this.conn),
         );
-        this.windowSystem = this.initFeature(
-            () =>
-                new WindowSystem(
-                    this.conn,
-                ),
-        );
+        this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
         this.trashcanSystem = this.initFeature(
-            () =>
-                new TrashcanSystem(
-                    this.conn,
-                ),
+            () => new TrashcanSystem(this.conn),
         );
         this.keypadDoorSystem = this.initFeature(
             () =>
@@ -273,10 +243,7 @@ export class Veratown {
                 ),
         );
         this.furnitureBondageSystem = this.initFeature(
-            () =>
-                new FurnitureBondageSystem(
-                    this.conn,
-                ),
+            () => new FurnitureBondageSystem(this.conn),
         );
 
         // Casino feature uses a separate bot connection (user3) to avoid
@@ -423,7 +390,9 @@ export class Veratown {
 
     public getStatus(): string {
         const features = this.features
-            .map((feature) => `${feature.key}=${feature.enabled ? "on" : "off"}`)
+            .map(
+                (feature) => `${feature.key}=${feature.enabled ? "on" : "off"}`,
+            )
             .join(", ");
         return [
             `Veratown: ${this.conn.isConnected() ? "connected" : "disconnected"}`,

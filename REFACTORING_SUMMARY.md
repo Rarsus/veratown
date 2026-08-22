@@ -12,14 +12,14 @@ This refactoring consolidates the Veratown game architecture around the `Veratow
 
 ### Key Metrics
 
-| Metric | Before | After | Change |
-|--------|--------|-------|--------|
-| CommandParser instances | 3 | 2 | Main parser plus the dedicated casino-connector parser |
-| Duplicate code (region loading) | ~40 lines | 0 | -40 lines |
-| Features implementing FeatureSystem | 7/8 (87%) | 8/8 (100%) | +1 (Casino) |
-| Initialization patterns | 3+ | 1 unified | Standardized |
-| Code paths in main.ts | 6 | 5 | -1 casino case |
-| Feature enable/disable coverage | Partial | Full | Complete |
+| Metric                              | Before    | After      | Change                                                 |
+| ----------------------------------- | --------- | ---------- | ------------------------------------------------------ |
+| CommandParser instances             | 3         | 2          | Main parser plus the dedicated casino-connector parser |
+| Duplicate code (region loading)     | ~40 lines | 0          | -40 lines                                              |
+| Features implementing FeatureSystem | 7/8 (87%) | 8/8 (100%) | +1 (Casino)                                            |
+| Initialization patterns             | 3+        | 1 unified  | Standardized                                           |
+| Code paths in main.ts               | 6         | 5          | -1 casino case                                         |
+| Feature enable/disable coverage     | Partial   | Full       | Complete                                               |
 
 ---
 
@@ -51,6 +51,7 @@ main.ts
 ```
 
 **Problems**:
+
 - 3 CommandParser instances processing duplicate message events
 - Casino can't participate in `/bot feature` commands
 - Dare and Casino initialized separately despite being Veratown features
@@ -80,6 +81,7 @@ main.ts
 ```
 
 **Improvements**:
+
 - 1 main CommandParser shared by main-connection features
 - Casino uses its own parser because it runs on a separate connector and region
 - Casino fully participates in `/bot feature` commands
@@ -97,10 +99,12 @@ main.ts
 **Objective**: Eliminate duplicate code by extracting common patterns into reusable modules.
 
 **Files Created**:
+
 - `bin/games/shared/locationUtils.ts` - Region loading helper
 - `bin/games/shared/commandParserFactory.ts` - CommandParser factory
 
 **Code Reduction**:
+
 - Dare: Removed ~20 lines of region loading code
 - Casino: Removed ~20 lines of region loading code
 - Total saved: ~40 lines of duplicate code
@@ -138,24 +142,25 @@ private async loadLocations() {
 **Changes**:
 
 1. **Casino Class**:
-   - `export class Casino implements VeratownFeatureSystem`
-   - Add properties: `key = "casino"`, `label = "Casino"`, `enabled = true`
-   - Implement `registerTriggers(): void` method
-   - Split initialization: constructor (properties) + registerTriggers (behavior)
-   - Update constructor signature: `constructor(conn, db, config?, commandParser?)`
-   - Replace inline region loading with `loadRegionFromDatabase()`
-   - Wrap all command handlers with `if (!this.enabled) return;`
-   - Ensure all handlers wrapped in `guardHandler()` for error isolation
+    - `export class Casino implements VeratownFeatureSystem`
+    - Add properties: `key = "casino"`, `label = "Casino"`, `enabled = true`
+    - Implement `registerTriggers(): void` method
+    - Split initialization: constructor (properties) + registerTriggers (behavior)
+    - Update constructor signature: `constructor(conn, db, config?, commandParser?)`
+    - Replace inline region loading with `loadRegionFromDatabase()`
+    - Wrap all command handlers with `if (!this.enabled) return;`
+    - Ensure all handlers wrapped in `guardHandler()` for error isolation
 
 2. **Veratown Integration**:
-   - Import Casino class
-   - Add `private casino?: Casino;` field
-   - Initialize Casino in constructor using `initFeature()` pattern
+    - Import Casino class
+    - Add `private casino?: Casino;` field
+    - Initialize Casino in constructor using `initFeature()` pattern
     - Keep Casino's parser bound to the dedicated casino connection
-   - Pass `this.locationStore` (shared) to Casino
-   - Casino now participates in feature lifecycle
+    - Pass `this.locationStore` (shared) to Casino
+    - Casino now participates in feature lifecycle
 
 **Benefits**:
+
 - `/bot feature list` includes casino
 - `/bot feature disable casino` works (respected by all handlers)
 - Dedicated casino CommandParser processes casino-connector messages
@@ -179,16 +184,19 @@ private async loadLocations() {
 **Objective**: Remove code paths that are now redundant.
 
 **Changes**:
+
 - Delete `case "casino":` from game selector
 - Casino is now exclusively initialized through Veratown
 - Pool roulette setup unchanged (uses separate conn3)
 
 **Result**:
+
 - Fewer code paths in main.ts (1 less case branch)
 - Veratown is single entry point for Casino
 - Clearer game mode separation
 
 **Before**:
+
 ```typescript
 case "veratown":
     // ... initialize Veratown (Casino initialized here)
@@ -199,6 +207,7 @@ case "dare":
 ```
 
 **After**:
+
 ```typescript
 case "veratown":
     // ... initialize Veratown (includes Casino)
@@ -213,12 +222,14 @@ case "dare":
 **Objective**: Document refactoring rationale, architecture patterns, and verification strategy.
 
 **Deliverables**:
+
 1. This REFACTORING_SUMMARY.md (architecture + phases)
 2. BACKUP_MANIFEST.md (git-based rollback strategy)
 3. Docker testing verification (bot startup + logs)
 4. JSDoc/code comments updated (where applicable)
 
 **Testing Strategy**:
+
 - Compilation: ✓ Verified (5.2mb bundle, no errors)
 - Docker startup: ✓ Verified (bot connects, Veratown initializes)
 - Feature enable/disable: Could test with `/bot feature disable casino` command
@@ -234,10 +245,10 @@ case "dare":
 
 ```typescript
 interface VeratownFeatureSystem {
-    readonly key: string;           // Feature identifier ("casino", "dare", etc)
-    readonly label: string;         // Display name
-    enabled: boolean;               // Enable/disable flag
-    registerTriggers(): void;       // Register commands and events
+    readonly key: string; // Feature identifier ("casino", "dare", etc)
+    readonly label: string; // Display name
+    enabled: boolean; // Enable/disable flag
+    registerTriggers(): void; // Register commands and events
 }
 ```
 
@@ -256,9 +267,9 @@ export async function loadRegionFromDatabase(
     locationStore: VeratownLocationStore,
     regionType: string,
     fallbackLocations: unknown[],
-): Promise<MapRegion | undefined>
+): Promise<MapRegion | undefined>;
 
-export function isValidRegion(region: unknown): region is MapRegion
+export function isValidRegion(region: unknown): region is MapRegion;
 ```
 
 **Usage**: Dare and Casino both use this instead of implementing region loading separately.
@@ -272,6 +283,7 @@ export function isValidRegion(region: unknown): region is MapRegion
 **Purpose**: Single parser instance receives all Veratown bot messages, eliminating duplicate processing.
 
 **Pattern**:
+
 ```typescript
 // Veratown creates parser
 this.commandParser = new CommandParser(conn);
@@ -299,7 +311,7 @@ this.commandParser.onCommand("gamble", this.onCommandGamble, this);
 this.commandParser.onCommand(
     "gamble",
     guardHandler("casino.gamble", this.onCommandGamble),
-    this
+    this,
 );
 ```
 
@@ -335,21 +347,25 @@ registerTriggers() {
 ## Code Quality Improvements
 
 ### Type Safety
+
 - All features strictly typed against VeratownFeatureSystem interface
 - Region loading has type guard: `isValidRegion()`
 - No `any` types introduced
 
 ### Error Handling
+
 - guardHandler wrapper on all command handlers
 - Graceful fallback to default regions if database unavailable
 - Proper error logging with feature context ([dare], [casino], etc)
 
 ### Testability
+
 - Feature initialization split into phases (constructor can be mocked)
 - Shared utilities (locationUtils, commandParserFactory) easily unit testable
 - Region loading isolated in single function
 
 ### Documentation
+
 - JSDoc comments on all public functions (locationUtils)
 - Clear commit messages with rationale
 - This REFACTORING_SUMMARY.md as living documentation
@@ -362,38 +378,40 @@ registerTriggers() {
 When adding a new Veratown feature (e.g., "LoveMachine" game):
 
 1. **Implement Interface**:
-   ```typescript
-   export class LoveMachine implements VeratownFeatureSystem {
-       public readonly key = "lovemachine";
-       public readonly label = "Love Machine";
-       public enabled = true;
-       
-       registerTriggers(): void {
-           // Register commands with guardHandler
-           this.commandParser.onCommand(
-               "test",
-               guardHandler("lovemachine.test", this.onCommandTest),
-               this
-           );
-       }
-   }
-   ```
+
+    ```typescript
+    export class LoveMachine implements VeratownFeatureSystem {
+        public readonly key = "lovemachine";
+        public readonly label = "Love Machine";
+        public enabled = true;
+
+        registerTriggers(): void {
+            // Register commands with guardHandler
+            this.commandParser.onCommand(
+                "test",
+                guardHandler("lovemachine.test", this.onCommandTest),
+                this,
+            );
+        }
+    }
+    ```
 
 2. **Add to Veratown**:
-   ```typescript
-   private loveMachine?: LoveMachine;
-   
-   // In constructor, after other features:
-   if (db) {
-       this.loveMachine = this.initFeature(
-           () => new LoveMachine(this.conn, db, this.commandParser)
-       );
-   }
-   ```
+
+    ```typescript
+    private loveMachine?: LoveMachine;
+
+    // In constructor, after other features:
+    if (db) {
+        this.loveMachine = this.initFeature(
+            () => new LoveMachine(this.conn, db, this.commandParser)
+        );
+    }
+    ```
 
 3. **Register in Feature List**:
-   - Automatically included via VeratownFeatureSystem interface
-   - Can be disabled via `/bot feature disable lovemachine`
+    - Automatically included via VeratownFeatureSystem interface
+    - Can be disabled via `/bot feature disable lovemachine`
 
 ---
 
@@ -416,6 +434,7 @@ docker-compose restart ropeybot
 ```
 
 Or rollback entire refactoring to pre-Phase-1:
+
 ```bash
 git revert --no-edit 27bc902 0f0fc5a 3e44e99
 docker-compose restart ropeybot
@@ -439,13 +458,13 @@ docker-compose restart ropeybot
 
 ## Performance Impact
 
-| Aspect | Before | After | Impact |
-|--------|--------|-------|--------|
-| Bot startup time | ~2s | ~2s | No change |
-| Message processing | 3 parsers | 1 parser | -66% event listeners |
-| Memory footprint | ~50MB (est) | ~48MB (est) | -2% (shared parser) |
-| Bundle size | 5.2MB | 5.2MB | No change |
-| Database queries | Duplicate queries | Single store | Reduced I/O |
+| Aspect             | Before            | After        | Impact               |
+| ------------------ | ----------------- | ------------ | -------------------- |
+| Bot startup time   | ~2s               | ~2s          | No change            |
+| Message processing | 3 parsers         | 1 parser     | -66% event listeners |
+| Memory footprint   | ~50MB (est)       | ~48MB (est)  | -2% (shared parser)  |
+| Bundle size        | 5.2MB             | 5.2MB        | No change            |
+| Database queries   | Duplicate queries | Single store | Reduced I/O          |
 
 ---
 
@@ -463,11 +482,11 @@ Based on this refactoring, consider:
 
 ## Commits Summary
 
-| Phase | Commit | Date | Changes |
-|-------|--------|------|---------|
-| 1 | 27bc902 | 12:10 | Shared utilities (locationUtils, commandParserFactory) |
-| 2 | 0f0fc5a | 12:15 | Casino as VeratownFeatureSystem, integrated into Veratown |
-| 4 | 3e44e99 | 12:20 | Removed standalone casino case from main.ts |
+| Phase | Commit  | Date  | Changes                                                   |
+| ----- | ------- | ----- | --------------------------------------------------------- |
+| 1     | 27bc902 | 12:10 | Shared utilities (locationUtils, commandParserFactory)    |
+| 2     | 0f0fc5a | 12:15 | Casino as VeratownFeatureSystem, integrated into Veratown |
+| 4     | 3e44e99 | 12:20 | Removed standalone casino case from main.ts               |
 
 ---
 
@@ -476,6 +495,7 @@ Based on this refactoring, consider:
 This refactoring transforms Veratown from an ad-hoc collection of game systems into a cohesive, well-architected feature platform. The VeratownFeatureSystem interface provides a clear contract, shared utilities eliminate duplication, and unified CommandParser simplifies the message flow. All changes maintain backward compatibility and are independently reversible via git.
 
 The resulting codebase is:
+
 - ✓ More maintainable (single initialization pattern)
 - ✓ More robust (consistent error isolation)
 - ✓ More extensible (clear pattern for new features)

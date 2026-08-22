@@ -73,7 +73,9 @@ function readString(value: unknown): string | undefined {
     return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined {
+function readConfig(
+    location: VeratownLocationDoc,
+): KeypadDoorConfig | undefined {
     const data = location.data ?? {};
     const doorX = readNumber(data.doorX);
     const doorY = readNumber(data.doorY);
@@ -104,13 +106,17 @@ function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined
     const hasInsideRegion = insideCoordinates.some(
         (coordinate) => coordinate !== undefined,
     );
-    if (hasInsideRegion && insideCoordinates.some((coordinate) => coordinate === undefined)) {
+    if (
+        hasInsideRegion &&
+        insideCoordinates.some((coordinate) => coordinate === undefined)
+    ) {
         return undefined;
     }
 
     const autoOpenTileX = readNumber(data.autoOpenTileX);
     const autoOpenTileY = readNumber(data.autoOpenTileY);
-    const hasAutoOpenTile = autoOpenTileX !== undefined && autoOpenTileY !== undefined;
+    const hasAutoOpenTile =
+        autoOpenTileX !== undefined && autoOpenTileY !== undefined;
 
     if (hasAutoOpenTile && hasInsideRegion) {
         return undefined;
@@ -134,7 +140,8 @@ function readConfig(location: VeratownLocationDoc): KeypadDoorConfig | undefined
     const whitelistMemberNumbers = Array.isArray(rawWhitelist)
         ? rawWhitelist.filter(
               (memberNumber): memberNumber is number =>
-                  typeof memberNumber === "number" && Number.isInteger(memberNumber),
+                  typeof memberNumber === "number" &&
+                  Number.isInteger(memberNumber),
           )
         : [];
 
@@ -177,7 +184,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private doors: KeypadDoor[] = [];
     private readonly keypadTrigger: ReturnType<typeof guardHandler>;
     private readonly autoOpenTrigger: ReturnType<typeof guardHandler>;
-    private notificationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private notificationTimers = new Map<
+        string,
+        ReturnType<typeof setTimeout>
+    >();
     private autoOpenTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     public constructor(
@@ -186,10 +196,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private locationStore?: VeratownLocationStore,
         private reloadLocationsCallback?: () => Promise<void>,
     ) {
-        this.keypadTrigger = guardHandler(
-            this.key,
-            this.onCharacterAtKeypad,
-        );
+        this.keypadTrigger = guardHandler(this.key, this.onCharacterAtKeypad);
         this.autoOpenTrigger = guardHandler(
             this.key,
             this.onCharacterAtAutoOpenTile,
@@ -201,7 +208,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         // Register "code" command with CommandParser so BC knows it's valid.
         // The actual handling is done by the raw message listener below, which
         // preserves casing and format.
-        this.commandParser?.register("code", guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser));
+        this.commandParser?.register(
+            "code",
+            guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser),
+        );
         // Register raw listeners for both !door and /bot door formats
         // This ensures !door whisper commands are properly routed
         this.conn.on(
@@ -230,7 +240,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         this.autoOpenTimers.clear();
 
         for (const door of this.doors) {
-            if (door.location.x !== undefined && door.location.y !== undefined) {
+            if (
+                door.location.x !== undefined &&
+                door.location.y !== undefined
+            ) {
                 this.conn.chatRoom?.map.removeTileTrigger(
                     door.location.x,
                     door.location.y,
@@ -247,7 +260,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         this.doors = locations
-            .filter((location) => location.type === "keypad_door" && location.enabled)
+            .filter(
+                (location) =>
+                    location.type === "keypad_door" && location.enabled,
+            )
             .map((location) => {
                 const config = readConfig(location);
                 return config ? { location, config } : undefined;
@@ -255,7 +271,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             .filter((door): door is KeypadDoor => door !== undefined);
 
         for (const door of this.doors) {
-            if (door.location.x !== undefined && door.location.y !== undefined) {
+            if (
+                door.location.x !== undefined &&
+                door.location.y !== undefined
+            ) {
                 this.conn.chatRoom?.map.addTileTrigger(
                     { X: door.location.x, Y: door.location.y },
                     this.keypadTrigger,
@@ -318,7 +337,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 character.MapPos.Y === door.config.autoOpenTile?.Y;
             if (!stillAtAutoOpenTile) return;
 
-            this.unlockDoor(door, "admin", character, door.config.unlockDurationMs);
+            this.unlockDoor(
+                door,
+                "admin",
+                character,
+                door.config.unlockDurationMs,
+            );
         }, AUTO_OPEN_TRIGGER_DELAY_MS);
 
         this.autoOpenTimers.set(autoOpenKey, timer);
@@ -340,7 +364,11 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Support both "!code <code>" and direct "<code>" formats
         const codeMatch = /^!code\s+(\S+)\s*$/i.exec(content);
-        const code = codeMatch ? codeMatch[1] : content.toLowerCase().startsWith("!code") ? undefined : content;
+        const code = codeMatch
+            ? codeMatch[1]
+            : content.toLowerCase().startsWith("!code")
+              ? undefined
+              : content;
 
         if (!code) return;
 
@@ -420,7 +448,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 : msg.message.Type === "Hidden"
                   ? /^ChatRoomBot\s+door(?:\s+(.+))?$/i.exec(content)
                   : undefined;
-        
+
         if (!match) {
             return;
         }
@@ -481,7 +509,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             case "code":
             case "change": {
                 const offset = action === "change" ? 1 : 0;
-                const group = args[1 + offset]?.toLowerCase() as KeypadAccessGroup;
+                const group = args[
+                    1 + offset
+                ]?.toLowerCase() as KeypadAccessGroup;
                 const code = args[2 + offset];
 
                 // Whitelist members can only change whitelist and guest codes
@@ -507,7 +537,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 }
                 door.config.codes[group] = code;
                 await this.persistDoor(door);
-                this.replyDoor(msg.message, `The ${group} door code was changed.`);
+                this.replyDoor(
+                    msg.message,
+                    `The ${group} door code was changed.`,
+                );
                 return;
             }
             case "add-user":
@@ -530,7 +563,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 return;
             case "list": {
                 const groups = ["admin", "whitelist", "guest"]
-                    .filter((group) => door.config.codes[group as KeypadAccessGroup])
+                    .filter(
+                        (group) =>
+                            door.config.codes[group as KeypadAccessGroup],
+                    )
                     .join(", ");
                 this.replyDoor(
                     msg.message,
@@ -540,7 +576,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             }
             case "list-whitelist": {
                 if (door.config.whitelistMemberNumbers.length === 0) {
-                    this.replyDoor(msg.message, "No whitelist members configured for this door.");
+                    this.replyDoor(
+                        msg.message,
+                        "No whitelist members configured for this door.",
+                    );
                 } else {
                     this.replyDoor(
                         msg.message,
@@ -552,39 +591,60 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             // Admin-only commands
             case "enable": {
                 if (!isAdmin) {
-                    this.replyDoor(msg.message, "Only room admins can enable/disable keypads.");
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can enable/disable keypads.",
+                    );
                     return;
                 }
                 if (door.location.enabled) {
-                    this.replyDoor(msg.message, "This keypad is already enabled.");
+                    this.replyDoor(
+                        msg.message,
+                        "This keypad is already enabled.",
+                    );
                     return;
                 }
                 await this.locationStore?.updateLocation(door.location.key, {
                     enabled: true,
                 });
                 await this.reloadLocationsCallback?.();
-                this.replyDoor(msg.message, `Keypad ${door.location.key} has been enabled.`);
+                this.replyDoor(
+                    msg.message,
+                    `Keypad ${door.location.key} has been enabled.`,
+                );
                 return;
             }
             case "disable": {
                 if (!isAdmin) {
-                    this.replyDoor(msg.message, "Only room admins can enable/disable keypads.");
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can enable/disable keypads.",
+                    );
                     return;
                 }
                 if (!door.location.enabled) {
-                    this.replyDoor(msg.message, "This keypad is already disabled.");
+                    this.replyDoor(
+                        msg.message,
+                        "This keypad is already disabled.",
+                    );
                     return;
                 }
                 await this.locationStore?.updateLocation(door.location.key, {
                     enabled: false,
                 });
                 await this.reloadLocationsCallback?.();
-                this.replyDoor(msg.message, `Keypad ${door.location.key} has been disabled.`);
+                this.replyDoor(
+                    msg.message,
+                    `Keypad ${door.location.key} has been disabled.`,
+                );
                 return;
             }
             case "lock": {
                 if (!isAdmin) {
-                    this.replyDoor(msg.message, "Only room admins can lock doors.");
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can lock doors.",
+                    );
                     return;
                 }
                 if (door.timer) clearTimeout(door.timer);
@@ -595,19 +655,30 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             }
             case "unlock": {
                 if (!isAdmin) {
-                    this.replyDoor(msg.message, "Only room admins can manually unlock doors.");
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can manually unlock doors.",
+                    );
                     return;
                 }
-                const seconds = args[1] ? Number(args[1]) : door.config.unlockDurationMs / 1000;
+                const seconds = args[1]
+                    ? Number(args[1])
+                    : door.config.unlockDurationMs / 1000;
                 if (!Number.isFinite(seconds) || seconds <= 0) {
-                    this.replyDoor(msg.message, "Usage: !door unlock [seconds]");
+                    this.replyDoor(
+                        msg.message,
+                        "Usage: !door unlock [seconds]",
+                    );
                     return;
                 }
                 this.unlockDoor(door, "admin", msg.sender, seconds * 1000);
                 return;
             }
             default:
-                this.replyDoor(msg.message, "Unknown door command. Use !door help.");
+                this.replyDoor(
+                    msg.message,
+                    "Unknown door command. Use !door help.",
+                );
         }
     };
 
@@ -619,7 +690,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         );
     }
 
-    private findDoorAtAutoOpenTile(character: API_Character): KeypadDoor | undefined {
+    private findDoorAtAutoOpenTile(
+        character: API_Character,
+    ): KeypadDoor | undefined {
         return this.doors.find(
             (door) =>
                 door.config.autoOpenTile &&
@@ -694,7 +767,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     private scheduleLockWhenEmpty(door: KeypadDoor): void {
         if (this.hasInsideOccupants(door)) {
-            door.timer = setTimeout(() => this.scheduleLockWhenEmpty(door), 1000);
+            door.timer = setTimeout(
+                () => this.scheduleLockWhenEmpty(door),
+                1000,
+            );
             return;
         }
 

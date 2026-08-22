@@ -10,6 +10,7 @@ Complete documentation suite for Veratown+, a persistent-world roleplay bot with
 ## Quick Navigation
 
 ### 🚀 For Deployment & Operations
+
 - **[Railway Deployment](RAILWAY_DEPLOYMENT.md)** - **Easiest option** (10 min, $5/month, auto-deploy from GitHub)
 - **[Environment Variables](ENVIRONMENT_VARIABLES.md)** - Configure bot via env vars (required for cloud deployment)
 - **[MongoDB Atlas Setup](MONGODB_ATLAS_SETUP.md)** - Cloud database guide (recommended, free tier available)
@@ -18,18 +19,21 @@ Complete documentation suite for Veratown+, a persistent-world roleplay bot with
 - **[docs/BUILD_SETUP.md](BUILD_SETUP.md)** - Local build and Docker setup guide
 
 ### �📘 For Players & Game Masters
+
 - **[Quick Start Guide](#quick-start-guide)** - Get running in 5 minutes
 - **[Game Features](#game-features)** - What you can do in Veratown
 - **[Commands Reference](#commands-reference)** - All player & admin commands
 - **[Troubleshooting](#troubleshooting)** - Common issues & fixes
 
 ### 🔧 For Developers
+
 - **[Architecture Deep Dive](VERATOWN_ARCHITECTURE.md)** - Technical design & systems
 - **[Development Guide](VERATOWN_COMPLETE_GUIDE.md#development-guide)** - Add new features
 - **[Multi-Bot System](VERATOWN_COMPLETE_GUIDE.md#multi-bot-architecture)** - Coordination patterns
 - **[Database Design](VERATOWN_ARCHITECTURE.md#database-design)** - MongoDB schemas
 
 ### 🗺️ For Map Designers
+
 - **[Map & Regions Reference](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md)** - Complete map layout
 - **[Furniture Map Objects](FURNITURE_MAP_OBJECTS.md)** - 13 bondage furniture types with map objects, commands, and examples
 - **[Door System](VERATOWN_DOORS.md)** - Keypad doors, group codes, tile styles, and exit protection
@@ -38,6 +42,7 @@ Complete documentation suite for Veratown+, a persistent-world roleplay bot with
 - **[Planned Improvements](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#planned-improvements)** - Future features
 
 ### 📊 Original Documentation
+
 - **[docs/VERATOWN.md](VERATOWN.md)** - Original feature documentation (for reference)
 - **[docs/REGION_MANAGEMENT.md](REGION_MANAGEMENT.md)** - Region system overview
 - **[docs/BUILD_SETUP.md](BUILD_SETUP.md)** - Build & deployment guide
@@ -83,9 +88,9 @@ pnpm start
 {
     "user": "YourBotName",
     "password": "bot_password",
-    "user2": "ShowerBot",      // optional
+    "user2": "ShowerBot", // optional
     "password2": "bot_password",
-    "user3": "CasinoBot",      // optional - enables casino
+    "user3": "CasinoBot", // optional - enables casino
     "password3": "bot_password",
     "game": "veratown",
     "mongo_uri": "mongodb://mongo:27017",
@@ -105,18 +110,18 @@ pnpm start
 
 ### 10 Core Features
 
-| Feature | Type | Players | Commands | Status |
-|---------|------|---------|----------|--------|
-| **Cages** | Restraint | 1/cage | N/A (auto) | ✅ Full |
-| **Kennels** | Roleplay | 1/kennel | N/A (auto) | ✅ Full |
-| **Furniture Bondage** | Configurable | Varies | `/bot location` | ✅ Full |
-| **Showers** | Sequence | 1 at a time | N/A (auto) | ✅ Full |
-| **Beds** | Auto-equip | 1/bed | N/A (emotion-based) | ✅ Full |
-| **Bunny Park** | Punishment | Unlimited | N/A (auto) | ✅ Full |
-| **Windows** | Narration | Unlimited | N/A (auto) | ✅ Full |
-| **Trashcan** | Constraint | Unlimited | N/A (auto) | ✅ Full |
-| **Dare Game** | Game | 4-6 | `/bot dare` | ✅ Full |
-| **Casino** | Games | Unlimited | `/bot chips/roulette/blackjack` | ✅ Full (Conn3) |
+| Feature               | Type         | Players     | Commands                        | Status          |
+| --------------------- | ------------ | ----------- | ------------------------------- | --------------- |
+| **Cages**             | Restraint    | 1/cage      | N/A (auto)                      | ✅ Full         |
+| **Kennels**           | Roleplay     | 1/kennel    | N/A (auto)                      | ✅ Full         |
+| **Furniture Bondage** | Configurable | Varies      | `/bot location`                 | ✅ Full         |
+| **Showers**           | Sequence     | 1 at a time | N/A (auto)                      | ✅ Full         |
+| **Beds**              | Auto-equip   | 1/bed       | N/A (emotion-based)             | ✅ Full         |
+| **Bunny Park**        | Punishment   | Unlimited   | N/A (auto)                      | ✅ Full         |
+| **Windows**           | Narration    | Unlimited   | N/A (auto)                      | ✅ Full         |
+| **Trashcan**          | Constraint   | Unlimited   | N/A (auto)                      | ✅ Full         |
+| **Dare Game**         | Game         | 4-6         | `/bot dare`                     | ✅ Full         |
+| **Casino**            | Games        | Unlimited   | `/bot chips/roulette/blackjack` | ✅ Full (Conn3) |
 
 ### Feature Highlights
 
@@ -202,21 +207,21 @@ MAINTENANCE
 **3 Independent Connections**:
 
 1. **Main Reception Bot** (`user`/`password`)
-   - Receptionist, feature coordination
-   - Manages 8 core Veratown features
-   - Routes admin commands
-   - Appearance: Clean (no game items)
+    - Receptionist, feature coordination
+    - Manages 8 core Veratown features
+    - Routes admin commands
+    - Appearance: Clean (no game items)
 
 2. **Shower Narrator Bot** (`user2`/`password2`) - Optional
-   - Narrates shower sequences
-   - Keeps main bot free for other operations
-   - Parked safely between uses
+    - Narrates shower sequences
+    - Keeps main bot free for other operations
+    - Parked safely between uses
 
 3. **Casino Bot** (`user3`/`password3`) - Optional
-   - Operates Casino feature (Roulette, Blackjack)
-   - Game Mistress character
-   - Independent CommandParser (casino commands on this bot only)
-   - Appearance: Has game items (roulette wheels, etc)
+    - Operates Casino feature (Roulette, Blackjack)
+    - Game Mistress character
+    - Independent CommandParser (casino commands on this bot only)
+    - Appearance: Has game items (roulette wheels, etc)
 
 **Why Multiple Bots?**
 
@@ -242,6 +247,7 @@ if (regionManager.markCharacterEntered("dare_region", sender.MemberNumber)) {
 ```
 
 **Benefits**:
+
 - Commands execute once per region entry (not per tile)
 - Prevents spam/duplicate execution
 - Supports multi-tile features naturally
@@ -281,10 +287,14 @@ export class MyFeatureSystem implements VeratownFeatureSystem {
     public registerTriggers(): void {
         // Register tile/region triggers, commands, handlers
         this.conn.chatRoom?.map.addTileTrigger(
-            {X: 10, Y: 10},
+            { X: 10, Y: 10 },
             (character) => {
-                this.conn.SendMessage("Whisper", character.MemberNumber, "Hello!");
-            }
+                this.conn.SendMessage(
+                    "Whisper",
+                    character.MemberNumber,
+                    "Hello!",
+                );
+            },
         );
     }
 }
@@ -297,7 +307,7 @@ import { MyFeatureSystem } from "./veratown/myFeatureSystem";
 
 // In constructor:
 this.myFeature = this.initFeature(
-    () => new MyFeatureSystem(this.conn, this.locationStore, FALLBACK)
+    () => new MyFeatureSystem(this.conn, this.locationStore, FALLBACK),
 );
 
 // Add to features array via initFeature() (automatic)
@@ -343,6 +353,7 @@ pnpm start
 **Symptoms**: `/bot chips` ignored or "command not found"
 
 **Check**:
+
 ```bash
 # Verify user3 configured
 grep user3 config.json
@@ -352,6 +363,7 @@ docker logs ropeybot | grep "Casino\|Game Mistress"
 ```
 
 **Fix**:
+
 1. Ensure `user3` and `password3` in config.json
 2. Restart bot: `docker-compose restart ropeybot`
 3. Verify in casino region (commands only work there)
@@ -361,11 +373,13 @@ docker logs ropeybot | grep "Casino\|Game Mistress"
 **Symptoms**: `/bot location` commands return "admin only" or error
 
 **Check**:
+
 1. Are you admin in the room?
 2. Is MongoDB running? `docker-compose ps | grep mongo`
 3. Check logs: `docker logs ropeybot | grep -i error`
 
 **Fix**:
+
 ```bash
 # Verify MongoDB connectivity
 docker logs ropeybot-mongo | tail -10
@@ -377,6 +391,7 @@ docker logs ropeybot-mongo | tail -10
 ### Bot Won't Start
 
 **Check startup sequence**:
+
 ```bash
 docker logs ropeybot | head -50
 ```
@@ -384,25 +399,27 @@ docker logs ropeybot | head -50
 **Common issues**:
 
 1. **MongoDB connection failed**:
-   - Check `mongo_uri` in config.json
-   - Verify MongoDB running: `docker-compose ps`
+    - Check `mongo_uri` in config.json
+    - Verify MongoDB running: `docker-compose ps`
 
 2. **Login failed**:
-   - Check credentials in config.json
-   - Verify bot account exists on BC
+    - Check credentials in config.json
+    - Verify bot account exists on BC
 
 3. **Room not found**:
-   - Check `room.Name` in config.json
-   - Verify room exists or create manually
+    - Check `room.Name` in config.json
+    - Verify room exists or create manually
 
 ### Performance Issues
 
 **Check for lagging**:
+
 ```bash
 docker logs ropeybot | grep -i throttl
 ```
 
 **Solutions**:
+
 1. Reduce message frequency in features
 2. Optimize database queries
 3. Check MongoDB performance: `docker stats`
@@ -412,11 +429,13 @@ docker logs ropeybot | grep -i throttl
 ## Full Documentation Files
 
 ### Complete Guides
+
 - [VERATOWN_COMPLETE_GUIDE.md](VERATOWN_COMPLETE_GUIDE.md) - Everything in one place
 - [VERATOWN_ARCHITECTURE.md](VERATOWN_ARCHITECTURE.md) - Technical deep dive
 - [VERATOWN_MAP_REGIONS_IMPROVEMENTS.md](VERATOWN_MAP_REGIONS_IMPROVEMENTS.md) - Map & regions
 
 ### Reference
+
 - [docs/VERATOWN.md](VERATOWN.md) - Original feature documentation
 - [docs/REGION_MANAGEMENT.md](REGION_MANAGEMENT.md) - Region system
 - [docs/BUILD_SETUP.md](BUILD_SETUP.md) - Build & deployment
@@ -425,6 +444,7 @@ docker logs ropeybot | grep -i throttl
 - [docs/HOWTOS.md](HOWTOS.md) - Development patterns
 
 ### Maintenance
+
 - [docs/IMPROVEMENTS.md](IMPROVEMENTS.md) - Code review results
 - [docs/CREDITS.md](CREDITS.md) - Contributors
 - [docs/REPOSITORY_ANALYSIS.md](REPOSITORY_ANALYSIS.md) - Repo structure
@@ -433,18 +453,18 @@ docker logs ropeybot | grep -i throttl
 
 ## Key Statistics
 
-| Metric | Value |
-|--------|-------|
-| **Features** | 9 (8 Veratown + 1 Casino) |
-| **Regions** | 8 defined |
-| **Map Size** | 50×50 tiles |
-| **Max Players** | Unlimited (per feature) |
-| **Connections** | 3 optional (main + shower + casino) |
-| **MongoDB Collections** | 1 (veratownLocations) |
-| **Admin Commands** | 20+ |
-| **Player Commands** | 12+ |
-| **Build Size** | ~5.2 MB (esbuild bundle) |
-| **Build Time** | ~300-400ms |
+| Metric                  | Value                               |
+| ----------------------- | ----------------------------------- |
+| **Features**            | 9 (8 Veratown + 1 Casino)           |
+| **Regions**             | 8 defined                           |
+| **Map Size**            | 50×50 tiles                         |
+| **Max Players**         | Unlimited (per feature)             |
+| **Connections**         | 3 optional (main + shower + casino) |
+| **MongoDB Collections** | 1 (veratownLocations)               |
+| **Admin Commands**      | 20+                                 |
+| **Player Commands**     | 12+                                 |
+| **Build Size**          | ~5.2 MB (esbuild bundle)            |
+| **Build Time**          | ~300-400ms                          |
 
 ---
 
@@ -473,6 +493,7 @@ See [docs/CONTRIBUTIONS.md](CONTRIBUTIONS.md) for details (if it exists).
 ## Version History
 
 ### v1.0 (Current) - 2026-08-04
+
 - ✅ Complete multi-bot architecture (3 connections)
 - ✅ Casino integration with separate bot (conn3)
 - ✅ Region management system with MongoDB persistence
@@ -480,11 +501,13 @@ See [docs/CONTRIBUTIONS.md](CONTRIBUTIONS.md) for details (if it exists).
 - ✅ Comprehensive documentation suite
 
 ### v0.9 - 2026-07-31
+
 - Region manager built and tested
 - Casino reintegration with conn3
 - Documentation created
 
 ### v0.8 - 2026-07-28
+
 - Appearance conflict fixed
 - Multi-bot system refined
 

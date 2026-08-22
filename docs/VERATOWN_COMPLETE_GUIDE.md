@@ -3,6 +3,7 @@
 Comprehensive documentation for Veratown+, an advanced persistent-world roleplay bot with games, features, and multi-bot architecture.
 
 **Table of Contents**
+
 1. [Quick Start](#quick-start)
 2. [Game Overview](#game-overview)
 3. [Multi-Bot Architecture](#multi-bot-architecture)
@@ -22,35 +23,38 @@ Comprehensive documentation for Veratown+, an advanced persistent-world roleplay
 
 1. Copy `config.sample.json` to `config.json`
 2. Set required fields:
-   ```json
-   {
-       "user": "MainBotName",
-       "password": "password",
-       "user2": "ShowerBotName",      // optional - shower narration
-       "password2": "password",
-       "user3": "CasinoBotName",      // optional - casino games
-       "password3": "password",
-       "game": "veratown",
-       "room": {"Name": "Veratown", ...},
-       "mongo_uri": "mongodb://mongo:27017",
-       "mongo_db": "ropeybot",
-       "mongo_tls": false
-   }
-   ```
+    ```json
+    {
+        "user": "MainBotName",
+        "password": "password",
+        "user2": "ShowerBotName",      // optional - shower narration
+        "password2": "password",
+        "user3": "CasinoBotName",      // optional - casino games
+        "password3": "password",
+        "game": "veratown",
+        "room": {"Name": "Veratown", ...},
+        "mongo_uri": "mongodb://mongo:27017",
+        "mongo_db": "ropeybot",
+        "mongo_tls": false
+    }
+    ```
 
 ### Running
 
 **Local:**
+
 ```bash
 pnpm install && pnpm start
 ```
 
 **Docker:**
+
 ```bash
 docker-compose up -d --build
 ```
 
 **Verify startup:**
+
 ```bash
 docker logs ropeybot | grep -E "Starting game|Location store|Casino|registerTriggers"
 ```
@@ -82,15 +86,17 @@ Veratown+ is a persistent, interactive roleplay environment featuring:
 Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance issues:
 
 ### Bot 1: Main Reception Bot (`connector`)
+
 - **Credentials**: `user` / `password`
 - **Role**: Receptionist, room management, all 8 Veratown features
 - **Features**:
-  - Manages receptionist position and welcome messages
-  - Handles Cage, Kennel, Shower (via conn2), Bed, Bunny Park, Window, Trashcan, Dare features
-  - Appearance: Clean, unmodified (no game props)
-  - Admin commands (map management, location CRUD, feature enable/disable)
+    - Manages receptionist position and welcome messages
+    - Handles Cage, Kennel, Shower (via conn2), Bed, Bunny Park, Window, Trashcan, Dare features
+    - Appearance: Clean, unmodified (no game props)
+    - Admin commands (map management, location CRUD, feature enable/disable)
 
 ### Bot 2: Shower Narrator Bot (`veratownConn2`)
+
 - **Credentials**: `user2` / `password2`
 - **Status**: Optional (gracefully degrades to main bot if not configured)
 - **Role**: Narrates shower sequences
@@ -99,6 +105,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 - **Activation**: Temp-moves to shower tile, speaks, returns
 
 ### Bot 3: Casino Game Mistress Bot (`poolRouletteConn`)
+
 - **Credentials**: `user3` / `password3`
 - **Status**: Optional (Casino gracefully disabled if not configured)
 - **Role**: Operates Casino feature (Roulette, Blackjack)
@@ -124,12 +131,14 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: 3 cages with entry positions
 
 **Flow**:
+
 1. Enter cage entry tile → Receive detailed consent notice
 2. Step onto cage → Auto-equipped with `FuturisticCrate` (locked with timer)
 3. Move around inside (or outside) → Cage timer continues
 4. Timer expires → Crate removed, release notice sent
 
 **Details**:
+
 - **Cage 1**: 5 minute lock
 - **Cage 2**: 10 minute lock
 - **Cage 3**: Random 5-15 minute lock
@@ -143,11 +152,13 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: 2 kennel tiles
 
 **Flow**:
+
 1. Step onto kennel → Equip `Kennel` device (door open)
 2. After 5 seconds → Door closes if still wearing
 3. Leave kennel tile → Door remains (no auto-unlock command yet)
 
 **Details**:
+
 - **Not enforced**: Purely roleplay - players can equip/remove
 - **Door control**: Closes automatically after 5s, can be reopened manually
 - **Status**: No built-in commands yet for manual door control
@@ -159,6 +170,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: 4 shower tiles
 
 **Flow**:
+
 1. Step on shower → Sequence starts
 2. Snapshot your outfit → Strip all items
 3. "Turn on shower" → See narration
@@ -166,6 +178,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 5. "Dry off" → Re-dress in original outfit
 
 **Details**:
+
 - **Narration**: Via `conn2` (shower narrator bot) if configured, else main bot
 - **Cleanup**: Leaves early = clothes NOT restored (intentional)
 - **Commands**: No player commands (fully automatic)
@@ -178,12 +191,14 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: 3 bed tiles
 
 **Flow**:
+
 1. Step on bed tile → Wait
 2. Change expression to "Sleep" → `Bed` + `Covers` auto-added
 3. Change expression away from "Sleep" → Items removed
 4. Leave bed tile → Items removed
 
 **Details**:
+
 - **Automation**: Responds to emotion/expression changes
 - **Polling**: Checks every 2 seconds for sleep state
 - **Items**: Only adds if not already present
@@ -196,16 +211,18 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: Rabbit sanctuary region with 3 bunny positions
 
 **Flow**:
+
 1. Enter park region → Warning not to step on bunnies
 2. Step on bunny tile → Punishment notice
 3. Auto-add random rope restraint → Locked for duration
 4. Leave park → Restraint remains (player must unlock or have admin remove)
 
 **Details**:
+
 - **Restraints**: Random config from `BUNNY_RESTRAINT_CONFIGS`
-  - Rope arm tie
-  - Rope leg tie
-  - Rope full-body tie
+    - Rope arm tie
+    - Rope leg tie
+    - Rope full-body tie
 - **Lock**: Unlocked items (just added, no timer)
 - **Punishment theme**: Encourages staying on paths
 
@@ -216,13 +233,15 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: 4 window tiles around room perimeter
 
 **Flow**:
+
 1. Step on window → Automated narration and pose
 2. Pose: `"Stand"` + `"Lean"` (against window)
 3. Narration: Whisper about view from window
-4. Duration**: ~3 seconds of poses
+4. Duration\*\*: ~3 seconds of poses
 5. Leave window → Return to normal
 
 **Details**:
+
 - **Poses**: Only added if not already there
 - **Non-blocking**: Can move away anytime (cleanup automatic)
 - **Flavor**: Passive immersion feature
@@ -234,12 +253,14 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: 4 trashcan tiles
 
 **Flow**:
+
 1. Step on trashcan → Can't equip items (disabled)
 2. Whisper: "You're in the trash..."
 3. Try equipping → Fails with rejection message
 4. Leave tile → Item equipping re-enabled
 
 **Details**:
+
 - **Temporary disable**: ItemPermission set to `None` while on tile
 - **Punishment theme**: Role-play degradation
 - **Non-damaging**: Just blocks actions, removes nothing
@@ -251,6 +272,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: Dare region (multi-tile area)
 
 **Features**:
+
 - 10-round dare game with turn order
 - Forfeits system (restraints, items, services)
 - CasinoStore integration for chip economy
@@ -264,10 +286,12 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Locations**: Casino region (multi-tile area) with Game Mistress bot
 
 **Games**:
+
 - **Roulette**: Spin wheel, bet chips or forfeits
 - **Blackjack**: Card game, bet chips or forfeits
 
 **Features**:
+
 - Daily free chips allocation
 - Player leaderboard
 - Forfeit table (restraints, services)
@@ -276,6 +300,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Commands** (see [Commands Reference](#commands-reference) for full list)
 
 **Details**:
+
 - **Separate Bot**: Runs on `conn3` (Game Mistress) to avoid appearance conflicts
 - **Region**: Casino commands only work in `GAME_LOCATION` region
 - **Forfeits**: Loss can result in restraint application or custom services
@@ -290,6 +315,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ### Player Commands (via `/bot`)
 
 #### Veratown System
+
 ```
 /bot help                      - Display help (all available commands)
 /bot freeandleave             - Remove all restraints and exit room
@@ -299,6 +325,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ```
 
 #### Dare Game
+
 ```
 /bot dare join                - Enter dare game lobby
 /bot dare leave               - Exit dare game
@@ -307,6 +334,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ```
 
 #### Casino
+
 ```
 /bot chips                    - Check your current chip balance
 /bot roulette [amount]        - Play roulette
@@ -320,6 +348,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ### Admin Commands (admin only)
 
 #### Feature Management
+
 ```
 /bot feature <enable|disable> <name>  - Toggle feature
   Example: /bot feature disable cage
@@ -327,6 +356,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ```
 
 #### Map Management
+
 ```
 /bot map update               - Save current map layout to database
 /bot map reset                - Restore default map layout
@@ -335,11 +365,13 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ```
 
 #### Character Management
+
 ```
 /bot strip <name>             - Remove all clothing from player
 ```
 
 #### Location Database CRUD
+
 ```
 /bot location add <key> <x> <y>                                    - Add point location
 /bot location get <key>                                            - View location details
@@ -351,6 +383,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ```
 
 #### Region Management
+
 ```
 /bot location region add <key> <x1> <y1> <x2> <y2> <type> [label] - Add region
   Types: game, dare, feature, custom
@@ -364,6 +397,7 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 ```
 
 #### Maintenance
+
 ```
 /bot maintenance              - Begin 1-minute shutdown sequence
 /bot adminhelp                - View all admin commands
@@ -412,7 +446,10 @@ src/                           # bc-bot library (low-level API)
 ```typescript
 import { API_Connector, API_Character, MapRegion } from "bc-bot";
 import { VeratownFeatureSystem, guardHandler } from "./featureSystem";
-import { VeratownLocationStore, VeratownLocationDoc } from "./veratownLocationStore";
+import {
+    VeratownLocationStore,
+    VeratownLocationDoc,
+} from "./veratownLocationStore";
 
 export class MyFeatureSystem implements VeratownFeatureSystem {
     public readonly key = "myfeature";
@@ -429,13 +466,13 @@ export class MyFeatureSystem implements VeratownFeatureSystem {
         // Register triggers, commands, event handlers
         this.conn.chatRoom?.map.addTileTrigger(
             { X: 10, Y: 10 },
-            guardHandler(
-                "myfeature:onTile",
-                (character: API_Character) => {
-                    this.conn.SendMessage("Whisper", character.MemberNumber, 
-                        "Welcome to my feature!");
-                },
-            ),
+            guardHandler("myfeature:onTile", (character: API_Character) => {
+                this.conn.SendMessage(
+                    "Whisper",
+                    character.MemberNumber,
+                    "Welcome to my feature!",
+                );
+            }),
         );
     }
 }
@@ -467,7 +504,9 @@ For features that should only execute once per region entry:
 
 ```typescript
 // In command handler
-if (this.regionManager.markCharacterEntered("game_region", sender.MemberNumber)) {
+if (
+    this.regionManager.markCharacterEntered("game_region", sender.MemberNumber)
+) {
     // Execute game startup (only happens on first entry to region)
     await this.startGame(sender);
 } else {
@@ -487,7 +526,7 @@ All feature triggers wrapped with `guardHandler()`:
 guardHandler("feature:commandName", (char) => {
     // Any error here is caught, logged, doesn't crash bot
     throw new Error("Something broke");
-})
+});
 ```
 
 Errors logged but don't prevent other features from working.
@@ -522,18 +561,20 @@ Region Management allows Veratown features to operate on multi-tile areas. Witho
 ### Key Components
 
 #### RegionManager
+
 - **File**: `bin/games/veratown/regionManager.ts`
 - **Methods**:
-  - `loadRegions(locationStore)` - Load from DB or use static fallbacks
-  - `markCharacterEntered(regionKey, memberNumber)` - Returns `true` if NEW entry
-  - `markCharacterLeft(regionKey, memberNumber)` - Track exit
-  - `isPositionInRegion(pos, regionKey)` - Check if tile is in region
-  - `validateRegions(staticDefs)` - Warn if DB conflicts with static
-  - `updateRegion(locationStore, region)` - Persist to DB
-  - `deleteRegion(locationStore, regionKey)` - Remove from DB
-  - `getAllRegions()` - List all regions
+    - `loadRegions(locationStore)` - Load from DB or use static fallbacks
+    - `markCharacterEntered(regionKey, memberNumber)` - Returns `true` if NEW entry
+    - `markCharacterLeft(regionKey, memberNumber)` - Track exit
+    - `isPositionInRegion(pos, regionKey)` - Check if tile is in region
+    - `validateRegions(staticDefs)` - Warn if DB conflicts with static
+    - `updateRegion(locationStore, region)` - Persist to DB
+    - `deleteRegion(locationStore, regionKey)` - Remove from DB
+    - `getAllRegions()` - List all regions
 
 #### VeratownRegion Interface
+
 ```typescript
 interface VeratownRegion extends VeratownLocationDoc {
     type: "region";
@@ -546,6 +587,7 @@ interface VeratownRegion extends VeratownLocationDoc {
 ```
 
 #### VeratownLocationStore
+
 - **File**: `bin/games/veratown/veratownLocationStore.ts`
 - **MongoDB**: Stores locations and regions in `veratownLocations` collection
 - **Indexes**: Unique on `key`, indexed on `type`
@@ -627,43 +669,45 @@ Casino is integrated as a Veratown feature but uses a **separate bot connection*
 ### Multi-Bot Flow
 
 1. **main.ts startup**:
-   ```typescript
-   // Create main bot
-   const connector = new API_Connector(...user/password...);
-   
-   // Create casino bot (if user3 configured)
-   const poolRouletteConn = new API_Connector(...user3/password3...);
-   
-   // Pass both to Veratown
-   const veratownGame = new Veratown(
-       connector,    // Main reception bot
-       veratownConn2,  // Shower bot (optional)
-       db,
-       config.dare,
-       poolRouletteConn,  // Casino bot (optional)
-       config.casino,
-   );
-   ```
+
+    ```typescript
+    // Create main bot
+    const connector = new API_Connector(...user/password...);
+
+    // Create casino bot (if user3 configured)
+    const poolRouletteConn = new API_Connector(...user3/password3...);
+
+    // Pass both to Veratown
+    const veratownGame = new Veratown(
+        connector,    // Main reception bot
+        veratownConn2,  // Shower bot (optional)
+        db,
+        config.dare,
+        poolRouletteConn,  // Casino bot (optional)
+        config.casino,
+    );
+    ```
 
 2. **Veratown initialization**:
-   ```typescript
-   if (this.conn3 && db) {
-       this.casino = this.initFeature(
-           () =>
-               new Casino(
-                   this.conn3!,  // Pass casino bot connection
-                   db,
-                   {...config...},
-                   // NO commandParser - Casino creates its own bound to conn3
-               ),
-       );
-   }
-   ```
+
+    ```typescript
+    if (this.conn3 && db) {
+        this.casino = this.initFeature(
+            () =>
+                new Casino(
+                    this.conn3!,  // Pass casino bot connection
+                    db,
+                    {...config...},
+                    // NO commandParser - Casino creates its own bound to conn3
+                ),
+        );
+    }
+    ```
 
 3. **Casino registration**:
-   - Casino creates CommandParser bound to conn3
-   - Commands registered on conn3's parser
-   - When players chat, conn3 receives and processes commands
+    - Casino creates CommandParser bound to conn3
+    - Commands registered on conn3's parser
+    - When players chat, conn3 receives and processes commands
 
 ### Command Flow
 
@@ -687,11 +731,11 @@ In `config.json`:
 {
     "user": "MainBotName",
     "password": "password",
-    "user3": "GameMistress",       // Casino bot
+    "user3": "GameMistress", // Casino bot
     "password3": "password",
     "casino": {
-        "game": "roulette",        // or "blackjack"
-        "cocktail": "mojito"       // optional
+        "game": "roulette", // or "blackjack"
+        "cocktail": "mojito" // optional
     }
 }
 ```
@@ -703,8 +747,8 @@ If `user3` not configured, Casino gracefully disabled.
 - **Chips Economy**: Daily free allocation, earn/lose via games
 - **Forfeits**: Losing can result in restraints or services
 - **Games**:
-  - Roulette: Spin wheel, bet chips or forfeits
-  - Blackjack: Card game, standard rules
+    - Roulette: Spin wheel, bet chips or forfeits
+    - Blackjack: Card game, standard rules
 - **Leaderboard**: Top players displayed in bot bio
 - **Persistent**: All data stored in MongoDB
 
@@ -804,6 +848,7 @@ If `user3` not configured, Casino gracefully disabled.
 **Issue**: Locations not auto-created on first run.
 
 **Workaround**: Either:
+
 - Use `/bot location add` commands to populate
 - Or use static fallback locations (included in code)
 
@@ -814,6 +859,7 @@ If `user3` not configured, Casino gracefully disabled.
 ### Bot Won't Start
 
 **Check logs**:
+
 ```bash
 docker logs ropeybot | head -100
 ```
@@ -821,40 +867,48 @@ docker logs ropeybot | head -100
 **Common issues**:
 
 1. **MongoDB connection failed**:
-   ```
-   Error: Could not connect to MongoDB
-   ```
-   - Check `mongo_uri` in config.json
-   - Verify MongoDB container is running: `docker ps | grep mongo`
-   - Try: `docker-compose restart mongo`
+
+    ```
+    Error: Could not connect to MongoDB
+    ```
+
+    - Check `mongo_uri` in config.json
+    - Verify MongoDB container is running: `docker ps | grep mongo`
+    - Try: `docker-compose restart mongo`
 
 2. **Invalid credentials**:
-   ```
-   Socket connected!
-   Error: Login failed
-   ```
-   - Check `user`/`password` in config.json
-   - Verify credentials work on BC website
-   - Try manual login to test
+
+    ```
+    Socket connected!
+    Error: Login failed
+    ```
+
+    - Check `user`/`password` in config.json
+    - Verify credentials work on BC website
+    - Try manual login to test
 
 3. **Room not found**:
-   ```
-   Room not found or inaccessible
-   ```
-   - Check `room.Name` in config.json
-   - Verify bot account has access to room
-   - Try creating room manually first
+
+    ```
+    Room not found or inaccessible
+    ```
+
+    - Check `room.Name` in config.json
+    - Verify bot account has access to room
+    - Try creating room manually first
 
 ### Casino Commands Not Working
 
 **Symptoms**: `/bot chips` command ignored or "command not found"
 
 **Diagnosis**:
+
 ```bash
 docker logs ropeybot | grep -E "Casino|user3|conn3|registerTriggers"
 ```
 
 **Expected output**:
+
 ```
 [Casino] registerTriggers() called for GameMistress with region=true
 [Casino] Commands registered for GameMistress
@@ -863,41 +917,46 @@ docker logs ropeybot | grep -E "Casino|user3|conn3|registerTriggers"
 **If missing**:
 
 1. **Check config.json**:
-   - `user3` and `password3` configured?
-   - If not, Casino won't initialize
+    - `user3` and `password3` configured?
+    - If not, Casino won't initialize
 
 2. **Verify Game Mistress bot logged in**:
-   ```bash
-   docker logs ropeybot | grep "GameMistress"
-   ```
+
+    ```bash
+    docker logs ropeybot | grep "GameMistress"
+    ```
 
 3. **Rebuild and restart**:
-   ```bash
-   docker-compose down
-   docker-compose up -d --build
-   sleep 5
-   docker logs ropeybot | tail -50
-   ```
+
+    ```bash
+    docker-compose down
+    docker-compose up -d --build
+    sleep 5
+    docker logs ropeybot | tail -50
+    ```
 
 4. **Check if in casino region**:
-   - Casino commands only work in `GAME_LOCATION` region
-   - Verify current position is in casino area
+    - Casino commands only work in `GAME_LOCATION` region
+    - Verify current position is in casino area
 
 ### Region Commands Not Working
 
 **Symptoms**: `/bot location region` commands fail or "admin only"
 
 **Check**:
+
 1. Are you logged in as admin?
 2. Is MongoDB running? (`docker-compose ps | grep mongo`)
 3. Any error messages in logs? (`docker logs ropeybot | grep -i error`)
 
 **Verify RegionManager initialized**:
+
 ```bash
 docker logs ropeybot | grep RegionManager
 ```
 
 Expected:
+
 ```
 [RegionManager] Loaded N regions from database
 ```
@@ -909,21 +968,25 @@ If shows "Loaded 0 regions", that's normal on first run - use static fallbacks.
 **Example**: Stepping on cage doesn't trigger cage system
 
 **Check**:
+
 1. Feature enabled? `/bot feature list` (should show "cage: enabled")
 2. On correct tile? (locations defined in `veratownConfig.ts`)
 3. Check logs: `docker logs ropeybot | grep -E "\[CageSystem\]|error"`
 
 **Enable feature**:
+
 ```
 /bot feature enable cage
 ```
 
 **Verify startup**:
+
 ```bash
 docker logs ropeybot | grep "\[CageSystem\]"
 ```
 
 Expected:
+
 ```
 [CageSystem] Registered 3 cage location(s)
 ```
@@ -933,20 +996,24 @@ Expected:
 **Symptoms**: Bot lagging, delayed responses
 
 **Check**:
+
 1. **MongoDB performance**:
-   ```bash
-   docker logs ropeybot-mongo | tail -20
-   ```
+
+    ```bash
+    docker logs ropeybot-mongo | tail -20
+    ```
 
 2. **Connection status**:
-   ```bash
-   docker logs ropeybot | grep "Throttling"
-   ```
-   High throttle messages = rate limited. Reduce message frequency.
+
+    ```bash
+    docker logs ropeybot | grep "Throttling"
+    ```
+
+    High throttle messages = rate limited. Reduce message frequency.
 
 3. **Feature loops**:
-   - Shower sequence running continuously?
-   - Check for infinite loops in feature code
+    - Shower sequence running continuously?
+    - Check for infinite loops in feature code
 
 ### Appearance Corruption
 
@@ -955,6 +1022,7 @@ Expected:
 **Cause**: Usually main bot using wrong connection for a feature
 
 **Fix**:
+
 1. Restart bot: `docker-compose restart ropeybot`
 2. Manual fix: `/bot strip BotName` (if you're admin)
 3. Reset appearance: Remove and re-add items via closet
@@ -966,16 +1034,18 @@ Expected:
 ## Configuration Examples
 
 ### Minimal (Main Bot Only)
+
 ```json
 {
     "user": "VeraBot",
     "password": "password",
     "game": "veratown",
-    "room": {"Name": "Veratown", "Space": "X"}
+    "room": { "Name": "Veratown", "Space": "X" }
 }
 ```
 
 ### Full Stack (All 3 Bots + MongoDB)
+
 ```json
 {
     "user": "VeraBot1",
@@ -998,8 +1068,8 @@ Expected:
     },
     "dare": {
         "region": {
-            "TopLeft": {"X": 5, "Y": 5},
-            "BottomRight": {"X": 15, "Y": 15}
+            "TopLeft": { "X": 5, "Y": 5 },
+            "BottomRight": { "X": 15, "Y": 15 }
         }
     },
     "casino": {

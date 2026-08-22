@@ -3,6 +3,7 @@
 ## Overview
 
 The BC-Bot API provides a method to make bot characters invisible to all players in the room. When invisible, the bot:
+
 - Does not appear in the room character list
 - Cannot be interacted with directly
 - Still functions normally (processes commands, manages state)
@@ -51,16 +52,19 @@ public registerTriggers(): void {
 ## Step-by-Step Implementation
 
 ### 1. Locate the Casino registerTriggers Method
+
 - File: `bin/games/casino.ts`
 - Search for: `public registerTriggers(): void`
 - This method is called once during Veratown initialization
 
 ### 2. Add SetInvisible Call
+
 - Add `this.conn.Player.SetInvisible(true);` as the **first line** in registerTriggers()
 - Place it before any region setup or command registration
 - This ensures the bot becomes invisible immediately when Veratown starts
 
 ### 3. Test the Change
+
 ```bash
 # Compile the code
 pnpm bundle
@@ -77,26 +81,30 @@ docker-compose up -d --build
 You could make invisibility configurable via `config.json`:
 
 ### Updated CasinoConfig Interface
+
 ```typescript
 export interface CasinoConfig {
     // ... existing properties ...
-    invisible?: boolean;  // New optional property
+    invisible?: boolean; // New optional property
 }
 ```
 
 ### In Casino Constructor
+
 ```typescript
-if (config?.invisible ?? true) {  // Default to invisible if not specified
+if (config?.invisible ?? true) {
+    // Default to invisible if not specified
     this.conn.Player.SetInvisible(true);
 }
 ```
 
 ### In config.json
+
 ```json
 {
     "casino": {
         "game": "roulette",
-        "invisible": true    // Optional, defaults to true
+        "invisible": true // Optional, defaults to true
     }
 }
 ```
@@ -106,18 +114,20 @@ if (config?.invisible ?? true) {  // Default to invisible if not specified
 When the casino bot is invisible:
 
 ### What Still Works
+
 ✓ Commands are processed normally (e.g., `/bot roulette`, `/bot blackjack`)  
 ✓ Messages are sent/received normally  
 ✓ Signs and visual elements display (just the character isn't visible)  
 ✓ Admin commands work normally  
 ✓ Chip tracking and game state persist  
-✓ Region triggers still activate when players enter the casino area  
+✓ Region triggers still activate when players enter the casino area
 
 ### What Changes
+
 ✗ Bot doesn't appear in the room character list  
 ✗ Players cannot see the bot as a character in the room  
 ✗ Casino bot won't be shown in character counts  
-✗ Admin command `/bot feature list` will still list casino (it's still a feature)  
+✗ Admin command `/bot feature list` will still list casino (it's still a feature)
 
 ## Making the Bot Visible Again
 
@@ -129,6 +139,7 @@ this.conn.Player.SetInvisible(false);
 ```
 
 For example, in a new admin command:
+
 ```typescript
 private onCommandBotVisibility = async (
     sender: API_Character,
@@ -136,7 +147,7 @@ private onCommandBotVisibility = async (
     args: string[],
 ) => {
     if (!this.requireAdmin(sender, msg)) return;
-    
+
     const visible = args[0] === "show";
     this.conn.Player.SetInvisible(!visible);
     this.conn.reply(msg, `Casino bot is now ${visible ? "visible" : "invisible"}.`);
@@ -146,18 +157,21 @@ private onCommandBotVisibility = async (
 ## Tradeoffs & Considerations
 
 ### Advantages
+
 - Clean solution: bot doesn't clutter the character list
 - Aesthetically pleasing: players only see the wheel, not a separate character
 - Simple implementation: one line of code
 - Doesn't break any functionality
 
 ### Disadvantages
+
 - Players can't see who's managing the casino
 - Makes debugging harder (harder to identify which bot account is handling casino)
 - If the bot appearance is important for immersion, this removes it
 - Uses the `ItemEars` slot permanently
 
 ### Alternatives (Not Recommended)
+
 1. **Keep bot visible**: More cluttered but more transparent about what's running
 2. **Multiple bot accounts**: Have invisibility bot separate from main Veratown bot (more complex)
 3. **Hide bot name in chat**: Not possible with BC API (would require custom server patch)
@@ -174,8 +188,8 @@ async toggleBotVisibility(active: boolean) {
         this.conn.Player.SetInvisible(true);
         if (this.player !== null) {
             await this.conn.Player.MoveToPos(
-                this.conn.Player.ChatRoomPosition < this.player.ChatRoomPosition 
-                    ? this.player.ChatRoomPosition 
+                this.conn.Player.ChatRoomPosition < this.player.ChatRoomPosition
+                    ? this.player.ChatRoomPosition
                     : this.player.ChatRoomPosition + 1
             );
         }
@@ -183,8 +197,8 @@ async toggleBotVisibility(active: boolean) {
         this.conn.Player.SetInvisible(false);
         if (this.player !== null) {
             await this.conn.Player.MoveToPos(
-                this.conn.Player.ChatRoomPosition < this.player.ChatRoomPosition 
-                    ? this.player.ChatRoomPosition - 1 
+                this.conn.Player.ChatRoomPosition < this.player.ChatRoomPosition
+                    ? this.player.ChatRoomPosition - 1
                     : this.player.ChatRoomPosition
             );
         }
@@ -193,6 +207,7 @@ async toggleBotVisibility(active: boolean) {
 ```
 
 This shows that:
+
 - `SetInvisible(true)` makes the bot invisible
 - `SetInvisible(false)` makes it visible again
 - Position swapping is often paired with visibility changes for immersion

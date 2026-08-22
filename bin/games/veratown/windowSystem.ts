@@ -34,9 +34,7 @@ export class WindowSystem implements VeratownFeatureSystem {
     private windowPositions: Array<{ X: number; Y: number }> = [];
     private readonly windowTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(
-        private conn: API_Connector,
-    ) {
+    public constructor(private conn: API_Connector) {
         this.windowTrigger = guardHandler(
             this.key,
             this.onCharacterPeepThroughWindow,
@@ -67,7 +65,10 @@ export class WindowSystem implements VeratownFeatureSystem {
             }
 
             for (const windowPos of this.windowPositions) {
-                this.conn.chatRoom.map.addTileTrigger(windowPos, this.windowTrigger);
+                this.conn.chatRoom.map.addTileTrigger(
+                    windowPos,
+                    this.windowTrigger,
+                );
             }
 
             console.log(

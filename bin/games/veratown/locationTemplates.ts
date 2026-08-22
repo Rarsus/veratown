@@ -266,8 +266,15 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
     furniture: {
         type: "furniture",
         label: "Bondage Furniture",
-        description: "Configurable bondage furniture with restraints and optional duration",
-        fields: ["x", "y", "data.furnitureAsset", "data.restraints (array)", "data.durationMs (optional)"],
+        description:
+            "Configurable bondage furniture with restraints and optional duration",
+        fields: [
+            "x",
+            "y",
+            "data.furnitureAsset",
+            "data.restraints (array)",
+            "data.durationMs (optional)",
+        ],
         example: {
             key: "furniture_bondage_bed",
             name: "Bondage Bed",
@@ -434,7 +441,9 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
     },
 };
 
-export function getLocationTemplate(type: string): LocationTemplate | undefined {
+export function getLocationTemplate(
+    type: string,
+): LocationTemplate | undefined {
     const key = type.toLowerCase() as LocationType;
     return LOCATION_TEMPLATES[key];
 }

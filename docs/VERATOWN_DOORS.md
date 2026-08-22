@@ -42,28 +42,28 @@ and `enabled` set to `true`.
 
 ```json
 {
-  "key": "basement_keypad",
-  "name": "Basement keypad",
-  "type": "keypad_door",
-  "x": 10,
-  "y": 8,
-  "enabled": true,
-  "data": {
-    "doorX": 20,
-    "doorY": 10,
-    "lockedTile": "MetalDown",
-    "unlockedTile": "SteelDoorOpen",
-    "unlockDurationMs": 10000,
-    "codes": {
-      "admin": "ADMIN-CODE",
-      "whitelist": "STAFF-CODE"
-    },
-    "whitelistMemberNumbers": [250927],
-    "insideTopLeftX": 21,
-    "insideTopLeftY": 9,
-    "insideBottomRightX": 39,
-    "insideBottomRightY": 20
-  }
+    "key": "basement_keypad",
+    "name": "Basement keypad",
+    "type": "keypad_door",
+    "x": 10,
+    "y": 8,
+    "enabled": true,
+    "data": {
+        "doorX": 20,
+        "doorY": 10,
+        "lockedTile": "MetalDown",
+        "unlockedTile": "SteelDoorOpen",
+        "unlockDurationMs": 10000,
+        "codes": {
+            "admin": "ADMIN-CODE",
+            "whitelist": "STAFF-CODE"
+        },
+        "whitelistMemberNumbers": [250927],
+        "insideTopLeftX": 21,
+        "insideTopLeftY": 9,
+        "insideBottomRightX": 39,
+        "insideBottomRightY": 20
+    }
 }
 ```
 
@@ -71,45 +71,45 @@ Example without directional exit protection but with auto-open from inside:
 
 ```json
 {
-  "key": "secure_room_door",
-  "name": "Secure room door",
-  "type": "keypad_door",
-  "x": 30,
-  "y": 15,
-  "enabled": true,
-  "data": {
-    "doorX": 30,
-    "doorY": 16,
-    "lockedTile": "WoodLocked",
-    "unlockedTile": "WoodOpen",
-    "unlockDurationMs": 8000,
-    "codes": {
-      "admin": "ADMIN-CODE"
-    },
-    "autoOpenTileX": 31,
-    "autoOpenTileY": 15
-  }
+    "key": "secure_room_door",
+    "name": "Secure room door",
+    "type": "keypad_door",
+    "x": 30,
+    "y": 15,
+    "enabled": true,
+    "data": {
+        "doorX": 30,
+        "doorY": 16,
+        "lockedTile": "WoodLocked",
+        "unlockedTile": "WoodOpen",
+        "unlockDurationMs": 8000,
+        "codes": {
+            "admin": "ADMIN-CODE"
+        },
+        "autoOpenTileX": 31,
+        "autoOpenTileY": 15
+    }
 }
 ```
 
 ### Required Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `x` | number | Keypad X coordinate. |
-| `y` | number | Keypad Y coordinate. |
-| `doorX` | number | Door tile X coordinate. |
-| `doorY` | number | Door tile Y coordinate. |
-| `lockedTile` | string | Visible `WallPath` map object used while locked. |
-| `unlockedTile` | string | Map object style used while unlocked. |
-| `unlockDurationMs` | number | Initial unlock duration in milliseconds. Defaults to 10 seconds. |
-| `codes` | object | Group-to-code mapping. At least one code is required. |
-| `insideTopLeftX` | number | Optional top-left X coordinate of the protected room. |
-| `insideTopLeftY` | number | Optional top-left Y coordinate of the protected room. |
-| `insideBottomRightX` | number | Optional bottom-right X coordinate of the protected room. |
-| `insideBottomRightY` | number | Optional bottom-right Y coordinate of the protected room. |
-| `autoOpenTileX` | number | Optional X coordinate of a tile inside the room that auto-opens the door. |
-| `autoOpenTileY` | number | Optional Y coordinate of a tile inside the room that auto-opens the door. |
+| Field                | Type   | Description                                                               |
+| -------------------- | ------ | ------------------------------------------------------------------------- |
+| `x`                  | number | Keypad X coordinate.                                                      |
+| `y`                  | number | Keypad Y coordinate.                                                      |
+| `doorX`              | number | Door tile X coordinate.                                                   |
+| `doorY`              | number | Door tile Y coordinate.                                                   |
+| `lockedTile`         | string | Visible `WallPath` map object used while locked.                          |
+| `unlockedTile`       | string | Map object style used while unlocked.                                     |
+| `unlockDurationMs`   | number | Initial unlock duration in milliseconds. Defaults to 10 seconds.          |
+| `codes`              | object | Group-to-code mapping. At least one code is required.                     |
+| `insideTopLeftX`     | number | Optional top-left X coordinate of the protected room.                     |
+| `insideTopLeftY`     | number | Optional top-left Y coordinate of the protected room.                     |
+| `insideBottomRightX` | number | Optional bottom-right X coordinate of the protected room.                 |
+| `insideBottomRightY` | number | Optional bottom-right Y coordinate of the protected room.                 |
+| `autoOpenTileX`      | number | Optional X coordinate of a tile inside the room that auto-opens the door. |
+| `autoOpenTileY`      | number | Optional Y coordinate of a tile inside the room that auto-opens the door. |
 
 `whitelistMemberNumbers` is optional. It is an array of member numbers that
 should use the `whitelist` group code.
@@ -148,23 +148,23 @@ The bot restores `lockedTile` whenever the door is locked and replaces it with
 `unlockedTile` during an unlock window. Both styles must be `WallPath` map
 objects. Their movement rules are enforced by the Bondage Club map client.
 
-| Locked style | Open style | Access rule while locked |
-| --- | --- | --- |
-| `WoodClosed` | `WoodOpen` | Users who can interact with the map. |
-| `WoodLocked` | `WoodOpen` | Room admins only. |
-| `WoodLockedBronze` | `WoodOpen` | Users holding the bronze map key. |
-| `WoodLockedSilver` | `WoodOpen` | Users holding the silver map key. |
-| `WoodLockedGold` | `WoodOpen` | Users holding the gold map key. |
-| `Metal` | `MetalOpen` | Everyone. |
-| `MetalUp` | `MetalOpen` | Upward movement into the door only. |
-| `MetalDown` | `MetalOpen` | Downward movement into the door only. |
-| `MetalLockedBronze` | `MetalOpen` | Users holding the bronze map key. |
-| `MetalLockedSilver` | `MetalOpen` | Users holding the silver map key. |
-| `MetalLockedGold` | `MetalOpen` | Users holding the gold map key. |
-| `BrownDoor` | `BrownDoorOpen` | Users who can interact with the map. |
-| `RoyalDoor` | `RoyalDoorOpen` | Users who can interact with the map. |
-| `SteelDoor` | `SteelDoorOpen` | Users who can interact with the map. |
-| `GrayDoor` | `GrayDoorOpen` | Users who can interact with the map. |
+| Locked style        | Open style      | Access rule while locked              |
+| ------------------- | --------------- | ------------------------------------- |
+| `WoodClosed`        | `WoodOpen`      | Users who can interact with the map.  |
+| `WoodLocked`        | `WoodOpen`      | Room admins only.                     |
+| `WoodLockedBronze`  | `WoodOpen`      | Users holding the bronze map key.     |
+| `WoodLockedSilver`  | `WoodOpen`      | Users holding the silver map key.     |
+| `WoodLockedGold`    | `WoodOpen`      | Users holding the gold map key.       |
+| `Metal`             | `MetalOpen`     | Everyone.                             |
+| `MetalUp`           | `MetalOpen`     | Upward movement into the door only.   |
+| `MetalDown`         | `MetalOpen`     | Downward movement into the door only. |
+| `MetalLockedBronze` | `MetalOpen`     | Users holding the bronze map key.     |
+| `MetalLockedSilver` | `MetalOpen`     | Users holding the silver map key.     |
+| `MetalLockedGold`   | `MetalOpen`     | Users holding the gold map key.       |
+| `BrownDoor`         | `BrownDoorOpen` | Users who can interact with the map.  |
+| `RoyalDoor`         | `RoyalDoorOpen` | Users who can interact with the map.  |
+| `SteelDoor`         | `SteelDoorOpen` | Users who can interact with the map.  |
+| `GrayDoor`          | `GrayDoorOpen`  | Users who can interact with the map.  |
 
 For a keypad outside a room that is below the door, use `MetalDown` as the
 locked style. It permits exit from the room above down toward the keypad, while
@@ -241,7 +241,9 @@ registered, and `/bot status` to confirm that the location snapshot loaded.
 There are two levels of door management access:
 
 ### Room Admins
+
 Room admins have full control over all keypads. They can:
+
 - Change any access code (admin, whitelist, guest)
 - Add and remove whitelist members
 - Manually lock/unlock doors
@@ -249,8 +251,10 @@ Room admins have full control over all keypads. They can:
 - View all configuration
 
 ### Whitelist Members
+
 Players on a keypad's whitelist have restricted management access. While on the
 keypad, they can:
+
 - Change the whitelist and guest codes (but NOT the admin code)
 - Add and remove other whitelist members
 - View the configuration and whitelist members
@@ -259,6 +263,7 @@ Whitelist members cannot lock, unlock, enable, or disable keypads — only admin
 can perform these administrative actions.
 
 ### Non-Whitelist Players
+
 Players who are not admins or on the whitelist cannot execute any door commands.
 They can only unlock the door by providing the correct code for their access group.
 
@@ -274,24 +279,24 @@ formats: `<code>`, `!code <code>`, or `/bot code <code>`.
 
 #### Admin-Only Commands (Room Admins)
 
-| Command | Purpose |
-| --- | --- |
-| `!door change-code admin <code>` | Change the admin access code. |
-| `!door lock` | Lock the door immediately. |
-| `!door unlock [seconds]` | Manually unlock the door for a duration. |
-| `!door enable` | Enable a disabled keypad. |
-| `!door disable` | Disable a keypad without deleting it. |
+| Command                          | Purpose                                  |
+| -------------------------------- | ---------------------------------------- |
+| `!door change-code admin <code>` | Change the admin access code.            |
+| `!door lock`                     | Lock the door immediately.               |
+| `!door unlock [seconds]`         | Manually unlock the door for a duration. |
+| `!door enable`                   | Enable a disabled keypad.                |
+| `!door disable`                  | Disable a keypad without deleting it.    |
 
 #### Whitelist Member & Admin Commands
 
-| Command | Purpose |
-| --- | --- |
-| `!door help` | Show available commands for your access level. |
-| `!door change-code <whitelist\|guest> <code>` | Change whitelist or guest code. |
-| `!door add-user <member number>` | Add a member number to the whitelist. |
-| `!door remove-user <member number>` | Remove a member number from the whitelist. |
-| `!door list` | Show configured groups, whitelist members, and unlock duration. |
-| `!door list-whitelist` | Show all whitelist member numbers for this keypad. |
+| Command                                       | Purpose                                                         |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| `!door help`                                  | Show available commands for your access level.                  |
+| `!door change-code <whitelist\|guest> <code>` | Change whitelist or guest code.                                 |
+| `!door add-user <member number>`              | Add a member number to the whitelist.                           |
+| `!door remove-user <member number>`           | Remove a member number from the whitelist.                      |
+| `!door list`                                  | Show configured groups, whitelist members, and unlock duration. |
+| `!door list-whitelist`                        | Show all whitelist member numbers for this keypad.              |
 
 Codes are not displayed by `!door list`. Code changes and whitelist modifications
 are persisted in the location document and trigger a location reload.

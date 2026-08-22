@@ -18,6 +18,7 @@ To create a simple bondage bed at coordinates (50, 20):
 **→ See [FURNITURE_MAP_OBJECTS.md](FURNITURE_MAP_OBJECTS.md) for a complete catalog of 13 furniture types with map objects, commands for each, and detailed examples.**
 
 For more complex examples here, see [Examples](#examples) section below.
+
 ## New Features
 
 ### !bindme Command
@@ -33,6 +34,7 @@ When a player stands on a furniture location and types `!bindme`, the furniture 
 ### Auto-Unlock Fixed
 
 The duration-based automatic unlock now works correctly:
+
 - When `durationMs` is set, furniture and restraints are automatically removed after the timer expires
 - Timer is properly tracked and cleaned up
 - Character receives a notification when released
@@ -46,6 +48,7 @@ The duration-based automatic unlock now works correctly:
 ```
 !location update my_bed data.furnitureProperties '{"disableAutoApply":true}'
 ```
+
 ## Overview
 
 The furniture bondage system allows admins to create highly configurable bondage
@@ -68,6 +71,7 @@ Everything is controlled by the location's `data` configuration block.
 ## Location Schema
 
 The location must have:
+
 - `type: "furniture"`
 - Valid `x` and `y` coordinates
 - `enabled: true`
@@ -78,15 +82,15 @@ The location must have:
 
 ```json
 {
-  "key": "furniture_bed_simple",
-  "name": "Simple Bed",
-  "type": "furniture",
-  "x": 20,
-  "y": 30,
-  "enabled": true,
-  "data": {
-    "furnitureAsset": "Bed"
-  }
+    "key": "furniture_bed_simple",
+    "name": "Simple Bed",
+    "type": "furniture",
+    "x": 20,
+    "y": 30,
+    "enabled": true,
+    "data": {
+        "furnitureAsset": "Bed"
+    }
 }
 ```
 
@@ -94,37 +98,37 @@ The location must have:
 
 ```json
 {
-  "key": "furniture_bondage_complete",
-  "name": "Complete Bondage Setup",
-  "type": "furniture",
-  "x": 25,
-  "y": 35,
-  "enabled": true,
-  "data": {
-    "furnitureAsset": "Bed",
-    "furnitureGroup": "ItemDevices",
-    "furnitureExtendedType": "Soft",
-    "furnitureColor": "#000000",
-    "furnitureProperties": {},
-    "craftDescription": "Bondage furniture setup",
-    "restraints": [
-      {
-        "group": "ItemArms",
-        "asset": "LeatherCuffs",
-        "extendedType": "Cuffs",
-        "difficulty": 20,
-        "color": "#000000"
-      },
-      {
-        "group": "ItemLegs",
-        "asset": "NylonRope",
-        "difficulty": 18,
-        "color": "#FF69B4"
-      }
-    ],
-    "applyDelayMs": 2000,
-    "durationMs": 120000
-  }
+    "key": "furniture_bondage_complete",
+    "name": "Complete Bondage Setup",
+    "type": "furniture",
+    "x": 25,
+    "y": 35,
+    "enabled": true,
+    "data": {
+        "furnitureAsset": "Bed",
+        "furnitureGroup": "ItemDevices",
+        "furnitureExtendedType": "Soft",
+        "furnitureColor": "#000000",
+        "furnitureProperties": {},
+        "craftDescription": "Bondage furniture setup",
+        "restraints": [
+            {
+                "group": "ItemArms",
+                "asset": "LeatherCuffs",
+                "extendedType": "Cuffs",
+                "difficulty": 20,
+                "color": "#000000"
+            },
+            {
+                "group": "ItemLegs",
+                "asset": "NylonRope",
+                "difficulty": 18,
+                "color": "#FF69B4"
+            }
+        ],
+        "applyDelayMs": 2000,
+        "durationMs": 120000
+    }
 }
 ```
 
@@ -132,47 +136,49 @@ The location must have:
 
 ### Furniture Configuration
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `furnitureAsset` | string | ✅ | The asset name (e.g., "Bed", "Kennel", "Pole", "WoodenBox") |
-| `furnitureGroup` | string | ❌ | Asset group (default: "ItemDevices") |
-| `furnitureExtendedType` | string | ❌ | Extended type variant for furniture |
-| `furnitureColor` | string | ❌ | Hex color code for furniture (e.g., "#000000") |
-| `furnitureProperties` | object | ❌ | Furniture-specific TypeRecord properties (e.g., { d: 0, p: 1 }) |
-| `craftDescription` | string | ❌ | Craft description (default: "Bondage furniture from [location]") |
+| Field                   | Type   | Required | Description                                                      |
+| ----------------------- | ------ | -------- | ---------------------------------------------------------------- |
+| `furnitureAsset`        | string | ✅       | The asset name (e.g., "Bed", "Kennel", "Pole", "WoodenBox")      |
+| `furnitureGroup`        | string | ❌       | Asset group (default: "ItemDevices")                             |
+| `furnitureExtendedType` | string | ❌       | Extended type variant for furniture                              |
+| `furnitureColor`        | string | ❌       | Hex color code for furniture (e.g., "#000000")                   |
+| `furnitureProperties`   | object | ❌       | Furniture-specific TypeRecord properties (e.g., { d: 0, p: 1 })  |
+| `craftDescription`      | string | ❌       | Craft description (default: "Bondage furniture from [location]") |
 
 ### Restraint Configuration
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `restraints` | array | ❌ | Array of restraint configurations |
+| Field        | Type  | Required | Description                       |
+| ------------ | ----- | -------- | --------------------------------- |
+| `restraints` | array | ❌       | Array of restraint configurations |
 
 Each restraint object in the array:
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `group` | string | ✅ | Asset group (e.g., "ItemMouth", "ItemArms", "ItemLegs") |
-| `asset` | string | ✅ | Asset name (e.g., "BallGag", "LeatherCuffs", "NylonRope") |
-| `extendedType` | string | ❌ | Type variant (e.g., "Tight", "Cuffs", "Hogtied") |
-| `difficulty` | number | ❌ | Lock difficulty 0-50 (default: 20) |
-| `color` | string | ❌ | Hex color code (uses asset default if not specified) |
+| Field          | Type   | Required | Description                                               |
+| -------------- | ------ | -------- | --------------------------------------------------------- |
+| `group`        | string | ✅       | Asset group (e.g., "ItemMouth", "ItemArms", "ItemLegs")   |
+| `asset`        | string | ✅       | Asset name (e.g., "BallGag", "LeatherCuffs", "NylonRope") |
+| `extendedType` | string | ❌       | Type variant (e.g., "Tight", "Cuffs", "Hogtied")          |
+| `difficulty`   | number | ❌       | Lock difficulty 0-50 (default: 20)                        |
+| `color`        | string | ❌       | Hex color code (uses asset default if not specified)      |
 
 ### Timing Configuration
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `applyDelayMs` | number | Delay (ms) before restraints are applied (default: 0) |
-| `durationMs` | number | Duration (ms) until furniture and restraints are automatically removed. Omit for permanent attachment. |
+| Field          | Type   | Description                                                                                            |
+| -------------- | ------ | ------------------------------------------------------------------------------------------------------ |
+| `applyDelayMs` | number | Delay (ms) before restraints are applied (default: 0)                                                  |
+| `durationMs`   | number | Duration (ms) until furniture and restraints are automatically removed. Omit for permanent attachment. |
 
 ## Available Furniture Assets
 
 **13 furniture types with dedicated map objects:**
+
 - Bed, Kennel, X-Cross, BondageBench, Trolley, Locker, WoodenBox
 - Coffin, TheDisplayFrame, Pole, MedicalBed, FuturisticCrate, Throne
 
 **→ See [FURNITURE_MAP_OBJECTS.md](FURNITURE_MAP_OBJECTS.md) for the complete catalog with map IDs, properties, and examples.**
 
 Additionally, any ItemDevices asset can be used as furniture (with or without a map object):
+
 - Cage, PersonalCage, LeatherCage
 - DisplayCase, SmallDisplayCase
 - VacBed, VacBedDeluxe
@@ -186,11 +192,11 @@ Furniture without dedicated map objects will still equip to the character but wo
 
 ```json
 {
-  "group": "ItemArms",
-  "asset": "HempRope",
-  "extendedType": "Cuffs",
-  "difficulty": 15,
-  "color": "#8B4513"
+    "group": "ItemArms",
+    "asset": "HempRope",
+    "extendedType": "Cuffs",
+    "difficulty": 15,
+    "color": "#8B4513"
 }
 ```
 
@@ -198,11 +204,11 @@ Furniture without dedicated map objects will still equip to the character but wo
 
 ```json
 {
-  "group": "ItemMouth",
-  "asset": "BallGag",
-  "extendedType": "Tight",
-  "difficulty": 20,
-  "color": "#FF1493"
+    "group": "ItemMouth",
+    "asset": "BallGag",
+    "extendedType": "Tight",
+    "difficulty": 20,
+    "color": "#FF1493"
 }
 ```
 
@@ -258,31 +264,31 @@ Auto-adds restraints for 1 minute:
 
 ```json
 {
-  "key": "furniture_punishment_bed",
-  "name": "Punishment Bed",
-  "type": "furniture",
-  "x": 40,
-  "y": 50,
-  "enabled": true,
-  "data": {
-    "furnitureAsset": "Bed",
-    "craftDescription": "Punishment bedding",
-    "restraints": [
-      {
-        "group": "ItemArms",
-        "asset": "LeatherCuffs",
-        "extendedType": "Cuffs",
-        "difficulty": 20
-      },
-      {
-        "group": "ItemLegs",
-        "asset": "LeatherCuffs",
-        "extendedType": "Cuffs",
-        "difficulty": 20
-      }
-    ],
-    "durationMs": 60000
-  }
+    "key": "furniture_punishment_bed",
+    "name": "Punishment Bed",
+    "type": "furniture",
+    "x": 40,
+    "y": 50,
+    "enabled": true,
+    "data": {
+        "furnitureAsset": "Bed",
+        "craftDescription": "Punishment bedding",
+        "restraints": [
+            {
+                "group": "ItemArms",
+                "asset": "LeatherCuffs",
+                "extendedType": "Cuffs",
+                "difficulty": 20
+            },
+            {
+                "group": "ItemLegs",
+                "asset": "LeatherCuffs",
+                "extendedType": "Cuffs",
+                "difficulty": 20
+            }
+        ],
+        "durationMs": 60000
+    }
 }
 ```
 
@@ -292,24 +298,24 @@ Adds kennel immediately, waits 3 seconds, then adds leash:
 
 ```json
 {
-  "key": "furniture_kennel_custom",
-  "name": "Custom Kennel",
-  "type": "furniture",
-  "x": 45,
-  "y": 55,
-  "enabled": true,
-  "data": {
-    "furnitureAsset": "Kennel",
-    "furnitureProperties": { "d": 0, "p": 1 },
-    "restraints": [
-      {
-        "group": "ItemNeck",
-        "asset": "LeatherCollar",
-        "color": "#FF69B4"
-      }
-    ],
-    "applyDelayMs": 3000
-  }
+    "key": "furniture_kennel_custom",
+    "name": "Custom Kennel",
+    "type": "furniture",
+    "x": 45,
+    "y": 55,
+    "enabled": true,
+    "data": {
+        "furnitureAsset": "Kennel",
+        "furnitureProperties": { "d": 0, "p": 1 },
+        "restraints": [
+            {
+                "group": "ItemNeck",
+                "asset": "LeatherCollar",
+                "color": "#FF69B4"
+            }
+        ],
+        "applyDelayMs": 3000
+    }
 }
 ```
 
@@ -319,36 +325,36 @@ No duration - restraints stay until manually removed:
 
 ```json
 {
-  "key": "furniture_throne_permanent",
-  "name": "Restraint Throne",
-  "type": "furniture",
-  "x": 30,
-  "y": 40,
-  "enabled": true,
-  "data": {
-    "furnitureAsset": "Throne",
-    "furnitureColor": "#8B4513",
-    "craftDescription": "Royal bondage throne",
-    "restraints": [
-      {
-        "group": "ItemArms",
-        "asset": "IronCuffs",
-        "difficulty": 30,
-        "color": "#696969"
-      },
-      {
-        "group": "ItemLegs",
-        "asset": "IronCuffs",
-        "difficulty": 30,
-        "color": "#696969"
-      },
-      {
-        "group": "ItemMouth",
-        "asset": "PanelGag",
-        "difficulty": 25
-      }
-    ]
-  }
+    "key": "furniture_throne_permanent",
+    "name": "Restraint Throne",
+    "type": "furniture",
+    "x": 30,
+    "y": 40,
+    "enabled": true,
+    "data": {
+        "furnitureAsset": "Throne",
+        "furnitureColor": "#8B4513",
+        "craftDescription": "Royal bondage throne",
+        "restraints": [
+            {
+                "group": "ItemArms",
+                "asset": "IronCuffs",
+                "difficulty": 30,
+                "color": "#696969"
+            },
+            {
+                "group": "ItemLegs",
+                "asset": "IronCuffs",
+                "difficulty": 30,
+                "color": "#696969"
+            },
+            {
+                "group": "ItemMouth",
+                "asset": "PanelGag",
+                "difficulty": 25
+            }
+        ]
+    }
 }
 ```
 
@@ -413,6 +419,7 @@ When a character steps on a furniture tile:
 ### Multiple Triggers
 
 If a character steps on the same furniture tile multiple times:
+
 - Each trigger adds new furniture/restraints
 - Previous items are NOT automatically removed
 - The character could accumulate multiple instances
@@ -424,23 +431,28 @@ To prevent this, use duration timers or place furniture on tiles that are only v
 Common extended types for different asset groups:
 
 ### ItemArms (Rope/Cuffs)
+
 - "Cuffs" - Arm cuffs
 - "Hogtied" - Hogtied (affects arms + legs)
 - "Reverse" - Reverse (behind back)
 - "Frogtie" - Frogtie (bent leg position)
 
 ### ItemMouth (Gags)
+
 - "Tight" - Tight gag
 - "Strict" - Strict gag
 - "Loose" - Loose fitting
 
 ### ItemNeck (Collars/Chains)
+
 - "Normal" - Standard collar
 - "Tight" - Tight collar
 - "Locked" - Locked collar
 
 ### ItemDevices (Furniture)
+
 Varies by furniture type:
+
 - **Kennel**: `d` (door: 0=open, 1=closed), `p` (padding: 0/1)
 - **Bed**: Various comfort settings
 - Other furniture may have specific property types
@@ -456,21 +468,25 @@ Varies by furniture type:
 ## Troubleshooting
 
 **Furniture not appearing:**
+
 - Verify furniture asset name is correct
 - Check that furnitureGroup is correct (usually "ItemDevices")
 - Confirm character's appearance has slot availability
 
 **Restraints not applying:**
+
 - Verify restraint asset group and name are correct
 - Check that character appearance has room for the items
 - Confirm difficulty is between 0-50
 
 **Duration not working:**
+
 - Ensure durationMs is set in milliseconds (e.g., 60000 for 1 minute)
 - Verify the character is still in the room when duration expires
 - Check console logs for timeout errors
 
 **Color not displaying:**
+
 - Use valid hex format: "#RRGGBB"
 - Some items may override custom colors with asset defaults
 - Try using default by omitting the color field
@@ -487,13 +503,13 @@ The furniture bondage system is automatically loaded and can be enabled/disabled
 
 ## Comparison with Other Systems
 
-| Feature | Kennel | Cage | Furniture |
-| --- | --- | --- | --- |
-| Configurable | ❌ No | Limited | ✅ Full |
-| Furniture Type | Kennel only | Crate only | Any ItemDevices |
-| Restraints | None | Built-in | ✅ Configurable |
-| Duration | None | ✅ Yes | ✅ Yes |
-| Admin Commands | ❌ No | Limited | ✅ Full management |
-| Predefined Positions | ✅ Yes | ✅ Yes | ✅ Via location system |
+| Feature              | Kennel      | Cage       | Furniture              |
+| -------------------- | ----------- | ---------- | ---------------------- |
+| Configurable         | ❌ No       | Limited    | ✅ Full                |
+| Furniture Type       | Kennel only | Crate only | Any ItemDevices        |
+| Restraints           | None        | Built-in   | ✅ Configurable        |
+| Duration             | None        | ✅ Yes     | ✅ Yes                 |
+| Admin Commands       | ❌ No       | Limited    | ✅ Full management     |
+| Predefined Positions | ✅ Yes      | ✅ Yes     | ✅ Via location system |
 
 The furniture system offers maximum flexibility while maintaining simplicity for common use cases.

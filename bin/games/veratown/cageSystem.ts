@@ -66,9 +66,7 @@ export class CageSystem implements VeratownFeatureSystem {
     private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
     private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(
-        private conn: API_Connector,
-    ) {
+    public constructor(private conn: API_Connector) {
         this.cageTrigger = guardHandler(this.key, this.onCharacterEnterCage);
         this.cageEntryTrigger = guardHandler(
             this.key,
@@ -98,7 +96,11 @@ export class CageSystem implements VeratownFeatureSystem {
         try {
             for (const posKey of this.cagesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom.map.removeTileTrigger(x, y, this.cageTrigger);
+                this.conn.chatRoom.map.removeTileTrigger(
+                    x,
+                    y,
+                    this.cageTrigger,
+                );
             }
             for (const posKey of this.cageEntriesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);

@@ -194,23 +194,46 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
         }
     }
 
-    private parseConfig(location: VeratownLocationDoc): FurnitureActionConfig | null {
+    private parseConfig(
+        location: VeratownLocationDoc,
+    ): FurnitureActionConfig | null {
         const data = location.data ?? {};
 
-        const furnitureAsset = typeof data.furnitureAsset === "string" ? data.furnitureAsset : undefined;
+        const furnitureAsset =
+            typeof data.furnitureAsset === "string"
+                ? data.furnitureAsset
+                : undefined;
         if (!furnitureAsset) {
-            console.warn(`[FurnitureBondageSystem] Location ${location.key} missing furnitureAsset`);
+            console.warn(
+                `[FurnitureBondageSystem] Location ${location.key} missing furnitureAsset`,
+            );
             return null;
         }
 
         const config: FurnitureActionConfig = {
             furnitureAsset,
-            furnitureGroup: typeof data.furnitureGroup === "string" ? data.furnitureGroup : "ItemDevices",
-            applyDelayMs: typeof data.applyDelayMs === "number" ? data.applyDelayMs : 0,
-            durationMs: typeof data.durationMs === "number" ? data.durationMs : undefined,
-            furnitureExtendedType: typeof data.furnitureExtendedType === "string" ? data.furnitureExtendedType : undefined,
-            furnitureColor: typeof data.furnitureColor === "string" ? data.furnitureColor : undefined,
-            craftDescription: typeof data.craftDescription === "string" ? data.craftDescription : `Bondage furniture from ${location.name}`,
+            furnitureGroup:
+                typeof data.furnitureGroup === "string"
+                    ? data.furnitureGroup
+                    : "ItemDevices",
+            applyDelayMs:
+                typeof data.applyDelayMs === "number" ? data.applyDelayMs : 0,
+            durationMs:
+                typeof data.durationMs === "number"
+                    ? data.durationMs
+                    : undefined,
+            furnitureExtendedType:
+                typeof data.furnitureExtendedType === "string"
+                    ? data.furnitureExtendedType
+                    : undefined,
+            furnitureColor:
+                typeof data.furnitureColor === "string"
+                    ? data.furnitureColor
+                    : undefined,
+            craftDescription:
+                typeof data.craftDescription === "string"
+                    ? data.craftDescription
+                    : `Bondage furniture from ${location.name}`,
         };
 
         // Parse restraints array
@@ -219,13 +242,25 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
             for (const r of data.restraints) {
                 if (typeof r === "object" && r !== null) {
                     const restraint = r as Record<string, unknown>;
-                    if (typeof restraint.group === "string" && typeof restraint.asset === "string") {
+                    if (
+                        typeof restraint.group === "string" &&
+                        typeof restraint.asset === "string"
+                    ) {
                         config.restraints.push({
                             group: restraint.group,
                             asset: restraint.asset,
-                            extendedType: typeof restraint.extendedType === "string" ? restraint.extendedType : undefined,
-                            difficulty: typeof restraint.difficulty === "number" ? restraint.difficulty : 20,
-                            color: typeof restraint.color === "string" ? restraint.color : undefined,
+                            extendedType:
+                                typeof restraint.extendedType === "string"
+                                    ? restraint.extendedType
+                                    : undefined,
+                            difficulty:
+                                typeof restraint.difficulty === "number"
+                                    ? restraint.difficulty
+                                    : 20,
+                            color:
+                                typeof restraint.color === "string"
+                                    ? restraint.color
+                                    : undefined,
                         });
                     }
                 }
@@ -233,8 +268,14 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
         }
 
         // Parse furniture properties
-        if (typeof data.furnitureProperties === "object" && data.furnitureProperties !== null) {
-            config.furnitureProperties = data.furnitureProperties as Record<string, unknown>;
+        if (
+            typeof data.furnitureProperties === "object" &&
+            data.furnitureProperties !== null
+        ) {
+            config.furnitureProperties = data.furnitureProperties as Record<
+                string,
+                unknown
+            >;
         }
 
         return config;
@@ -280,7 +321,9 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
             );
 
             if (tile.config.furnitureExtendedType && furniture?.Extended) {
-                furniture.Extended.SetType(tile.config.furnitureExtendedType as any);
+                furniture.Extended.SetType(
+                    tile.config.furnitureExtendedType as any,
+                );
             }
 
             if (tile.config.furnitureColor) {
@@ -294,7 +337,10 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
 
             // Apply furniture-specific properties
             if (tile.config.furnitureProperties) {
-                furniture?.setProperty("TypeRecord", tile.config.furnitureProperties as any);
+                furniture?.setProperty(
+                    "TypeRecord",
+                    tile.config.furnitureProperties as any,
+                );
             }
 
             // Apply restraints after optional delay
@@ -331,7 +377,10 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 }, tile.config.durationMs);
 
                 // Store the timer with config for later cleanup
-                this.activeTimers.set(character.MemberNumber, { timer, config: tile.config });
+                this.activeTimers.set(character.MemberNumber, {
+                    timer,
+                    config: tile.config,
+                });
             }
         } catch (e) {
             console.error(
@@ -398,7 +447,10 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 `(Your time with the ${config.furnitureAsset} has ended. Restraints removed.)`,
             );
         } catch (e) {
-            console.error("[FurnitureBondageSystem] Error removing restraints:", e);
+            console.error(
+                "[FurnitureBondageSystem] Error removing restraints:",
+                e,
+            );
         }
     }
 }

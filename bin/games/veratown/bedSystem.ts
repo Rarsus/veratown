@@ -41,9 +41,7 @@ export class BedSystem implements VeratownFeatureSystem {
     private bedPositions: Array<{ X: number; Y: number }> = [];
     private readonly bedTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(
-        private conn: API_Connector,
-    ) {
+    public constructor(private conn: API_Connector) {
         this.bedTrigger = guardHandler(this.key, this.onCharacterEnterBed);
     }
 
@@ -126,7 +124,7 @@ export class BedSystem implements VeratownFeatureSystem {
                         AssetGet("ItemAddon", "Covers"),
                     );
                 } else if (!isAsleep && hasBed) {
-                    character.Appearance.RemoveItem("ItemAddon"); // 
+                    character.Appearance.RemoveItem("ItemAddon"); //
                     character.Appearance.RemoveItem("ItemDevices");
                 }
 

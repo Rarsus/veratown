@@ -9,7 +9,7 @@ This guide explains how to use MongoDB Atlas (cloud-hosted MongoDB) with Veratow
 ✅ **Auto-Scaling** - Handles load automatically  
 ✅ **Stateless Containers** - Deploy anywhere (Cloud Run, Compute Engine, local)  
 ✅ **Free Tier** - 512 MB storage, plenty for Veratown+  
-✅ **Low Cost** - ~$0-10/month for free/shared tier  
+✅ **Low Cost** - ~$0-10/month for free/shared tier
 
 ## Quick Start (5 minutes)
 
@@ -19,10 +19,10 @@ This guide explains how to use MongoDB Atlas (cloud-hosted MongoDB) with Veratow
 2. Click **Try Free** and create account
 3. Create a project (default name OK)
 4. Create a cluster:
-   - **Tier**: M0 (free)
-   - **Cloud**: AWS, Google Cloud, or Azure (any region)
-   - **Name**: "veratown" or similar
-   - Click **Create**
+    - **Tier**: M0 (free)
+    - **Cloud**: AWS, Google Cloud, or Azure (any region)
+    - **Name**: "veratown" or similar
+    - Click **Create**
 
 Wait ~5-10 minutes for cluster to deploy.
 
@@ -35,6 +35,7 @@ Wait ~5-10 minutes for cluster to deploy.
 5. Replace `<password>` and `<database_name>` with your credentials
 
 Example:
+
 ```
 mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/ropeybot?retryWrites=true&w=majority
 ```
@@ -56,12 +57,12 @@ Edit `config.json` and update:
 
 ```json
 {
-  "user": "your_bot_username",
-  "password": "your_bot_password",
-  "game": "veratown",
-  "mongo_uri": "mongodb+srv://atlas_username:atlas_password@cluster0.xxxxx.mongodb.net/ropeybot",
-  "mongo_db": "ropeybot",
-  "mongo_tls": true
+    "user": "your_bot_username",
+    "password": "your_bot_password",
+    "game": "veratown",
+    "mongo_uri": "mongodb+srv://atlas_username:atlas_password@cluster0.xxxxx.mongodb.net/ropeybot",
+    "mongo_db": "ropeybot",
+    "mongo_tls": true
 }
 ```
 
@@ -70,24 +71,24 @@ Edit `config.json` and update:
 Replace the entire file with:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
-  ropeybot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ropeybot
-    restart: unless-stopped
-    
-    volumes:
-      - ./config.json:/bot/cfg/config.json:ro
-    
-    environment:
-      NODE_ENV: production
-    
-    stdin_open: true
-    tty: true
+    ropeybot:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: ropeybot
+        restart: unless-stopped
+
+        volumes:
+            - ./config.json:/bot/cfg/config.json:ro
+
+        environment:
+            NODE_ENV: production
+
+        stdin_open: true
+        tty: true
 ```
 
 **Note**: No MongoDB service! All persistence handled by Atlas.
@@ -110,6 +111,7 @@ Look for "Connecting to mongo..." in logs. If no errors, you're good!
 **Problem**: `MongoServerError: connect ECONNREFUSED`
 
 **Solutions**:
+
 1. Check username/password in connection string
 2. Verify IP whitelist: Atlas → Network Access → Add your IP
 3. For Docker: Atlas automatically allows all IPs from Docker (no extra config needed)
@@ -119,6 +121,7 @@ Look for "Connecting to mongo..." in logs. If no errors, you're good!
 **Problem**: `MongoAuthenticationError: Invalid username or password`
 
 **Solution**:
+
 ```bash
 # Reset password in Atlas UI:
 # Database Access → Click user → Edit → Change password
@@ -134,7 +137,7 @@ docker-compose restart
 
 ```json
 {
-  "mongo_uri": "mongodb+srv://...?maxPoolSize=100"
+    "mongo_uri": "mongodb+srv://...?maxPoolSize=100"
 }
 ```
 
@@ -143,6 +146,7 @@ docker-compose restart
 **Problem**: `MongoOperationError: authentication failed`
 
 **Solution**:
+
 1. Verify database name in connection string (`/ropeybot`)
 2. Ensure database user has correct privileges
 3. Try connecting with MongoDB Compass to test
@@ -189,6 +193,7 @@ docker-compose exec -T mongo mongorestore \
 ### Automatic Backups (Free Tier)
 
 MongoDB Atlas automatically:
+
 - ✅ Backs up hourly
 - ✅ Keeps 7 days of snapshots (free tier)
 - ✅ Stores on AWS S3 (encrypted)
@@ -204,6 +209,7 @@ MongoDB Atlas automatically:
 ### Automated Backups (Paid Tier)
 
 For production, upgrade to M2+ tier:
+
 - ✅ Continuous backups
 - ✅ Longer retention (up to 90 days)
 - ✅ Multiple restore points
@@ -213,21 +219,25 @@ For production, upgrade to M2+ tier:
 ## Cost Analysis
 
 ### Free Tier (M0)
+
 - **Limit**: 512 MB storage, 100 concurrent connections
 - **Cost**: $0
 - **Suitable for**: Development, testing, small deployments
 
 ### Shared Tier (M2, M5)
+
 - **Limit**: 2 GB - 5 GB storage
 - **Cost**: $9-57/month
 - **Suitable for**: Small production deployments
 
 ### Dedicated Tier (M10+)
+
 - **Limit**: 10+ GB storage, auto-scaling
 - **Cost**: $57+/month
 - **Suitable for**: High-traffic production deployments
 
 **For Veratown+**: Free tier M0 is plenty for:
+
 - 700+ player records
 - 80+ dares
 - 30+ locations
@@ -266,6 +276,7 @@ Only upgrade if you hit storage limit or need higher availability.
 ### Cloud Console Metrics
 
 Atlas provides real-time monitoring:
+
 - **Connections** - Current and historical
 - **Operations** - Queries, inserts, updates
 - **Disk usage** - Storage trend
@@ -276,10 +287,10 @@ Atlas provides real-time monitoring:
 
 1. Click **Alerts** in Atlas console
 2. Create rules for:
-   - Disk usage > 80%
-   - Connection count > 90
-   - CPU usage > 70%
-   - Member down or replication lag
+    - Disk usage > 80%
+    - Connection count > 90
+    - CPU usage > 70%
+    - Member down or replication lag
 
 ---
 
@@ -289,13 +300,14 @@ Atlas provides real-time monitoring:
 
 ```json
 {
-  "mongo_uri": "mongodb+srv://...?maxPoolSize=50&minPoolSize=10"
+    "mongo_uri": "mongodb+srv://...?maxPoolSize=50&minPoolSize=10"
 }
 ```
 
 ### Replica Sets (Paid)
 
 For redundancy, upgrade to paid tier:
+
 - Automatic 3-node replication
 - Automatic failover
 - 99.99% SLA
@@ -303,6 +315,7 @@ For redundancy, upgrade to paid tier:
 ### Sharding (Enterprise)
 
 For massive scale (not needed for Veratown+):
+
 - Horizontal data partitioning
 - Automatic load distribution
 
@@ -314,4 +327,3 @@ For massive scale (not needed for Veratown+):
 - [Connection String Reference](https://docs.mongodb.com/manual/reference/connection-string/)
 - [MongoDB Compass](https://www.mongodb.com/products/compass) - GUI for exploring data
 - [Google Cloud Deployment with Atlas](docs/GOOGLE_CLOUD_QUICK_START.md)
-

@@ -26,17 +26,19 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 
 ## Veratown+ Documentation
 
-**Veratown+** is a persistent-world roleplay bot with integrated games, multi-bot architecture, and region management. 
+**Veratown+** is a persistent-world roleplay bot with integrated games, multi-bot architecture, and region management.
 
 **Start here**: [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Complete documentation suite with quick start, features, commands, development guide, and troubleshooting.
 
 **For different roles**:
+
 - **Players & Game Masters**: [Quick Start Guide](docs/VERATOWN_DOCUMENTATION_INDEX.md#quick-start-guide), [Commands Reference](docs/VERATOWN_DOCUMENTATION_INDEX.md#commands-reference), [Troubleshooting](docs/VERATOWN_DOCUMENTATION_INDEX.md#troubleshooting)
 - **Developers**: [Architecture Deep Dive](docs/VERATOWN_ARCHITECTURE.md), [Development Guide](docs/VERATOWN_COMPLETE_GUIDE.md#development-guide), [Database Design](docs/VERATOWN_ARCHITECTURE.md#database-design)
 - **Map Designers**: [Map & Regions](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md), [Region Definitions](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#region-definitions), [Planned Improvements](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#planned-improvements)
 - **DevOps & Operations**: [Google Cloud Deployment](docs/GOOGLE_CLOUD_DEPLOYMENT.md) (persistent MongoDB + GitHub auto-deploy), [Build & Setup](docs/BUILD_SETUP.md)
 
 **New documentation files**:
+
 - [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Navigation index for all docs
 - [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) - **Environment variable configuration** (required for cloud deployment)
 - [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) - **Easiest cloud deployment** (10 min setup, $5/month, GitHub auto-deploy)
@@ -117,6 +119,7 @@ The bot can either be run locally or via the Docker image.
 The bot uses MongoDB to store game data (player records, dares, locations, etc).
 
 **Recommended**: Use **MongoDB Atlas** (free cloud-hosted MongoDB):
+
 - Create a free MongoDB Atlas cluster: [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
 - Get your connection string: `mongodb+srv://user:pass@cluster.xxx.mongodb.net/ropeybot`
 - Update `config.json` with `mongo_uri` and set `mongo_tls` to `true`
@@ -126,6 +129,7 @@ The bot uses MongoDB to store game data (player records, dares, locations, etc).
 **Setup**: See [docs/MONGODB_ATLAS_SETUP.md](docs/MONGODB_ATLAS_SETUP.md) for detailed instructions.
 
 **Alternative**: For local development with local MongoDB container, use `docker-compose.local.yml`:
+
 ```bash
 docker compose -f docker-compose.local.yml up -d --build
 ```

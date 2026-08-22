@@ -11,6 +11,7 @@
 The codebase has significant architectural inefficiencies due to the evolutionary path of feature development. **Dare and Casino started as standalone games but evolved to work within Veratown**, creating duplicate patterns and missed opportunities for unified architecture.
 
 **Key Finding**: Casino is a de facto Veratown feature but doesn't implement the `VeratownFeatureSystem` interface, causing:
+
 - Duplicate CommandParser initialization and management
 - No unified feature enable/disable control
 - Inconsistent initialization patterns in `main.ts`
@@ -55,17 +56,19 @@ bin/
 ### 1. **Casino is a De Facto VeratownFeatureSystem** ❌
 
 **Current Problem**:
+
 ```typescript
 // main.ts - Casino initialized as separate entity
 const veratownGame = new Veratown(connector, veratownConn2, db, config.dare);
 // ... later, Casino created independently with its own CommandParser
-new Casino(poolRouletteConn, db, { 
-    region: GAME_LOCATION, 
-    locationStore: poolRouletteLocationStore 
+new Casino(poolRouletteConn, db, {
+    region: GAME_LOCATION,
+    locationStore: poolRouletteLocationStore,
 });
 ```
 
 **What This Means**:
+
 - Casino has its **own CommandParser** (duplicates Veratown's)
 - Casino commands processed independently
 - No unified `!bot feature enable/disable casino`
@@ -74,6 +77,7 @@ new Casino(poolRouletteConn, db, {
 - Inconsistent error handling (Casino doesn't use `guardHandler`)
 
 **Impact**:
+
 - Veratown's admin commands (`/bot feature list|enable|disable`) don't manage Casino
 - Code duplication in CommandParser initialization (3 instances: Veratown, Dare, Casino)
 - Complex multi-game state in `main.ts` instead of Veratown managing all its parts
@@ -84,17 +88,19 @@ new Casino(poolRouletteConn, db, {
 ### 2. **Location Store Loaded Multiple Times** 🔄
 
 **Current**:
+
 ```typescript
 // main.ts - Veratown init
 await this.locationStore.loadLocations(VERATOWN_LOCATIONS_FALLBACK);
 
 // main.ts - Casino init (separate)
-new Casino(poolRouletteConn, db, { 
-    locationStore: poolRouletteLocationStore  // NEW instance!
+new Casino(poolRouletteConn, db, {
+    locationStore: poolRouletteLocationStore, // NEW instance!
 });
 ```
 
-**Problem**: 
+**Problem**:
+
 - `VeratownLocationStore` instantiated separately for Casino
 - Database loaded redundantly
 - No state sharing between Veratown and Casino location data
@@ -105,13 +111,14 @@ new Casino(poolRouletteConn, db, {
 
 Three separate instances across one environment:
 
-| Instance | Owner | Region |
-|----------|-------|--------|
-| `Veratown.commandParser` | Veratown | Excludes GAME_LOCATION |
-| `Dare.commandParser` | Dare | DARE_LOCATION (optional) |
-| `Casino.commandParser` | Casino | GAME_LOCATION |
+| Instance                 | Owner    | Region                   |
+| ------------------------ | -------- | ------------------------ |
+| `Veratown.commandParser` | Veratown | Excludes GAME_LOCATION   |
+| `Dare.commandParser`     | Dare     | DARE_LOCATION (optional) |
+| `Casino.commandParser`   | Casino   | GAME_LOCATION            |
 
 **Issues**:
+
 - Three separate message parsing loops
 - Three `charName.indexOf("!bot")` searches per message
 - Inconsistent command registration patterns
@@ -142,6 +149,7 @@ new Casino(poolRouletteConn, db, { ... });  // ← Separate lifecycle!
 ```
 
 **Why This Matters**:
+
 - Casino startup/shutdown not synchronized with Veratown
 - If Casino crashes, Veratown doesn't know or recover
 - Feature enable/disable doesn't apply to Casino
@@ -152,6 +160,7 @@ new Casino(poolRouletteConn, db, { ... });  // ← Separate lifecycle!
 ### 5. **No Unified Error Handling** ⚠️
 
 Veratown features use `guardHandler()` wrapper:
+
 ```typescript
 private initFeature<T extends VeratownFeatureSystem>(
     factory: () => T,
@@ -169,6 +178,7 @@ private initFeature<T extends VeratownFeatureSystem>(
 ```
 
 Casino has **no equivalent**:
+
 - Crash in Casino's message handler takes down entire bot
 - No graceful degradation
 - No per-feature error recovery
@@ -179,13 +189,14 @@ Casino has **no equivalent**:
 
 These systems share location data but don't know about each other:
 
-| System | Location Type | Current Pattern |
-|--------|---|---|
-| **Dare** | `dare_region` | Loads from locationStore in constructor |
-| **Casino** | `game_region` | Loads from locationStore in constructor |
-| **Veratown Features** | `cage`, `shower`, `bed`, etc. | All managed by Veratown |
+| System                | Location Type                 | Current Pattern                         |
+| --------------------- | ----------------------------- | --------------------------------------- |
+| **Dare**              | `dare_region`                 | Loads from locationStore in constructor |
+| **Casino**            | `game_region`                 | Loads from locationStore in constructor |
+| **Veratown Features** | `cage`, `shower`, `bed`, etc. | All managed by Veratown                 |
 
-**Problem**: 
+**Problem**:
+
 - Dare/Casino location loads happen in parallel, not guaranteed to complete before use
 - No transaction/atomicity when location data updates
 - Each system does its own `locationStore.loadLocations()` call
@@ -196,12 +207,11 @@ These systems share location data but don't know about each other:
 
 ```typescript
 // Only 3 functions:
-- generatePassword()
-- remainingTimeString()
-- wait()
+-generatePassword() - remainingTimeString() - wait();
 ```
 
 **Could include**:
+
 - Shared forfeit logic (used by Dare + Casino)
 - Shared item validation
 - Shared location pattern matching
@@ -214,6 +224,7 @@ These systems share location data but don't know about each other:
 ## Code Duplication Examples
 
 ### Pattern 1: Forfeit Logic
+
 ```typescript
 // casino/forfeits.ts - Forfeit application
 export function applyForfeitForDare(...) { ... }
@@ -221,10 +232,12 @@ export function applyForfeitForDare(...) { ... }
 // dare.ts - Uses the same function
 import { applyForfeitForDare } from "./casino/forfeits";
 ```
+
 ✅ **Current**: Already shared (good!)  
 ⚠️ **Issue**: Imported from casino/ folder, but logically belongs to shared utils
 
 ### Pattern 2: Location Store Loading
+
 ```typescript
 // dare.ts
 private async loadLocations(): Promise<void> {
@@ -246,9 +259,11 @@ private async loadGameRegion(...): Promise<void> {
     } catch (e) { ... }
 }
 ```
+
 **Duplication**: Same pattern, different type key → Extract to utility
 
 ### Pattern 3: CommandParser Management
+
 ```typescript
 // veratown.ts
 this.commandParser = new CommandParser(this.conn, undefined, [GAME_LOCATION]);
@@ -259,6 +274,7 @@ this.commandParser = commandParser ?? new CommandParser(conn, config?.region);
 // casino.ts
 this.commandParser = new CommandParser(conn, config?.region);
 ```
+
 **Pattern**: All follow same but require manual handling → Centralize
 
 ---
@@ -266,12 +282,14 @@ this.commandParser = new CommandParser(conn, config?.region);
 ## Efficiency & Performance Issues
 
 ### 1. **CommandParser Dispatch Overhead**
+
 - **3 parsers** → **3 message interceptors** per chat message
 - Dare parser receives **all** Veratown messages, filters by region
 - Casino parser receives **all** Veratown messages, filters by region
 - Better: **1 parser** dispatches to `CommandRegistry` by feature
 
 ### 2. **Database Queries Not Batched**
+
 ```typescript
 // Veratown init
 await this.locationStore.loadLocations(...);
@@ -284,16 +302,19 @@ await this.loadGameRegion(...);  // Third query for same data!
 ```
 
 ### 3. **No Lazy Loading of Features**
+
 - All systems initialized immediately, even if disabled
 - Dare/Casino storage instances created even if not needed
 - Better: Initialize only when feature enabled
 
 ### 4. **Initialization Order Fragility**
+
 ```typescript
 // In main.ts
 new Veratown(...);
 new Casino(...);  // What if Veratown init fails partway through?
 ```
+
 No guarantees about state consistency if initialization halts partway.
 
 ---
@@ -323,12 +344,13 @@ games/
 ### Change 1: Make Casino a VeratownFeatureSystem
 
 **Before**:
+
 ```typescript
 export class Casino {
     private game: Game;
     public commandParser: CommandParser;
     public store: CasinoStore;
-    
+
     public constructor(
         private conn: API_Connector,
         db: Db,
@@ -340,15 +362,16 @@ export class Casino {
 ```
 
 **After**:
+
 ```typescript
 export class CasinoSystem implements VeratownFeatureSystem {
     public readonly key = "casino";
     public readonly label = "Casino";
     public enabled = true;
-    
+
     private game: Game;
     private store: CasinoStore;
-    
+
     public constructor(
         private conn: API_Connector,
         private locationStore: VeratownLocationStore,
@@ -358,17 +381,17 @@ export class CasinoSystem implements VeratownFeatureSystem {
         this.store = new CasinoStore(conn.connector.db);
         // Don't register commands or listeners here
     }
-    
+
     public registerTriggers(): void {
         // Register commands on provided CommandParser (or create local)
         const parser = this.commandParser ?? new CommandParser(this.conn);
         parser.register("chips", this.onCommandChips);
         // ...
-        
+
         // Register event listeners
         this.conn.on("CharacterEntered", this.onCharacterEntered);
         this.conn.on("Beep", this.onBeep);
-        
+
         // Load region asynchronously
         this.loadGameRegion();
     }
@@ -376,6 +399,7 @@ export class CasinoSystem implements VeratownFeatureSystem {
 ```
 
 **Benefits**:
+
 - ✅ Single CommandParser for all Veratown commands
 - ✅ Casino disable/enable through `/bot feature disable casino`
 - ✅ Unified error handling via `guardHandler`
@@ -387,6 +411,7 @@ export class CasinoSystem implements VeratownFeatureSystem {
 ### Change 2: Unified Location Loading
 
 **New Utility** (`shared/locationUtils.ts`):
+
 ```typescript
 export async function loadRegionFromDatabase<T extends { type: string }>(
     locationStore: VeratownLocationStore,
@@ -395,8 +420,8 @@ export async function loadRegionFromDatabase<T extends { type: string }>(
 ): Promise<MapRegion | undefined> {
     try {
         const locations = await locationStore.loadLocations(fallbackLocations);
-        const doc = locations.find(loc => loc.type === regionType);
-        
+        const doc = locations.find((loc) => loc.type === regionType);
+
         if (doc?.data?.bottomRightX && doc.data.bottomRightY) {
             return {
                 TopLeft: { X: doc.x, Y: doc.y },
@@ -414,16 +439,18 @@ export async function loadRegionFromDatabase<T extends { type: string }>(
 ```
 
 **Usage**:
+
 ```typescript
 // In any feature
 this.dareRegion = await loadRegionFromDatabase(
-    this.locationStore, 
-    "dare_region", 
-    this.fallbackLocations
+    this.locationStore,
+    "dare_region",
+    this.fallbackLocations,
 );
 ```
 
 **Benefits**:
+
 - ✅ Single source of truth for region loading
 - ✅ Consistent error handling
 - ✅ Reusable across Dare, Casino, and future systems
@@ -434,23 +461,24 @@ this.dareRegion = await loadRegionFromDatabase(
 ### Change 3: Simplified main.ts Initialization
 
 **Before**:
+
 ```typescript
 case "veratown":
     const veratownGame = new Veratown(connector, veratownConn2, db, config.dare);
     await veratownGame.init();
-    
+
     if (config.user3 && config.password3) {
         if (!db) { console.log("...skipping"); }
         else {
             const poolRouletteConn = new API_Connector(...);
             await poolRouletteConn.joinOrCreateRoom(config.room);
             ensureBotIsRoomAdmin(connector, poolRouletteConn);
-            
+
             poolRouletteConn.moveOnMap(
                 GAME_MISTRESS_POSITION.X,
                 GAME_MISTRESS_POSITION.Y,
             );
-            
+
             const poolRouletteLocationStore = new VeratownLocationStore(db);
             new Casino(poolRouletteConn, db, {
                 ...config.casino,
@@ -464,10 +492,11 @@ case "veratown":
 ```
 
 **After**:
+
 ```typescript
 case "veratown":
     const veratownGame = new Veratown(
-        connector, 
+        connector,
         { veratownConn2, poolRouletteConn, ...otherBots },  // Unified bot config
         db,
         config.games,  // Unified games config
@@ -476,6 +505,7 @@ case "veratown":
 ```
 
 **Benefits**:
+
 - ✅ All Veratown sub-games initialized together
 - ✅ Single await point for full Veratown startup
 - ✅ Cleaner, more maintainable
@@ -486,15 +516,19 @@ case "veratown":
 ### Change 4: Shared Game Module Interface
 
 **New Interface** (`shared/gameModule.ts`):
+
 ```typescript
 export interface VeratownGameModule {
     readonly key: string;
     readonly label: string;
-    
+
     // For games that need separate bot connection
     botConnection?: API_Connector;
-    
-    init(locationStore: VeratownLocationStore, commandParser: CommandParser): Promise<void>;
+
+    init(
+        locationStore: VeratownLocationStore,
+        commandParser: CommandParser,
+    ): Promise<void>;
     registerTriggers(): void;
     disable(): void;
     enable(): void;
@@ -508,48 +542,52 @@ This extends `VeratownFeatureSystem` with lifecycle management for complex games
 ## Implementation Roadmap
 
 ### Phase 1: Foundational Changes (Low Risk) ✅
+
 - [ ] **Extract shared utilities** → `bin/games/shared/utilities.ts`
-  - `loadRegionFromDatabase()` utility
-  - CommandParser factory
-  - Shared error messages
-  - Location pattern validation
-  
+    - `loadRegionFromDatabase()` utility
+    - CommandParser factory
+    - Shared error messages
+    - Location pattern validation
 - [ ] **Add JSDoc to featureSystem.ts** (already done in your narration utils work)
 
 - [ ] **Create VeratownLocationStore singleton** in Veratown
-  - Passed to all features
-  - Initialize once, reuse everywhere
+    - Passed to all features
+    - Initialize once, reuse everywhere
 
 ### Phase 2: Casino Integration (Medium Risk)
+
 - [ ] **Move Casino to `veratown/casinoSystem.ts`**
-  - Rename `Casino` → `CasinoSystem`
-  - Implement `VeratownFeatureSystem`
-  - Accept `commandParser` in constructor (optional)
-  
+    - Rename `Casino` → `CasinoSystem`
+    - Implement `VeratownFeatureSystem`
+    - Accept `commandParser` in constructor (optional)
 - [ ] **Update Veratown to initialize CasinoSystem**
-  ```typescript
-  this.casino = this.initFeature(
-      () => new CasinoSystem(
-          this.conn,
-          this.locationStore,
-          VERATOWN_LOCATIONS_FALLBACK,
-          this.commandParser,
-      )
-  );
-  ```
+
+    ```typescript
+    this.casino = this.initFeature(
+        () =>
+            new CasinoSystem(
+                this.conn,
+                this.locationStore,
+                VERATOWN_LOCATIONS_FALLBACK,
+                this.commandParser,
+            ),
+    );
+    ```
 
 - [ ] **Create dedicated bot connection management in Veratown**
-  - Store `conn2`, `conn3`, etc. as configurable
-  - Auto-promote to admin
+    - Store `conn2`, `conn3`, etc. as configurable
+    - Auto-promote to admin
 
 - [ ] **Update main.ts to pass additional connections**
 
 ### Phase 3: Dare Integration (Low Risk, already partially done)
+
 - [ ] **Optional**: Move Dare to `veratown/dare/` subfolder
-  - Keep as `VeratownFeatureSystem` (already is)
-  - Extract DareStore to `veratown/dare/dareStore.ts`
+    - Keep as `VeratownFeatureSystem` (already is)
+    - Extract DareStore to `veratown/dare/dareStore.ts`
 
 ### Phase 4: Testing & Validation
+
 - [ ] Compile with all changes
 - [ ] Test feature enable/disable for Casino
 - [ ] Test Veratown startup with all sub-games
@@ -557,6 +595,7 @@ This extends `VeratownFeatureSystem` with lifecycle management for complex games
 - [ ] Verify CommandParser correctly routes all commands
 
 ### Phase 5: Documentation & Cleanup
+
 - [ ] Update docstrings in main.ts
 - [ ] Create VeratownSubsystem architecture guide
 - [ ] Update VERATOWN.md with new module structure
@@ -566,27 +605,30 @@ This extends `VeratownFeatureSystem` with lifecycle management for complex games
 ## Impact Analysis
 
 ### Positive Impacts ✅
-| Impact | Benefit | Metrics |
-|--------|---------|---------|
-| **Code Reuse** | Utilities extracted once, used everywhere | -200 lines duplication |
-| **Maintainability** | Single pattern for all features | -3 initialization patterns → 1 |
-| **Performance** | One CommandParser instead of three | ~3x faster message dispatch |
-| **Testability** | Unified initialization makes unit tests easier | Easier to mock Veratown |
-| **Scalability** | Adding new features doesn't require main.ts changes | New features extend, don't fork |
-| **Debugging** | Unified error handling and logging | Better visibility into failures |
+
+| Impact              | Benefit                                             | Metrics                         |
+| ------------------- | --------------------------------------------------- | ------------------------------- |
+| **Code Reuse**      | Utilities extracted once, used everywhere           | -200 lines duplication          |
+| **Maintainability** | Single pattern for all features                     | -3 initialization patterns → 1  |
+| **Performance**     | One CommandParser instead of three                  | ~3x faster message dispatch     |
+| **Testability**     | Unified initialization makes unit tests easier      | Easier to mock Veratown         |
+| **Scalability**     | Adding new features doesn't require main.ts changes | New features extend, don't fork |
+| **Debugging**       | Unified error handling and logging                  | Better visibility into failures |
 
 ### Negative Impacts ⚠️
-| Risk | Mitigation |
-|------|------------|
+
+| Risk                 | Mitigation                                                   |
+| -------------------- | ------------------------------------------------------------ |
 | **Breaking Changes** | Implement incrementally, support old Casino init temporarily |
-| **Database Schema** | Location data schema unchanged, no migration needed |
-| **Backward Compat** | Keep standalone Dare/Casino for non-Veratown deployments |
+| **Database Schema**  | Location data schema unchanged, no migration needed          |
+| **Backward Compat**  | Keep standalone Dare/Casino for non-Veratown deployments     |
 
 ---
 
 ## File-by-File Changes Summary
 
 ### New Files
+
 ```
 bin/games/shared/
 ├── locationUtils.ts          # Region loading utility
@@ -595,6 +637,7 @@ bin/games/shared/
 ```
 
 ### Modified Files
+
 ```
 bin/games/veratown.ts
 ├── Add locationStore: VeratownLocationStore (singleton)
@@ -622,6 +665,7 @@ bin/games/veratown/featureSystem.ts
 ```
 
 ### Unchanged
+
 ```
 bin/hub/                       # Leave legacy systems as-is
 bin/games/casino/              # Sub-games (roulette, blackjack)
@@ -633,6 +677,7 @@ bin/games/veratown/*/System.ts # Existing systems (cage, shower, bed, etc.)
 ## Code Metrics
 
 ### Before Refactoring
+
 ```
 - CommandParser instances: 3
 - Location store instances: 2-3 (depending on init order)
@@ -644,6 +689,7 @@ bin/games/veratown/*/System.ts # Existing systems (cage, shower, bed, etc.)
 ```
 
 ### After Refactoring
+
 ```
 - CommandParser instances: 1
 - Location store instances: 1
@@ -659,34 +705,35 @@ bin/games/veratown/*/System.ts # Existing systems (cage, shower, bed, etc.)
 ## Recommendation
 
 ### Priority Order
+
 1. **HIGH**: Extract shared utilities (Phase 1)
-   - Low risk, immediate benefit
-   - Foundation for all other changes
-   - Can be done independently
+    - Low risk, immediate benefit
+    - Foundation for all other changes
+    - Can be done independently
 
 2. **HIGH**: Unify location store loading (Phase 1)
-   - Single source of truth
-   - Reduces database queries
-   - Enable concurrent feature initialization
+    - Single source of truth
+    - Reduces database queries
+    - Enable concurrent feature initialization
 
 3. **MEDIUM**: Integrate Casino as VeratownFeatureSystem (Phase 2)
-   - Consolidates game architecture
-   - Enables unified feature control
-   - Significant long-term benefit
+    - Consolidates game architecture
+    - Enables unified feature control
+    - Significant long-term benefit
 
 4. **LOW**: Move Dare to veratown/ subdirectory (Phase 3)
-   - Nice-to-have for organization
-   - Can be deferred if time-constrained
-   - Backward compatibility concerns
+    - Nice-to-have for organization
+    - Can be deferred if time-constrained
+    - Backward compatibility concerns
 
 ---
 
 ## Next Steps
 
 1. **Create shared utilities module** with:
-   - `loadRegionFromDatabase()` 
-   - `CommandParser` factory
-   - Shared error messages
+    - `loadRegionFromDatabase()`
+    - `CommandParser` factory
+    - Shared error messages
 
 2. **Extract Casino to veratown/casinoSystem.ts**
 

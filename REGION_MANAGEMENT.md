@@ -9,32 +9,33 @@ The Region Management System allows Veratown features to operate on multi-tile a
 ### Components
 
 1. **RegionManager** (`bin/games/veratown/regionManager.ts`)
-   - In-memory cache of all regions
-   - Character tracking per region (who's currently in which region)
-   - Entry/exit lifecycle management
-   - Database persistence via VeratownLocationStore
+    - In-memory cache of all regions
+    - Character tracking per region (who's currently in which region)
+    - Entry/exit lifecycle management
+    - Database persistence via VeratownLocationStore
 
 2. **VeratownRegion Interface**
-   ```typescript
-   interface VeratownRegion extends VeratownLocationDoc {
-       type: "region";
-       region: {
-           TopLeft: { X: number; Y: number };
-           BottomRight: { X: number; Y: number };
-       };
-       regionType: "game" | "dare" | "feature" | "custom";
-   }
-   ```
+
+    ```typescript
+    interface VeratownRegion extends VeratownLocationDoc {
+        type: "region";
+        region: {
+            TopLeft: { X: number; Y: number };
+            BottomRight: { X: number; Y: number };
+        };
+        regionType: "game" | "dare" | "feature" | "custom";
+    }
+    ```
 
 3. **VeratownLocationStore** (`bin/games/veratown/veratownLocationStore.ts`)
-   - MongoDB backend for persistent region storage
-   - Supports both point-based locations (x/y) and region-based locations (region boundaries)
-   - Methods: `getAllLocations()`, `getLocation(key)`, `addLocation()`, `updateLocation()`, `deleteLocation()`
+    - MongoDB backend for persistent region storage
+    - Supports both point-based locations (x/y) and region-based locations (region boundaries)
+    - Methods: `getAllLocations()`, `getLocation(key)`, `addLocation()`, `updateLocation()`, `deleteLocation()`
 
 4. **Static Fallback Definitions** (`bin/games/veratown/veratownConfig.ts`)
-   - `FEATURE_REGIONS_STATIC`: Pre-defined regions for game, dare, etc.
-   - Used when database is empty or unavailable
-   - Also used for conflict detection against dynamic database regions
+    - `FEATURE_REGIONS_STATIC`: Pre-defined regions for game, dare, etc.
+    - Used when database is empty or unavailable
+    - Also used for conflict detection against dynamic database regions
 
 ## Key Features
 
@@ -82,11 +83,12 @@ Regions are stored in MongoDB alongside other locations:
 On startup, RegionManager validates that database regions match static definitions:
 
 ```
-[RegionManager] Region conflict for "game_region": Database region differs 
+[RegionManager] Region conflict for "game_region": Database region differs
 from static definition. Using database version. Static: {...}, Database: {...}
 ```
 
 This helps identify:
+
 - Map rebalancing (coordinate changes)
 - Admin command mistakes
 - Accidental database corruption
@@ -107,18 +109,18 @@ This helps identify:
 public async onCommandDare(msg: BC_Server_ChatRoomMessage): Promise<void> {
     // Check if player is in dare region
     const regionManager = this.veratown.getRegionManager();
-    
+
     if (!regionManager.isPositionInRegion(sender, "dare_region")) {
         msg.Sender.Tell("You must be in the dare area!");
         return;
     }
-    
+
     // Single execution per region entry
     if (!regionManager.markCharacterEntered("dare_region", sender.MemberNumber)) {
         msg.Sender.Tell("You've already triggered a dare this round!");
         return;
     }
-    
+
     // Execute dare logic...
 }
 ```
@@ -134,13 +136,13 @@ const newRegion: VeratownRegion = {
     regionType: "custom",
     region: {
         TopLeft: { X: 10, Y: 5 },
-        BottomRight: { X: 20, Y: 15 }
+        BottomRight: { X: 20, Y: 15 },
     },
     label: "Battle Arena",
     description: "PvP Arena",
     enabled: true,
     createdAt: Date.now(),
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
 };
 
 await regionManager.updateRegion(locationStore, newRegion);
@@ -198,6 +200,7 @@ The `/bot location` command needs extension to support region CRUD:
 ## Integration Checklist
 
 ### Completed ✅
+
 - [x] RegionManager class with full API
 - [x] VeratownRegion interface with database discriminator
 - [x] VeratownLocationStore updated to support regions (x/y OR region boundaries)
@@ -208,6 +211,7 @@ The `/bot location` command needs extension to support region CRUD:
 - [x] RegionManager exported from Veratown module
 
 ### Pending ⏳
+
 - [ ] Update Dare feature to use regionManager.markCharacterEntered()
 - [ ] Update Casino feature to use regionManager.markCharacterEntered()
 - [ ] Extend VeratownAdminCommands with region CRUD commands
@@ -242,6 +246,7 @@ The `/bot location` command needs extension to support region CRUD:
 ### Index Strategy
 
 Existing indexes on `veratownLocations`:
+
 - `key: 1` (unique) - Fast lookup by region key
 - `type: 1` - Query all regions via `type: "region"`
 
@@ -255,9 +260,9 @@ When database region differs from static definition:
 2. **Log warning** with both static and database coordinates
 3. **Continue operation** (don't crash on mismatch)
 4. **Admin remediation**:
-   - Option A: Delete database region, restart bot (reverts to static)
-   - Option B: Update static definition in code (new default)
-   - Option C: Keep database version as override (intentional mismatch)
+    - Option A: Delete database region, restart bot (reverts to static)
+    - Option B: Update static definition in code (new default)
+    - Option C: Keep database version as override (intentional mismatch)
 
 ## Performance Considerations
 
@@ -289,29 +294,35 @@ When database region differs from static definition:
 ## Troubleshooting
 
 ### Issue: Regions not loading
+
 **Symptom**: `[RegionManager] Loaded 0 regions from database` even after adding regions
 
 **Causes**:
+
 - Database connection issue (check MongoDB logs)
 - Regions stored with type="region" but without region boundary object
 - Region coordinates not in expected format
 
-**Fix**: 
+**Fix**:
+
 ```typescript
 // Verify in MongoDB
-db.veratownLocations.find({ type: "region" }).pretty()
+db.veratownLocations.find({ type: "region" }).pretty();
 
 // Should show region objects with TopLeft/BottomRight structure
 ```
 
 ### Issue: Static regions not overriding defaults
+
 **Symptom**: Changes to FEATURE_REGIONS_STATIC don't take effect
 
 **Causes**:
+
 - Regions already in database (database takes priority)
 - Static definitions weren't recompiled
 
 **Fix**:
+
 ```bash
 # Option 1: Delete database regions
 mongo veratown --eval "db.veratownLocations.deleteMany({ type: 'region' })"
@@ -325,13 +336,16 @@ db.veratownLocations.updateOne(
 ```
 
 ### Issue: Commands triggering on every tile movement
+
 **Symptom**: !dare command triggers multiple times in same region
 
 **Causes**:
+
 - Feature code not calling `regionManager.markCharacterEntered()`
 - Character not marked as entered region
 
 **Fix**:
+
 ```typescript
 // WRONG - triggers on every message
 if (isPositionInRegion(pos, "dare_region")) {

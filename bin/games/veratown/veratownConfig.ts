@@ -65,7 +65,8 @@ export const FEATURE_REGIONS_STATIC: Map<string, VeratownRegion> = new Map([
             regionType: "game",
             label: "Casino Game Area",
             region: GAME_LOCATION,
-            description: "Main casino/gambling area - commands only trigger once per entry",
+            description:
+                "Main casino/gambling area - commands only trigger once per entry",
         } as VeratownRegion,
     ],
     [
@@ -76,7 +77,8 @@ export const FEATURE_REGIONS_STATIC: Map<string, VeratownRegion> = new Map([
             regionType: "dare",
             label: "Dare Challenge Area",
             region: DARE_LOCATION,
-            description: "Dare game zone - commands only trigger once per entry",
+            description:
+                "Dare game zone - commands only trigger once per entry",
         } as VeratownRegion,
     ],
 ]);

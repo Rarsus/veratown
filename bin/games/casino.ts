@@ -43,10 +43,7 @@ import {
     VeratownLocationDoc,
 } from "./veratown/veratownLocationStore";
 import { loadRegionFromDatabase } from "./shared/locationUtils";
-import {
-    VeratownFeatureSystem,
-    guardHandler,
-} from "./veratown/featureSystem";
+import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 
 const FREE_CHIPS = 20;
 
@@ -167,7 +164,10 @@ export class Casino implements VeratownFeatureSystem {
         if (this.gameConfig?.region) {
             this.conn.chatRoom.map.addEnterRegionTrigger(
                 this.gameConfig.region,
-                guardHandler("casino:enterRegion", this.onCharacterEnterCasinoRegion),
+                guardHandler(
+                    "casino:enterRegion",
+                    this.onCharacterEnterCasinoRegion,
+                ),
             );
         }
 
@@ -183,7 +183,10 @@ export class Casino implements VeratownFeatureSystem {
             );
         }
 
-        this.commandParser.register("help", guardHandler("casino:help", this.onCommandHelp));
+        this.commandParser.register(
+            "help",
+            guardHandler("casino:help", this.onCommandHelp),
+        );
         this.commandParser.register(
             "forfeits",
             guardHandler("casino:forfeits", this.onCommandForfeits),
@@ -192,7 +195,10 @@ export class Casino implements VeratownFeatureSystem {
             "commands",
             guardHandler("casino:commands", this.onCommandCommands),
         );
-        this.commandParser.register("chips", guardHandler("casino:chips", this.onCommandChips));
+        this.commandParser.register(
+            "chips",
+            guardHandler("casino:chips", this.onCommandChips),
+        );
         this.commandParser.register(
             "addfriend",
             guardHandler("casino:addfriend", this.onCommandAddFriend),
@@ -201,12 +207,18 @@ export class Casino implements VeratownFeatureSystem {
             "remove",
             guardHandler("casino:remove", this.onCommandRemove),
         );
-        this.commandParser.register("buy", guardHandler("casino:buy", this.onCommandBuy));
+        this.commandParser.register(
+            "buy",
+            guardHandler("casino:buy", this.onCommandBuy),
+        );
         this.commandParser.register(
             "vouchers",
             guardHandler("casino:vouchers", this.onCommandVouchers),
         );
-        this.commandParser.register("give", guardHandler("casino:give", this.onCommandGive));
+        this.commandParser.register(
+            "give",
+            guardHandler("casino:give", this.onCommandGive),
+        );
         this.commandParser.register(
             "grant",
             guardHandler("casino:grant", this.onCommandGrant),
@@ -215,7 +227,10 @@ export class Casino implements VeratownFeatureSystem {
             "close",
             guardHandler("casino:close", this.onCommandClose),
         );
-        this.commandParser.register("open", guardHandler("casino:open", this.onCommandOpen));
+        this.commandParser.register(
+            "open",
+            guardHandler("casino:open", this.onCommandOpen),
+        );
         this.commandParser.register(
             "bonus",
             guardHandler("casino:bonus", this.onCommandBonusRound),
@@ -229,7 +244,9 @@ export class Casino implements VeratownFeatureSystem {
             "CharacterEntered",
             guardHandler("casino:characterEntered", this.onCharacterEntered),
         );
-        this.conn.on("Beep", (msg) => guardHandler("casino:beep", this.onBeep)(msg));
+        this.conn.on("Beep", (msg) =>
+            guardHandler("casino:beep", this.onBeep)(msg),
+        );
     }
 
     private onCharacterEntered = async (character: API_Character) => {

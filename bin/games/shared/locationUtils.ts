@@ -85,7 +85,9 @@ export async function loadRegionFromDatabase(
  * @param region The region to validate
  * @returns true if region has valid TopLeft and BottomRight with X/Y values
  */
-export function isValidRegion(region: MapRegion | undefined): region is MapRegion {
+export function isValidRegion(
+    region: MapRegion | undefined,
+): region is MapRegion {
     return (
         region !== undefined &&
         region.TopLeft &&

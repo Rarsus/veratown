@@ -3,6 +3,7 @@
 Comprehensive reference for Veratown's map layout, region boundaries, visual design, and planned improvements.
 
 **Table of Contents**
+
 1. [Map Overview](#map-overview)
 2. [Region Definitions](#region-definitions)
 3. [Feature Locations](#feature-locations)
@@ -18,6 +19,7 @@ Comprehensive reference for Veratown's map layout, region boundaries, visual des
 ### Map Dimensions
 
 **Veratown Map** (custom ServerChatRoomMapData):
+
 - **Size**: 50×50 tiles
 - **Format**: Compressed Base64 blob stored in code
 - **Location**: `bin/games/veratown/veratownConfig.ts` in `MAP` variable
@@ -60,13 +62,13 @@ export const FEATURE_REGIONS_STATIC: Map<string, VeratownRegion> = new Map([
 ```typescript
 interface VeratownRegion {
     type: "region";
-    key: string;                           // Unique ID
+    key: string; // Unique ID
     region: {
-        TopLeft: {X: number, Y: number};
-        BottomRight: {X: number, Y: number};
+        TopLeft: { X: number; Y: number };
+        BottomRight: { X: number; Y: number };
     };
     regionType: "game" | "dare" | "feature" | "custom";
-    label: string;                         // Human-readable
+    label: string; // Human-readable
     enabled: boolean;
 }
 ```
@@ -74,6 +76,7 @@ interface VeratownRegion {
 ### Current Regions (As of Build 1.0)
 
 #### 1. Cage Region
+
 ```
 Key: cage_region
 Type: feature
@@ -86,6 +89,7 @@ Exit: Automatic unlock when timer expires
 ```
 
 #### 2. Dare Region
+
 ```
 Key: dare_region
 Type: dare
@@ -99,6 +103,7 @@ Exit: Leave region or game ends
 ```
 
 #### 3. Casino Region
+
 ```
 Key: casino_region (aka GAME_LOCATION)
 Type: game
@@ -112,6 +117,7 @@ Bot: Game Mistress (conn3) located at (35,30)
 ```
 
 #### 4. Shower Region
+
 ```
 Key: shower_region
 Type: feature
@@ -125,6 +131,7 @@ Abort: Leave tile before sequence completes (clothes not restored)
 ```
 
 #### 5. Bunny Park Region
+
 ```
 Key: bunny_region
 Type: feature
@@ -139,6 +146,7 @@ Exit: Restraint remains (player removes manually)
 ```
 
 #### 6. Bed Region
+
 ```
 Key: bed_region
 Type: feature
@@ -152,6 +160,7 @@ Exit: Change emotion or leave tile → Items removed
 ```
 
 #### 7. Window Region
+
 ```
 Key: window_region
 Type: feature
@@ -165,6 +174,7 @@ Duration: ~3 seconds (poses then removed)
 ```
 
 #### 8. Trashcan Region
+
 ```
 Key: trash_region
 Type: feature
@@ -179,6 +189,7 @@ Exit: Leave tile → ItemPermission restored
 ```
 
 #### 9. Kennel Region
+
 ```
 Key: kennel_region
 Type: feature
@@ -251,6 +262,7 @@ Exit: Player removes device manually (no auto-unlock)
 ### Point-Based Locations (Exact Coordinates)
 
 #### Receptionist Position
+
 ```
 Key: receptionist_pos
 Type: point
@@ -261,6 +273,7 @@ Purpose: Room entry/greeting, visible to all players
 ```
 
 #### Game Mistress Position
+
 ```
 Key: game_mistress_pos
 Type: point
@@ -270,6 +283,7 @@ Purpose: Casino operations, in center of casino region
 ```
 
 #### Shower Bot Home
+
 ```
 Key: shower_bot_home
 Type: point
@@ -279,6 +293,7 @@ Purpose: Keep shower bot out of main traffic area
 ```
 
 #### Cage Locations (3)
+
 ```
 Cage 1: (12, 10) - 5 minute lock
 Cage 2: (14, 12) - 10 minute lock
@@ -291,6 +306,7 @@ Entry 3: (15, 14)
 ```
 
 #### Bunny Positions (3)
+
 ```
 Bunny 1: (45, 8)
 Bunny 2: (48, 10)
@@ -298,6 +314,7 @@ Bunny 3: (46, 13)
 ```
 
 #### Shower Positions (4)
+
 ```
 Shower 1: (3, 26)
 Shower 2: (4, 26)
@@ -306,6 +323,7 @@ Shower 4: (3, 29)
 ```
 
 #### Bed Positions (3)
+
 ```
 Bed 1: (18, 38)
 Bed 2: (21, 40)
@@ -313,6 +331,7 @@ Bed 3: (24, 43)
 ```
 
 #### Window Positions (4)
+
 ```
 Window 1: (1, 10)
 Window 2: (49, 25)
@@ -321,6 +340,7 @@ Window 4: (35, 49)
 ```
 
 #### Trashcan Positions (4)
+
 ```
 Trash 1: (11, 46)
 Trash 2: (12, 48)
@@ -329,12 +349,14 @@ Trash 4: (14, 47)
 ```
 
 #### Kennel Positions (2)
+
 ```
 Kennel 1: (5, 34)
 Kennel 2: (6, 36)
 ```
 
 #### Cage Information Screen
+
 ```
 Key: cage_info_screen
 Type: region
@@ -372,11 +394,13 @@ Description: View real-time occupancy of all 3 cages
 ### Map Validation
 
 **Check for conflicts**:
+
 ```bash
 /bot location region validate
 ```
 
 **Output**:
+
 ```
 [RegionManager] Validating regions against static definitions...
 [RegionManager] Region 'casino_region' bounds match ✓
@@ -389,16 +413,19 @@ Description: View real-time occupancy of all 3 cages
 ### Map Debugging
 
 **List all locations**:
+
 ```bash
 /bot location list
 ```
 
 **Get specific location**:
+
 ```bash
 /bot location get cage_1
 ```
 
 **Check region membership**:
+
 ```bash
 # No direct command, but can verify in logs:
 docker logs ropeybot | grep "markCharacterEntered"
@@ -413,6 +440,7 @@ docker logs ropeybot | grep "markCharacterEntered"
 **Status**: In Progress  
 **Goal**: All multi-tile features track character entry/exit properly  
 **Work**:
+
 - ✅ RegionManager system built
 - ✅ Database persistence layer working
 - ✅ Static fallback regions defined
@@ -427,6 +455,7 @@ docker logs ropeybot | grep "markCharacterEntered"
 **Status**: Planned  
 **Goal**: Ensure all 9 features work together without conflicts  
 **Work**:
+
 - Add feature enable/disable via admin commands
 - Prevent command collisions (same prefix from different features)
 - Per-feature settings (enable/disable at runtime)
@@ -439,6 +468,7 @@ docker logs ropeybot | grep "markCharacterEntered"
 **Status**: Planned  
 **Goal**: Richer gambling experience with more forfeit options  
 **Work**:
+
 - Implement all forfeit types (restraints, services, items)
 - Add multi-player games (e.g., Texas Hold'em)
 - Player statistics tracking (wins/losses)
@@ -452,6 +482,7 @@ docker logs ropeybot | grep "markCharacterEntered"
 **Status**: Planned  
 **Goal**: In-game tools to visualize and edit regions  
 **Work**:
+
 - Add visual region boundary markers (items placed at corners)
 - Region editor command (interactive `/bot region edit`)
 - Region conflict detection and auto-resolution
@@ -464,6 +495,7 @@ docker logs ropeybot | grep "markCharacterEntered"
 **Status**: Planned  
 **Goal**: Recurring events and scheduled features  
 **Work**:
+
 - Daily dare challenges
 - Hourly casino jackpot announcements
 - Weekly feature rotations (disable/enable)
@@ -566,6 +598,7 @@ docker logs ropeybot | grep "markCharacterEntered"
 **Description**: Narrate to player when they enter/exit feature regions.
 
 **Example**:
+
 ```
 Player enters casino region:
 "You walk into the casino. The roulette wheel spins with a familiar sound."
@@ -575,11 +608,13 @@ Player leaves dare region:
 ```
 
 **Benefits**:
+
 - Improves immersion
 - Clearer feedback about region boundaries
 - Helps players understand map layout
 
 **Implementation**:
+
 - Add narration method to RegionManager
 - Call on `markCharacterEntered()` and `markCharacterLeft()`
 - Per-region customizable messages
@@ -595,6 +630,7 @@ Player leaves dare region:
 **Description**: Each feature has its own help command.
 
 **Example**:
+
 ```
 /bot cage help        → Cage system rules
 /bot dare help        → Dare game rules
@@ -603,11 +639,13 @@ Player leaves dare region:
 ```
 
 **Benefits**:
+
 - Players learn features without flooding main help
 - Cleaner output
 - Each feature documents itself
 
 **Implementation**:
+
 - Add `getHelp()` method to VeratownFeatureSystem interface
 - CommandParser routes `<feature> help` to that handler
 - Include examples and commands
@@ -623,17 +661,20 @@ Player leaves dare region:
 **Description**: Track player activity (games played, wins, forfeits, etc).
 
 **Features**:
+
 - Daily/weekly/monthly stats
 - Achievement system (badges)
 - Leaderboard display in bot bio
 - Per-player profile via `/bot profile <name>`
 
 **Benefits**:
+
 - Encourages engagement
 - Replayability
 - Social competition
 
 **Implementation**:
+
 - Extend MongoDB with player stats schema
 - Add stat-tracking to each feature
 - Create stats display commands
@@ -649,16 +690,19 @@ Player leaves dare region:
 **Description**: Automatically detect and resolve overlapping regions.
 
 **Features**:
+
 - Warn if regions overlap
 - Option to merge or resize automatically
 - Audit trail of changes
 
 **Benefits**:
+
 - Prevent accidental conflicts
 - Easier to add new features
 - Better data integrity
 
 **Implementation**:
+
 - Add geometry checks to RegionManager
 - Implement merge strategies (smallest wins, newest wins, etc)
 - Log all changes
@@ -674,16 +718,19 @@ Player leaves dare region:
 **Description**: Enable/disable features based on time, day, or custom conditions.
 
 **Examples**:
+
 - Casino only available evenings
 - Dare games disabled on Mondays
 - Special events on weekends
 
 **Benefits**:
+
 - Dynamic gameplay
 - Admin control over player experience
 - Prevents feature fatigue
 
 **Implementation**:
+
 - Add `isAvailable()` check to VeratownFeatureSystem
 - Evaluate before executing commands
 - Display "feature unavailable" message
@@ -699,16 +746,19 @@ Player leaves dare region:
 **Description**: Edit map without restarting bot.
 
 **Features**:
+
 - `/bot map reload` command
 - Backup previous version automatically
 - No interruption to connected players
 
 **Benefits**:
+
 - Faster iteration during development
 - No downtime for admins
 - Better map maintenance
 
 **Implementation**:
+
 - Add map reload endpoint
 - Validate new map before applying
 - Notify players of changes
@@ -724,16 +774,19 @@ Player leaves dare region:
 **Description**: Weekly rotation of available features to keep gameplay fresh.
 
 **Examples**:
+
 - Week 1: Dare & Casino enabled
 - Week 2: Cages & Kennels enabled
 - Week 3: All features enabled
 
 **Benefits**:
+
 - Prevents monotony
 - Encourages players to try all features
 - Admin control over engagement
 
 **Implementation**:
+
 - Add rotation configuration to Veratown
 - Scheduled enable/disable at set times
 - Announce rotation changes
@@ -746,21 +799,21 @@ Player leaves dare region:
 
 ## Summary of Improvements
 
-| Phase | Feature | Priority | Effort | Impact | Status |
-|-------|---------|----------|--------|--------|--------|
-| 1 | Region awareness | High | 12h | High | In Progress |
-| 2 | Multi-feature coexistence | High | 8h | High | Planned |
-| 3 | Enhanced casino | Medium | 12h | High | Planned |
-| 4 | Region visualization | Medium | 10h | Medium | Planned |
-| 5 | Scheduler/timed events | Low | 15h | Medium | Planned |
-| - | Kennel manual control | Low | 3h | Low | Gap |
-| - | Region entry narration | Medium | 4h | High | Proposal |
-| - | Feature-specific help | Low | 3h | Medium | Proposal |
-| - | Player achievements | Low | 12h | High | Proposal |
-| - | Region conflict resolution | Medium | 5h | Medium | Proposal |
-| - | Conditional features | Low | 4h | Medium | Proposal |
-| - | Map hot-reload | Low | 3h | Low | Proposal |
-| - | Feature rotation | Very Low | 4h | Medium | Proposal |
+| Phase | Feature                    | Priority | Effort | Impact | Status      |
+| ----- | -------------------------- | -------- | ------ | ------ | ----------- |
+| 1     | Region awareness           | High     | 12h    | High   | In Progress |
+| 2     | Multi-feature coexistence  | High     | 8h     | High   | Planned     |
+| 3     | Enhanced casino            | Medium   | 12h    | High   | Planned     |
+| 4     | Region visualization       | Medium   | 10h    | Medium | Planned     |
+| 5     | Scheduler/timed events     | Low      | 15h    | Medium | Planned     |
+| -     | Kennel manual control      | Low      | 3h     | Low    | Gap         |
+| -     | Region entry narration     | Medium   | 4h     | High   | Proposal    |
+| -     | Feature-specific help      | Low      | 3h     | Medium | Proposal    |
+| -     | Player achievements        | Low      | 12h    | High   | Proposal    |
+| -     | Region conflict resolution | Medium   | 5h     | Medium | Proposal    |
+| -     | Conditional features       | Low      | 4h     | Medium | Proposal    |
+| -     | Map hot-reload             | Low      | 3h     | Low    | Proposal    |
+| -     | Feature rotation           | Very Low | 4h     | Medium | Proposal    |
 
 ---
 

@@ -83,7 +83,10 @@ export class ShowerSystem implements VeratownFeatureSystem {
             }
 
             for (const showerPos of this.showerPositions) {
-                this.conn.chatRoom.map.addTileTrigger(showerPos, this.showerTrigger);
+                this.conn.chatRoom.map.addTileTrigger(
+                    showerPos,
+                    this.showerTrigger,
+                );
             }
 
             console.log(
@@ -139,7 +142,11 @@ export class ShowerSystem implements VeratownFeatureSystem {
             "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
         );
 
-        narrator.sayAt(broadcastPos, "Emote", `*${character} is taking a shower*`);
+        narrator.sayAt(
+            broadcastPos,
+            "Emote",
+            `*${character} is taking a shower*`,
+        );
 
         const clothingItems =
             character.Appearance.getAppearanceData().filter(isClothing);
@@ -150,7 +157,11 @@ export class ShowerSystem implements VeratownFeatureSystem {
         }
 
         if (!isInShower()) return abortShower();
-        narrator.sayAt(broadcastPos, "Emote", `*${character} turns on the shower*`);
+        narrator.sayAt(
+            broadcastPos,
+            "Emote",
+            `*${character} turns on the shower*`,
+        );
 
         await wait(SHOWER_STEP_DELAY_MS);
         if (!isInShower()) return abortShower();
@@ -162,7 +173,11 @@ export class ShowerSystem implements VeratownFeatureSystem {
         await wait(SHOWER_SING_DELAY_MS);
         if (!isInShower()) return abortShower();
 
-        narrator.sayAt(broadcastPos, "Emote", `*${character} dries off with a towel*`);
+        narrator.sayAt(
+            broadcastPos,
+            "Emote",
+            `*${character} dries off with a towel*`,
+        );
 
         await wait(SHOWER_STEP_DELAY_MS);
         if (!isInShower()) return abortShower();

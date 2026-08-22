@@ -288,7 +288,6 @@ Game Overview
             () => this.enforceDressingBlocks(),
             STRIP_ENFORCE_INTERVAL_MS,
         );
-
     }
 
     public async reloadLocations(
@@ -298,7 +297,8 @@ Game Overview
         this.region = this.configuredRegion;
         const region = locations.find(
             (location) =>
-                location.type === "dare_region" && location.enabled &&
+                location.type === "dare_region" &&
+                location.enabled &&
                 typeof location.x === "number" &&
                 typeof location.y === "number" &&
                 typeof location.data?.bottomRightX === "number" &&
