@@ -28,6 +28,21 @@ const AssetUpperOverflowAlpha = [0, -700, 500, 700];
 const AssetLowerOverflowAlpha = [0, 1000, 500, 1000 + 150];
 
 /**
+ * Pose type constants for PoseMapping
+ * @type {Record<string, string>}
+ */
+export const PoseType = {
+	HIDE: "Hide",
+	DEFAULT: "",
+};
+
+/** @type readonly ("Kneel" | "KneelingSpread")[] */
+export const PoseAllKneeling = Object.freeze(["Kneel", "KneelingSpread"]);
+
+/** @type readonly ("BaseLower" | "LegsClosed" | "Spread")[] */
+export const PoseAllStanding = Object.freeze(["BaseLower", "LegsClosed", "Spread"]);
+
+/**
  * The list of available effects.
  *
  * @satisfies {Partial<Record<EffectName, EffectName>>}
@@ -291,7 +306,7 @@ export const E = /** @type {const} */ ({
  * All the default {@link AssetGroupDefinition.PoseMapping} values for the various groups.
  * @satisfies {Partial<Record<AssetGroupName, AssetPoseMapping>>}
  */
-const AssetPoseMapping = /** @type {const} */ ({
+export const AssetPoseMapping = /** @type {const} */ ({
 	BodyLower: {
 		AllFours: PoseType.HIDE,
 		Hogtied: PoseType.HIDE,
