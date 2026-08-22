@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { AssetFemale3DCG } from "./bcdata/female3DCG.js";
+import { AssetFemale3DCG } from "./bcdata/Female3DCG.js";
 import { BC_AppearanceItem, getAssetDef } from "./item.ts";
 
 function getAssetGroup(groupName: AssetGroupName): AssetGroupDefinition | null {

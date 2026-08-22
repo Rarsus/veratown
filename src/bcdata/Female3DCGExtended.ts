@@ -195,7 +195,7 @@ import {
 	//#endregion
 } from "./defs.ts";
 
-import { E } from "./female3DCG.js";
+import { E } from "./Female3DCG.js";
 
 
 
