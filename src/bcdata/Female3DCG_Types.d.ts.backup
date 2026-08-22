@@ -735,7 +735,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	/** Enable the special color drawing mode used for eyes */
 	FullAlpha?: boolean;
 
-	MirrorExpression?: AssetGroupName;
+	MirrorExpression?: AssetGroupBodyName;
 
 	CustomBlindBackground?: string;
 
