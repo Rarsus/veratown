@@ -22,10 +22,14 @@
 // If you change an item or a piece of code made by someone else, make sure to get their approval first
 
 // Alpha mask regions based on Appearance.js CanvasUpperOverflow and CanvasLowerOverflow values
-/** @type {[number, number, number, number]} */
-const AssetUpperOverflowAlpha = [0, -700, 500, 700];
-/** @type {[number, number, number, number]} */
-const AssetLowerOverflowAlpha = [0, 1000, 500, 1000 + 150];
+/**
+ * @type {[number, number, number, number]}
+ */
+export const AssetUpperOverflowAlpha = [0, -700, 500, 700];
+/**
+ * @type {[number, number, number, number]}
+ */
+export const AssetLowerOverflowAlpha = [0, 1000, 500, 1000 + 150];
 
 /**
  * Pose type constants for PoseMapping
@@ -75180,7 +75184,7 @@ export var PoseFemale3DCGNames = PoseFemale3DCG.map((pose) => pose.Name);
  *
  * @type {Activity[]}
  */
-var ActivityFemale3DCG = [
+export var ActivityFemale3DCG = [
 	/* Mouth activities */
 	{
 		Name: "Whisper",
@@ -76145,7 +76149,7 @@ var ActivityFemale3DCG = [
  * Display order for activities.
  * @type {ActivityName[]}
  */
-let ActivityFemale3DCGOrdering = ActivityFemale3DCG.map((a) => a.Name);
+export let ActivityFemale3DCGOrdering = ActivityFemale3DCG.map((a) => a.Name);
 
 // #endregion
 
@@ -76155,7 +76159,7 @@ let ActivityFemale3DCGOrdering = ActivityFemale3DCG.map((a) => a.Name);
  * Modify PreferenceArousalFetishDefaultCompressedString if you add a new fetish
  * @type {Fetish[]}
  */
-var FetishFemale3DCG = [
+export var FetishFemale3DCG = [
 	{
 		Name: "Bondage",
 		FetishID: 0,
