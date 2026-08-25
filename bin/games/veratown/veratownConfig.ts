@@ -327,6 +327,15 @@ export const BED_POSITIONS: ChatRoomMapPos[] = [
 // remain on a bed tile.
 export const BED_CHECK_INTERVAL_MS = 2 * 1000;
 
+// --- Release System ---
+
+// Emergency release command timeouts and configuration
+export const RELEASE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between releases
+export const RELEASE_NUDITY_CHECK_INTERVAL_MS = 2500; // Check every 2.5 seconds
+export const RELEASE_NUDITY_TIMEOUT_MS = 60 * 1000; // 60 second max to strip
+export const RELEASE_PUNISHMENT_ROOM_KEY = "punishment_room_entrance"; // Location key
+export const RELEASE_KEYPAD_KEY = "keypad_punishment"; // Keypad location key
+
 // --- Shared helpers ---
 
 // Shared by every tile-group polling loop (shower/bed/trashcan) instead of

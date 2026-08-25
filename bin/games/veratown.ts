@@ -46,6 +46,7 @@ import {
 import { VeratownAdminCommands } from "./veratown/adminCommands";
 import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import { VeratownCharacterProfileStore } from "./veratown/veratownCharacterProfileStore";
+import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -96,7 +97,7 @@ export class Veratown {
         "",
         "PLAYER COMMANDS:",
         "/bot help - Display this help message",
-        "/bot freeandleave - Remove all restraints and exit the room",
+        "/bot release - Emergency release: teleport to punishment room, then strip to escape",
         "/bot changelog - View recent map changes",
         "/bot status - View bot connection, location, and feature status",
         "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, keypadDoor, dare, casino",
@@ -161,6 +162,7 @@ export class Veratown {
     private keypadDoorSystem?: KeypadDoorSystem;
     private catDogSystem?: CatDogSystem;
     private furnitureBondageSystem?: FurnitureBondageSystem;
+    private releaseSystem?: ReleaseSystem;
 
     // Every successfully-initialized room feature, in registration order.
     // Backs the "/bot feature list|enable|disable" command; systems that
@@ -260,6 +262,19 @@ export class Veratown {
         this.furnitureBondageSystem = this.initFeature(
             () => new FurnitureBondageSystem(this.conn),
         );
+        this.releaseSystem = new ReleaseSystem(
+            this.conn,
+            this.locationStore,
+            this.characterProfileStore,
+            {
+                freeCharacterIfCaged: (c) =>
+                    this.cageSystem?.freeCharacterIfCaged(c),
+            },
+            {
+                freeCharacterIfKenneled: (c) =>
+                    this.kennelSystem?.freeCharacterIfKenneled(c),
+            },
+        );
 
         // Casino feature uses a separate bot connection (user3) to avoid
         // modifying the main bot's appearance with casino items
@@ -285,7 +300,16 @@ export class Veratown {
         // are updated to match the new map layout.
 
         this.commandParser.register("help", this.onCommandHelp);
-        this.commandParser.register("freeandleave", this.onCommandFreeAndLeave);
+        this.commandParser.register("release", async (sender, msg, args) =>
+            this.releaseSystem?.executeRelease(sender),
+        );
+        // Keep freeandleave as backward compat alias
+        this.commandParser.register("freeandleave", (sender, msg, args) =>
+            this.commandParser.handle(this.conn, sender, {
+                Type: "chat",
+                Content: "/bot release",
+            } as any),
+        );
         this.commandParser.register("changelog", this.onCommandChangelog);
 
         // All admin-only commands (strip, feature enable/disable, map
