@@ -61,11 +61,8 @@ export class API_AppearanceItem {
         private character: API_Character,
         private data: BC_AppearanceItem,
     ) {
-        // Validate item group and name before lookup
+        // Silently skip items with missing group or name (common in asset layer definitions)
         if (!data.Group || !data.Name) {
-            console.warn(
-                `Skipping item with invalid properties. Group="${data.Group}", Name="${data.Name}"`,
-            );
             return;
         }
 
