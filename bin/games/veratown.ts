@@ -262,18 +262,21 @@ export class Veratown {
         this.furnitureBondageSystem = this.initFeature(
             () => new FurnitureBondageSystem(this.conn),
         );
-        this.releaseSystem = new ReleaseSystem(
-            this.conn,
-            this.locationStore,
-            this.characterProfileStore,
-            {
-                freeCharacterIfCaged: (c) =>
-                    this.cageSystem?.freeCharacterIfCaged(c),
-            },
-            {
-                freeCharacterIfKenneled: (c) =>
-                    this.kennelSystem?.freeCharacterIfKenneled(c),
-            },
+        this.releaseSystem = this.initFeature(
+            () =>
+                new ReleaseSystem(
+                    this.conn,
+                    this.locationStore,
+                    this.characterProfileStore,
+                    {
+                        freeCharacterIfCaged: (c) =>
+                            this.cageSystem?.freeCharacterIfCaged(c),
+                    },
+                    {
+                        freeCharacterIfKenneled: (c) =>
+                            this.kennelSystem?.freeCharacterIfKenneled(c),
+                    },
+                ),
         );
 
         // Casino feature uses a separate bot connection (user3) to avoid
@@ -300,9 +303,9 @@ export class Veratown {
         // are updated to match the new map layout.
 
         this.commandParser.register("help", this.onCommandHelp);
-        this.commandParser.register("release", async (sender, msg, args) =>
-            this.releaseSystem?.executeRelease(sender),
-        );
+        this.commandParser.register("release", async (sender, msg, args) => {
+            await this.releaseSystem?.executeRelease(sender);
+        });
         // Keep freeandleave as backward compat alias
         this.commandParser.register("freeandleave", (sender, msg, args) =>
             this.commandParser.handle(this.conn, sender, {
