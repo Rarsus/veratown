@@ -65,7 +65,7 @@ export class BedSystem implements VeratownFeatureSystem {
                 .filter((loc) => loc.type === "bed" && loc.enabled)
                 .map((bed) => ({ X: bed.x!, Y: bed.y! }));
 
-            if (locations.length === 0) {
+            if (this.bedPositions.length === 0) {
                 this.bedPositions = [...BED_POSITIONS];
             }
 
