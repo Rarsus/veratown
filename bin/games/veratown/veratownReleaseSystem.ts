@@ -70,12 +70,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
-     * Main entry point for release command
+     * Send a private whisper to a character (only they see it)
      */
+    private whisper(character: API_Character, message: string): void {
+        this.conn.SendMessage("Whisper", message, character.MemberNumber);
+    }
+
+    /**
     public async executeRelease(character: API_Character): Promise<void> {
         // Prevent overlapping releases
         if (this.activeReleases.has(character.MemberNumber)) {
-            this.conn.reply(
+            this.whisper(
                 character,
                 "You're already in the process of releasing yourself. Wait a moment.",
             );
@@ -114,7 +119,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Stage 1: Announce release
             console.log(`[ReleaseSystem] Stage 1: Announcing release`);
-            this.conn.reply(
+            this.whisper(
                 character,
                 "*You press the emergency release button. Alarms sound...*",
             );
@@ -140,7 +145,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     `[ReleaseSystem] Teleport failed, using kick fallback`,
                 );
                 // Fallback to kick
-                this.conn.reply(
+                this.whisper(
                     character,
                     "Release sequence failed. You are being removed from the room.",
                 );
@@ -162,7 +167,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 console.log(
                     `[ReleaseSystem] Nudity check failed for ${character.MemberNumber}`,
                 );
-                this.conn.reply(
+                this.whisper(
                     character,
                     "You failed to strip in time. No door code for you.",
                 );
@@ -177,7 +182,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             const granted = await this.grantDoorAccess(character);
             if (!granted) {
                 console.log(`[ReleaseSystem] Door access could not be granted`);
-                this.conn.reply(
+                this.whisper(
                     character,
                     "Door access could not be granted. Try finding the exit manually.",
                 );
@@ -211,10 +216,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             if (e instanceof Error) {
                 console.error(`[ReleaseSystem] Stack trace:`, e.stack);
             }
-            this.conn.reply(
-                character,
-                "Release sequence encountered an error.",
-            );
+            this.whisper(character, "Release sequence encountered an error.");
             await this.recordReleaseEvent(character, "release_error");
         }
     }
@@ -236,7 +238,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             if (nextRelease && Date.now() < nextRelease) {
                 const remaining = Math.ceil((nextRelease - Date.now()) / 1000);
                 const minutes = Math.ceil(remaining / 60);
-                this.conn.reply(
+                this.whisper(
                     character,
                     `Emergency release on cooldown. Available in ${minutes} minute(s).`,
                 );
@@ -250,7 +252,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 RELEASE_PUNISHMENT_ROOM_KEY,
             );
             if (!punishmentRoom) {
-                this.conn.reply(
+                this.whisper(
                     character,
                     "Release location not configured. Contact admins.",
                 );
@@ -307,7 +309,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        this.conn.reply(character, "*Restraints fall away...*");
+        this.whisper(character, "*Restraints fall away...*");
     }
 
     /**
@@ -338,7 +340,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Teleport
             character.mapTeleport({ X: location.x, Y: location.y });
-            this.conn.reply(
+            this.whisper(
                 character,
                 "*The floor beneath you trembles... you fall through a chute!*",
             );
@@ -382,7 +384,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const startTime = Date.now();
         const punishmentRoomPos = { X: location.x, Y: location.y };
 
-        this.conn.reply(
+        this.whisper(
             character,
             "**BEFORE YOU CAN ESCAPE**: Remove ALL clothing and stand here.",
         );
@@ -395,7 +397,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 character.MapPos.X !== punishmentRoomPos.X ||
                 character.MapPos.Y !== punishmentRoomPos.Y
             ) {
-                this.conn.reply(
+                this.whisper(
                     character,
                     "*A barrier prevents you from leaving until you comply!*",
                 );
@@ -406,7 +408,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             // Check if naked (only body items, no clothing)
             const isNaked = this.isCharacterNaked(character);
             if (isNaked) {
-                this.conn.reply(character, "*The barrier dissolves...*");
+                this.whisper(character, "*The barrier dissolves...*");
                 return true;
             }
 
@@ -415,14 +417,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
             if (remaining % 10 === 0) {
                 // Message every 10 seconds
-                this.conn.reply(
+                this.whisper(
                     character,
                     `Still clothed. Strip down. (${remaining}s remaining)`,
                 );
             }
         }
 
-        this.conn.reply(
+        this.whisper(
             character,
             "Time's up! You're leaving, but without the door code.",
         );
@@ -490,7 +492,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 return false;
             }
 
-            this.conn.reply(
+            this.whisper(
                 character,
                 `*A panel lights up with the escape code*\n\n**KEYPAD CODE: ${guestCode}**\n\nThis code expires in 10 minutes. Use it to escape.`,
             );

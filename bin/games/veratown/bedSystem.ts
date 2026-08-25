@@ -91,7 +91,20 @@ export class BedSystem implements VeratownFeatureSystem {
             }
 
             for (const bedPos of this.bedPositions) {
-                this.conn.chatRoom.map.addTileTrigger(bedPos, this.bedTrigger);
+                try {
+                    this.conn.chatRoom.map.addTileTrigger(
+                        bedPos,
+                        this.bedTrigger,
+                    );
+                    console.log(
+                        `[BedSystem] Registered trigger for bed at (${bedPos.X}, ${bedPos.Y})`,
+                    );
+                } catch (e) {
+                    console.error(
+                        `[BedSystem] Failed to register trigger for bed at (${bedPos.X}, ${bedPos.Y}):`,
+                        e,
+                    );
+                }
             }
 
             console.log(
