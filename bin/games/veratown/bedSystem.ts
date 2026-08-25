@@ -106,8 +106,17 @@ export class BedSystem implements VeratownFeatureSystem {
     }
 
     private onCharacterEnterBed = async (character: API_Character) => {
-        if (!this.enabled) return;
-        if (this.sleepingCharacters.has(character.MemberNumber)) return;
+        console.log(`[BedSystem] ${character.MemberNumber} entered bed tile`);
+        if (!this.enabled) {
+            console.log(`[BedSystem] System disabled, ignoring`);
+            return;
+        }
+        if (this.sleepingCharacters.has(character.MemberNumber)) {
+            console.log(
+                `[BedSystem] ${character.MemberNumber} already sleeping, ignoring`,
+            );
+            return;
+        }
         this.sleepingCharacters.add(character.MemberNumber);
 
         const isOnBed = () => {
@@ -133,30 +142,49 @@ export class BedSystem implements VeratownFeatureSystem {
                     "Covers";
 
                 if (isAsleep && !hasBed) {
+                    console.log(
+                        `[BedSystem] ${character.MemberNumber} is sleeping and has no bed, adding bed`,
+                    );
                     // Check if character already has something else equipped in the bed slot
                     const existingBedItem =
                         character.Appearance.getItemData("ItemDevices");
                     if (existingBedItem && existingBedItem.Name !== "Bed") {
+                        console.log(
+                            `[BedSystem] ${character.MemberNumber} has conflicting item in bed slot: ${existingBedItem.Name}`,
+                        );
                         // Character has another item in the bed slot, don't allow sleep
                         await wait(BED_CHECK_INTERVAL_MS);
                         continue;
                     }
 
-                    const bed = character.Appearance.AddItem(
-                        AssetGet("ItemDevices", "Bed"),
-                    );
-                    bed.SetCraft({
-                        Name: "Bed",
-                        Description: `${character} is fast asleep`,
-                    });
+                    try {
+                        const bed = character.Appearance.AddItem(
+                            AssetGet("ItemDevices", "Bed"),
+                        );
+                        bed.SetCraft({
+                            Name: "Bed",
+                            Description: `${character} is fast asleep`,
+                        });
 
-                    // The blanket ("Covers") requires the Bed to already be
-                    // equipped (Prerequisite: "OnBed"), so it's added right
-                    // after the Bed itself.
-                    character.Appearance.AddItem(
-                        AssetGet("ItemAddon", "Covers"),
-                    );
+                        // The blanket ("Covers") requires the Bed to already be
+                        // equipped (Prerequisite: "OnBed"), so it's added right
+                        // after the Bed itself.
+                        character.Appearance.AddItem(
+                            AssetGet("ItemAddon", "Covers"),
+                        );
+                        console.log(
+                            `[BedSystem] ${character.MemberNumber} bed applied successfully`,
+                        );
+                    } catch (bedError) {
+                        console.error(
+                            `[BedSystem] Failed to add bed for ${character.MemberNumber}:`,
+                            bedError,
+                        );
+                    }
                 } else if (!isAsleep && (hasBed || hasCovers)) {
+                    console.log(
+                        `[BedSystem] ${character.MemberNumber} woke up or left bed, removing bed items`,
+                    );
                     // Only remove if we actually have the items (prevent unnecessary removals)
                     if (hasCovers) {
                         character.Appearance.RemoveItem("ItemAddon");
@@ -169,6 +197,9 @@ export class BedSystem implements VeratownFeatureSystem {
                 await wait(BED_CHECK_INTERVAL_MS);
             }
         } finally {
+            console.log(
+                `[BedSystem] ${character.MemberNumber} left bed, cleaning up`,
+            );
             // Clean up bed items when character leaves or system is disabled
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name === "Bed"
@@ -180,6 +211,7 @@ export class BedSystem implements VeratownFeatureSystem {
             ) {
                 character.Appearance.RemoveItem("ItemAddon");
             }
+            this.sleepingCharacters.delete(character.MemberNumber);
             this.sleepingCharacters.delete(character.MemberNumber);
         }
     };
