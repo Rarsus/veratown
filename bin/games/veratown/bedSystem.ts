@@ -54,6 +54,10 @@ export class BedSystem implements VeratownFeatureSystem {
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
         try {
+            console.log(
+                `[BedSystem] reloadLocations called with ${locations.length} total locations`,
+            );
+
             for (const bedPos of this.bedPositions) {
                 this.conn.chatRoom.map.removeTileTrigger(
                     bedPos.X,
@@ -61,11 +65,28 @@ export class BedSystem implements VeratownFeatureSystem {
                     this.bedTrigger,
                 );
             }
-            this.bedPositions = locations
-                .filter((loc) => loc.type === "bed" && loc.enabled)
-                .map((bed) => ({ X: bed.x!, Y: bed.y! }));
+
+            const bedLocations = locations.filter(
+                (loc) => loc.type === "bed" && loc.enabled,
+            );
+            console.log(
+                `[BedSystem] Found ${bedLocations.length} bed locations in database`,
+            );
+            bedLocations.forEach((bed) => {
+                console.log(
+                    `[BedSystem]   - ${bed.key}: (${bed.x}, ${bed.y}) enabled=${bed.enabled}`,
+                );
+            });
+
+            this.bedPositions = bedLocations.map((bed) => ({
+                X: bed.x!,
+                Y: bed.y!,
+            }));
 
             if (this.bedPositions.length === 0) {
+                console.log(
+                    "[BedSystem] No bed locations in database, using config defaults",
+                );
                 this.bedPositions = [...BED_POSITIONS];
             }
 
