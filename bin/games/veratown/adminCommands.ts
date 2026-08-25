@@ -36,6 +36,7 @@ import {
     formatTemplateExample,
     listLocationTypesHelp,
 } from "./locationTemplates";
+import { VeratownCharacterProfileStore } from "./veratownCharacterProfileStore";
 
 // Owns every admin-only Veratown command: "strip", "feature
 // enable/disable", "map update/reset/import/export", and "maintenance".
@@ -65,6 +66,7 @@ export class VeratownAdminCommands {
         private conn2?: API_Connector,
         private reloadLocations?: () => Promise<void>,
         private getStatus?: () => string,
+        private characterProfileStore?: VeratownCharacterProfileStore,
     ) {}
 
     public registerCommands(): void {

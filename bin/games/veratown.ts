@@ -45,6 +45,7 @@ import {
 } from "./veratown/veratownLocationStore";
 import { VeratownAdminCommands } from "./veratown/adminCommands";
 import { RegionManager, VeratownRegion } from "./veratown/regionManager";
+import { VeratownCharacterProfileStore } from "./veratown/veratownCharacterProfileStore";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -71,6 +72,15 @@ export {
 
 export type { VeratownRegion } from "./veratown/regionManager";
 export { RegionManager } from "./veratown/regionManager";
+export type {
+    VeratownCharacterProfileDoc,
+    CageSession,
+    KennelSession,
+    CurrentRestraint,
+    RoleplayFlags,
+    AuditLogEntry,
+} from "./veratown/veratownCharacterProfileStore";
+export { VeratownCharacterProfileStore } from "./veratown/veratownCharacterProfileStore";
 
 export interface VeratownConnections {
     main: API_Connector;
@@ -170,6 +180,10 @@ export class Veratown {
     // with config fallback. Only set when mongo_uri/mongo_db are configured.
     private locationStore?: VeratownLocationStore;
 
+    // Stores character profiles (position, appearance, cage/kennel sessions, audit log).
+    // Only set when mongo_uri/mongo_db are configured.
+    private characterProfileStore?: VeratownCharacterProfileStore;
+
     public constructor(
         connections: VeratownConnections,
         db?: Db,
@@ -190,6 +204,7 @@ export class Veratown {
                 dareConfig ??
                 (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
             this.locationStore = new VeratownLocationStore(db);
+            this.characterProfileStore = new VeratownCharacterProfileStore(db);
             this.dare = this.initFeature(
                 () =>
                     new Dare(
@@ -288,6 +303,7 @@ export class Veratown {
             this.conn2,
             () => this.reloadLocations(),
             () => this.getStatus(),
+            this.characterProfileStore,
         ).registerCommands();
     }
 
@@ -404,6 +420,12 @@ export class Veratown {
 
     public getRegionManager(): RegionManager {
         return this.regionManager;
+    }
+
+    public getCharacterProfileStore():
+        | VeratownCharacterProfileStore
+        | undefined {
+        return this.characterProfileStore;
     }
 
     private onChatRoomCreated = async () => {
