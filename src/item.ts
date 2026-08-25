@@ -61,9 +61,24 @@ export class API_AppearanceItem {
         private character: API_Character,
         private data: BC_AppearanceItem,
     ) {
+        // Validate item group and name before lookup
+        if (!data.Group || !data.Name) {
+            console.warn(
+                `Skipping item with invalid properties. Group="${data.Group}", Name="${data.Name}"`,
+            );
+            return;
+        }
+
         const def = getAssetDef(AssetGet(data.Group, data.Name));
         if (def && def.Extended) {
-            this._extendedItem = new ExtendedItem(this, data);
+            try {
+                this._extendedItem = new ExtendedItem(this, data);
+            } catch (error) {
+                console.error(
+                    `Failed to create extended item for ${data.Group}/${data.Name}: ${error instanceof Error ? error.message : String(error)}`,
+                );
+                // Continue without extended item rather than crashing
+            }
         }
     }
 
@@ -227,8 +242,19 @@ export class ExtendedItem {
         private itemType: API_AppearanceItem,
         private item: BC_AppearanceItem,
     ) {
+        // Validate item properties before lookup
+        if (!this.item.Group || !this.item.Name) {
+            throw new Error(
+                `Cannot create ExtendedItem: invalid item properties. Group="${this.item.Group}", Name="${this.item.Name}"`,
+            );
+        }
+
         let config = resolveExtendedAsset(this.item.Group, this.item.Name);
-        if (!config) throw new Error();
+        if (!config) {
+            throw new Error(
+                `Extended item not found in registry: ${this.item.Group}/${this.item.Name}. This may indicate an R131/R130 data mismatch or incomplete Female3DCGExtended.ts definitions.`,
+            );
+        }
         this.extendedDef = config;
         //console.log(`Made extended item for ${item.Group} / ${item.Name}, Extended def is ${this.extendedDef}`);
     }
@@ -365,6 +391,14 @@ export function getAssetDef(desc: BC_AppearanceItem): AssetDefinition | null {
 export function getExtendedAssetDef(
     desc: BC_AppearanceItem,
 ): AssetArchetypeConfig | null {
+    // Validate input properties
+    if (!desc.Group || !desc.Name) {
+        console.warn(
+            `getExtendedAssetDef: invalid item properties. Group="${desc.Group}", Name="${desc.Name}"`,
+        );
+        return null;
+    }
+
     const grp = AssetFemale3DCGExtended[desc.Group];
     if (!grp) {
         if (!isIgnorableUnknownGroup(desc.Group))
@@ -372,7 +406,13 @@ export function getExtendedAssetDef(
         return null;
     }
 
-    return grp[desc.Name];
+    const result = grp[desc.Name];
+    if (!result) {
+        console.debug(
+            `Extended definition not found: ${desc.Group}/${desc.Name}. Item may not have extended properties.`,
+        );
+    }
+    return result;
 }
 
 function makeAssetType(desc: BC_AppearanceItem) {

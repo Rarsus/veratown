@@ -169,8 +169,14 @@ export class AppearanceType {
     public AddItem(desc: BC_AppearanceItem): API_AppearanceItem {
         const newItem = this.bulkAddItem(desc);
 
-        newItem.queueUpdate();
-        return newItem;
+        if (newItem) {
+            newItem.queueUpdate();
+            return newItem;
+        } else {
+            throw new Error(
+                `Failed to add item ${desc.Group}/${desc.Name} - see console for details`,
+            );
+        }
     }
 
     public RemoveItem(slot: AssetGroupName): void {
@@ -377,7 +383,7 @@ export class AppearanceType {
         return this._items;
     }
 
-    private bulkAddItem(item: BC_AppearanceItem): API_AppearanceItem {
+    private bulkAddItem(item: BC_AppearanceItem): API_AppearanceItem | null {
         this.data = this.data.filter((i) => i.Group !== item.Group);
         this._items = this._items.filter((i) => i.Group !== item.Group);
 
@@ -385,11 +391,17 @@ export class AppearanceType {
             `Adding item ${item.Group} (${item.Name}) to character ${this.character.Name}`,
         );*/
 
-        const newItem = new API_AppearanceItem(this.character, item);
-        this._items.push(newItem);
-        this.data.push(newItem.getData());
-
-        return newItem;
+        try {
+            const newItem = new API_AppearanceItem(this.character, item);
+            this._items.push(newItem);
+            this.data.push(newItem.getData());
+            return newItem;
+        } catch (error) {
+            console.error(
+                `Failed to add item ${item.Group}/${item.Name} for character ${this.character.Name}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return null;
+        }
     }
 
     private filterItems(

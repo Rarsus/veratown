@@ -33,8 +33,10 @@ declare namespace TopLeft {
 	 */
 	type Definition = number | Partial<Record<AssetPoseName | PoseTypeDefault, number>>;
 	/** See {@link ItemProperties["DrawingTop"]} */
+	// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 	type ItemData = Partial<Record<AssetOverride | LayerName, TopLeft.DataMutable>>;
 	/** See {@link ItemPropertiesConfig["DrawingTop"]} */
+	// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 	type ItemDefinition = Partial<Record<AssetOverride | LayerName, TopLeft.Definition>>;
 }
 
@@ -996,7 +998,7 @@ interface ExtendedItemConfig<OptionType extends ExtendedItemOption> {
 	/** The group name and asset name of a configuration to copy - useful if multiple items share the same config */
 	CopyConfig?: { GroupName?: AssetGroupName, AssetName: string };
 	/** An interface with element-specific drawing data for a given screen. */
-	DrawData?: ExtendedItemConfigDrawData<{}>;
+	DrawData?: ExtendedItemConfigDrawData<object>;
 	/**
 	 * A list with extra to-be allowed effect names.
 	 * Should only defined when there are effects that are exclusively managed by script hooks and thus cannot be extracted from the normal extended item options.

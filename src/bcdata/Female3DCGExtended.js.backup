@@ -618,94 +618,6 @@ var AssetFemale3DCGExtended = {
 		},
 	},
 	ClothOuter: {
-		CheerleaderTop: {
-			Archetype: ExtendedArchetype.TEXT,
-			MaxLength: { Text: 8 },
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "CheerleaderTop",
-			},
-		}, // CheerleaderTop
-		WhiteDress: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "WhiteDress",
-			},
-		}, // WhiteDress
-		LatexHobbleDress: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "LatexHobbleDress",
-			},
-		}, // LatexHobbleDress
-		StarryOceanEveningGown: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "StarryOceanEveningGown",
-			},
-		}, // StarryOceanEveningGown
-		SlaveRags: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "SlaveRags",
-			},
-		}, // SlaveRags
-		MilitaryFatigue: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "MilitaryFatigue",
-			},
-		}, // MilitaryFatigue
-		OffTheShoulderTop: {
-			Archetype: ExtendedArchetype.TYPED,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "OffTheShoulderTop",
-			},
-		}, // OffTheShoulderTop
-		MeshTop: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "MeshTop",
-			},
-		}, // Mesh Top
-		LittleFormalShirt: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: { GroupName: "Cloth", AssetName: "LittleFormalShirt" },
-		}, // LittleFormalShirt
-		Jacket: {
-			Archetype: ExtendedArchetype.TYPED,
-			CopyConfig: { GroupName: "Cloth", AssetName: "Jacket" },
-		}, // Jacket
-		FishnetTop: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: { GroupName: "Cloth", AssetName: "FishnetTop" },
-		}, // FishnetTop
-		AllureSidecut: {
-			Archetype: ExtendedArchetype.TYPED,
-			CopyConfig: { GroupName: "Cloth", AssetName: "AllureSidecut" },
-		}, // AllureSidecut
-		ChineseDress2: {
-			Archetype: ExtendedArchetype.TYPED,
-			CopyConfig: { GroupName: "Cloth", AssetName: "ChineseDress2" },
-		}, // ChineseDress2
-		BrocadeCloudsSnowEmbroideryQipao: {
-			Archetype: ExtendedArchetype.TYPED,
-			CopyConfig: {
-				GroupName: "Cloth",
-				AssetName: "BrocadeCloudsSnowEmbroideryQipao",
-			},
-		}, // BrocadeCloudsSnowEmbroideryQipao
-		CasualDroppedSuit: {
-			Archetype: ExtendedArchetype.MODULAR,
-			CopyConfig: { GroupName: "Cloth", AssetName: "CasualDroppedSuit" },
-		}, // CasualDroppedSuit
 		JacketHoodie: {
 			Archetype: ExtendedArchetype.MODULAR,
 			Modules: [
@@ -899,11 +811,6 @@ var AssetFemale3DCGExtended = {
 					DrawImages: true,
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothMilitaryFatigueSelect",
-				Option: "ClothMilitaryFatigueOption",
-				Module: "ClothMilitaryFatigueModule",
-			},
 		}, // MilitaryFatigue
 		ChineseDress2: {
 			Archetype: ExtendedArchetype.TYPED,
@@ -918,10 +825,6 @@ var AssetFemale3DCGExtended = {
 					Name: "Pink",
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothChineseDress2Select",
-				Option: "ClothChineseDress2",
-			},
 		}, // ChineseDress2
 		LatexLacedSuit: {
 			Archetype: ExtendedArchetype.TYPED,
@@ -985,10 +888,6 @@ var AssetFemale3DCGExtended = {
 					},
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothJacketSelect",
-				Option: "ClothJacket",
-			},
 		}, // Jacket
 		SlaveRags: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -1013,11 +912,6 @@ var AssetFemale3DCGExtended = {
 					],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothSlaveRagsSelect",
-				Option: "ClothSlaveRagsOption",
-				Module: "ClothSlaveRagsModule",
-			},
 		}, //SlaveRags
 		Hoodie: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -1147,12 +1041,6 @@ var AssetFemale3DCGExtended = {
 					],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothFishnetTopSelect",
-				Module: "ClothFishnetTopModule",
-				Option: "ClothFishnetTopOption",
-				Chat: "ClothFishnetTopSet",
-			},
 		}, // FishnetTop
 		MeshTop: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -1184,12 +1072,6 @@ var AssetFemale3DCGExtended = {
 					],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothMeshTopSelect",
-				Module: "ClothMeshTopModule",
-				Option: "ClothMeshTopOption",
-				Chat: "ClothMeshTopSet",
-			},
 		}, // MeshTop
 		CorsetDress: {
 			Archetype: ExtendedArchetype.TYPED,
@@ -1277,11 +1159,6 @@ var AssetFemale3DCGExtended = {
 					],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothLatexHobbleDressSelect",
-				Option: "ClothLatexHobbleDressOption",
-				Module: "ClothLatexHobbleDressModule",
-			},
 		}, // LatexHobbleDress
 		OffTheShoulderTop: {
 			Archetype: ExtendedArchetype.TYPED,
@@ -1293,41 +1170,24 @@ var AssetFemale3DCGExtended = {
 					Name: "Right",
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothOffTheShoulderTopSelect",
-				Option: "ClothOffTheShoulderTop",
-			},
 		}, // OffTheShoulderTop
 		BrocadeCloudsSnowEmbroideryQipao: {
 			Archetype: ExtendedArchetype.TYPED,
 			DrawImages: false,
 			Options: [{ Name: "Yes" }, { Name: "No" }],
-			DialogPrefix: {
-				Header: "ClothBrocadeCloudsSnowEmbroideryQipaoSelect",
-				Option: "ClothBrocadeCloudsSnowEmbroideryQipao",
-			},
 		}, // BrocadeCloudsSnowEmbroideryQipao
 		AllureSidecut: {
 			Archetype: ExtendedArchetype.TYPED,
 			ChangeWhenLocked: false,
 			DrawImages: false,
 			Options: [{ Name: "Default" }, { Name: "Transparent" }],
-			DialogPrefix: {
-				Header: "ClothAllureSidecutSelect",
-				Option: "ClothAllureSidecut",
-			},
 		}, // AllureSidecut
 		LittleFormalShirt: {
-			Archetype: ExtendedArchetype.MODULAR,
+			Archetype: "modular",
 			Modules: [{ Name: "Tie", Key: "t", Options: [{}, {}] }],
-			DialogPrefix: {
-				Option: "ClothLittleFormalShirtOption",
-				Header: "ClothLittleFormalShirtSelect",
-				Module: "ClothLittleFormalShirtModule",
-			},
 		}, // LittleFormalShirt
 		StarryOceanEveningGown: {
-			Archetype: ExtendedArchetype.MODULAR,
+			Archetype: "modular",
 			DrawImages: false,
 			Modules: [
 				{
@@ -1336,11 +1196,6 @@ var AssetFemale3DCGExtended = {
 					Options: [{}, { DrawOptions: { Mirror: true } }],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothStarryOceanEveningGownSelect",
-				Option: "ClothStarryOceanEveningGownOption",
-				Module: "ClothStarryOceanEveningGownModule",
-			},
 		}, // StarryOceanEveningGown
 		CasualDroppedSuit: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -1353,11 +1208,6 @@ var AssetFemale3DCGExtended = {
 					Options: [{}, { DrawOptions: { Mirror: true } }],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothCasualDroppedSuitSelect",
-				Option: "ClothCasualDroppedSuitOption",
-				Module: "ClothCasualDroppedSuitModule",
-			},
 		}, // CasualDroppedSuit
 		WhiteDress: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -1369,11 +1219,6 @@ var AssetFemale3DCGExtended = {
 					Options: [{ Property: { Hide: ["Nipples"] } }, {}],
 				},
 			],
-			DialogPrefix: {
-				Header: "ClothWhiteDressSelect",
-				Option: "ClothWhiteDressOption",
-				Module: "ClothWhiteDressModule",
-			},
 		}, // WhiteDress
 		Transparentraincoat: {
 			Archetype: ExtendedArchetype.TYPED,
@@ -1793,10 +1638,6 @@ var AssetFemale3DCGExtended = {
 				Option: "BodyMarkingsSplattersOption",
 				Chat: "BodyMarkingsSplattersSet",
 			},
-		},
-		BabyPowderDust: {
-			Archetype: ExtendedArchetype.TYPED,
-			Options: [{ Name: "Light" }, { Name: "Heavy" }],
 		},
 		FacePaints: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -11905,7 +11746,6 @@ var AssetFemale3DCGExtended = {
 					],
 				},
 			],
-			BaselineProperty: { Text: "" },
 		},
 		Sybian: {
 			Archetype: ExtendedArchetype.VIBRATING,
@@ -14097,30 +13937,6 @@ var AssetFemale3DCGExtended = {
 				},
 			],
 		}, // RoundClitPiercings
-		Catheter: {
-			Archetype: ExtendedArchetype.MODULAR,
-			DrawImages: false,
-			Modules: [
-				{
-					Name: "Length",
-					Key: "l",
-					DrawImages: false,
-					Options: [
-						{}, // l0 - long
-						{}, // l1 - short
-					],
-				},
-				{
-					Name: "OpenEnded",
-					Key: "o",
-					DrawImages: false,
-					Options: [
-						{}, // o0 - open
-						{ Property: { Effect: ["DenialMode", "RuinOrgasms"] } }, // o1 - closed
-					],
-				},
-			],
-		},
 		VibeHeartClitPiercing: {
 			Archetype: ExtendedArchetype.VIBRATING,
 		}, // VibeHeartClitPiercing
@@ -14816,10 +14632,6 @@ var AssetFemale3DCGExtended = {
 				},
 			],
 		}, // BarrelCorset
-		HeavyLatexCorset: {
-			Archetype: ExtendedArchetype.TYPED,
-			CopyConfig: { GroupName: "ItemTorso", AssetName: "HeavyLatexCorset" },
-		}, // HeavyLatexCorset
 	}, // Corset
 	ItemTorso: {
 		HeavyLatexCorset: {
@@ -15490,113 +15302,6 @@ var AssetFemale3DCGExtended = {
 				},
 			],
 		}, // ZipperLeatherBoots
-		PrintedCrocs: {
-			Archetype: ExtendedArchetype.TYPED,
-			Options: [
-				{ Name: "PlainColor" },
-				{ Name: "Pattern1" },
-				{ Name: "Pattern2" },
-				{ Name: "Pattern3" },
-			],
-		}, // PrintedCrocs
-		MaryJaneShoes: {
-			Archetype: ExtendedArchetype.MODULAR,
-			Modules: [
-				{
-					Name: "Style",
-					Key: "l",
-					DrawImages: false,
-					Options: [{}, {}],
-				},
-			],
-		}, // MaryJaneShoes
-		ToeRing: {
-			Archetype: ExtendedArchetype.MODULAR,
-			ChangeWhenLocked: false,
-			Modules: [
-				{
-					Name: "RightLittleToeRing",
-					DrawImages: false,
-					Key: "R5",
-					Options: [{}, {}],
-				},
-				{
-					Name: "RightFourthToeRing",
-					DrawImages: false,
-					Key: "R4",
-					Options: [{}, {}],
-				},
-				{
-					Name: "RightMiddleToeRing",
-					DrawImages: false,
-					Key: "R3",
-					Options: [{}, {}],
-				},
-				{
-					Name: "RightSecondToeRing",
-					DrawImages: false,
-					Key: "R2",
-					Options: [{}, {}],
-				},
-				{
-					Name: "RightBigToeRing",
-					DrawImages: false,
-					Key: "R1",
-					Options: [{}, {}],
-				},
-				{
-					Name: "LeftBigToeRing",
-					DrawImages: false,
-					Key: "L1",
-					Options: [{}, {}],
-				},
-				{
-					Name: "LeftSecondToeRing",
-					DrawImages: false,
-					Key: "L2",
-					Options: [{}, {}],
-				},
-				{
-					Name: "LeftMiddleToeRing",
-					DrawImages: false,
-					Key: "L3",
-					Options: [{}, {}],
-				},
-				{
-					Name: "LeftFourthToeRing",
-					DrawImages: false,
-					Key: "L4",
-					Options: [{}, {}],
-				},
-				{
-					Name: "LeftLittleToeRing",
-					DrawImages: false,
-					Key: "L5",
-					Options: [{}, {}],
-				},
-			],
-			DrawData: {
-				elementData: [
-					.../** @type {{position:[number,number]}[]} */ (
-						Array.from({ length: 5 }).map((_, idx) => ({
-							position: [
-								1135 + 250 * (idx % 3),
-								450 + 75 * Math.floor(idx / 3),
-							],
-						}))
-					),
-					.../** @type {{position:[number,number]}[]} */ (
-						Array.from({ length: 5 }).map((_, idx) => ({
-							position: [
-								1135 + 250 * (idx % 3),
-								450 + 75 * 3 + 75 * Math.floor(idx / 3),
-							],
-						}))
-					),
-				],
-				itemsPerPage: 10,
-			},
-		}, // ToeRing
 	}, // Shoes
 	HairAccessory1: {
 		ElfEars: {
@@ -21216,6 +20921,12 @@ var AssetFemale3DCGExtended = {
 				GroupName: "Cloth",
 				AssetName: "MeshTop",
 			},
+			DialogPrefix: {
+				Header: "ClothMeshTopSelect",
+				Module: "ClothMeshTopModule",
+				Option: "ClothMeshTopOption",
+				Chat: "ClothMeshTopSet",
+			},
 		}, //Mesh Top
 		SportSwimsuit: {
 			Archetype: ExtendedArchetype.MODULAR,
@@ -22236,9 +21947,15 @@ var AssetFemale3DCGExtended = {
 		FishnetTop: {
 			Archetype: ExtendedArchetype.MODULAR,
 			CopyConfig: { GroupName: "Cloth", AssetName: "FishnetTop" },
+			DialogPrefix: {
+				Header: "ClothFishnetTopSelect",
+				Module: "ClothFishnetTopModule",
+				Option: "ClothFishnetTopOption",
+				Chat: "ClothFishnetTopSet",
+			},
 		}, // FishnetTop
 		GlossyBodystocking: {
-			Archetype: ExtendedArchetype.MODULAR,
+			Archetype: "modular",
 			DrawImages: false,
 			Modules: [
 				{ Name: "HandStyle", Key: "h", Options: [{}, {}, {}, {}] },
@@ -22528,6 +22245,53 @@ var AssetFemale3DCGExtended = {
 			Archetype: ExtendedArchetype.MODULAR,
 			Modules: [
 				{
+					Name: "Background",
+					Key: "b",
+					Options: [
+						{
+							// b0 - Passthrough
+							Property: {
+								CustomBlindBackground: "",
+							},
+						},
+						{
+							// b1 - SynthWave
+							Property: {
+								CustomBlindBackground: "SynthWave",
+								Effect: [],
+							},
+						},
+						{
+							// b2 - Dungeon
+							Property: {
+								CustomBlindBackground: "Dungeon",
+								Effect: [],
+							},
+						},
+						{
+							// b3 - SciFiCell
+							Property: {
+								CustomBlindBackground: "SciFiCell",
+								Effect: [],
+							},
+						},
+						{
+							// b4 - AncientRuins
+							Property: {
+								CustomBlindBackground: "AncientRuins",
+								Effect: [],
+							},
+						},
+						{
+							// b5 - HypnoticSpiral
+							Property: {
+								CustomBlindBackground: "HypnoticSpiral",
+								Effect: [],
+							},
+						},
+					],
+				},
+				{
 					// Use `BlindTotal` for VR avatars to ensure that the `thin` property never reduces the blindness level below `BlindHeavy`,
 					// as lowering it any more will result in visual oddities related to partial blindness
 					Name: "Function",
@@ -22542,7 +22306,6 @@ var AssetFemale3DCGExtended = {
 						{
 							// f1 - Off
 							Property: {
-								CustomBlindBackground: "",
 								Effect: [E.BlindHeavy, E.BlockWardrobe],
 							},
 						},
@@ -22559,66 +22322,6 @@ var AssetFemale3DCGExtended = {
 							},
 						},
 					],
-				},
-				{
-					Name: "Background",
-					Key: "b",
-					Options: [
-						{
-							// b0 - Passthrough
-							Property: {
-								CustomBlindBackground: undefined,
-							},
-						},
-						{
-							// b1 - SynthWave
-							Property: {
-								CustomBlindBackground: "SynthWave",
-							},
-						},
-						{
-							// b2 - Dungeon
-							Property: {
-								CustomBlindBackground: "Dungeon",
-							},
-						},
-						{
-							// b3 - SciFiCell
-							Property: {
-								CustomBlindBackground: "SciFiCell",
-							},
-						},
-						{
-							// b4 - AncientRuins
-							Property: {
-								CustomBlindBackground: "AncientRuins",
-							},
-						},
-						{
-							// b5 - HypnoticSpiral
-							Property: {
-								CustomBlindBackground: "HypnoticSpiral",
-							},
-						},
-						{
-							// b6 - Black
-							Property: {
-								CustomBlindBackground: "",
-							},
-						},
-					],
-					DrawData: {
-						// Shuffle "b6 - Black" back into the 2nd spot
-						elementData: [
-							{ position: ExtendedXY[7][0] },
-							{ position: ExtendedXY[7][2] },
-							{ position: ExtendedXY[7][3] },
-							{ position: ExtendedXY[7][4] },
-							{ position: ExtendedXY[7][5] },
-							{ position: ExtendedXY[7][6] },
-							{ position: ExtendedXY[7][1] },
-						],
-					},
 				},
 				{
 					Name: "Game",
