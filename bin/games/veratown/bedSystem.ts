@@ -107,8 +107,20 @@ export class BedSystem implements VeratownFeatureSystem {
                 const hasBed =
                     character.Appearance.getItemData("ItemDevices")?.Name ===
                     "Bed";
+                const hasCovers =
+                    character.Appearance.getItemData("ItemAddon")?.Name ===
+                    "Covers";
 
                 if (isAsleep && !hasBed) {
+                    // Check if character already has something else equipped in the bed slot
+                    const existingBedItem =
+                        character.Appearance.getItemData("ItemDevices");
+                    if (existingBedItem && existingBedItem.Name !== "Bed") {
+                        // Character has another item in the bed slot, don't allow sleep
+                        await wait(BED_CHECK_INTERVAL_MS);
+                        continue;
+                    }
+
                     const bed = character.Appearance.AddItem(
                         AssetGet("ItemDevices", "Bed"),
                     );
@@ -123,19 +135,29 @@ export class BedSystem implements VeratownFeatureSystem {
                     character.Appearance.AddItem(
                         AssetGet("ItemAddon", "Covers"),
                     );
-                } else if (!isAsleep && hasBed) {
-                    character.Appearance.RemoveItem("ItemAddon"); //
-                    character.Appearance.RemoveItem("ItemDevices");
+                } else if (!isAsleep && (hasBed || hasCovers)) {
+                    // Only remove if we actually have the items (prevent unnecessary removals)
+                    if (hasCovers) {
+                        character.Appearance.RemoveItem("ItemAddon");
+                    }
+                    if (hasBed) {
+                        character.Appearance.RemoveItem("ItemDevices");
+                    }
                 }
 
                 await wait(BED_CHECK_INTERVAL_MS);
             }
         } finally {
+            // Clean up bed items when character leaves or system is disabled
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name === "Bed"
             ) {
-                character.Appearance.RemoveItem("ItemAddon");
                 character.Appearance.RemoveItem("ItemDevices");
+            }
+            if (
+                character.Appearance.getItemData("ItemAddon")?.Name === "Covers"
+            ) {
+                character.Appearance.RemoveItem("ItemAddon");
             }
             this.sleepingCharacters.delete(character.MemberNumber);
         }
