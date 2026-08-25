@@ -97,15 +97,23 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      */
     private async performRelease(character: API_Character): Promise<void> {
         try {
+            console.log(
+                `[ReleaseSystem] Starting release for ${character.MemberNumber}`,
+            );
+
             // Check if can release (admin bypass, cooldown, etc.)
             if (
                 !(await this.checkCanRelease(character)) &&
                 !character.IsRoomAdmin()
             ) {
+                console.log(
+                    `[ReleaseSystem] Release check failed for ${character.MemberNumber}`,
+                );
                 return; // Error already messaged
             }
 
             // Stage 1: Announce release
+            console.log(`[ReleaseSystem] Stage 1: Announcing release`);
             this.conn.reply(
                 character,
                 "*You press the emergency release button. Alarms sound...*",
@@ -113,16 +121,24 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             await wait(500);
 
             // Stage 2: Free from confinement
+            console.log(`[ReleaseSystem] Stage 2: Freeing from confinement`);
             await this.freeFromConfinement(character);
             await wait(300);
 
             // Stage 3: Strip non-owner-locked items
+            console.log(`[ReleaseSystem] Stage 3: Stripping non-owner items`);
             await this.stripNonOwnerItems(character);
             await wait(300);
 
             // Stage 4: Teleport to punishment room
+            console.log(
+                `[ReleaseSystem] Stage 4: Teleporting to punishment room`,
+            );
             const teleported = await this.teleportToPunishmentRoom(character);
             if (!teleported) {
+                console.log(
+                    `[ReleaseSystem] Teleport failed, using kick fallback`,
+                );
                 // Fallback to kick
                 this.conn.reply(
                     character,
@@ -136,12 +152,16 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             await wait(500);
 
             // Stage 5: Force nudity check
+            console.log(`[ReleaseSystem] Stage 5: Checking for nudity`);
             const isNaked = await this.waitForNudity(
                 character,
                 RELEASE_NUDITY_TIMEOUT_MS,
             );
 
             if (!isNaked) {
+                console.log(
+                    `[ReleaseSystem] Nudity check failed for ${character.MemberNumber}`,
+                );
                 this.conn.reply(
                     character,
                     "You failed to strip in time. No door code for you.",
@@ -153,8 +173,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             await wait(500);
 
             // Stage 6: Grant door access
+            console.log(`[ReleaseSystem] Stage 6: Granting door access`);
             const granted = await this.grantDoorAccess(character);
             if (!granted) {
+                console.log(`[ReleaseSystem] Door access could not be granted`);
                 this.conn.reply(
                     character,
                     "Door access could not be granted. Try finding the exit manually.",
@@ -162,6 +184,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Record successful release
+            console.log(
+                `[ReleaseSystem] Stage 7: Recording successful release`,
+            );
             await this.recordReleaseEvent(character, "successful_release");
 
             // Set cooldown if configured
@@ -171,8 +196,21 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     Date.now() + RELEASE_COOLDOWN_MS,
                 );
             }
+            console.log(
+                `[ReleaseSystem] Release completed successfully for ${character.MemberNumber}`,
+            );
         } catch (e) {
-            console.error(`[ReleaseSystem] Release failed for ${character}`, e);
+            console.error(
+                `[ReleaseSystem] Release failed for ${character}:`,
+                e,
+            );
+            console.error(
+                `[ReleaseSystem] Error details:`,
+                e instanceof Error ? e.message : String(e),
+            );
+            if (e instanceof Error) {
+                console.error(`[ReleaseSystem] Stack trace:`, e.stack);
+            }
             this.conn.reply(
                 character,
                 "Release sequence encountered an error.",
