@@ -273,8 +273,35 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     character,
                     "You failed to strip in time. No door code for you.",
                 );
+                // Clear parole if they failed nudity check - they didn't escape
+                if (this.characterProfileStore) {
+                    await this.characterProfileStore.clearReleaseParole(
+                        character.MemberNumber,
+                    );
+                    this.paroleMetadata.delete(character.MemberNumber);
+                    this.paroleAppearanceTracking.delete(
+                        character.MemberNumber,
+                    );
+                }
                 await this.recordReleaseEvent(character, "failed_nudity_check");
                 return;
+            }
+
+            // CRITICAL: Update parole metadata with fully-naked state
+            // Any clothing added during parole from this point is a violation
+            const nakedAppearance = character.Appearance.getAppearanceData();
+            const nakedItems = new Set<string>();
+            for (const item of nakedAppearance) {
+                if (item.Group) {
+                    nakedItems.add(item.Group);
+                }
+            }
+            const metadata = this.paroleMetadata.get(character.MemberNumber);
+            if (metadata) {
+                metadata.startingItems = nakedItems; // Update to fully-naked state
+                console.log(
+                    `[ReleaseSystem] Updated parole metadata for ${character.MemberNumber}: now tracking fully-naked state (${nakedItems.size} item groups)`,
+                );
             }
 
             await wait(500);
@@ -1029,7 +1056,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * Works cross-room by comparing to stored parole metadata
      */
     private async checkAllParoleViolations(): Promise<void> {
-        if (!this.characterProfileStore) {
+        if (!this.characterProfileStore || !this.conn?.chatRoom?.Characters) {
             return;
         }
 
@@ -1107,43 +1134,27 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Check if a paroled character has added clothing beyond their starting state
+     * Since we capture starting state after nudity check passes (fully naked),
+     * ANY clothing item is a violation during parole
      */
     private async checkParoleViolation(
         character: API_Character,
         startingItems: Set<string>,
     ): Promise<void> {
         const currentAppearance = character.Appearance.getAppearanceData();
-        const currentItems = new Set<string>();
 
-        // Build set of current clothing items
+        // Check each item - looking for CLOTHING ONLY (not body parts)
         for (const item of currentAppearance) {
             if (item.Group && this.actualClothingGroups.has(item.Group)) {
-                currentItems.add(item.Group);
-            }
-        }
-
-        // Check if any NEW CLOTHING items were added (violation)
-        for (const group of currentItems) {
-            if (!startingItems.has(group)) {
-                // New clothing item added - this is a violation
-                const item = currentAppearance.find((i) => i.Group === group);
-                if (item) {
+                // Found clothing - is it in the starting state?
+                if (!startingItems.has(item.Group)) {
+                    // NEW clothing item added during parole - VIOLATION
                     console.log(
-                        `[ReleaseSystem] Parole violation detected - new clothing: ${item.Name} (${group})`,
+                        `[ReleaseSystem] Parole violation detected - added clothing: ${item.Name} (${item.Group})`,
                     );
                     await this.handleParoleViolation(character, "dressed");
                     return;
                 }
-            }
-        }
-
-        // Update tracking to current state
-        const previousGroups = this.paroleAppearanceTracking.get(
-            character.MemberNumber,
-        );
-        if (previousGroups) {
-            for (const group of currentItems) {
-                previousGroups.add(group);
             }
         }
     }
