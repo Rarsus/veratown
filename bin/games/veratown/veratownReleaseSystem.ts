@@ -1668,7 +1668,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return;
         }
 
-        if (!this.conn?.chatRoom?.Characters) {
+        if (
+            !this.conn ||
+            !this.conn.chatRoom ||
+            !this.conn.chatRoom.Characters
+        ) {
             console.log(
                 `[ReleaseSystem] checkAllParoleViolations: chatRoom not ready`,
             );
