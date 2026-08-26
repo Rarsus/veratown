@@ -268,14 +268,18 @@ export class Veratown {
                     this.conn,
                     this.locationStore,
                     this.characterProfileStore,
-                    {
-                        freeCharacterIfCaged: (c) =>
-                            this.cageSystem?.freeCharacterIfCaged(c),
-                    },
-                    {
-                        freeCharacterIfKenneled: (c) =>
-                            this.kennelSystem?.freeCharacterIfKenneled(c),
-                    },
+                    this.cageSystem
+                        ? {
+                              freeCharacterIfCaged: (c) =>
+                                  this.cageSystem!.freeCharacterIfCaged(c),
+                          }
+                        : undefined,
+                    this.kennelSystem
+                        ? {
+                              freeCharacterIfKenneled: (c) =>
+                                  this.kennelSystem!.freeCharacterIfKenneled(c),
+                          }
+                        : undefined,
                 ),
         );
 

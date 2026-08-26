@@ -269,10 +269,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * Free from cage/kennel
      */
     private async freeFromConfinement(character: API_Character): Promise<void> {
-        if (this.cageSystem) {
+        // Check if the methods exist and are callable
+        if (this.cageSystem?.freeCharacterIfCaged) {
             this.cageSystem.freeCharacterIfCaged(character);
         }
-        if (this.kennelSystem) {
+        if (this.kennelSystem?.freeCharacterIfKenneled) {
             this.kennelSystem.freeCharacterIfKenneled(character);
         }
     }
