@@ -1969,28 +1969,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         );
 
         let clothingFound = false;
-        let clothingDetails: string[] = [];
-        let allItems: string[] = [];
         let clothingItems: string[] = [];
 
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ---- EXPECTED STATE ANALYSIS ----`,
+            `[ReleaseSystem:PAROLE_CHECK] ---- PAROLE REQUIREMENT ----`,
         );
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] startingItems.size = ${startingItems.size}`,
+            `[ReleaseSystem:PAROLE_CHECK] Expected State: CHARACTER MUST BE COMPLETELY NAKED (no clothing allowed)`,
         );
-        if (startingItems.size === 0) {
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Expected: COMPLETELY NAKED (empty set, no items in startingItems)`,
-            );
-        } else {
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Expected: ${startingItems.size} item groups allowed:`,
-            );
-            Array.from(startingItems).forEach((group) => {
-                console.log(`[ReleaseSystem:PAROLE_CHECK]   - ${group}`);
-            });
-        }
 
         console.log(
             `[ReleaseSystem:PAROLE_CHECK] ---- CURRENT APPEARANCE ANALYSIS (${currentAppearance.length} items) ----`,
@@ -2000,10 +1986,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         for (const item of currentAppearance) {
             const itemName = item.Name || "NO_NAME";
             const itemGroup = item.Group || "NO_GROUP";
-            allItems.push(`${itemName}(${itemGroup})`);
 
             console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Item #${allItems.length}: "${itemName}" | Group: "${itemGroup}"`,
+                `[ReleaseSystem:PAROLE_CHECK] Item #${clothingItems.length + 1}: "${itemName}" | Group: "${itemGroup}"`,
             );
 
             if (!item.Group) {
@@ -2021,45 +2006,24 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             if (isClothing) {
                 clothingItems.push(`${itemName} (${itemGroup})`);
                 clothingFound = true;
-                clothingDetails.push(`${itemName} (${itemGroup})`);
 
                 console.log(
-                    `[ReleaseSystem:PAROLE_CHECK]   → YES, this is CLOTHING`,
+                    `[ReleaseSystem:PAROLE_CHECK]   → YES, THIS IS CLOTHING - VIOLATION!`,
                 );
-
-                // Found clothing - is it in the starting state?
-                const inStartingItems = startingItems.has(item.Group);
                 console.log(
-                    `[ReleaseSystem:PAROLE_CHECK]   → Was ${itemGroup} in startingItems? ${inStartingItems}`,
+                    `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION CONDITION MET ***`,
                 );
-
-                if (!inStartingItems) {
-                    // NEW clothing item added during parole - VIOLATION
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION CONDITION MET ***`,
-                    );
-                    if (startingItems.size === 0) {
-                        console.log(
-                            `[ReleaseSystem:PAROLE_CHECK] Reason: Character must be COMPLETELY NAKED during parole, but found "${itemGroup}"`,
-                        );
-                    } else {
-                        console.log(
-                            `[ReleaseSystem:PAROLE_CHECK] Reason: "${itemGroup}" NOT in startingItems (new clothing added during parole)`,
-                        );
-                    }
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] Decision: CALL handleParoleViolation()`,
-                    );
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
-                    );
-                    await this.handleParoleViolation(character, "dressed");
-                    return;
-                } else {
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK]   → NO VIOLATION: ${itemGroup} was in startingItems (allowed)`,
-                    );
-                }
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] Reason: Character must be COMPLETELY NAKED during parole, but found "${itemName}" in group "${itemGroup}"`,
+                );
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] Decision: CALL handleParoleViolation()`,
+                );
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
+                );
+                await this.handleParoleViolation(character, "dressed");
+                return;
             } else {
                 console.log(
                     `[ReleaseSystem:PAROLE_CHECK]   → NO, this is a body part/device (not counted)`,
@@ -2067,7 +2031,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
-        // Debug: Log summary
+        // No clothing found - compliant
         console.log(
             `[ReleaseSystem:PAROLE_CHECK] ---- VIOLATION CHECK SUMMARY ----`,
         );
@@ -2077,25 +2041,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         console.log(
             `[ReleaseSystem:PAROLE_CHECK] Clothing items found: ${clothingItems.length}`,
         );
-        if (clothingItems.length > 0) {
-            clothingItems.forEach((item) => {
-                console.log(`[ReleaseSystem:PAROLE_CHECK]   - ${item}`);
-            });
-        }
 
-        if (clothingFound) {
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] ⚠️  WARNING: Character has clothing, but all items were in startingItems`,
-            );
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Items: ${clothingDetails.join(", ")}`,
-            );
-        } else {
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: Character is naked (no clothing found)`,
-            );
-        }
-
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: Character is naked (no clothing found)`,
+        );
         console.log(
             `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (NO VIOLATION) ===============`,
         );
