@@ -2312,6 +2312,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             currentClothingDetected,
         );
 
+        // If no clothing detected, they're compliant
+        if (currentEquippedClothing.length === 0) {
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: No clothing detected - character is naked`,
+            );
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (COMPLIANT) ===============`,
+            );
+            return;
+        }
+
         // BIDIRECTIONAL VALIDATION
         // Method 1: Check if ANY clothing exists (absolute rule)
         console.log(
@@ -2321,33 +2332,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:PAROLE_CHECK] Rule: Character MUST have ZERO clothing items`,
         );
 
-        for (const item of currentAppearance) {
-            if (!item.Group) {
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] ⚠️  ITEM WITH NO GROUP: "${item.Name || "NO_NAME"}"`,
-                );
-                continue; // Skip items without group
-            }
-
-            const isClothing = this.actualClothingGroups.has(item.Group);
-
-            if (isClothing) {
-                const itemName = item.Name || "NO_NAME";
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION DETECTED (Method 1) ***`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] Found clothing: "${itemName}" in group "${item.Group}"`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] Parole rule violated: CHARACTER MUST BE COMPLETELY NAKED`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
-                );
-                await this.handleParoleViolation(character, "dressed");
-                return;
-            }
+        for (const item of currentEquippedClothing) {
+            const itemName = item.name || "NO_NAME";
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION DETECTED (Method 1) ***`,
+            );
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] Found clothing: "${itemName}" in group "${item.group}"`,
+            );
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] Parole rule violated: CHARACTER MUST BE COMPLETELY NAKED`,
+            );
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
+            );
+            await this.handleParoleViolation(character, "dressed");
+            return;
         }
 
         // Method 2: Bidirectional check (if metadata available)
@@ -2360,13 +2360,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
 
             const currentClothingMap = new Map<string, string>();
-            for (const item of currentAppearance) {
-                if (
-                    item.Group &&
-                    this.actualClothingGroups.has(item.Group) &&
-                    item.Name
-                ) {
-                    currentClothingMap.set(item.Group, item.Name);
+            for (const item of currentEquippedClothing) {
+                if (item.group && item.name) {
+                    currentClothingMap.set(item.group, item.name);
                 }
             }
 
