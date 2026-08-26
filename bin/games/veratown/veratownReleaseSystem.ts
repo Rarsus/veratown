@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { API_Connector, API_Character } from "bc-bot";
+import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
@@ -283,19 +283,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * stripBulk with stripLocked=false keeps items where Property?.LockedBy exists
      */
     private async stripNonOwnerItems(character: API_Character): Promise<void> {
-        // Get all appearance items
+        // Get all appearance items BEFORE stripping
         const appearance = character.Appearance.getAppearanceData();
 
-        // Collect items to remove (those NOT locked by owner or time)
-        const itemsToRemove: Array<{ group: string; item: string }> = [];
+        // Identify locked items that must be preserved
+        const lockedItems: Array<{
+            group: string;
+            name: string;
+            lockType: string;
+            lockedBy: string;
+        }> = [];
 
         for (const item of appearance) {
-            // Skip items with no group or name
             if (!item.Group || !item.Name) {
                 continue;
             }
 
-            // Check lock status
             const isOwnerLocked =
                 item.Property?.LockedBy &&
                 item.Property?.Lock === "Owner" &&
@@ -305,26 +308,52 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 item.Property?.Lock === "Timers" &&
                 item.Property.Difficulty !== undefined;
 
-            // If NOT locked by owner or time, mark for removal
-            if (!isOwnerLocked && !isTimeLocked) {
-                itemsToRemove.push({
+            if (isOwnerLocked || isTimeLocked) {
+                lockedItems.push({
                     group: item.Group,
-                    item: item.Name,
+                    name: item.Name,
+                    lockType: item.Property?.Lock ?? "Unknown",
+                    lockedBy: item.Property?.LockedBy ?? "Unknown",
                 });
+                console.log(
+                    `[ReleaseSystem] Will preserve ${item.Name} (${item.Property?.Lock || "Unknown"} lock)`,
+                );
             }
         }
 
-        // Remove items
-        let removedCount = 0;
-        for (const itemDef of itemsToRemove) {
-            console.log(
-                `[ReleaseSystem] Removing ${itemDef.item} from ${itemDef.group}`,
-            );
-            character.Appearance.RemoveItem(itemDef.group, itemDef.item);
-            removedCount++;
-        }
+        // Strip ALL items (including locked, we'll re-add them)
+        console.log(`[ReleaseSystem] Stripping all items...`);
+        character.Appearance.stripBulk({ item: true }, true); // stripLocked=true removes everything
 
-        console.log(`[ReleaseSystem] Stripped ${removedCount} total items`);
+        // Re-add locked items
+        console.log(
+            `[ReleaseSystem] Re-adding ${lockedItems.length} locked items...`,
+        );
+        for (const lockedItem of lockedItems) {
+            try {
+                const asset = AssetGet(lockedItem.group, lockedItem.name);
+                if (asset) {
+                    const addedItem = character.Appearance.AddItem(asset);
+                    // Restore lock properties
+                    if (addedItem && addedItem.Property) {
+                        addedItem.Property.Lock = lockedItem.lockType;
+                        addedItem.Property.LockedBy = lockedItem.lockedBy;
+                    }
+                    console.log(
+                        `[ReleaseSystem] Re-added locked item: ${lockedItem.name}`,
+                    );
+                } else {
+                    console.warn(
+                        `[ReleaseSystem] Could not find asset for ${lockedItem.group}/${lockedItem.name}`,
+                    );
+                }
+            } catch (e) {
+                console.error(
+                    `[ReleaseSystem] Error re-adding locked item ${lockedItem.name}:`,
+                    e,
+                );
+            }
+        }
 
         // Update profile with current state
         if (this.characterProfileStore) {
@@ -353,9 +382,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
+        const totalRemoved = appearance.length - lockedItems.length;
         this.whisper(
             character,
-            `*${removedCount} item${removedCount !== 1 ? "s" : ""} fall away...*`,
+            `*${totalRemoved} item${totalRemoved !== 1 ? "s" : ""} fall away...*`,
         );
     }
 
