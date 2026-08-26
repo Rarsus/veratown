@@ -731,7 +731,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 `[ReleaseSystem]   - Total items: ${currentAppearance.length} (bundle: ${bundleRefresh.length}), Clothing items: ${clothingCount}`,
             );
 
-            const isNaked = this.isCharacterNaked(character);
+            const isNaked = await this.isCharacterNaked(character);
             if (isNaked) {
                 console.log(
                     `[ReleaseSystem] Nudity confirmed on check #${checkCount}`,
@@ -762,14 +762,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     /**
      * Check if character has no clothing (only body items remain)
      * Nudity = no actual CLOTHING. Body parts and intimate devices are OK.
+     * ASYNC: Waits for appearance cache refresh after MakeAppearanceBundle()
      */
-    private isCharacterNaked(character: API_Character): boolean {
-        // Force refresh bundle first to clear any cache
-        const bundle = character.Appearance.MakeAppearanceBundle();
+    private async isCharacterNaked(character: API_Character): Promise<boolean> {
+        // Force refresh bundle to invalidate server-side cache
+        character.Appearance.MakeAppearanceBundle();
+        // CRITICAL: Wait for cache invalidation to propagate
+        // BC library async cache update needs 50-100ms to take effect
+        await wait(100);
+
         const appearance = character.Appearance.getAppearanceData();
 
         console.log(
-            `[ReleaseSystem] Checking nudity for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - total items: ${appearance.length} (bundle had ${bundle.length})`,
+            `[ReleaseSystem] Checking nudity for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - total items: ${appearance.length}`,
         );
 
         // Log ALL items for debugging
@@ -1040,7 +1045,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         while (Date.now() - paroleStartTime < paroleDurationMs) {
             // Check if character added clothing (violation)
-            const isNaked = this.isCharacterNaked(character);
+            const isNaked = await this.isCharacterNaked(character);
             if (!isNaked) {
                 console.log(
                     `[ReleaseSystem] Parole violation detected for ${character.MemberNumber}: character clothed during monitoring`,
@@ -1077,7 +1082,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] Parole duration expired for ${character.MemberNumber}, performing final check`,
         );
 
-        const finalNakedCheck = this.isCharacterNaked(character);
+        const finalNakedCheck = await this.isCharacterNaked(character);
         if (!finalNakedCheck) {
             console.log(
                 `[ReleaseSystem] PAROLE FAILED: Character ${character.MemberNumber} clothed at expiration`,
