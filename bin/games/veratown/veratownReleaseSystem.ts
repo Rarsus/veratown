@@ -84,6 +84,52 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         "ClothUpper",
     ]);
 
+    /**
+     * ALTERNATIVE APPROACH: Inverse whitelist of body parts/cosmetics/intimate items
+     * If item.Group NOT in this set → it's considered clothing
+     * Useful if cache issues persist with forward whitelist approach
+     * Reference: BC Item Groups that are NOT clothing
+     */
+    private readonly bodyPartsAndNonClothingGroups = new Set([
+        // Body modifications
+        "BodyStyle",
+        "BodyLower",
+        "BodyUpper",
+        "Pussy",
+        "Nipples",
+
+        // Face/head cosmetics
+        "Eyes",
+        "Eyes2",
+        "Eyebrows",
+        "EyeShadow",
+        "Blush",
+        "Mouth",
+
+        // Hair (natural)
+        "HairFront",
+        "HairBack",
+
+        // Physical characteristics
+        "Height",
+        "Pronouns",
+        "Head",
+
+        // Arm/hand positions
+        "ArmsLeft",
+        "ArmsRight",
+        "HandsLeft",
+        "HandsRight",
+
+        // Intimate piercings/devices
+        "ItemNipplesPiercings",
+        "ItemNeck",
+
+        // Visual effects
+        "Emoticon",
+        "Fluids",
+    ]);
+
     // Track active releases (memberNumber -> Promise)
     private activeReleases = new Map<number, Promise<void>>();
     // Track release cooldowns (memberNumber -> nextReleaseTime)
@@ -204,6 +250,80 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     /**
      * Execute the full release sequence
      */
+    /**
+     * HELPER: Check if an item is clothing using FORWARD logic (current approach)
+     * If item.Group is in actualClothingGroups → it's clothing
+     *
+     * Current strategy: Use forward whitelist (faster, more explicit)
+     * Fallback: Switch to isClothingByInverse() if cache issues persist
+     */
+    private isClothingByForward(itemGroup: string | undefined): boolean {
+        if (!itemGroup) return false;
+        return this.actualClothingGroups.has(itemGroup);
+    }
+
+    /**
+     * DIAGNOSTIC: Compare forward and inverse clothing checks
+     * If both approaches disagree on what's clothing, indicates potential cache issues
+     * or definition gaps in whitelist/blacklist
+     *
+     * Returns: {forward: boolean, inverse: boolean, isDiscrepancy: boolean}
+     */
+    private diagnoseClothingDetection(
+        itemGroup: string | undefined,
+    ): { forward: boolean; inverse: boolean; isDiscrepancy: boolean } {
+        const forward = this.isClothingByForward(itemGroup);
+        const inverse = this.isClothingByInverse(itemGroup);
+        return {
+            forward,
+            inverse,
+            isDiscrepancy: forward !== inverse,
+        };
+    }
+
+    /**
+     * DIAGNOSTIC: Detect stale cache by comparing items across multiple rapid refreshes
+     * If same items appear in consecutive calls despite MakeAppearanceBundle(),
+     * indicates BC library cache is stale
+     *
+     * This reveals the actual lag time between equipment removal and cache update
+     */
+    private detectStaleCacheIndicators(
+        currentAppearance: any[],
+        previousAppearance: any[] | null,
+    ): {
+        stalenessScore: number; // 0-100, higher = staler
+        identicalItems: boolean; // true if same items in both calls
+        gapDetected: boolean; // true if items should have changed but didn't
+    } {
+        if (!previousAppearance) {
+            return {
+                stalenessScore: 0,
+                identicalItems: false,
+                gapDetected: false,
+            };
+        }
+
+        // Compare item sets
+        const currentSet = new Set(
+            currentAppearance.map((i) => i.Group + ":" + i.Name),
+        );
+        const previousSet = new Set(
+            previousAppearance.map((i) => i.Group + ":" + i.Name),
+        );
+
+        // If sets are identical across refresh cycles, cache likely stale
+        const identical =
+            currentSet.size === previousSet.size &&
+            [...currentSet].every((item) => previousSet.has(item));
+
+        return {
+            stalenessScore: identical ? 100 : 0,
+            identicalItems: identical,
+            gapDetected: identical && currentSet.size > 0, // Items unchanged despite refresh
+        };
+    }
+
     private async performRelease(character: API_Character): Promise<void> {
         try {
             console.log(
@@ -336,9 +456,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // CRITICAL: Update parole metadata with fully-naked state
             // Any clothing added during parole from this point is a violation
-            // MUST refresh bundle before checking appearance (cache clearing pattern)
+            // MUST use aggressive refresh to ensure fresh cache
+            console.log(
+                `[ReleaseSystem] Aggressive cache refresh for naked state capture`,
+            );
             character.Appearance.MakeAppearanceBundle();
-            await wait(100);
+            await wait(200);
+            character.Appearance.MakeAppearanceBundle();
+            await wait(300);
             const nakedAppearance = character.Appearance.getAppearanceData();
             // CRITICAL: Only capture CLOTHING groups in the naked state
             // Body parts, cosmetics, etc. should NOT be tracked
@@ -783,40 +908,42 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:NUDITY_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
         );
 
-        // Force refresh bundle to invalidate server-side cache
+        // Force aggressive cache refresh to get current appearance state
         console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 1: Calling MakeAppearanceBundle()`,
+            `[ReleaseSystem:NUDITY_CHECK] Step 1: Aggressive cache refresh (double refresh pattern)`,
         );
         character.Appearance.MakeAppearanceBundle();
-        // CRITICAL: Wait for cache invalidation to propagate
-        // BC library async cache update needs 50-100ms to take effect
-        console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 2: Waiting 100ms for cache to clear`,
-        );
-        await wait(100);
+        await wait(200); // Initial clear
+        character.Appearance.MakeAppearanceBundle(); // Double refresh
+        await wait(300); // Longer wait for BC library processing
 
         console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 3: Calling getAppearanceData()`,
+            `[ReleaseSystem:NUDITY_CHECK] Step 2: Fetching appearance data`,
         );
         const appearance = character.Appearance.getAppearanceData();
         console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 3 Result: Got ${appearance.length} total items`,
+            `[ReleaseSystem:NUDITY_CHECK] Step 3: Result - Got ${appearance.length} total items`,
         );
 
         console.log(
             `[ReleaseSystem:NUDITY_CHECK] ---- ALL ITEMS IN APPEARANCE (${appearance.length} total) ----`,
         );
 
-        // Log ALL items for debugging
+        // Log ALL items for debugging - include last item time for cache validation
         const clothingItems: string[] = [];
         const bodyItems: string[] = [];
 
+        // Show when each item was last equipped for cache validation
         for (const item of appearance) {
-            const itemName = item.Name || "NO_NAME";
-            const itemGroup = item.Group || "NO_GROUP";
-            const lockStatus = item.Property?.LockedBy || "Unlocked";
+            const timeSinceChange = item.LastPlayerUpdateDate
+                ? Date.now() - item.LastPlayerUpdateDate
+                : -1;
+            const lastChangeInfo =
+                timeSinceChange >= 0
+                    ? ` [changed ${timeSinceChange}ms ago]`
+                    : " [no change time]";
             console.log(
-                `[ReleaseSystem:NUDITY_CHECK] Item: "${itemName}" | Group: "${itemGroup}" | Locked: ${lockStatus}`,
+                `[ReleaseSystem:NUDITY_CHECK] Item: "${item.Name || "NO_NAME"}" | Group: "${item.Group || "NO_GROUP"}" | Locked: ${item.Property?.LockedBy || "Unlocked"}${lastChangeInfo}`,
             );
         }
 
@@ -1948,24 +2075,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:PAROLE_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
         );
 
-        // CRITICAL: Refresh appearance bundle to clear server-side cache
-        // Without this, getAppearanceData() returns stale data
+        // CRITICAL: Force aggressive cache refresh to get latest appearance state
+        // BC library caches appearance data - must invalidate completely
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 1: Calling MakeAppearanceBundle()`,
+            `[ReleaseSystem:PAROLE_CHECK] Step 1: Aggressive cache refresh (CRITICAL for accuracy)`,
         );
         character.Appearance.MakeAppearanceBundle();
+        await wait(200); // Increased from 100ms
+        character.Appearance.MakeAppearanceBundle(); // Double refresh to ensure cache clear
+        await wait(300); // Longer wait for BC library to process
 
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 2: Waiting 100ms for cache to clear`,
-        );
-        await wait(100);
-
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 3: Calling getAppearanceData()`,
+            `[ReleaseSystem:PAROLE_CHECK] Step 2: Fetching appearance after cache clear`,
         );
         const currentAppearance = character.Appearance.getAppearanceData();
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 3 Result: Got ${currentAppearance.length} items from getAppearanceData()`,
+            `[ReleaseSystem:PAROLE_CHECK] Step 3: Got ${currentAppearance.length} items from getAppearanceData()`,
         );
 
         let clothingFound = false;
@@ -1986,9 +2111,16 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         for (const item of currentAppearance) {
             const itemName = item.Name || "NO_NAME";
             const itemGroup = item.Group || "NO_GROUP";
+            const timeSinceChange = item.LastPlayerUpdateDate
+                ? Date.now() - item.LastPlayerUpdateDate
+                : -1;
+            const lastChangeInfo =
+                timeSinceChange >= 0
+                    ? ` [changed ${timeSinceChange}ms ago]`
+                    : " [no change time]";
 
             console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Item #${clothingItems.length + 1}: "${itemName}" | Group: "${itemGroup}"`,
+                `[ReleaseSystem:PAROLE_CHECK] Item: "${itemName}" | Group: "${itemGroup}"${lastChangeInfo}`,
             );
 
             if (!item.Group) {
