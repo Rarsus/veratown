@@ -1549,15 +1549,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                             `[ReleaseSystem] VIOLATION ON RESTART: ${parole.name} (${parole.memberNumber}) is clothed during parole - triggering enforcement`,
                         );
                         // Don't await - let violation handler run independently
-                        this.handleParoleViolation(
-                            character,
-                            "dressed_on_restart",
-                        ).catch((e) => {
-                            console.error(
-                                `[ReleaseSystem] Error handling restart violation:`,
-                                e,
-                            );
-                        });
+                        this.handleParoleViolation(character, "dressed").catch(
+                            (e) => {
+                                console.error(
+                                    `[ReleaseSystem] Error handling restart violation:`,
+                                    e,
+                                );
+                            },
+                        );
                     } else {
                         console.log(
                             `[ReleaseSystem] Parole resuming for ${parole.name} (${parole.memberNumber}) - still naked, resuming monitoring`,
