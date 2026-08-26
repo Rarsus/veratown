@@ -1817,6 +1817,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
         startingItems: Set<string>,
     ): Promise<void> {
+        // CRITICAL: Refresh appearance bundle to clear server-side cache
+        // Without this, getAppearanceData() returns stale data
+        character.Appearance.MakeAppearanceBundle();
+        await wait(100);
+
         const currentAppearance = character.Appearance.getAppearanceData();
         let clothingFound = false;
         let clothingDetails: string[] = [];
