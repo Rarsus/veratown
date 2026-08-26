@@ -1639,6 +1639,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         // Check every 5 seconds
         this.paroleMonitoringInterval = setInterval(() => {
+            console.log(
+                `[ReleaseSystem] Interval callback fired - checking violations`,
+            );
             this.checkAllParoleViolations().catch((e) => {
                 console.error(`[ReleaseSystem] Error in parole monitoring:`, e);
             });
@@ -1661,6 +1664,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * Works cross-room by comparing to stored parole metadata
      */
     private async checkAllParoleViolations(): Promise<void> {
+        console.log(
+            `[ReleaseSystem] checkAllParoleViolations called - starting violation check`,
+        );
+
         if (!this.characterProfileStore) {
             console.log(
                 `[ReleaseSystem] checkAllParoleViolations: store unavailable`,
