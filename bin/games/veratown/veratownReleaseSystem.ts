@@ -1539,10 +1539,32 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     this.paroleMetadata.delete(parole.memberNumber);
                 } else if (character) {
                     console.log(
-                        `[ReleaseSystem] Parole active for ${parole.name} (${parole.memberNumber}) - monitoring`,
+                        `[ReleaseSystem] Parole active for ${parole.name} (${parole.memberNumber}) - checking if still compliant`,
                     );
-                    // Character is in room - start tracking their appearance
-                    this.trackParoleCharacter(character);
+                    // Character is in room - CRITICAL: Verify they still have no clothing
+                    // If they added clothing while bot was down, trigger violation immediately
+                    const isNaked = await this.isCharacterNaked(character);
+                    if (!isNaked) {
+                        console.log(
+                            `[ReleaseSystem] VIOLATION ON RESTART: ${parole.name} (${parole.memberNumber}) is clothed during parole - triggering enforcement`,
+                        );
+                        // Don't await - let violation handler run independently
+                        this.handleParoleViolation(
+                            character,
+                            "dressed_on_restart",
+                        ).catch((e) => {
+                            console.error(
+                                `[ReleaseSystem] Error handling restart violation:`,
+                                e,
+                            );
+                        });
+                    } else {
+                        console.log(
+                            `[ReleaseSystem] Parole resuming for ${parole.name} (${parole.memberNumber}) - still naked, resuming monitoring`,
+                        );
+                        // Character still compliant - resume tracking
+                        this.trackParoleCharacter(character);
+                    }
                 } else {
                     console.log(
                         `[ReleaseSystem] Parole active for ${parole.name} (${parole.memberNumber}) but not in room - will monitor on entry`,
@@ -1690,18 +1712,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Check if a paroled character has added clothing beyond their starting state
-     * Since we capture starting state after nudity check passes (fully naked),
-     * ANY clothing item is a violation during parole
+     * During parole, the character must remain COMPLETELY NAKED (no clothing groups)
+     * Any clothing item found = violation
      */
     private async checkParoleViolation(
         character: API_Character,
         startingItems: Set<string>,
     ): Promise<void> {
         const currentAppearance = character.Appearance.getAppearanceData();
+        let clothingFound = false;
+        let clothingDetails: string[] = [];
 
         // Check each item - looking for CLOTHING ONLY (not body parts)
         for (const item of currentAppearance) {
             if (item.Group && this.actualClothingGroups.has(item.Group)) {
+                clothingFound = true;
+                clothingDetails.push(`${item.Name} (${item.Group})`);
                 // Found clothing - is it in the starting state?
                 if (!startingItems.has(item.Group)) {
                     // NEW clothing item added during parole - VIOLATION
@@ -1712,6 +1738,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     return;
                 }
             }
+        }
+
+        // Debug: Log if clothing found
+        if (clothingFound) {
+            console.log(
+                `[ReleaseSystem] WARNING: Character ${character.MemberNumber} found with clothing during parole check:`,
+                clothingDetails.join(", "),
+            );
         }
     }
 }
