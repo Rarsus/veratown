@@ -283,6 +283,11 @@ export class Veratown {
                 ),
         );
 
+        // Link ReleaseSystem to ShowerSystem for parole violation checking
+        if (this.showerSystem && this.releaseSystem) {
+            this.showerSystem.setReleaseSystem(this.releaseSystem);
+        }
+
         // Casino feature uses a separate bot connection (user3) to avoid
         // modifying the main bot's appearance with casino items
         if (this.conn3 && db) {

@@ -130,6 +130,46 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
+     * Check if character is on parole with clothing and enforce violation if detected
+     * Called by other features (e.g., ShowerSystem) to validate parole status before proceeding
+     * Throws if violation is detected and enforced, so caller can handle the abort
+     */
+    public async checkAndEnforceParoleViolation(
+        character: API_Character,
+    ): Promise<void> {
+        if (!this.characterProfileStore) {
+            return; // No profile store, can't check
+        }
+
+        const paroleState =
+            await this.characterProfileStore.getReleaseParoleState(
+                character.MemberNumber,
+            );
+
+        if (!paroleState || !paroleState.isOnParole) {
+            return; // Not on parole, allow through
+        }
+
+        // Character is on parole - check if they have clothing
+        const currentAppearance = character.Appearance.getAppearanceData();
+        const hasClothing = currentAppearance.some(
+            (item) => item.Group && this.actualClothingGroups.has(item.Group),
+        );
+
+        if (hasClothing) {
+            console.log(
+                `[ReleaseSystem] Parole violation detected on shower entry for ${character.MemberNumber}: has clothing while on parole`,
+            );
+
+            // Enforce the violation immediately
+            await this.handleParoleViolation(character, "dressed");
+
+            // Throw to signal to caller that they should abort their operation
+            throw new Error("Parole violation enforced - shower access denied");
+        }
+    }
+
+    /**
      * Send a private whisper to a character (only they see it)
      */
     private whisper(character: API_Character, message: string): void {

@@ -26,6 +26,7 @@ import {
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
+import type { ReleaseSystem } from "./veratownReleaseSystem";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -41,6 +42,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
     private showerBotHomePos: { X: number; Y: number } =
         SHOWER_BOT2_HOME_POSITION;
     private readonly showerTrigger: ReturnType<typeof guardHandler>;
+    private releaseSystem?: ReleaseSystem;
 
     public constructor(
         private conn: API_Connector,
@@ -50,6 +52,14 @@ export class ShowerSystem implements VeratownFeatureSystem {
             this.key,
             this.onCharacterEnterShower,
         );
+    }
+
+    /**
+     * Set the release system reference for parole checking
+     * Called after ReleaseSystem is initialized
+     */
+    public setReleaseSystem(releaseSystem: ReleaseSystem): void {
+        this.releaseSystem = releaseSystem;
     }
 
     public registerTriggers(): void {
@@ -103,6 +113,29 @@ export class ShowerSystem implements VeratownFeatureSystem {
     private onCharacterEnterShower = async (character: API_Character) => {
         if (!this.enabled) return;
         if (this.showeringCharacters.has(character.MemberNumber)) return;
+
+        // CRITICAL: Check for parole violations BEFORE allowing shower
+        // If character is on parole with clothing, enforce violation immediately
+        if (this.releaseSystem) {
+            try {
+                await this.releaseSystem.checkAndEnforceParoleViolation(
+                    character,
+                );
+                // If we reach here without exception, no violation detected
+            } catch (e) {
+                console.error(
+                    `[ShowerSystem] Error checking parole for shower: ${character.MemberNumber}`,
+                    e,
+                );
+                // If parole check fails, abort shower to be safe
+                character.Tell(
+                    "Whisper",
+                    "(Unable to enter shower due to system error. Please contact staff.)",
+                );
+                return;
+            }
+        }
+
         this.showeringCharacters.add(character.MemberNumber);
 
         const isInShower = () =>
