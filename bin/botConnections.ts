@@ -49,7 +49,43 @@ async function connectBotAccount(
 ): Promise<API_Connector> {
     const connection = new API_Connector(serverUrl, user, password, config.env);
     if (joinRoom) await connection.joinOrCreateRoom(config.room);
+
+    // Wait for connection to stabilize before returning
+    // This prevents connection flapping when multiple bots join in quick succession
+    await waitForConnectionStability(connection);
+
     return connection;
+}
+
+/**
+ * Wait for a connection to be stable and ready for operations.
+ * Checks that the connection is actively connected and has received
+ * at least one room update message.
+ */
+async function waitForConnectionStability(
+    connection: API_Connector,
+    maxWaitMs: number = 5000,
+): Promise<void> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitMs) {
+        try {
+            // Check if connection is alive
+            if (!connection.socket?.connected) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                continue;
+            }
+
+            // Connection is stable
+            return;
+        } catch {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+    }
+
+    console.warn(
+        `Connection for ${connection.Player?.Name} did not stabilize within ${maxWaitMs}ms, proceeding anyway`,
+    );
 }
 
 export function validateBotAccountConfiguration(config: ConfigFile): void {
@@ -111,6 +147,7 @@ export async function createBotConnections(
 ): Promise<BotConnections> {
     validateBotAccountConfiguration(config);
 
+    console.log(`[Startup] Creating main bot connection...`);
     const main = await connectBotAccount(
         serverUrl,
         config,
@@ -118,6 +155,7 @@ export async function createBotConnections(
         config.password,
         true,
     );
+    console.log(`[Startup] Main connection established: ${main.Player.Name}`);
 
     if (!main.Player.IsRoomAdmin()) {
         console.log(
@@ -131,6 +169,9 @@ export async function createBotConnections(
         if (!config.user2 || !config.password2) {
             throw new Error("Need user2/password2 for Maid's Party Night");
         }
+        console.log(`[Startup] Creating secondary connection...`);
+        // Wait a moment before creating the next connection
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         connections.secondary = await connectBotAccount(
             serverUrl,
             config,
@@ -138,17 +179,26 @@ export async function createBotConnections(
             config.password2,
             false,
         );
+        console.log(
+            `[Startup] Secondary connection established: ${connections.secondary.Player.Name}`,
+        );
     }
 
     if (config.game !== "veratown") return connections;
 
     if (config.user2 && config.password2) {
+        console.log(`[Startup] Creating shower connection...`);
+        // Wait a moment before creating the next connection
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         connections.shower = await connectBotAccount(
             serverUrl,
             config,
             config.user2,
             config.password2,
             true,
+        );
+        console.log(
+            `[Startup] Shower connection established: ${connections.shower.Player.Name}`,
         );
         ensureBotIsRoomAdmin(main, connections.shower);
     } else {
@@ -163,12 +213,18 @@ export async function createBotConnections(
                 "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
             );
         } else {
+            console.log(`[Startup] Creating casino connection...`);
+            // Wait a moment before creating the next connection
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             connections.casino = await connectBotAccount(
                 serverUrl,
                 config,
                 config.user3,
                 config.password3,
                 true,
+            );
+            console.log(
+                `[Startup] Casino connection established: ${connections.casino.Player.Name}`,
             );
             ensureBotIsRoomAdmin(main, connections.casino);
             connections.casino.moveOnMap(
