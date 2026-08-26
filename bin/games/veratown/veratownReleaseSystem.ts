@@ -151,6 +151,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         // Character is on parole - check if they have clothing
+        // Force refresh bundle to clear any cache
+        const bundle = character.Appearance.MakeAppearanceBundle();
         const currentAppearance = character.Appearance.getAppearanceData();
         const hasClothing = currentAppearance.some(
             (item) => item.Group && this.actualClothingGroups.has(item.Group),
@@ -158,7 +160,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         if (hasClothing) {
             console.log(
-                `[ReleaseSystem] Parole violation detected on shower entry for ${character.MemberNumber}: has clothing while on parole`,
+                `[ReleaseSystem] Parole violation detected on shower entry for ${character.MemberNumber}: has clothing while on parole (bundle had ${bundle.length} items)`,
             );
 
             // Enforce the violation immediately
@@ -513,12 +515,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Second pass: strip EVERYTHING
         console.log(`[ReleaseSystem] Stripping ALL items...`);
         character.Appearance.stripBulk({ item: true }, true);
-        await wait(100);
+        // Wait for API to process removal
+        await wait(250);
 
         // Verify what was stripped
+        // Force refresh appearance bundle to clear any cache
+        const bundleAfterStrip = character.Appearance.MakeAppearanceBundle();
         const afterStripAppearance = character.Appearance.getAppearanceData();
         console.log(
-            `[ReleaseSystem] After stripBulk: ${afterStripAppearance.length} items remaining`,
+            `[ReleaseSystem] After stripBulk: ${afterStripAppearance.length} items remaining (bundle had ${bundleAfterStrip.length})`,
         );
         for (const item of afterStripAppearance) {
             console.log(
@@ -537,6 +542,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     console.log(
                         `[ReleaseSystem] Re-added clothing: ${clothing.name}`,
                     );
+                    // Brief wait to ensure item is added before next one
+                    await wait(50);
                 } else {
                     console.warn(
                         `[ReleaseSystem] Could not find asset for ${clothing.group}/${clothing.name}`,
@@ -550,10 +557,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
-        // Verify what was re-added
+        // Wait for all items to be added
+        await wait(200);
+
+        // Verify what was re-added - refresh bundle first to clear cache
+        const bundleAfterReadd = character.Appearance.MakeAppearanceBundle();
         const afterReaddAppearance = character.Appearance.getAppearanceData();
         console.log(
-            `[ReleaseSystem] After re-adding clothing: ${afterReaddAppearance.length} items total`,
+            `[ReleaseSystem] After re-adding clothing: ${afterReaddAppearance.length} items total (bundle had ${bundleAfterReadd.length})`,
         );
         for (const item of afterReaddAppearance) {
             console.log(
@@ -706,14 +717,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 `[ReleaseSystem] Nudity check #${checkCount} for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
             );
 
-            // Log current appearance
+            // Log current appearance - force refresh bundle to avoid cache issues
+            const bundleRefresh = character.Appearance.MakeAppearanceBundle();
             const currentAppearance = character.Appearance.getAppearanceData();
             const clothingCount = currentAppearance.filter(
                 (item) =>
                     item.Group && this.actualClothingGroups.has(item.Group),
             ).length;
             console.log(
-                `[ReleaseSystem]   - Total items: ${currentAppearance.length}, Clothing items: ${clothingCount}`,
+                `[ReleaseSystem]   - Total items: ${currentAppearance.length} (bundle: ${bundleRefresh.length}), Clothing items: ${clothingCount}`,
             );
 
             const isNaked = this.isCharacterNaked(character);
@@ -749,10 +761,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * Nudity = no actual CLOTHING. Body parts and intimate devices are OK.
      */
     private isCharacterNaked(character: API_Character): boolean {
+        // Force refresh bundle first to clear any cache
+        const bundle = character.Appearance.MakeAppearanceBundle();
         const appearance = character.Appearance.getAppearanceData();
 
         console.log(
-            `[ReleaseSystem] Checking nudity for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - total items: ${appearance.length}`,
+            `[ReleaseSystem] Checking nudity for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - total items: ${appearance.length} (bundle had ${bundle.length})`,
         );
 
         // Log ALL items for debugging
