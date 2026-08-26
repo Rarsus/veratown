@@ -646,8 +646,18 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
         maxWaitMs: number,
     ): Promise<boolean> {
+        console.log(
+            `[ReleaseSystem:WAIT_NUDITY] =============== WAIT FOR NUDITY START ===============`,
+        );
+        console.log(
+            `[ReleaseSystem:WAIT_NUDITY] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
+        );
+        console.log(`[ReleaseSystem:WAIT_NUDITY] Timeout: ${maxWaitMs}ms`);
+
         if (!this.locationStore) {
-            // Can't verify location, allow them through
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] Location store unavailable, allowing through`,
+            );
             return true;
         }
 
@@ -655,12 +665,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             RELEASE_PUNISHMENT_ROOM_KEY,
         );
         if (!location || location.x === undefined || location.y === undefined) {
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] Punishment room location not found, allowing through`,
+            );
             return true; // Can't check, allow through
         }
 
         const startTime = Date.now();
         const punishmentRoomPos = { X: location.x, Y: location.y };
         let checkCount = 0;
+
+        console.log(
+            `[ReleaseSystem:WAIT_NUDITY] Punishment room position: (${punishmentRoomPos.X}, ${punishmentRoomPos.Y})`,
+        );
 
         this.whisper(
             character,
@@ -670,12 +687,24 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         while (Date.now() - startTime < maxWaitMs) {
             await wait(RELEASE_NUDITY_CHECK_INTERVAL_MS);
             checkCount++;
+            const elapsedMs = Date.now() - startTime;
+            const elapsedSecs = Math.ceil(elapsedMs / 1000);
+
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] ---- Check #${checkCount} (${elapsedSecs}s elapsed) ----`,
+            );
 
             // Check if still on punishment room tile
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] Current position: (${character.MapPos.X}, ${character.MapPos.Y})`,
+            );
             if (
                 character.MapPos.X !== punishmentRoomPos.X ||
                 character.MapPos.Y !== punishmentRoomPos.Y
             ) {
+                console.log(
+                    `[ReleaseSystem:WAIT_NUDITY] Character left punishment room! Teleporting back...`,
+                );
                 this.whisper(
                     character,
                     "*A barrier prevents you from leaving until you comply!*",
@@ -683,27 +712,25 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 character.mapTeleport(punishmentRoomPos);
                 continue;
             }
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] Character is at correct position`,
+            );
 
             // Check if naked (only body items, no clothing)
             console.log(
-                `[ReleaseSystem] Nudity check #${checkCount} for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
+                `[ReleaseSystem:WAIT_NUDITY] Running isCharacterNaked()...`,
             );
-
-            // Log current appearance - force refresh bundle to avoid cache issues
-            const bundleRefresh = character.Appearance.MakeAppearanceBundle();
-            const currentAppearance = character.Appearance.getAppearanceData();
-            const clothingCount = currentAppearance.filter(
-                (item) =>
-                    item.Group && this.actualClothingGroups.has(item.Group),
-            ).length;
-            console.log(
-                `[ReleaseSystem]   - Total items: ${currentAppearance.length} (bundle: ${bundleRefresh.length}), Clothing items: ${clothingCount}`,
-            );
-
             const isNaked = await this.isCharacterNaked(character);
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] isCharacterNaked() returned: ${isNaked}`,
+            );
+
             if (isNaked) {
                 console.log(
-                    `[ReleaseSystem] Nudity confirmed on check #${checkCount}`,
+                    `[ReleaseSystem:WAIT_NUDITY] NUDITY CONFIRMED on check #${checkCount}`,
+                );
+                console.log(
+                    `[ReleaseSystem:WAIT_NUDITY] =============== WAIT FOR NUDITY END (SUCCESS) ===============`,
                 );
                 this.whisper(character, "*The barrier dissolves...*");
                 return true;
@@ -711,6 +738,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             const remaining = Math.ceil(
                 (maxWaitMs - (Date.now() - startTime)) / 1000,
+            );
+            console.log(
+                `[ReleaseSystem:WAIT_NUDITY] Still clothed. ${remaining}s remaining.`,
             );
             if (remaining % 10 === 0) {
                 // Message every 10 seconds
@@ -721,6 +751,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
+        console.log(
+            `[ReleaseSystem:WAIT_NUDITY] TIMEOUT: Character never got fully naked within ${maxWaitMs}ms`,
+        );
+        console.log(
+            `[ReleaseSystem:WAIT_NUDITY] =============== WAIT FOR NUDITY END (TIMEOUT) ===============`,
+        );
         this.whisper(
             character,
             "Time's up! You're leaving, but without the door code.",
@@ -734,38 +770,105 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * ASYNC: Waits for appearance cache refresh after MakeAppearanceBundle()
      */
     private async isCharacterNaked(character: API_Character): Promise<boolean> {
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] =============== NUDITY CHECK START ===============`,
+        );
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
+        );
+
         // Force refresh bundle to invalidate server-side cache
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] Step 1: Calling MakeAppearanceBundle()`,
+        );
         character.Appearance.MakeAppearanceBundle();
         // CRITICAL: Wait for cache invalidation to propagate
         // BC library async cache update needs 50-100ms to take effect
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] Step 2: Waiting 100ms for cache to clear`,
+        );
         await wait(100);
 
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] Step 3: Calling getAppearanceData()`,
+        );
         const appearance = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] Step 3 Result: Got ${appearance.length} total items`,
+        );
 
         console.log(
-            `[ReleaseSystem] Checking nudity for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - total items: ${appearance.length}`,
+            `[ReleaseSystem:NUDITY_CHECK] ---- ALL ITEMS IN APPEARANCE (${appearance.length} total) ----`,
         );
 
         // Log ALL items for debugging
+        const clothingItems: string[] = [];
+        const bodyItems: string[] = [];
+
         for (const item of appearance) {
+            const itemName = item.Name || "NO_NAME";
+            const itemGroup = item.Group || "NO_GROUP";
+            const lockStatus = item.Property?.LockedBy || "Unlocked";
             console.log(
-                `[ReleaseSystem]   - ${item.Name} (Group: ${item.Group}, Locked: ${item.Property?.LockedBy || "No"})`,
+                `[ReleaseSystem:NUDITY_CHECK] Item: "${itemName}" | Group: "${itemGroup}" | Locked: ${lockStatus}`,
             );
         }
+
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] ---- CLOTHING CLASSIFICATION ----`,
+        );
 
         // Check against WHITELIST of actual clothing ONLY
         // If any actual CLOTHING is equipped, not naked
         for (const item of appearance) {
             if (item.Group && this.actualClothingGroups.has(item.Group)) {
+                const itemName = item.Name || "NO_NAME";
                 console.log(
-                    `[ReleaseSystem] NOT NAKED: Found clothing ${item.Name} in group ${item.Group}`,
+                    `[ReleaseSystem:NUDITY_CHECK] CLOTHING FOUND: "${itemName}" in group "${item.Group}"`,
                 );
-                return false;
+                clothingItems.push(`${itemName} (${item.Group})`);
+            } else if (item.Group) {
+                const itemName = item.Name || "NO_NAME";
+                console.log(
+                    `[ReleaseSystem:NUDITY_CHECK] Body part/device: "${itemName}" in group "${item.Group}" (not counted as clothing)`,
+                );
+                bodyItems.push(`${itemName} (${item.Group})`);
             }
         }
 
+        console.log(`[ReleaseSystem:NUDITY_CHECK] ---- SUMMARY ----`);
         console.log(
-            `[ReleaseSystem] Character IS NAKED - no actual clothing found (body parts/devices OK)`,
+            `[ReleaseSystem:NUDITY_CHECK] Clothing items found: ${clothingItems.length}`,
+        );
+        if (clothingItems.length > 0) {
+            clothingItems.forEach((item) => {
+                console.log(`[ReleaseSystem:NUDITY_CHECK]   - ${item}`);
+            });
+        }
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] Body parts/devices found: ${bodyItems.length}`,
+        );
+        if (bodyItems.length > 0) {
+            bodyItems.forEach((item) => {
+                console.log(`[ReleaseSystem:NUDITY_CHECK]   - ${item}`);
+            });
+        }
+
+        if (clothingItems.length > 0) {
+            console.log(
+                `[ReleaseSystem:NUDITY_CHECK] NOT NAKED: Character has ${clothingItems.length} clothing item(s)`,
+            );
+            console.log(
+                `[ReleaseSystem:NUDITY_CHECK] =============== NUDITY CHECK END (NOT NAKED) ===============`,
+            );
+            return false;
+        }
+
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] NAKED: No clothing found (body parts/devices OK)`,
+        );
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] =============== NUDITY CHECK END (NAKED) ===============`,
         );
         return true;
     }
@@ -1826,77 +1929,157 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
         startingItems: Set<string>,
     ): Promise<void> {
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK START ===============`,
+        );
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
+        );
+
         // CRITICAL: Refresh appearance bundle to clear server-side cache
         // Without this, getAppearanceData() returns stale data
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Step 1: Calling MakeAppearanceBundle()`,
+        );
         character.Appearance.MakeAppearanceBundle();
+
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Step 2: Waiting 100ms for cache to clear`,
+        );
         await wait(100);
 
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Step 3: Calling getAppearanceData()`,
+        );
         const currentAppearance = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Step 3 Result: Got ${currentAppearance.length} items from getAppearanceData()`,
+        );
+
         let clothingFound = false;
         let clothingDetails: string[] = [];
         let allItems: string[] = [];
+        let clothingItems: string[] = [];
 
         console.log(
-            `[ReleaseSystem] Checking parole for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}):`,
+            `[ReleaseSystem:PAROLE_CHECK] ---- EXPECTED STATE ANALYSIS ----`,
         );
         console.log(
-            `  Expected state: ${startingItems.size === 0 ? "COMPLETELY NAKED (no items allowed)" : `${startingItems.size} item groups: ${Array.from(startingItems).join(", ")}`}`,
+            `[ReleaseSystem:PAROLE_CHECK] startingItems.size = ${startingItems.size}`,
         );
+        if (startingItems.size === 0) {
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] Expected: COMPLETELY NAKED (empty set, no items in startingItems)`,
+            );
+        } else {
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] Expected: ${startingItems.size} item groups allowed:`,
+            );
+            Array.from(startingItems).forEach((group) => {
+                console.log(`[ReleaseSystem:PAROLE_CHECK]   - ${group}`);
+            });
+        }
+
         console.log(
-            `  Current appearance: ${currentAppearance.length} total items`,
+            `[ReleaseSystem:PAROLE_CHECK] ---- CURRENT APPEARANCE ANALYSIS (${currentAppearance.length} items) ----`,
         );
 
         // Check each item - looking for CLOTHING ONLY (not body parts)
         for (const item of currentAppearance) {
-            allItems.push(`${item.Name}(${item.Group})`);
+            const itemName = item.Name || "NO_NAME";
+            const itemGroup = item.Group || "NO_GROUP";
+            allItems.push(`${itemName}(${itemGroup})`);
+
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] Item #${allItems.length}: "${itemName}" | Group: "${itemGroup}"`,
+            );
 
             if (!item.Group) {
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK]   → SKIPPED: No group property`,
+                );
                 continue; // Skip items without groups
             }
 
             const isClothing = this.actualClothingGroups.has(item.Group);
             console.log(
-                `  [Item] ${item.Name} (${item.Group}) - ${isClothing ? "CLOTHING" : "body part/device"}`,
+                `[ReleaseSystem:PAROLE_CHECK]   → Is in actualClothingGroups? ${isClothing}`,
             );
 
             if (isClothing) {
+                clothingItems.push(`${itemName} (${itemGroup})`);
                 clothingFound = true;
-                clothingDetails.push(`${item.Name} (${item.Group})`);
+                clothingDetails.push(`${itemName} (${itemGroup})`);
+
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK]   → YES, this is CLOTHING`,
+                );
+
                 // Found clothing - is it in the starting state?
-                if (!startingItems.has(item.Group)) {
+                const inStartingItems = startingItems.has(item.Group);
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK]   → Was ${itemGroup} in startingItems? ${inStartingItems}`,
+                );
+
+                if (!inStartingItems) {
                     // NEW clothing item added during parole - VIOLATION
                     console.log(
-                        `[ReleaseSystem] *** PAROLE VIOLATION DETECTED ***`,
+                        `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION CONDITION MET ***`,
                     );
                     console.log(
-                        `  Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
+                        `[ReleaseSystem:PAROLE_CHECK] Reason: "${itemGroup}" NOT in startingItems (new clothing added during parole)`,
                     );
                     console.log(
-                        `  Violation: Added clothing ${item.Name} (${item.Group}) during parole`,
+                        `[ReleaseSystem:PAROLE_CHECK] Decision: CALL handleParoleViolation()`,
                     );
                     console.log(
-                        `  Expected state: ${startingItems.size === 0 ? "completely naked" : `${startingItems.size} groups allowed`}`,
+                        `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
                     );
                     await this.handleParoleViolation(character, "dressed");
                     return;
                 } else {
                     console.log(
-                        `    → Item ${item.Group} was in starting state, not a new violation`,
+                        `[ReleaseSystem:PAROLE_CHECK]   → NO VIOLATION: ${itemGroup} was in startingItems (allowed)`,
                     );
                 }
+            } else {
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK]   → NO, this is a body part/device (not counted)`,
+                );
             }
         }
 
         // Debug: Log summary
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] ---- VIOLATION CHECK SUMMARY ----`,
+        );
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Total items in appearance: ${currentAppearance.length}`,
+        );
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Clothing items found: ${clothingItems.length}`,
+        );
+        if (clothingItems.length > 0) {
+            clothingItems.forEach((item) => {
+                console.log(`[ReleaseSystem:PAROLE_CHECK]   - ${item}`);
+            });
+        }
+
         if (clothingFound) {
             console.log(
-                `[ReleaseSystem] WARNING: Character ${character.MemberNumber} found with clothing during parole check:`,
-                clothingDetails.join(", "),
+                `[ReleaseSystem:PAROLE_CHECK] ⚠️  WARNING: Character has clothing, but all items were in startingItems`,
+            );
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] Items: ${clothingDetails.join(", ")}`,
             );
         } else {
             console.log(
-                `[ReleaseSystem] ✓ Character ${character.MemberNumber} is compliant (no clothing found)`,
+                `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: Character is naked (no clothing found)`,
             );
         }
+
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (NO VIOLATION) ===============`,
+        );
     }
 }
