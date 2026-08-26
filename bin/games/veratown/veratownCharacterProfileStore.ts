@@ -663,4 +663,59 @@ export class VeratownCharacterProfileStore {
 
         return itemsToReapply;
     }
+
+    /**
+     * Get all characters currently on release parole (for startup/recovery)
+     */
+    public async getActiveParoles(): Promise<
+        Array<{
+            memberNumber: number;
+            name: string;
+            paroleState: ReleaseParoleState;
+            isExpired: boolean;
+        }>
+    > {
+        await this.init();
+
+        const now = Date.now();
+        const profiles = await this.profiles
+            .find({
+                "releaseParoleState.isOnParole": true,
+            })
+            .toArray();
+
+        return profiles
+            .filter(
+                (p) =>
+                    p.releaseParoleState &&
+                    p.releaseParoleState.isOnParole &&
+                    p.releaseParoleState.paroleExpiresAt,
+            )
+            .map((p) => ({
+                memberNumber: p._id,
+                name: p.name,
+                paroleState: p.releaseParoleState!,
+                isExpired: (p.releaseParoleState?.paroleExpiresAt ?? 0) < now,
+            }));
+    }
+
+    /**
+     * Update parole expiry time (for timeout checking)
+     */
+    public async updateParoleExpiry(
+        memberNumber: number,
+        newExpiryTime: number,
+    ): Promise<void> {
+        await this.init();
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "releaseParoleState.paroleExpiresAt": newExpiryTime,
+                    updatedAt: Date.now(),
+                },
+            },
+        );
+    }
 }

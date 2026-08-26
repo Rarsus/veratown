@@ -88,6 +88,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private activeReleases = new Map<number, Promise<void>>();
     // Track release cooldowns (memberNumber -> nextReleaseTime)
     private releaseCooldowns = new Map<number, number>();
+    // Track previous appearances for characters on parole (memberNumber -> itemGroups set)
+    private paroleAppearanceTracking = new Map<number, Set<string>>();
+    // Parole monitoring interval
+    private paroleMonitoringInterval?: NodeJS.Timer;
 
     private readonly releaseTrigger: ReturnType<typeof guardHandler>;
 
@@ -106,7 +110,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     public registerTriggers(): void {
-        // Command registered elsewhere, this is for spatial/temporal triggers
+        // Initialize parole monitoring on startup
+        this.initializeReleaseParoles().catch((e) => {
+            console.error(`[ReleaseSystem] Failed to initialize paroles`, e);
+        });
+    }
+
+    public reloadLocations(): void {
+        // No location-specific triggers needed for release system
     }
 
     /**
@@ -187,6 +198,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 console.log(
                     `[ReleaseSystem] Parole started for ${character.MemberNumber} with ${removedBondageItems.length} tracked items`,
                 );
+
+                // Start monitoring their appearance for parole violations
+                this.trackParoleCharacter(character);
             }
 
             await wait(300);
@@ -752,4 +766,211 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private handleRelease = async (character: API_Character): Promise<void> => {
         await this.executeRelease(character);
     };
+
+    /**
+     * Initialize parole system on bot startup
+     * - Load active paroles from database
+     * - Enforce expired paroles for characters no longer in room
+     * - Start monitoring interval for active characters
+     */
+    private async initializeReleaseParoles(): Promise<void> {
+        if (!this.characterProfileStore) {
+            return;
+        }
+
+        console.log(`[ReleaseSystem] Initializing release paroles on startup`);
+
+        try {
+            const activeParoles =
+                await this.characterProfileStore.getActiveParoles();
+
+            if (activeParoles.length === 0) {
+                console.log(`[ReleaseSystem] No active paroles found`);
+                this.startParoleMonitoring();
+                return;
+            }
+
+            console.log(
+                `[ReleaseSystem] Found ${activeParoles.length} active parole(s)`,
+            );
+
+            for (const parole of activeParoles) {
+                const character = this.conn.chatRoom.GetCharacter(
+                    parole.memberNumber,
+                );
+
+                if (parole.isExpired) {
+                    console.log(
+                        `[ReleaseSystem] Parole expired for ${parole.name} (${parole.memberNumber}) - clearing`,
+                    );
+                    // Clear expired parole but don't reapply - they escaped in time (or parole simply expired)
+                    await this.characterProfileStore.clearReleaseParole(
+                        parole.memberNumber,
+                    );
+                } else if (character) {
+                    console.log(
+                        `[ReleaseSystem] Parole active for ${parole.name} (${parole.memberNumber}) - monitoring`,
+                    );
+                    // Character is in room - start tracking their appearance
+                    this.trackParoleCharacter(character);
+                } else {
+                    console.log(
+                        `[ReleaseSystem] Parole active for ${parole.name} (${parole.memberNumber}) but not in room - will monitor on entry`,
+                    );
+                    // Character not in room - monitoring will pick them up when they enter
+                }
+            }
+
+            // Start periodic monitoring
+            this.startParoleMonitoring();
+        } catch (e) {
+            console.error(`[ReleaseSystem] Error initializing paroles:`, e);
+        }
+    }
+
+    /**
+     * Track a character on parole - record their current appearance
+     */
+    private trackParoleCharacter(character: API_Character): void {
+        const groups = new Set<string>();
+        const appearance = character.Appearance.getAppearanceData();
+
+        for (const item of appearance) {
+            if (item.Group) {
+                groups.add(item.Group);
+            }
+        }
+
+        this.paroleAppearanceTracking.set(character.MemberNumber, groups);
+        console.log(
+            `[ReleaseSystem] Tracking parole for ${character.Nickname}: ${groups.size} item groups`,
+        );
+    }
+
+    /**
+     * Start periodic monitoring for parole violations
+     */
+    private startParoleMonitoring(): void {
+        if (this.paroleMonitoringInterval) {
+            console.log(`[ReleaseSystem] Parole monitoring already running`);
+            return;
+        }
+
+        console.log(`[ReleaseSystem] Starting parole violation monitoring`);
+
+        // Check every 5 seconds
+        this.paroleMonitoringInterval = setInterval(() => {
+            this.checkAllParoleViolations().catch((e) => {
+                console.error(`[ReleaseSystem] Error in parole monitoring:`, e);
+            });
+        }, 5000);
+    }
+
+    /**
+     * Stop periodic monitoring
+     */
+    public stopParoleMonitoring(): void {
+        if (this.paroleMonitoringInterval) {
+            clearInterval(this.paroleMonitoringInterval);
+            this.paroleMonitoringInterval = undefined;
+            console.log(`[ReleaseSystem] Stopped parole monitoring`);
+        }
+    }
+
+    /**
+     * Check all characters on parole for violations
+     */
+    private async checkAllParoleViolations(): Promise<void> {
+        if (!this.characterProfileStore) {
+            return;
+        }
+
+        const now = Date.now();
+        const activeParoles =
+            await this.characterProfileStore.getActiveParoles();
+
+        for (const parole of activeParoles) {
+            // Check timeout
+            if (parole.isExpired) {
+                const character = this.conn.chatRoom.GetCharacter(
+                    parole.memberNumber,
+                );
+                if (character) {
+                    console.log(
+                        `[ReleaseSystem] Parole timeout for ${character.Nickname}`,
+                    );
+                    await this.handleParoleViolation(character, "timeout");
+                } else {
+                    // Clear expired parole
+                    await this.characterProfileStore.clearReleaseParole(
+                        parole.memberNumber,
+                    );
+                }
+                continue;
+            }
+
+            // Check if character is in room
+            const character = this.conn.chatRoom.GetCharacter(
+                parole.memberNumber,
+            );
+            if (!character) {
+                continue;
+            }
+
+            // Start tracking if not already
+            if (!this.paroleAppearanceTracking.has(character.MemberNumber)) {
+                this.trackParoleCharacter(character);
+                continue;
+            }
+
+            // Check for clothing added (parole violation)
+            await this.checkParoleViolation(character);
+        }
+    }
+
+    /**
+     * Check if a paroled character has added clothing
+     */
+    private async checkParoleViolation(
+        character: API_Character,
+    ): Promise<void> {
+        const previousGroups = this.paroleAppearanceTracking.get(
+            character.MemberNumber,
+        );
+        if (!previousGroups) {
+            return;
+        }
+
+        const currentAppearance = character.Appearance.getAppearanceData();
+        const currentGroups = new Set<string>();
+
+        for (const item of currentAppearance) {
+            if (item.Group) {
+                currentGroups.add(item.Group);
+            }
+        }
+
+        // Check if any new item groups were added (parole violation)
+        for (const group of currentGroups) {
+            if (!previousGroups.has(group)) {
+                // New item group added - could be clothing or bondage
+                const item = currentAppearance.find((i) => i.Group === group);
+                if (item && this.actualClothingGroups.has(group)) {
+                    console.log(
+                        `[ReleaseSystem] Parole violation - clothing added: ${item.Name} (${group})`,
+                    );
+                    await this.handleParoleViolation(character, "dressed");
+                    // Reset tracking for new parole period
+                    this.trackParoleCharacter(character);
+                    return;
+                }
+            }
+        }
+
+        // Update tracking to current state
+        this.paroleAppearanceTracking.set(
+            character.MemberNumber,
+            currentGroups,
+        );
+    }
 }
