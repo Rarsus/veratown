@@ -462,9 +462,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
-     * Remove only BONDAGE ITEMS, preserving all clothing
-     * Returns list of removed items with full property state for parole tracking
-     * Character must manually remove their own clothing
+     * Remove ALL items including clothing for complete nudity
+     * Character must remain fully naked during parole monitoring (Stages 5-7)
+     * Returns list of ALL removed items (clothing + bondage) with full property state
      */
     private async stripNonOwnerItems(
         character: API_Character,
@@ -475,48 +475,40 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] stripNonOwnerItems: Starting with ${appearance.length} total items`,
         );
 
-        // Track what we're removing
+        // Track what we're removing (ALL items - clothing AND bondage must be removed)
         const removedItems: RemovedBondageItem[] = [];
-        const preservedClothing: Array<{
-            group: string;
-            name: string;
-            asset?: unknown;
-        }> = [];
 
-        // First pass: identify clothing to preserve and items to remove
+        // First pass: identify ALL items being removed for tracking
         for (const item of appearance) {
             if (!item.Group || !item.Name) {
                 continue;
             }
 
+            // Track ALL items being removed (will return them after parole completes)
+            removedItems.push({
+                group: item.Group,
+                name: item.Name,
+                lockType: item.Property?.Lock,
+                lockedBy: item.Property?.LockedBy,
+                color: item.Color ? String(item.Color) : undefined,
+                difficulty: item.Difficulty,
+            });
+
             if (this.actualClothingGroups.has(item.Group)) {
-                // Actual clothing - preserve it
-                preservedClothing.push({
-                    name: item.Name,
-                    group: item.Group,
-                    asset: AssetGet(item.Group, item.Name),
-                });
                 console.log(
-                    `[ReleaseSystem] Will preserve clothing: ${item.Name} (${item.Group})`,
+                    `[ReleaseSystem] Removing clothing (REQUIRED for parole): ${item.Name} (${item.Group})`,
                 );
             } else {
-                // Not clothing = bondage/device/restraint - track it with full properties
-                removedItems.push({
-                    group: item.Group,
-                    name: item.Name,
-                    lockType: item.Property?.Lock,
-                    lockedBy: item.Property?.LockedBy,
-                    color: item.Color ? String(item.Color) : undefined,
-                    difficulty: item.Difficulty,
-                });
                 console.log(
-                    `[ReleaseSystem] Will remove bondage: ${item.Name} (${item.Group}) [Lock: ${item.Property?.Lock || "none"}]`,
+                    `[ReleaseSystem] Removing bondage: ${item.Name} (${item.Group})`,
                 );
             }
         }
 
-        // Second pass: strip EVERYTHING
-        console.log(`[ReleaseSystem] Stripping ALL items...`);
+        // Second pass: strip EVERYTHING (including all clothing - character must be fully naked for parole)
+        console.log(
+            `[ReleaseSystem] Stripping ALL items (${removedItems.length} total) for complete nudity...`,
+        );
         character.Appearance.stripBulk({ item: true }, true);
         // Wait for API to process removal
         await wait(250);
@@ -524,6 +516,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Verify what was stripped
         // Force refresh appearance bundle to clear any cache
         const bundleAfterStrip = character.Appearance.MakeAppearanceBundle();
+        await wait(100); // Wait for cache refresh
         const afterStripAppearance = character.Appearance.getAppearanceData();
         console.log(
             `[ReleaseSystem] After stripBulk: ${afterStripAppearance.length} items remaining (bundle had ${bundleAfterStrip.length})`,
@@ -534,59 +527,28 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        // Third pass: re-add only clothing items
-        console.log(
-            `[ReleaseSystem] Re-adding ${preservedClothing.length} clothing items...`,
-        );
-        for (const clothing of preservedClothing) {
-            try {
-                if (clothing.asset) {
-                    character.Appearance.AddItem(clothing.asset);
-                    console.log(
-                        `[ReleaseSystem] Re-added clothing: ${clothing.name}`,
-                    );
-                    // Brief wait to ensure item is added before next one
-                    await wait(50);
-                } else {
-                    console.warn(
-                        `[ReleaseSystem] Could not find asset for ${clothing.group}/${clothing.name}`,
-                    );
-                }
-            } catch (e) {
-                console.error(
-                    `[ReleaseSystem] Error re-adding clothing ${clothing.name}:`,
-                    e,
-                );
-            }
-        }
+        // CRITICAL: Do NOT re-add clothing here!
+        // Character must be FULLY NAKED during parole enforcement (Stages 5-7)
+        // Clothing will be returned AFTER parole completes successfully in Stage 8
+        // If we return clothing now, nudity check will fail and parole system breaks
 
-        // Wait for all items to be added
-        await wait(200);
-
-        // Verify what was re-added - refresh bundle first to clear cache
-        const bundleAfterReadd = character.Appearance.MakeAppearanceBundle();
-        const afterReaddAppearance = character.Appearance.getAppearanceData();
-        console.log(
-            `[ReleaseSystem] After re-adding clothing: ${afterReaddAppearance.length} items total (bundle had ${bundleAfterReadd.length})`,
-        );
-        for (const item of afterReaddAppearance) {
-            console.log(
-                `[ReleaseSystem]   - After readd: ${item.Name} (${item.Group})`,
-            );
-        }
+        const clothingCount = removedItems.filter((item) =>
+            this.actualClothingGroups.has(item.group),
+        ).length;
+        const bondageCount = removedItems.length - clothingCount;
 
         // Notify character
-        if (removedItems.length > 0) {
+        if (bondageCount > 0) {
             this.whisper(
                 character,
-                `*${removedItems.length} restraint${removedItems.length !== 1 ? "s" : ""} fall away...*`,
+                `*${bondageCount} restraint${bondageCount !== 1 ? "s" : ""} fall away...*`,
             );
         }
 
-        if (preservedClothing.length > 0) {
+        if (clothingCount > 0) {
             this.whisper(
                 character,
-                `*${preservedClothing.length} piece${preservedClothing.length !== 1 ? "s" : ""} of clothing remain. You must remove ${preservedClothing.length === 1 ? "it" : "them"} yourself to escape.*`,
+                `*${clothingCount} piece${clothingCount !== 1 ? "s" : ""} of clothing are also removed. You must remain fully naked for parole.*`,
             );
         }
 
@@ -616,6 +578,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 remainingRestraints,
             );
         }
+
+        console.log(
+            `[ReleaseSystem] Stripping complete: ${clothingCount} clothing + ${bondageCount} bondage removed. Character fully naked.`,
+        );
 
         return removedItems;
     }
@@ -1143,6 +1109,45 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             character,
             "*Congratulations! Your parole has completed successfully. You are now free!*",
         );
+
+        // Restore removed items (clothing + bondage) now that parole is complete
+        const paroleState =
+            await this.characterProfileStore?.getReleaseParoleState(
+                character.MemberNumber,
+            );
+        if (paroleState && paroleState.removedBondageItems) {
+            console.log(
+                `[ReleaseSystem] Restoring ${paroleState.removedBondageItems.length} items for ${character.MemberNumber}...`,
+            );
+            for (const item of paroleState.removedBondageItems) {
+                try {
+                    const asset = AssetGet(item.group);
+                    if (asset) {
+                        character.Appearance.AddItem(
+                            asset,
+                            item.color || undefined,
+                        );
+                        console.log(
+                            `[ReleaseSystem] Restored: ${item.name} (${item.group})`,
+                        );
+                        await wait(50);
+                    } else {
+                        console.log(
+                            `[ReleaseSystem] Could not find asset for ${item.group} when restoring`,
+                        );
+                    }
+                } catch (e) {
+                    console.error(
+                        `[ReleaseSystem] Error restoring ${item.name}:`,
+                        e,
+                    );
+                }
+            }
+            await wait(100); // Wait for all items to be added
+            console.log(
+                `[ReleaseSystem] Item restoration complete for ${character.MemberNumber}`,
+            );
+        }
 
         // Clear parole state
         if (this.characterProfileStore) {
