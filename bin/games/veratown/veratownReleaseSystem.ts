@@ -283,11 +283,44 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * stripBulk with stripLocked=false keeps items where Property?.LockedBy exists
      */
     private async stripNonOwnerItems(character: API_Character): Promise<void> {
-        // Get pre-strip appearance for profile
-        const preStripAppearance = character.Appearance.getAppearanceData();
+        // Get all appearance items
+        const appearance = character.Appearance.getAppearanceData();
 
-        // Strip items, but NOT locked items (owner-locked persist)
-        character.Appearance.stripBulk({ item: true }, false);
+        // Collect items to remove (those NOT locked by owner or time)
+        const itemsToRemove: Array<{ group: string; item: string }> = [];
+
+        for (const item of appearance) {
+            // Skip non-restraint groups
+            if (!item.Group?.includes("Item")) {
+                continue;
+            }
+
+            // Check lock status
+            const isOwnerLocked =
+                item.Property?.LockedBy &&
+                item.Property?.Lock === "Owner" &&
+                item.Property.LockedBy !== "";
+            const isTimeLocked =
+                item.Property?.LockedBy &&
+                item.Property?.Lock === "Timers" &&
+                item.Property.Difficulty !== undefined;
+
+            // If NOT locked by owner or time, remove it
+            if (!isOwnerLocked && !isTimeLocked) {
+                itemsToRemove.push({
+                    group: item.Group ?? "ItemDevices",
+                    item: item.Name ?? "Unknown",
+                });
+            }
+        }
+
+        // Remove items
+        for (const itemDef of itemsToRemove) {
+            console.log(
+                `[ReleaseSystem] Removing ${itemDef.item} from ${itemDef.group}`,
+            );
+            character.Appearance.RemoveItem(itemDef.group, itemDef.item);
+        }
 
         // Update profile with current state
         if (this.characterProfileStore) {
@@ -297,7 +330,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 currentAppearance,
             );
 
-            // Update restraints (should be empty or only locked ones)
+            // Record remaining restraints (should only be locked ones)
             const remainingRestraints = currentAppearance
                 .filter(
                     (item) =>
@@ -316,7 +349,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        this.whisper(character, "*Restraints fall away...*");
+        this.whisper(
+            character,
+            `*${itemsToRemove.length} restraint${itemsToRemove.length !== 1 ? "s" : ""} fall away...*`,
+        );
     }
 
     /**
