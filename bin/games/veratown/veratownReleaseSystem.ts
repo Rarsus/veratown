@@ -312,6 +312,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:CACHE] Cache cleared. Fetched ${appearance.length} items`,
         );
 
+        // DIAGNOSTIC: Log clothing group whitelist on first cache operation
+        const clothingGroups = Array.from(this.actualClothingGroups).join(", ");
+        console.log(
+            `[ReleaseSystem:CACHE] Monitoring for these clothing groups: ${clothingGroups}`,
+        );
+
         return appearance;
     }
 
@@ -943,12 +949,31 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:NUDITY_CHECK] ---- ANALYZING ${appearance.length} ITEMS ----`,
         );
 
+        // DIAGNOSTIC: Log all items with complete details
+        console.log(
+            `[ReleaseSystem:NUDITY_CHECK] ---- RAW APPEARANCE DATA (for debugging) ----`,
+        );
+        for (const item of appearance) {
+            const hasGroup = item.Group ? "YES" : "NO";
+            const inClothingSet = item.Group
+                ? this.actualClothingGroups.has(item.Group)
+                    ? "YES (CLOTHING)"
+                    : "NO (body part)"
+                : "N/A (no group)";
+            console.log(
+                `[ReleaseSystem:NUDITY_CHECK] "${item.Name || "NO_NAME"}" | Group: "${item.Group || "NONE"}" | In clothing set: ${inClothingSet}`,
+            );
+        }
+
         const clothingItems: string[] = [];
         const bodyItems: string[] = [];
 
         // Check each item - looking for CLOTHING ONLY
         for (const item of appearance) {
             if (!item.Group) {
+                console.log(
+                    `[ReleaseSystem:NUDITY_CHECK] ⚠️  ITEM WITH NO GROUP: "${item.Name || "NO_NAME"}"`,
+                );
                 continue; // Skip items without group
             }
 
@@ -2071,10 +2096,29 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:PAROLE_CHECK] Analyzing ${currentAppearance.length} items for violations`,
         );
 
+        // DIAGNOSTIC: Log all items with complete details
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] ---- RAW APPEARANCE DATA (for debugging) ----`,
+        );
+        for (const item of currentAppearance) {
+            const hasGroup = item.Group ? "YES" : "NO";
+            const inClothingSet = item.Group
+                ? this.actualClothingGroups.has(item.Group)
+                    ? "YES (CLOTHING)"
+                    : "NO (body part)"
+                : "N/A (no group)";
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] "${item.Name || "NO_NAME"}" | Group: "${item.Group || "NONE"}" | In clothing set: ${inClothingSet}`,
+            );
+        }
+
         // Parole rule: CHARACTER MUST BE COMPLETELY NAKED
         // Any clothing item = immediate violation
         for (const item of currentAppearance) {
             if (!item.Group) {
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] ⚠️  ITEM WITH NO GROUP: "${item.Name || "NO_NAME"}"`,
+                );
                 continue; // Skip items without group
             }
 
