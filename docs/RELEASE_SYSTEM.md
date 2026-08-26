@@ -29,6 +29,18 @@ When a character initiates `/bot release`, the following 7-stage sequence execut
 - Pauses 500ms for narrative effect
 - **Purpose:** Immersive narration of the release sequence
 
+### **Stage 4: Teleport to Punishment Room**
+
+- Queries `RELEASE_PUNISHMENT_ROOM_KEY` location from location store
+- Teleports character to designated punishment room tile
+- **Fallback:** If teleport fails, character is kicked from room
+- **Purpose:** Isolates character for final nudity verification BEFORE attempting to break free from confinement
+
+### **Wait 250ms**
+
+- Waits 250 milliseconds to allow the teleport and appearance update to complete
+- **Purpose:** Ensures character position and appearance state are stable before proceeding to Stage 2
+
 ### **Stage 2: Free from Confinement**
 
 - Calls `CageSystem.freeCharacterIfCaged()` if character is in a cage
@@ -36,6 +48,7 @@ When a character initiates `/bot release`, the following 7-stage sequence execut
 - Removes all confinement-specific restraints
 - **Purpose:** Escape from furniture-based confinement (cages, kennels, stocks, etc.)
 - **Note:** Only removes confinement restraints; other bondage items remain for Stage 3
+- **Note:** Character is already in the punishment room at this point
 
 ### **Stage 3: Strip Non-Owner-Locked Items**
 
@@ -67,13 +80,6 @@ This is the critical bondage removal stage:
     - Stores for later reapplication if parole is violated
 
 **Critical Detail:** Character does NOT automatically strip clothing. They must manually remove clothing themselves in Stage 5.
-
-### **Stage 4: Teleport to Punishment Room**
-
-- Queries `RELEASE_PUNISHMENT_ROOM_KEY` location from location store
-- Teleports character to designated punishment room tile
-- **Fallback:** If teleport fails, character is kicked from room
-- **Purpose:** Isolates character for final nudity verification
 
 ### **Stage 5: Forced Nudity Check (60-second Window)**
 
@@ -113,16 +119,46 @@ The system verifies that character has removed ALL clothing:
 - Sends whisper with code for exit
 - **Fallback:** If keypad not found, sends "Try finding the exit manually"
 - **Purpose:** Provides access code to escape the punishment room
+- **Note:** Character will still be nude and restricted by parole after leaving the punishment room
 
-### **Stage 7: Record Successful Release & Clear Parole**
+### **Stage 6b: Parole Notification (When Character Leaves Room)**
 
-- Removes parole state from database (successful escape)
-- Clears parole tracking metadata from memory
-- Records release event in character audit log
-- Sets cooldown timer if configured (default: 0ms for testing, 1 hour production)
-- Sends final completion log entry
+- When character leaves the room after Stage 6, send notification message:
+    - _"You are now on parole! You are NOT allowed to wear ANY clothing. Parole expires in 10 minutes."_
+- Parole enforcement begins immediately
+- Character is now subject to all parole violations (adding clothing, showering, etc.)
+- **Purpose:** Clear notification of parole restrictions and duration
 
-**Result:** Character is FREE and no longer on parole restrictions
+### **Stage 7: Parole Monitoring & Enforcement**
+
+This stage is NOT a discrete step but rather an ongoing enforcement period:
+
+1. **Duration:** Parole lasts for 10 minutes from when nudity was confirmed in Stage 5
+
+2. **Continuous Monitoring:**
+    - System monitors character state continuously through character updates (movement, interactions)
+    - At each character update, checks if character has added clothing
+    - Performs appearance bundle refresh (`MakeAppearanceBundle()`) before checking
+    - If any clothing item detected from the whitelist → immediate violation
+
+3. **Violation Response:**
+    - Character is immediately teleported back to the release room location (Stage 4 teleport location)
+    - All removed bondage items are re-equipped with original lock states
+    - Message: _"You violated parole! You've been dragged back."_
+    - **Restart:** Process restarts from Stage 2 (Free from Confinement) with new cycle
+    - New 10-minute parole timer begins from this point
+
+4. **Parole Expiration (After 10 Minutes):**
+    - When parole timer expires:
+        - Check final state: Is character still fully naked?
+        - If YES: Character successfully completed parole, parole state cleared from database
+        - If NO: Record as violation, re-restrain, restart from Stage 2
+    - Send message: _"Your parole has expired. You are now free!"_
+    - Clear parole metadata from memory and database
+    - Record successful completion in audit log
+    - Set cooldown timer if configured (default: 0ms for testing, 1 hour production)
+
+**Result:** Character is FREE and no longer on parole restrictions (only if full 10 minutes completed naked)
 
 ---
 
@@ -150,8 +186,9 @@ ReleaseParoleState {
 
 - Character is naked when parole starts (after Stage 5)
 - Character manually equips any clothing item
-- System detects clothing addition (any item in actualClothingGroups)
+- System detects clothing addition at next character update (movement, interaction)
 - **Violation Triggered:** `handleParoleViolation("dressed")`
+- **Result:** Teleported to release room, re-restrained, restart from Stage 2 with fresh 10-minute timer
 
 #### **Scenario 2: Character Attempts to Shower While on Parole**
 
@@ -159,27 +196,37 @@ ReleaseParoleState {
 - If character has clothing while on parole → violation
 - **Implementation:** `ShowerSystem.onCharacterEnterShower()` calls `ReleaseSystem.checkAndEnforceParoleViolation()`
 - **Violation Triggered:** `handleParoleViolation("dressed")`
+- **Result:** Teleported to release room, re-restrained, restart from Stage 2 with fresh 10-minute timer
 
-#### **Scenario 3: Parole Expires Without Violation**
+#### **Scenario 3: Parole Timer Expires (Success)**
 
 - Character remains fully naked for entire 10-minute parole
-- System detects expiry during monitoring
+- At expiration: system performs final clothing check
 - **Status:** Parole successfully completed, character freed permanently
 - **No Violation:** Character is free to re-clothe and act normally
+- Parole state cleared from database and memory
 
-#### **Scenario 4: Character Leaves Room During Parole**
+#### **Scenario 4: Parole Timer Expires (Failure)**
 
-- Parole is tracked per-member in-memory
+- Character remains fully naked for most of parole, then adds clothing
+- At final expiration check: clothing is detected
+- **Violation Triggered:** `handleParoleViolation("parole_timeout")`
+- **Result:** Treated as violation, teleported to release room, re-restrained, restart from Stage 2 with fresh 10-minute timer
+
+#### **Scenario 5: Character Leaves Room During Parole**
+
+- Parole is tracked in-memory and persisted to database
 - If character re-enters room during parole window, violation checks resume
-- **Cross-Room Detection:** Parole metadata includes location for restoration
+- Character can still violate parole through clothing addition
+- **Cross-Room Tracking:** Parole metadata enables enforcement across room instances
 
 ### **Parole Violation Handling**
 
 When a parole violation is detected via `handleParoleViolation(reason)`:
 
-1. **Teleport Back:**
-    - Character is instantly teleported back to `releasedFromLocation`
-    - Message: _"You are dragged back to where you started by an invisible force! (X, Y)"_
+1. **Teleport Back to Release Room:**
+    - Character is instantly teleported back to the punishment room location (Stage 4 teleport point)
+    - Message: _"You violated parole! You've been dragged back to the release room."_
     - Character profile position is updated in database
 
 2. **Reapply All Bondage Items:**
@@ -187,30 +234,53 @@ When a parole violation is detected via `handleParoleViolation(reason)`:
     - Lock states, colors, and difficulty preserved
     - Notifications show count of items restored: _"10 bondage items reapplied..."_
 
-3. **Start New Parole Period:**
-    - Fresh 10-minute parole begins from violation moment
-    - Same removed items are tracked again
-    - Character must return to fully-naked state to "escape" again
+3. **Restart Release Sequence:**
+    - Process restarts from **Stage 2: Free from Confinement**
+    - Character must again free themselves from confinement
+    - Then proceed through Stage 3 (strip) → Stage 5 (nudity check) → Stage 6 (access code) → Stage 7 (new parole)
+    - Fresh 10-minute parole timer begins from nudity confirmation (Stage 5)
+    - Same removed items are tracked again for the new cycle
+    - Character must again remain fully naked for entire 10 minutes to complete parole successfully
 
 4. **Record Violation:**
-    - Audit log entry: violation reason ("dressed" or "timeout")
-    - Character profile notes the violation event
+    - Audit log entry: violation reason ("dressed", "shower", or other)
+    - Character profile notes the violation event and timestamp
+    - Violation counter incremented for pattern tracking
 
 ---
 
 ## Parole Monitoring System
 
-### **Continuous Violation Detection**
+### **Event-Driven Violation Detection**
 
-The system runs a background monitoring loop every 5 seconds:
+The system monitors character state through character update events (movement, interactions):
 
 ```
-checkAllParoleViolations() [every 5s]
-  ├─ For each character on parole:
-  │  ├─ Query database for parole state
-  │  ├─ Check if parole expired → handleParoleViolation("timeout")
-  │  └─ Check if clothing added → handleParoleViolation("dressed")
-  └─ Repeat every 5 seconds
+onCharacterUpdate(character) [triggered on any character action]
+  ├─ If character on parole:
+  │  ├─ Refresh appearance: MakeAppearanceBundle()
+  │  ├─ Check if clothing added (any actualClothingGroups item)
+  │  └─ If clothing found → handleParoleViolation("dressed")
+  │     → Teleport back to release room
+  │     → Re-equip bondage
+  │     → Restart from Stage 2
+  └─ Continue monitoring every update until parole expires
+```
+
+### **Parole Expiration Handling**
+
+When 10-minute parole timer expires:
+
+```
+onParoleExpiration(character) [triggered at expiration time]
+  ├─ Check final clothing state: MakeAppearanceBundle() + getAppearanceData()
+  ├─ If clothed → handleParoleViolation("parole_timeout")
+  │  └─ Re-equip bondage, restart from Stage 2
+  └─ If fully naked → Success!
+     ├─ Clear parole state from database
+     ├─ Clear parole metadata from memory
+     ├─ Record successful parole completion in audit log
+     └─ Character is free to re-clothe and act normally
 ```
 
 ### **Startup Recovery**
@@ -322,15 +392,16 @@ RELEASE_PAROLE_DURATION_MS = 10 * 60 * 1000; // Parole lasts 10 minutes
 
 ## Use Cases Summary
 
-| Use Case                       | Trigger                                  | Flow                      | Result                                          |
-| ------------------------------ | ---------------------------------------- | ------------------------- | ----------------------------------------------- |
-| **Successful Release**         | `/bot release`                           | Stages 0-7, nudity passes | Character naked, freed, 10-min parole           |
-| **Failed Nudity Check**        | Didn't strip in 60s                      | Stages 0-5 timeout        | Parole cleared, stays in room, no cooldown      |
-| **Parole Violation - Clothed** | Add clothing during parole               | Violation detected        | Re-teleported, re-restrained, new parole        |
-| **Parole Violation - Shower**  | Try shower while on parole with clothing | Shower blocks entry       | Violation enforced immediately                  |
-| **Parole Timeout**             | 10 minutes pass without violation        | Auto-detected             | Character freed permanently                     |
-| **Bot Restart During Parole**  | Bot crashes/restarts                     | Recovery on startup       | Parole state loaded from DB, monitoring resumes |
-| **Admin Override**             | Admin calls `/bot release`               | Stages 0-7 bypass checks  | Immediate successful release                    |
+| Use Case                       | Trigger                                  | Flow                                     | Result                                                                           |
+| ------------------------------ | ---------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------- |
+| **Successful Release**         | `/bot release`                           | Stages 0-1 → 4 → 2-3 → 5-6 → 7 completes | Character naked, 10-min parole begins; must remain naked for duration            |
+| **Failed Nudity Check**        | Didn't strip in 60s                      | Stages 0-5 timeout                       | Release fails, character stays clothed, no parole starts                         |
+| **Parole Violation - Clothed** | Add clothing during parole               | Clothing detected at character update    | Teleported back to release room, re-restrained, restart from Stage 2, new parole |
+| **Parole Violation - Shower**  | Try shower while on parole with clothing | Shower blocks entry, violation triggered | Teleported back, re-restrained, restart from Stage 2, new parole                 |
+| **Parole Completion**          | 10 minutes pass in fully naked state     | No violations, auto-check at expiration  | Parole state cleared, character freed permanently                                |
+| **Parole Failure**             | Clothed when 10-minute timer expires     | Final check finds clothing               | Treated as violation, re-restrained, restart from Stage 2                        |
+| **Bot Restart During Parole**  | Bot crashes/restarts                     | Recovery on startup                      | Parole state loaded from DB, monitoring resumes from character updates           |
+| **Admin Override**             | Admin calls `/bot release`               | Stages 0-1 → 4 → 2-3 → 5-6 → 7           | Immediate release, parole begins                                                 |
 
 ---
 
@@ -412,17 +483,23 @@ Everything else (body parts, intimate devices, restraints) is ignored for nudity
 
 1. **Manual Clothing Removal:** Bot removes bondage but NOT clothing. Character must manually strip. Prevents automated escapes, requires player agency.
 
-2. **Stage-Based Workflow:** Each stage has clear entry/exit criteria, making the system debuggable and testable.
+2. **Stage-Based Workflow:** Each stage has clear entry/exit criteria, making the system debuggable and testable. New order: Capture → Announce → **Teleport First** → Free Confinement → Strip → Nudity Check → Access Code → Parole Enforcement.
 
-3. **Parole Over Total Lockdown:** Rather than permanent bondage loss, parole enforces temporary restrictions (10 min). Encourages continuous engagement.
+3. **Early Teleportation:** Character is teleported to punishment room BEFORE freeing from confinement. Ensures isolated environment for the entire release process.
 
-4. **Cross-Room Monitoring:** Parole is enforced everywhere in the room, not just in one location. Prevents bypassing via room transitions.
+4. **Violation = Full Restart:** When parole is violated, character is not just re-restrained—they restart from Stage 2 (Free from Confinement). Full cycle must repeat, creating meaningful consequence.
 
-5. **Location Restoration:** When parole violated, character is teleported back to release location. Prevents "escaping" the punishment zone.
+5. **Event-Driven Monitoring:** Parole violations checked at character update events (movement, interactions) rather than on a timer. Immediate detection with zero delay.
 
-6. **Database Persistence:** All parole states backed by MongoDB. Survives bot crashes, enables multi-bot coordination.
+6. **Parole Duration:** 10-minute timer begins when nudity is confirmed (Stage 5). Character must remain fully naked for entire duration. Final check at expiration; any clothing triggers violation.
 
-7. **Bundle Refresh Pattern:** Calling `MakeAppearanceBundle()` before appearance reads prevents stale cache issues from BC library.
+7. **Location Restoration:** When parole violated, character is teleported back to punishment room (Stage 4 location). Prevents escape to safe zones.
+
+8. **Database Persistence:** All parole states backed by MongoDB. Survives bot crashes, enables multi-bot coordination.
+
+9. **Bundle Refresh Pattern:** Calling `MakeAppearanceBundle()` before appearance reads prevents stale cache issues from BC library.
+
+10. **Cross-Notification:** When character leaves room after Stage 6, explicit message informs them parole has started and clothing is forbidden.
 
 ---
 
