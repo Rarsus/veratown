@@ -98,7 +98,7 @@ export class VeratownCharacterProfileStore {
     private async init(): Promise<void> {
         if (this.inited) return;
 
-        await this.profiles.createIndex({ _id: 1 }, { unique: true });
+        // Note: MongoDB automatically creates a unique index on _id, don't specify unique: true
         await this.profiles.createIndex({ name: 1 });
         await this.profiles.createIndex({ updatedAt: -1 });
         this.inited = true;
