@@ -638,7 +638,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Check if naked (only body items, no clothing)
             console.log(
-                `[ReleaseSystem] Nudity check #${checkCount} for ${character.Nickname}`,
+                `[ReleaseSystem] Nudity check #${checkCount} for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
             );
             const isNaked = this.isCharacterNaked(character);
             if (isNaked) {
@@ -676,7 +676,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const appearance = character.Appearance.getAppearanceData();
 
         console.log(
-            `[ReleaseSystem] Checking nudity for ${character.Nickname} - total items: ${appearance.length}`,
+            `[ReleaseSystem] Checking nudity for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - total items: ${appearance.length}`,
         );
 
         // Log ALL items for debugging
@@ -756,7 +756,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         console.log(
-            `[ReleaseSystem] Parole violation for ${character.Nickname}: ${reason}`,
+            `[ReleaseSystem] Parole violation for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}): ${reason}`,
         );
 
         // Get parole state to get original location and items
@@ -767,7 +767,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         if (!paroleState) {
             console.log(
-                `[ReleaseSystem] No parole state found for ${character.Nickname}`,
+                `[ReleaseSystem] No parole state found for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
             );
             return;
         }
@@ -781,7 +781,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         if (itemsToReapply.length === 0) {
             console.log(
-                `[ReleaseSystem] No items to reapply for ${character.Nickname}`,
+                `[ReleaseSystem] No items to reapply for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
             );
             return;
         }
@@ -799,7 +799,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     Y: originalLocation.Y,
                 });
                 console.log(
-                    `[ReleaseSystem] Restored ${character.Nickname} to location (${originalLocation.X}, ${originalLocation.Y})`,
+                    `[ReleaseSystem] Restored ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) to location (${originalLocation.X}, ${originalLocation.Y})`,
                 );
                 this.whisper(
                     character,
@@ -813,7 +813,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
             } catch (e) {
                 console.error(
-                    `[ReleaseSystem] Error restoring location for ${character.Nickname}:`,
+                    `[ReleaseSystem] Error restoring location for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}):`,
                     e,
                 );
             }
@@ -954,6 +954,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
 
             for (const parole of activeParoles) {
+                // Safe check for chatRoom and Characters array
+                if (
+                    !this.conn?.chatRoom?.Characters ||
+                    !Array.isArray(this.conn.chatRoom.Characters)
+                ) {
+                    console.log(
+                        `[ReleaseSystem] ChatRoom not ready for ${parole.name}, will monitor on next cycle`,
+                    );
+                    continue;
+                }
+
                 const character = this.conn.chatRoom.Characters.find(
                     (c) => c.MemberNumber === parole.memberNumber,
                 );
@@ -1017,7 +1028,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         this.paroleAppearanceTracking.set(character.MemberNumber, groups);
         console.log(
-            `[ReleaseSystem] Tracking parole for ${character.Nickname}: ${groups.size} item groups`,
+            `[ReleaseSystem] Tracking parole for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}): ${groups.size} item groups`,
         );
     }
 
@@ -1072,7 +1083,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
                 if (character) {
                     console.log(
-                        `[ReleaseSystem] Parole timeout for ${character.Nickname}`,
+                        `[ReleaseSystem] Parole timeout for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
                     );
                     await this.handleParoleViolation(character, "timeout");
                 } else {
