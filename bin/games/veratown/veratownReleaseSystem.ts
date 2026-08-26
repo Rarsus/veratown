@@ -300,32 +300,109 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // CRITICAL: BC's cache is extremely stubborn. Real-world testing shows that
         // stale data persists for 1-2+ seconds after items are equipped/removed.
         // This pattern forces multiple cache invalidations with extended waits.
+        // VERIFY: Log object reference & hash to detect if it's actually being replaced
+
+        let previousHash = "";
+        const getArrayHash = (arr: any[]): string => {
+            // Create hash of array structure to detect if object actually changed
+            return `[${arr.map((item) => `${item.Name}:${item.Group}`).join("|")}]`;
+        };
 
         // Refresh cycle 1: Begin cache invalidation
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 1: MakeAppearanceBundle() call`,
+        );
         character.Appearance.MakeAppearanceBundle();
+        let testAppearance = character.Appearance.getAppearanceData();
+        previousHash = getArrayHash(testAppearance);
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 1: Got ${testAppearance.length} items | Hash: ${previousHash.substring(0, 80)}...`,
+        );
         await wait(400);
 
         // Refresh cycle 2: Flush any pending updates
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 2: MakeAppearanceBundle() call`,
+        );
         character.Appearance.MakeAppearanceBundle();
+        testAppearance = character.Appearance.getAppearanceData();
+        const hash2 = getArrayHash(testAppearance);
+        const changed2 = hash2 !== previousHash;
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 2: Got ${testAppearance.length} items | Hash: ${hash2.substring(0, 80)}... | Changed: ${changed2}`,
+        );
+        previousHash = hash2;
         await wait(400);
 
         // Refresh cycle 3: Deep cache clear
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 3: MakeAppearanceBundle() call`,
+        );
         character.Appearance.MakeAppearanceBundle();
+        testAppearance = character.Appearance.getAppearanceData();
+        const hash3 = getArrayHash(testAppearance);
+        const changed3 = hash3 !== previousHash;
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 3: Got ${testAppearance.length} items | Hash: ${hash3.substring(0, 80)}... | Changed: ${changed3}`,
+        );
+        previousHash = hash3;
         await wait(400);
 
         // Refresh cycle 4: Secondary invalidation
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 4: MakeAppearanceBundle() call`,
+        );
         character.Appearance.MakeAppearanceBundle();
+        testAppearance = character.Appearance.getAppearanceData();
+        const hash4 = getArrayHash(testAppearance);
+        const changed4 = hash4 !== previousHash;
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 4: Got ${testAppearance.length} items | Hash: ${hash4.substring(0, 80)}... | Changed: ${changed4}`,
+        );
+        previousHash = hash4;
         await wait(400);
 
         // Refresh cycle 5: Tertiary invalidation - final push
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 5: MakeAppearanceBundle() call`,
+        );
         character.Appearance.MakeAppearanceBundle();
+        testAppearance = character.Appearance.getAppearanceData();
+        const hash5 = getArrayHash(testAppearance);
+        const changed5 = hash5 !== previousHash;
+        console.log(
+            `[ReleaseSystem:CACHE] Cycle 5: Got ${testAppearance.length} items | Hash: ${hash5.substring(0, 80)}... | Changed: ${changed5}`,
+        );
         await wait(500); // Longer final wait for absolute stability
 
         // Total wait: 400+400+400+400+500 = 2100ms minimum (plus call overhead)
 
         const appearance = character.Appearance.getAppearanceData();
         console.log(
-            `[ReleaseSystem:CACHE] Cache clear complete. Fetched ${appearance.length} items`,
+            `[ReleaseSystem:CACHE] FINAL: Cache clear complete. Fetched ${appearance.length} items`,
+        );
+
+        // LOG FULL OBJECT STRUCTURE FOR DEBUGGING
+        console.log(
+            `[ReleaseSystem:CACHE] ---- FULL APPEARANCE OBJECT STRUCTURE ----`,
+        );
+        console.log(
+            `[ReleaseSystem:CACHE] Appearance array type: ${Array.isArray(appearance) ? "Array" : typeof appearance}`,
+        );
+        console.log(
+            `[ReleaseSystem:CACHE] Appearance array length: ${appearance.length}`,
+        );
+        if (appearance.length > 0) {
+            const firstItem = appearance[0];
+            console.log(
+                `[ReleaseSystem:CACHE] First item object keys: ${Object.keys(firstItem).join(", ")}`,
+            );
+            console.log(
+                `[ReleaseSystem:CACHE] First item sample: ${JSON.stringify(firstItem, null, 2)}`,
+            );
+        }
+        console.log(
+            `[ReleaseSystem:CACHE] Full array (first 5 items): ${JSON.stringify(appearance.slice(0, 5), null, 2)}`,
         );
 
         // DIAGNOSTIC: Log clothing group whitelist on every cache operation
@@ -669,6 +746,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
     ): Promise<RemovedBondageItem[]> {
         // Get all appearance items
+        console.log(
+            `[ReleaseSystem] stripNonOwnerItems: BEFORE stripping - inspecting Appearance object`,
+        );
+        this.inspectAppearanceObject(character, "BEFORE stripBulk call");
+
         const appearance = character.Appearance.getAppearanceData();
         console.log(
             `[ReleaseSystem] stripNonOwnerItems: Starting with ${appearance.length} total items`,
@@ -712,10 +794,24 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Wait for API to process removal
         await wait(250);
 
+        console.log(
+            `[ReleaseSystem] stripNonOwnerItems: AFTER stripBulk - inspecting Appearance object`,
+        );
+        this.inspectAppearanceObject(
+            character,
+            "AFTER stripBulk (before MakeAppearanceBundle)",
+        );
+
         // Verify what was stripped
         // Force refresh appearance bundle to clear any cache
         const bundleAfterStrip = character.Appearance.MakeAppearanceBundle();
         await wait(100); // Wait for cache refresh
+
+        console.log(
+            `[ReleaseSystem] stripNonOwnerItems: AFTER MakeAppearanceBundle - inspecting Appearance object`,
+        );
+        this.inspectAppearanceObject(character, "AFTER MakeAppearanceBundle");
+
         const afterStripAppearance = character.Appearance.getAppearanceData();
         console.log(
             `[ReleaseSystem] After stripBulk: ${afterStripAppearance.length} items remaining (bundle had ${bundleAfterStrip.length})`,
@@ -961,6 +1057,72 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
+     * Debug helper: Inspect the actual Appearance object structure
+     * Helps verify if MakeAppearanceBundle() is actually modifying the cached object
+     */
+    private inspectAppearanceObject(
+        character: API_Character,
+        label: string,
+    ): void {
+        console.log(
+            `[ReleaseSystem:INSPECT] ========== APPEARANCE OBJECT INSPECTION: ${label} ==========`,
+        );
+
+        const appearanceObj = character.Appearance;
+        console.log(
+            `[ReleaseSystem:INSPECT] Appearance object type: ${typeof appearanceObj}`,
+        );
+        console.log(
+            `[ReleaseSystem:INSPECT] Appearance object is null/undefined: ${appearanceObj === null || appearanceObj === undefined}`,
+        );
+
+        if (appearanceObj) {
+            console.log(
+                `[ReleaseSystem:INSPECT] Appearance object keys: ${Object.keys(appearanceObj).slice(0, 20).join(", ")}${Object.keys(appearanceObj).length > 20 ? "..." : ""}`,
+            );
+            console.log(
+                `[ReleaseSystem:INSPECT] Appearance object total keys: ${Object.keys(appearanceObj).length}`,
+            );
+
+            // Check for common cache-related properties
+            const commonCacheProps = [
+                "CacheVersion",
+                "CacheHash",
+                "CacheTimestamp",
+                "cache",
+                "_cache",
+                "appearanceCache",
+                "Bundle",
+                "Bundle.Version",
+            ];
+            for (const prop of commonCacheProps) {
+                const value = (appearanceObj as any)[prop];
+                if (value !== undefined) {
+                    console.log(
+                        `[ReleaseSystem:INSPECT] Found cache property "${prop}": ${typeof value} = ${String(value).substring(0, 100)}`,
+                    );
+                }
+            }
+        }
+
+        const data = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem:INSPECT] getAppearanceData() returns: ${Array.isArray(data) ? `Array[${data.length}]` : typeof data}`,
+        );
+
+        if (Array.isArray(data) && data.length > 0) {
+            const item = data[0];
+            console.log(
+                `[ReleaseSystem:INSPECT] First item object: ${JSON.stringify(item, null, 2)}`,
+            );
+        }
+
+        console.log(
+            `[ReleaseSystem:INSPECT] ========== END INSPECTION ==========`,
+        );
+    }
+
+    /**
      * Check if character has no clothing (only body items remain)
      * Nudity = no actual CLOTHING. Body parts and intimate devices are OK.
      * ASYNC: Waits for appearance cache refresh after MakeAppearanceBundle()
@@ -975,6 +1137,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         // Use new aggressive cache clearing
         const appearance = await this.clearCacheAndGetAppearance(character);
+
+        // INSPECTION: Log the actual Appearance object structure
+        this.inspectAppearanceObject(
+            character,
+            `After cache clear (got ${appearance.length} items)`,
+        );
 
         console.log(
             `[ReleaseSystem:NUDITY_CHECK] ---- ANALYZING ${appearance.length} ITEMS ----`,
