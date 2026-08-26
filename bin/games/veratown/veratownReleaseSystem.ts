@@ -77,6 +77,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
+     * Execute the full release sequence immediately
+     */
     public async executeRelease(character: API_Character): Promise<void> {
         // Prevent overlapping releases
         if (this.activeReleases.has(character.MemberNumber)) {
