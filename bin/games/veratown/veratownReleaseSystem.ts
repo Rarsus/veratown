@@ -332,6 +332,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // CRITICAL: Update parole metadata with fully-naked state
             // Any clothing added during parole from this point is a violation
+            // MUST refresh bundle before checking appearance (cache clearing pattern)
+            character.Appearance.MakeAppearanceBundle();
+            await wait(100);
             const nakedAppearance = character.Appearance.getAppearanceData();
             const nakedItems = new Set<string>();
             for (const item of nakedAppearance) {
@@ -930,6 +933,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         // Update metadata with fully-naked state
+        // MUST refresh bundle before checking appearance (cache clearing pattern)
+        character.Appearance.MakeAppearanceBundle();
+        await wait(100);
         const nakedAppearance = character.Appearance.getAppearanceData();
         const nakedItems = new Set<string>();
         for (const item of nakedAppearance) {
@@ -1416,6 +1422,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Update naked state
+            // MUST refresh bundle before checking appearance (cache clearing pattern)
+            character.Appearance.MakeAppearanceBundle();
+            await wait(100);
             const nakedAppearance = character.Appearance.getAppearanceData();
             const nakedItems = new Set<string>();
             for (const item of nakedAppearance) {
