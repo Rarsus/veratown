@@ -1101,6 +1101,16 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             } else if (remaining === 60) {
                 // 1 minute remaining
                 this.whisper(character, "*Parole: 1 minute remaining*");
+            } else if (
+                remaining > 0 &&
+                remaining <= 60 &&
+                remaining % 15 === 0
+            ) {
+                // Progress notifications every 15 seconds during final minute
+                this.whisper(
+                    character,
+                    `*Parole: ${remaining}s remaining - stay naked*`,
+                );
             }
 
             await wait(checkIntervalMs);
