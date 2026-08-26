@@ -1661,15 +1661,37 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * Works cross-room by comparing to stored parole metadata
      */
     private async checkAllParoleViolations(): Promise<void> {
-        if (!this.characterProfileStore || !this.conn?.chatRoom?.Characters) {
+        if (!this.characterProfileStore) {
+            console.log(
+                `[ReleaseSystem] checkAllParoleViolations: store unavailable`,
+            );
             return;
         }
+
+        if (!this.conn?.chatRoom?.Characters) {
+            console.log(
+                `[ReleaseSystem] checkAllParoleViolations: chatRoom not ready`,
+            );
+            return;
+        }
+
+        console.log(
+            `[ReleaseSystem] checkAllParoleViolations: checking for violations...`,
+        );
 
         const now = Date.now();
         const activeParoles =
             await this.characterProfileStore.getActiveParoles();
 
+        console.log(
+            `[ReleaseSystem] checkAllParoleViolations: found ${activeParoles.length} active parole(s)`,
+        );
+
         for (const parole of activeParoles) {
+            console.log(
+                `[ReleaseSystem] checkAllParoleViolations: checking parole ${parole.memberNumber}: expired=${parole.isExpired}`,
+            );
+
             // Check timeout
             if (parole.isExpired) {
                 const character = this.conn.chatRoom.Characters.find(
@@ -1683,7 +1705,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 } else {
                     // Clear expired parole
                     console.log(
-                        `[ReleaseSystem] Parole expired for ${parole.name} (${parole.memberNumber}) - clearing`,
+                        `[ReleaseSystem] Parole expired for ${parole.memberNumber} - clearing`,
                     );
                     await this.characterProfileStore.clearReleaseParole(
                         parole.memberNumber,
@@ -1698,6 +1720,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 (c) => c.MemberNumber === parole.memberNumber,
             );
 
+            console.log(
+                `[ReleaseSystem] checkAllParoleViolations: character ${parole.memberNumber} in room? ${character ? "YES" : "NO"}`,
+            );
+
             if (!character) {
                 // Character not in current room - they could be in another room
                 // If they were being tracked and now aren't, they might have left
@@ -1707,6 +1733,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Character is in room - check for violations
             const metadata = this.paroleMetadata.get(character.MemberNumber);
+            console.log(
+                `[ReleaseSystem] checkAllParoleViolations: metadata for ${character.MemberNumber}? ${metadata ? "YES" : "NO"}`,
+            );
+
             if (!metadata) {
                 // This shouldn't happen if bot restart initialization worked correctly
                 // But as a safety net: if parole exists but no metadata, initialize with empty set
@@ -1714,7 +1744,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 console.log(
                     `[ReleaseSystem] WARNING: Parole metadata missing for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - reinitializing with empty startingItems`,
                 );
-                const metadata: typeof this.paroleMetadata = new Map();
                 const newMetadata = {
                     startingItems: new Set<string>(), // Must be naked during parole
                     startingLocation: parole.paroleState
@@ -1727,6 +1756,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 this.paroleMetadata.set(character.MemberNumber, newMetadata);
                 // Fall through to check for violation
             }
+
+            console.log(
+                `[ReleaseSystem] checkAllParoleViolations: running violation check for ${character.MemberNumber}`,
+            );
 
             // Check if they've added clothing (parole violation)
             await this.checkParoleViolation(
