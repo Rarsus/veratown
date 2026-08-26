@@ -290,8 +290,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const itemsToRemove: Array<{ group: string; item: string }> = [];
 
         for (const item of appearance) {
-            // Skip non-restraint groups
-            if (!item.Group?.includes("Item")) {
+            // Skip items with no group or name
+            if (!item.Group || !item.Name) {
                 continue;
             }
 
@@ -305,22 +305,26 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 item.Property?.Lock === "Timers" &&
                 item.Property.Difficulty !== undefined;
 
-            // If NOT locked by owner or time, remove it
+            // If NOT locked by owner or time, mark for removal
             if (!isOwnerLocked && !isTimeLocked) {
                 itemsToRemove.push({
-                    group: item.Group ?? "ItemDevices",
-                    item: item.Name ?? "Unknown",
+                    group: item.Group,
+                    item: item.Name,
                 });
             }
         }
 
         // Remove items
+        let removedCount = 0;
         for (const itemDef of itemsToRemove) {
             console.log(
                 `[ReleaseSystem] Removing ${itemDef.item} from ${itemDef.group}`,
             );
             character.Appearance.RemoveItem(itemDef.group, itemDef.item);
+            removedCount++;
         }
+
+        console.log(`[ReleaseSystem] Stripped ${removedCount} total items`);
 
         // Update profile with current state
         if (this.characterProfileStore) {
@@ -330,11 +334,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 currentAppearance,
             );
 
-            // Record remaining restraints (should only be locked ones)
+            // Record remaining locked items
             const remainingRestraints = currentAppearance
                 .filter(
                     (item) =>
-                        item.Group?.includes("Item") && item.Property?.LockedBy,
+                        item.Group && item.Name && item.Property?.LockedBy,
                 )
                 .map((item) => ({
                     itemName: item.Name ?? "Unknown",
@@ -351,7 +355,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         this.whisper(
             character,
-            `*${itemsToRemove.length} restraint${itemsToRemove.length !== 1 ? "s" : ""} fall away...*`,
+            `*${removedCount} item${removedCount !== 1 ? "s" : ""} fall away...*`,
         );
     }
 
@@ -480,29 +484,49 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private isCharacterNaked(character: API_Character): boolean {
         const appearance = character.Appearance.getAppearanceData();
 
-        // Clothing groups to check for
-        const clothingGroups = [
+        // Comprehensive list of clothing/device groups that count as "not naked"
+        const clothingGroups = new Set([
+            // Upper body
             "Bra",
-            "Cloth",
-            "ClothAccessory",
-            "ClothLower",
             "Corset",
+            "Shirt",
+            // Lower body
+            "Panties",
+            "Pussy", // Chastity/pussy items
+            "Butt", // Butt plugs/items
+            "Penetrating",
+            // Accessories
             "Gloves",
             "Shoes",
             "Socks",
             "Stockings",
+            "Hat",
+            "Hair",
+            // General clothing
+            "Cloth",
+            "ClothAccessory",
+            "ClothLower",
+            "ClothUpper",
             "Jacket",
             "OuterClothes",
-            "Panties",
-        ];
+            "Dress",
+            "Swimsuit",
+            // Bondage/Device items (should be fine if locked, but if not locked they count)
+            "ItemBreast",
+            "ItemPelvis",
+        ]);
 
-        // If any clothing item is equipped, not naked
+        // If any clothing/device item is equipped, not naked
         for (const item of appearance) {
-            if (item.Group && clothingGroups.includes(item.Group)) {
+            if (item.Group && clothingGroups.has(item.Group)) {
+                console.log(
+                    `[ReleaseSystem] Character not naked: ${item.Name} in ${item.Group}`,
+                );
                 return false;
             }
         }
 
+        console.log(`[ReleaseSystem] Character is naked`);
         return true;
     }
 
