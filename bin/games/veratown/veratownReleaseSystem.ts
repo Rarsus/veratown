@@ -1057,6 +1057,31 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 `[ReleaseSystem] Parole check for ${character.MemberNumber}: ${remaining}s remaining (clothed checks: ${consecutiveClothedChecks}/${CLOTHED_VIOLATION_THRESHOLD})`,
             );
 
+            // CRITICAL: Update database with current appearance and parole progress
+            // This allows:
+            // - Parole to survive bot restarts
+            // - Cross-room parole enforcement (other systems check database)
+            // - Audit trail of parole progress with appearance snapshots
+            // - Recovery if connection lost
+            if (this.characterProfileStore) {
+                try {
+                    const currentAppearance =
+                        character.Appearance.getAppearanceData();
+                    await this.characterProfileStore.updateAppearance(
+                        character.MemberNumber,
+                        currentAppearance,
+                    );
+                    console.log(
+                        `[ReleaseSystem] Updated database appearance for ${character.MemberNumber}: ${currentAppearance.length} items`,
+                    );
+                } catch (e) {
+                    console.error(
+                        `[ReleaseSystem] Failed to update appearance in database:`,
+                        e,
+                    );
+                }
+            }
+
             // Send notifications at specific intervals
             if (remaining === 300) {
                 // 5 minutes remaining
@@ -1086,6 +1111,26 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         console.log(
             `[ReleaseSystem] Parole duration expired for ${character.MemberNumber}, performing final check`,
         );
+
+        // Final database update with end-of-parole appearance
+        if (this.characterProfileStore) {
+            try {
+                const finalAppearance =
+                    character.Appearance.getAppearanceData();
+                await this.characterProfileStore.updateAppearance(
+                    character.MemberNumber,
+                    finalAppearance,
+                );
+                console.log(
+                    `[ReleaseSystem] Final appearance update: ${finalAppearance.length} items`,
+                );
+            } catch (e) {
+                console.error(
+                    `[ReleaseSystem] Failed to update final appearance:`,
+                    e,
+                );
+            }
+        }
 
         const finalNakedCheck = await this.isCharacterNaked(character);
         if (!finalNakedCheck) {
