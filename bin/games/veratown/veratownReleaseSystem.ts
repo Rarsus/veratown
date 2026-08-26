@@ -282,9 +282,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 // Store parole metadata for cross-room enforcement
                 const currentAppearance =
                     character.Appearance.getAppearanceData();
+                // CRITICAL: Only capture CLOTHING groups, not body parts/cosmetics
                 const startingItems = new Set<string>();
                 for (const item of currentAppearance) {
-                    if (item.Group) {
+                    if (
+                        item.Group &&
+                        this.actualClothingGroups.has(item.Group)
+                    ) {
                         startingItems.add(item.Group);
                     }
                 }
@@ -1478,9 +1482,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 // Update parole metadata
                 const currentAppearance =
                     character.Appearance.getAppearanceData();
+                // CRITICAL: Only capture CLOTHING groups, not body parts/cosmetics
                 const startingItems = new Set<string>();
                 for (const item of currentAppearance) {
-                    if (item.Group) {
+                    if (
+                        item.Group &&
+                        this.actualClothingGroups.has(item.Group)
+                    ) {
                         startingItems.add(item.Group);
                     }
                 }
@@ -2026,9 +2034,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     console.log(
                         `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION CONDITION MET ***`,
                     );
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] Reason: "${itemGroup}" NOT in startingItems (new clothing added during parole)`,
-                    );
+                    if (startingItems.size === 0) {
+                        console.log(
+                            `[ReleaseSystem:PAROLE_CHECK] Reason: Character must be COMPLETELY NAKED during parole, but found "${itemGroup}"`,
+                        );
+                    } else {
+                        console.log(
+                            `[ReleaseSystem:PAROLE_CHECK] Reason: "${itemGroup}" NOT in startingItems (new clothing added during parole)`,
+                        );
+                    }
                     console.log(
                         `[ReleaseSystem:PAROLE_CHECK] Decision: CALL handleParoleViolation()`,
                     );
