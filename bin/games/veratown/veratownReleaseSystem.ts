@@ -294,27 +294,41 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
     ): Promise<any[]> {
         console.log(
-            `[ReleaseSystem:CACHE] Initiating triple-refresh cache clear pattern`,
+            `[ReleaseSystem:CACHE] ⚠️  AGGRESSIVE CACHE CLEAR INITIATED (2500ms timeout)`,
         );
 
-        // First refresh - begin cache invalidation
-        character.Appearance.MakeAppearanceBundle();
-        await wait(300);
+        // CRITICAL: BC's cache is extremely stubborn. Real-world testing shows that
+        // stale data persists for 1-2+ seconds after items are equipped/removed.
+        // This pattern forces multiple cache invalidations with extended waits.
 
-        // Second refresh - flush any pending updates
+        // Refresh cycle 1: Begin cache invalidation
         character.Appearance.MakeAppearanceBundle();
-        await wait(300);
+        await wait(400);
 
-        // Third refresh - ensure absolute clean state
+        // Refresh cycle 2: Flush any pending updates
         character.Appearance.MakeAppearanceBundle();
-        await wait(400); // Longer wait after third refresh
+        await wait(400);
+
+        // Refresh cycle 3: Deep cache clear
+        character.Appearance.MakeAppearanceBundle();
+        await wait(400);
+
+        // Refresh cycle 4: Secondary invalidation
+        character.Appearance.MakeAppearanceBundle();
+        await wait(400);
+
+        // Refresh cycle 5: Tertiary invalidation - final push
+        character.Appearance.MakeAppearanceBundle();
+        await wait(500); // Longer final wait for absolute stability
+
+        // Total wait: 400+400+400+400+500 = 2100ms minimum (plus call overhead)
 
         const appearance = character.Appearance.getAppearanceData();
         console.log(
-            `[ReleaseSystem:CACHE] Cache cleared. Fetched ${appearance.length} items`,
+            `[ReleaseSystem:CACHE] Cache clear complete. Fetched ${appearance.length} items`,
         );
 
-        // DIAGNOSTIC: Log clothing group whitelist on first cache operation
+        // DIAGNOSTIC: Log clothing group whitelist on every cache operation
         const clothingGroups = Array.from(this.actualClothingGroups).join(", ");
         console.log(
             `[ReleaseSystem:CACHE] Monitoring for these clothing groups: ${clothingGroups}`,
@@ -2160,6 +2174,51 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 `[ReleaseSystem:PAROLE_CHECK] "${item.Name || "NO_NAME"}" | Group: "${item.Group || "NONE"}" | In clothing set: ${inClothingSet}`,
             );
         }
+
+        // STALE CACHE DETECTION: Track detected clothing to identify persistent stale data
+        const currentClothingDetected = new Set<string>();
+        for (const item of currentAppearance) {
+            if (
+                item.Group &&
+                this.actualClothingGroups.has(item.Group) &&
+                item.Name
+            ) {
+                currentClothingDetected.add(`${item.Name}:${item.Group}`);
+            }
+        }
+
+        const previousClothing = this.paroleAppearanceTracking.get(
+            character.MemberNumber,
+        );
+        if (previousClothing && previousClothing.size > 0) {
+            // Compare current detected clothing against previous detected clothing
+            const sameItems =
+                currentClothingDetected.size === previousClothing.size &&
+                Array.from(currentClothingDetected).every((item) =>
+                    previousClothing.has(item),
+                );
+
+            if (sameItems && currentClothingDetected.size > 0) {
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] ⚠️  STALE CACHE WARNING: Detected clothing identical to last check`,
+                );
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] Items this check: ${Array.from(currentClothingDetected).join(", ")}`,
+                );
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] Items last check: ${Array.from(previousClothing).join(", ")}`,
+                );
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK] ⚠️  POSSIBLE STALE CACHE - BC library not refreshing appearance data properly`,
+                );
+            }
+        }
+
+        // Update tracking for next check
+        this.paroleAppearanceTracking.set(
+            character.MemberNumber,
+            currentClothingDetected,
+        );
 
         // BIDIRECTIONAL VALIDATION
         // Method 1: Check if ANY clothing exists (absolute rule)
