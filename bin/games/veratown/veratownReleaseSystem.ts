@@ -199,16 +199,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         // Character is on parole - check if they have clothing
-        // Force refresh bundle to clear any cache
-        const bundle = character.Appearance.MakeAppearanceBundle();
-        const currentAppearance = character.Appearance.getAppearanceData();
-        const hasClothing = currentAppearance.some(
-            (item) => item.Group && this.actualClothingGroups.has(item.Group),
-        );
+        // Use direct API calls matching the bed system pattern (proven working, no cache issues)
+        const hasClothing = this.hasAnyClothing(character);
 
         if (hasClothing) {
             console.log(
-                `[ReleaseSystem] Parole violation detected on shower entry for ${character.MemberNumber}: has clothing while on parole (bundle had ${bundle.length} items)`,
+                `[ReleaseSystem] Parole violation detected on shower entry for ${character.MemberNumber}: has clothing while on parole`,
             );
 
             // Enforce the violation immediately
@@ -2073,20 +2069,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Track a character on parole - record their current appearance
+     * CRITICAL: Uses direct getItemData() API (not stale getAppearanceData() cache)
      */
     private trackParoleCharacter(character: API_Character): void {
         const groups = new Set<string>();
-        const appearance = character.Appearance.getAppearanceData();
 
-        for (const item of appearance) {
-            if (item.Group) {
-                groups.add(item.Group);
+        // Use direct API calls matching the bed system pattern (proven working, no cache issues)
+        for (const clothingGroup of this.actualClothingGroups) {
+            const item = character.Appearance.getItemData(clothingGroup);
+            if (item && item.Name) {
+                groups.add(clothingGroup);
             }
         }
 
         this.paroleAppearanceTracking.set(character.MemberNumber, groups);
         console.log(
-            `[ReleaseSystem] Tracking parole for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}): ${groups.size} item groups`,
+            `[ReleaseSystem] Tracking parole for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}): ${groups.size} clothing group(s) with items`,
         );
     }
 
