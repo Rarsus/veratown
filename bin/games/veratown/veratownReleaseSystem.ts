@@ -340,17 +340,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             character.Appearance.MakeAppearanceBundle();
             await wait(100);
             const nakedAppearance = character.Appearance.getAppearanceData();
+            // CRITICAL: Only capture CLOTHING groups in the naked state
+            // Body parts, cosmetics, etc. should NOT be tracked
             const nakedItems = new Set<string>();
             for (const item of nakedAppearance) {
-                if (item.Group) {
+                if (item.Group && this.actualClothingGroups.has(item.Group)) {
                     nakedItems.add(item.Group);
                 }
             }
             const metadata = this.paroleMetadata.get(character.MemberNumber);
             if (metadata) {
-                metadata.startingItems = nakedItems; // Update to fully-naked state
+                metadata.startingItems = nakedItems; // Update to fully-naked state (should be empty if truly naked)
                 console.log(
-                    `[ReleaseSystem] Updated parole metadata for ${character.MemberNumber}: now tracking fully-naked state (${nakedItems.size} item groups)`,
+                    `[ReleaseSystem] Updated parole metadata for ${character.MemberNumber}: now tracking fully-naked state (${nakedItems.size} clothing item(s) allowed)`,
                 );
             }
 
@@ -1044,9 +1046,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character.Appearance.MakeAppearanceBundle();
         await wait(100);
         const nakedAppearance = character.Appearance.getAppearanceData();
+        // CRITICAL: Only capture CLOTHING groups in the naked state
         const nakedItems = new Set<string>();
         for (const item of nakedAppearance) {
-            if (item.Group) {
+            if (item.Group && this.actualClothingGroups.has(item.Group)) {
                 nakedItems.add(item.Group);
             }
         }
@@ -1537,9 +1540,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             character.Appearance.MakeAppearanceBundle();
             await wait(100);
             const nakedAppearance = character.Appearance.getAppearanceData();
+            // CRITICAL: Only capture CLOTHING groups in the naked state
             const nakedItems = new Set<string>();
             for (const item of nakedAppearance) {
-                if (item.Group) {
+                if (item.Group && this.actualClothingGroups.has(item.Group)) {
                     nakedItems.add(item.Group);
                 }
             }
