@@ -460,6 +460,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         const startTime = Date.now();
         const punishmentRoomPos = { X: location.x, Y: location.y };
+        let checkCount = 0;
 
         this.whisper(
             character,
@@ -468,6 +469,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         while (Date.now() - startTime < maxWaitMs) {
             await wait(RELEASE_NUDITY_CHECK_INTERVAL_MS);
+            checkCount++;
 
             // Check if still on punishment room tile
             if (
@@ -483,8 +485,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Check if naked (only body items, no clothing)
+            console.log(
+                `[ReleaseSystem] Nudity check #${checkCount} for ${character.Nickname}`,
+            );
             const isNaked = this.isCharacterNaked(character);
             if (isNaked) {
+                console.log(
+                    `[ReleaseSystem] Nudity confirmed on check #${checkCount}`,
+                );
                 this.whisper(character, "*The barrier dissolves...*");
                 return true;
             }
@@ -514,49 +522,66 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private isCharacterNaked(character: API_Character): boolean {
         const appearance = character.Appearance.getAppearanceData();
 
-        // Comprehensive list of clothing/device groups that count as "not naked"
+        console.log(
+            `[ReleaseSystem] Checking nudity for ${character.Nickname} - total items: ${appearance.length}`,
+        );
+
+        // Log ALL items for debugging
+        for (const item of appearance) {
+            console.log(
+                `[ReleaseSystem]   - ${item.Name} (Group: ${item.Group}, Locked: ${item.Property?.LockedBy || "No"})`,
+            );
+        }
+
+        // ONLY actual CLOTHING counts. Intimate devices (Pussy, Butt, Penetrating)
+        // and bondage devices (ItemDevices, ItemBreast, etc) do NOT count as "clothed"
         const clothingGroups = new Set([
-            // Upper body
+            // Upper body clothing
             "Bra",
             "Corset",
             "Shirt",
-            // Lower body
+            "Top",
+            "BodyUpper",
+            // Lower body clothing
             "Panties",
-            "Pussy", // Chastity/pussy items
-            "Butt", // Butt plugs/items
-            "Penetrating",
-            // Accessories
-            "Gloves",
+            "Bottom",
+            "BodyLower",
+            // Full body
+            "Dress",
+            "Swimsuit",
+            "Uniform",
+            "Jacket",
+            "OuterClothes",
+            // Foot/leg clothing
             "Shoes",
             "Socks",
             "Stockings",
+            // Hand/arm clothing
+            "Gloves",
+            // Head/hair
             "Hat",
             "Hair",
+            "Mask",
             // General clothing
             "Cloth",
             "ClothAccessory",
             "ClothLower",
             "ClothUpper",
-            "Jacket",
-            "OuterClothes",
-            "Dress",
-            "Swimsuit",
-            // Bondage/Device items (should be fine if locked, but if not locked they count)
-            "ItemBreast",
-            "ItemPelvis",
         ]);
 
-        // If any clothing/device item is equipped, not naked
+        // If any actual clothing is equipped, not naked
         for (const item of appearance) {
             if (item.Group && clothingGroups.has(item.Group)) {
                 console.log(
-                    `[ReleaseSystem] Character not naked: ${item.Name} in ${item.Group}`,
+                    `[ReleaseSystem] NOT NAKED: Found clothing ${item.Name} in group ${item.Group}`,
                 );
                 return false;
             }
         }
 
-        console.log(`[ReleaseSystem] Character is naked`);
+        console.log(
+            `[ReleaseSystem] Character IS NAKED - no clothing items found (intimate devices are OK)`,
+        );
         return true;
     }
 
