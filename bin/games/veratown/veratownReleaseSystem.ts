@@ -1511,10 +1511,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     `[ReleaseSystem] Processing parole for ${parole.name} (${parole.memberNumber})`,
                 );
 
-                // Safe check for chatRoom and Characters array
+                // Safe check for chatRoom and characters array
                 if (
-                    !this.conn?.chatRoom?.Characters ||
-                    !Array.isArray(this.conn.chatRoom.Characters)
+                    !this.conn?.chatRoom?.characters ||
+                    !Array.isArray(this.conn.chatRoom.characters)
                 ) {
                     console.log(
                         `[ReleaseSystem] ChatRoom not ready for ${parole.name}, will monitor on next cycle`,
@@ -1522,7 +1522,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     continue;
                 }
 
-                const character = this.conn.chatRoom.Characters.find(
+                const character = this.conn.chatRoom.characters.find(
                     (c) => c.MemberNumber === parole.memberNumber,
                 );
                 console.log(
@@ -1678,7 +1678,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         if (
             !this.conn ||
             !this.conn.chatRoom ||
-            !this.conn.chatRoom.Characters
+            !this.conn.chatRoom.characters
         ) {
             console.log(
                 `[ReleaseSystem] checkAllParoleViolations: chatRoom not ready`,
@@ -1705,7 +1705,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Check timeout
             if (parole.isExpired) {
-                const character = this.conn.chatRoom.Characters.find(
+                const character = this.conn.chatRoom.characters.find(
                     (c) => c.MemberNumber === parole.memberNumber,
                 );
                 if (character) {
@@ -1727,7 +1727,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Check if character is in current room
-            const character = this.conn.chatRoom.Characters.find(
+            const character = this.conn.chatRoom.characters.find(
                 (c) => c.MemberNumber === parole.memberNumber,
             );
 
