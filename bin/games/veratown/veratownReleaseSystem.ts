@@ -426,6 +426,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     ): Promise<RemovedBondageItem[]> {
         // Get all appearance items
         const appearance = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem] stripNonOwnerItems: Starting with ${appearance.length} total items`,
+        );
 
         // Track what we're removing
         const removedItems: RemovedBondageItem[] = [];
@@ -472,6 +475,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character.Appearance.stripBulk({ item: true }, true);
         await wait(100);
 
+        // Verify what was stripped
+        const afterStripAppearance = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem] After stripBulk: ${afterStripAppearance.length} items remaining`,
+        );
+        for (const item of afterStripAppearance) {
+            console.log(
+                `[ReleaseSystem]   - After strip: ${item.Name} (${item.Group})`,
+            );
+        }
+
         // Third pass: re-add only clothing items
         console.log(
             `[ReleaseSystem] Re-adding ${preservedClothing.length} clothing items...`,
@@ -494,6 +508,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     e,
                 );
             }
+        }
+
+        // Verify what was re-added
+        const afterReaddAppearance = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem] After re-adding clothing: ${afterReaddAppearance.length} items total`,
+        );
+        for (const item of afterReaddAppearance) {
+            console.log(
+                `[ReleaseSystem]   - After readd: ${item.Name} (${item.Group})`,
+            );
         }
 
         // Notify character
@@ -640,6 +665,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             console.log(
                 `[ReleaseSystem] Nudity check #${checkCount} for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
             );
+
+            // Log current appearance
+            const currentAppearance = character.Appearance.getAppearanceData();
+            const clothingCount = currentAppearance.filter(
+                (item) =>
+                    item.Group && this.actualClothingGroups.has(item.Group),
+            ).length;
+            console.log(
+                `[ReleaseSystem]   - Total items: ${currentAppearance.length}, Clothing items: ${clothingCount}`,
+            );
+
             const isNaked = this.isCharacterNaked(character);
             if (isNaked) {
                 console.log(
