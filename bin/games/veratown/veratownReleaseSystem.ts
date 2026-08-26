@@ -1515,9 +1515,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
 
                 // Load parole metadata for this character
+                // CRITICAL: Always initialize metadata, even if character not in room yet
+                // This prevents the violation check from re-initializing with current appearance
                 if (parole.paroleState) {
                     this.paroleMetadata.set(parole.memberNumber, {
-                        startingItems: new Set<string>(), // Will be updated when they enter room
+                        startingItems: new Set<string>(), // Empty = should be completely naked
                         startingLocation: parole.paroleState
                             .releasedFromLocation || {
                             X: 0,
@@ -1526,6 +1528,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         paroleExpiresAt:
                             parole.paroleState.paroleExpiresAt || 0,
                     });
+                    console.log(
+                        `[ReleaseSystem] Initialized parole metadata for ${parole.name} (${parole.memberNumber}) - expected state: completely naked`,
+                    );
                 }
 
                 if (parole.isExpired) {
@@ -1680,32 +1685,32 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             // Character is in room - check for violations
             const metadata = this.paroleMetadata.get(character.MemberNumber);
             if (!metadata) {
-                // First time seeing them after parole was created
-                // Initialize their metadata
-                const currentAppearance =
-                    character.Appearance.getAppearanceData();
-                const startingItems = new Set<string>();
-                for (const item of currentAppearance) {
-                    if (item.Group) {
-                        startingItems.add(item.Group);
-                    }
-                }
-
-                this.paroleMetadata.set(character.MemberNumber, {
-                    startingItems,
+                // This shouldn't happen if bot restart initialization worked correctly
+                // But as a safety net: if parole exists but no metadata, initialize with empty set
+                // (meaning character should be completely naked)
+                console.log(
+                    `[ReleaseSystem] WARNING: Parole metadata missing for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}) - reinitializing with empty startingItems`,
+                );
+                const metadata: typeof this.paroleMetadata = new Map();
+                const newMetadata = {
+                    startingItems: new Set<string>(), // Must be naked during parole
                     startingLocation: parole.paroleState
                         .releasedFromLocation || {
                         X: 0,
                         Y: 0,
                     },
                     paroleExpiresAt: parole.paroleState.paroleExpiresAt || now,
-                });
-                this.trackParoleCharacter(character);
-                continue;
+                };
+                this.paroleMetadata.set(character.MemberNumber, newMetadata);
+                // Fall through to check for violation
             }
 
             // Check if they've added clothing (parole violation)
-            await this.checkParoleViolation(character, metadata.startingItems);
+            await this.checkParoleViolation(
+                character,
+                this.paroleMetadata.get(character.MemberNumber)
+                    ?.startingItems || new Set<string>(),
+            );
         }
     }
 
