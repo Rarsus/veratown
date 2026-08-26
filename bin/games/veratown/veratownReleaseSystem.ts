@@ -542,10 +542,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             "Corset",
             "Shirt",
             "Top",
-            "BodyUpper",
             "Panties",
             "Bottom",
-            "BodyLower",
             "Dress",
             "Swimsuit",
             "Uniform",
@@ -554,16 +552,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Foot/leg coverage
             "Shoes",
-            "Socks",
-            "Stockings",
-
-            // Hand/arm coverage
-            "Gloves",
-
-            // Head coverage (not just empty slots)
-            "Hat",
-            "Mask",
-
             // General clothing categories
             "Cloth",
             "ClothAccessory",
