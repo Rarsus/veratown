@@ -518,6 +518,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Check if character has no clothing (only body items remain)
+     * Nudity = no actual CLOTHING. Body parts and intimate devices are OK.
      */
     private isCharacterNaked(character: API_Character): boolean {
         const appearance = character.Appearance.getAppearanceData();
@@ -533,45 +534,46 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        // ONLY actual CLOTHING counts. Intimate devices (Pussy, Butt, Penetrating)
-        // and bondage devices (ItemDevices, ItemBreast, etc) do NOT count as "clothed"
-        const clothingGroups = new Set([
-            // Upper body clothing
+        // WHITELIST of ACTUAL CLOTHING GROUPS ONLY
+        // Everything else (body parts, devices, intimate items) do NOT count as "clothed"
+        const actualClothingGroups = new Set([
+            // Garments that cover the body
             "Bra",
             "Corset",
             "Shirt",
             "Top",
             "BodyUpper",
-            // Lower body clothing
             "Panties",
             "Bottom",
             "BodyLower",
-            // Full body
             "Dress",
             "Swimsuit",
             "Uniform",
             "Jacket",
             "OuterClothes",
-            // Foot/leg clothing
+
+            // Foot/leg coverage
             "Shoes",
             "Socks",
             "Stockings",
-            // Hand/arm clothing
+
+            // Hand/arm coverage
             "Gloves",
-            // Head/hair
+
+            // Head coverage (not just empty slots)
             "Hat",
-            "Hair",
             "Mask",
-            // General clothing
+
+            // General clothing categories
             "Cloth",
             "ClothAccessory",
             "ClothLower",
             "ClothUpper",
         ]);
 
-        // If any actual clothing is equipped, not naked
+        // If any actual CLOTHING is equipped, not naked
         for (const item of appearance) {
-            if (item.Group && clothingGroups.has(item.Group)) {
+            if (item.Group && actualClothingGroups.has(item.Group)) {
                 console.log(
                     `[ReleaseSystem] NOT NAKED: Found clothing ${item.Name} in group ${item.Group}`,
                 );
@@ -580,7 +582,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         console.log(
-            `[ReleaseSystem] Character IS NAKED - no clothing items found (intimate devices are OK)`,
+            `[ReleaseSystem] Character IS NAKED - no actual clothing found (body parts/devices OK)`,
         );
         return true;
     }
