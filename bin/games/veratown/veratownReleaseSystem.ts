@@ -1479,6 +1479,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      */
     private async initializeReleaseParoles(): Promise<void> {
         if (!this.characterProfileStore) {
+            console.log(
+                `[ReleaseSystem] Character profile store not available, skipping parole initialization`,
+            );
             return;
         }
 
@@ -1495,10 +1498,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             console.log(
-                `[ReleaseSystem] Found ${activeParoles.length} active parole(s)`,
+                `[ReleaseSystem] Found ${activeParoles.length} active parole(s):`,
             );
+            activeParoles.forEach((p) => {
+                console.log(
+                    `  - ${p.name} (${p.memberNumber}): expired=${p.isExpired}, has paroleState=${!!p.paroleState}`,
+                );
+            });
 
             for (const parole of activeParoles) {
+                console.log(
+                    `[ReleaseSystem] Processing parole for ${parole.name} (${parole.memberNumber})`,
+                );
+
                 // Safe check for chatRoom and Characters array
                 if (
                     !this.conn?.chatRoom?.Characters ||
@@ -1512,6 +1524,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
                 const character = this.conn.chatRoom.Characters.find(
                     (c) => c.MemberNumber === parole.memberNumber,
+                );
+                console.log(
+                    `[ReleaseSystem] Character lookup: ${parole.name} (${parole.memberNumber}) - ${character ? "FOUND in room" : "NOT in room"}`,
                 );
 
                 // Load parole metadata for this character
@@ -1531,6 +1546,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     console.log(
                         `[ReleaseSystem] Initialized parole metadata for ${parole.name} (${parole.memberNumber}) - expected state: completely naked`,
                     );
+                } else {
+                    console.log(
+                        `[ReleaseSystem] WARNING: No paroleState for ${parole.name} (${parole.memberNumber})`,
+                    );
                 }
 
                 if (parole.isExpired) {
@@ -1549,9 +1568,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     // Character is in room - CRITICAL: Verify they still have no clothing
                     // If they added clothing while bot was down, trigger violation immediately
                     const isNaked = await this.isCharacterNaked(character);
+                    console.log(
+                        `[ReleaseSystem] Naked check result for ${parole.name} (${parole.memberNumber}): ${isNaked ? "YES" : "NO - CLOTHED"}`,
+                    );
                     if (!isNaked) {
                         console.log(
-                            `[ReleaseSystem] VIOLATION ON RESTART: ${parole.name} (${parole.memberNumber}) is clothed during parole - triggering enforcement`,
+                            `[ReleaseSystem] *** VIOLATION ON RESTART *** ${parole.name} (${parole.memberNumber}) is clothed during parole - triggering enforcement`,
                         );
                         // Don't await - let violation handler run independently
                         this.handleParoleViolation(character, "dressed").catch(
@@ -1578,6 +1600,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Start periodic monitoring
+            console.log(`[ReleaseSystem] Starting periodic parole monitoring`);
             this.startParoleMonitoring();
         } catch (e) {
             console.error(`[ReleaseSystem] Error initializing paroles:`, e);
@@ -1726,29 +1749,68 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const currentAppearance = character.Appearance.getAppearanceData();
         let clothingFound = false;
         let clothingDetails: string[] = [];
+        let allItems: string[] = [];
+
+        console.log(
+            `[ReleaseSystem] Checking parole for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}):`,
+        );
+        console.log(
+            `  Expected state: ${startingItems.size === 0 ? "COMPLETELY NAKED (no items allowed)" : `${startingItems.size} item groups: ${Array.from(startingItems).join(", ")}`}`,
+        );
+        console.log(
+            `  Current appearance: ${currentAppearance.length} total items`,
+        );
 
         // Check each item - looking for CLOTHING ONLY (not body parts)
         for (const item of currentAppearance) {
-            if (item.Group && this.actualClothingGroups.has(item.Group)) {
+            allItems.push(`${item.Name}(${item.Group})`);
+
+            if (!item.Group) {
+                continue; // Skip items without groups
+            }
+
+            const isClothing = this.actualClothingGroups.has(item.Group);
+            console.log(
+                `  [Item] ${item.Name} (${item.Group}) - ${isClothing ? "CLOTHING" : "body part/device"}`,
+            );
+
+            if (isClothing) {
                 clothingFound = true;
                 clothingDetails.push(`${item.Name} (${item.Group})`);
                 // Found clothing - is it in the starting state?
                 if (!startingItems.has(item.Group)) {
                     // NEW clothing item added during parole - VIOLATION
                     console.log(
-                        `[ReleaseSystem] Parole violation detected - added clothing: ${item.Name} (${item.Group})`,
+                        `[ReleaseSystem] *** PAROLE VIOLATION DETECTED ***`,
+                    );
+                    console.log(
+                        `  Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
+                    );
+                    console.log(
+                        `  Violation: Added clothing ${item.Name} (${item.Group}) during parole`,
+                    );
+                    console.log(
+                        `  Expected state: ${startingItems.size === 0 ? "completely naked" : `${startingItems.size} groups allowed`}`,
                     );
                     await this.handleParoleViolation(character, "dressed");
                     return;
+                } else {
+                    console.log(
+                        `    → Item ${item.Group} was in starting state, not a new violation`,
+                    );
                 }
             }
         }
 
-        // Debug: Log if clothing found
+        // Debug: Log summary
         if (clothingFound) {
             console.log(
                 `[ReleaseSystem] WARNING: Character ${character.MemberNumber} found with clothing during parole check:`,
                 clothingDetails.join(", "),
+            );
+        } else {
+            console.log(
+                `[ReleaseSystem] ✓ Character ${character.MemberNumber} is compliant (no clothing found)`,
             );
         }
     }
