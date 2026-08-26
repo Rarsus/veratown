@@ -235,7 +235,29 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
             await wait(500);
 
-            // Stage 2: Free from confinement
+            // Stage 4: Teleport to punishment room FIRST (before freeing from confinement)
+            console.log(
+                `[ReleaseSystem] Stage 4: Teleporting to punishment room`,
+            );
+            const teleported = await this.teleportToPunishmentRoom(character);
+            if (!teleported) {
+                console.log(
+                    `[ReleaseSystem] Teleport failed, using kick fallback`,
+                );
+                // Fallback to kick
+                this.whisper(
+                    character,
+                    "Release sequence failed. You are being removed from the room.",
+                );
+                await wait(500);
+                character.Kick();
+                return;
+            }
+
+            // Wait 250ms for teleport and appearance to stabilize
+            await wait(250);
+
+            // Stage 2: Free from confinement (now in isolated punishment room)
             console.log(`[ReleaseSystem] Stage 2: Freeing from confinement`);
             await this.freeFromConfinement(character);
             await wait(300);
@@ -278,27 +300,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             await wait(300);
-
-            // Stage 4: Teleport to punishment room
-            console.log(
-                `[ReleaseSystem] Stage 4: Teleporting to punishment room`,
-            );
-            const teleported = await this.teleportToPunishmentRoom(character);
-            if (!teleported) {
-                console.log(
-                    `[ReleaseSystem] Teleport failed, using kick fallback`,
-                );
-                // Fallback to kick
-                this.whisper(
-                    character,
-                    "Release sequence failed. You are being removed from the room.",
-                );
-                await wait(500);
-                character.Kick();
-                return;
-            }
-
-            await wait(500);
 
             // Stage 5: Force nudity check
             console.log(`[ReleaseSystem] Stage 5: Checking for nudity`);
@@ -359,22 +360,27 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
             }
 
-            // Record successful release
+            // Stage 6b: Wait for character to leave room, then notify about parole
             console.log(
-                `[ReleaseSystem] Stage 7: Recording successful release`,
+                `[ReleaseSystem] Stage 6b: Waiting for character to leave punishment room`,
+            );
+            await this.waitForCharacterToLeaveRoom(character, startingLocation);
+
+            this.whisper(
+                character,
+                "*You are now on parole!* You are NOT allowed to wear ANY clothing. Parole expires in 10 minutes.",
             );
 
-            // Clear parole on successful escape
-            if (this.characterProfileStore) {
-                await this.characterProfileStore.clearReleaseParole(
-                    character.MemberNumber,
-                );
-                // Clean up parole metadata
-                this.paroleMetadata.delete(character.MemberNumber);
-                this.paroleAppearanceTracking.delete(character.MemberNumber);
-            }
+            // Stage 7: ONGOING ENFORCEMENT - Monitor parole for 10 minutes
+            console.log(
+                `[ReleaseSystem] Stage 7: Starting parole enforcement (10 minutes)`,
+            );
+            await this.monitorParoleExpiration(character);
 
-            await this.recordReleaseEvent(character, "successful_release");
+            // Record successful completion (only reached if parole was completed successfully)
+            console.log(
+                `[ReleaseSystem] Stage 7 complete: Release and parole successfully finished for ${character.MemberNumber}`,
+            );
 
             // Set cooldown if configured
             if (RELEASE_COOLDOWN_MS > 0) {
@@ -383,9 +389,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     Date.now() + RELEASE_COOLDOWN_MS,
                 );
             }
-            console.log(
-                `[ReleaseSystem] Release completed successfully for ${character.MemberNumber}`,
-            );
         } catch (e) {
             console.error(
                 `[ReleaseSystem] Release failed for ${character}:`,
@@ -986,6 +989,364 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         // Record the violation
         await this.recordReleaseEvent(character, `parole_violation_${reason}`);
+    }
+
+    /**
+     * Wait for character to leave the punishment room (go to a different location)
+     */
+    private async waitForCharacterToLeaveRoom(
+        character: API_Character,
+        punishmentRoomPos: ChatRoomMapPos,
+    ): Promise<void> {
+        const maxWaitMs = 60 * 1000; // Max 60 seconds to leave room
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitMs) {
+            // If character left the punishment room position, they've left
+            if (
+                character.MapPos.X !== punishmentRoomPos.X ||
+                character.MapPos.Y !== punishmentRoomPos.Y
+            ) {
+                console.log(
+                    `[ReleaseSystem] Character ${character.MemberNumber} left punishment room at (${character.MapPos.X}, ${character.MapPos.Y})`,
+                );
+                return;
+            }
+            await wait(500);
+        }
+
+        // Timeout - character stayed in room too long
+        console.log(
+            `[ReleaseSystem] Character ${character.MemberNumber} did not leave punishment room within 60s`,
+        );
+    }
+
+    /**
+     * Monitor parole for 10-minute duration
+     * Checks clothing state periodically
+     * Handles violations by restarting from Stage 2
+     * Only clears parole if character remains fully naked entire time
+     */
+    private async monitorParoleExpiration(
+        character: API_Character,
+    ): Promise<void> {
+        const paroleStartTime = Date.now();
+        const paroleDurationMs = RELEASE_PAROLE_DURATION_MS;
+        const checkIntervalMs = 5000; // Check every 5 seconds during monitoring
+
+        console.log(
+            `[ReleaseSystem] Starting 10-minute parole monitoring for ${character.MemberNumber}`,
+        );
+
+        while (Date.now() - paroleStartTime < paroleDurationMs) {
+            // Check if character added clothing (violation)
+            const isNaked = this.isCharacterNaked(character);
+            if (!isNaked) {
+                console.log(
+                    `[ReleaseSystem] Parole violation detected for ${character.MemberNumber}: character clothed during monitoring`,
+                );
+                await this.enforceParoleViolation(character, "dressed");
+                // enforceParoleViolation will restart from Stage 2 recursively
+                return;
+            }
+
+            const remaining = Math.ceil(
+                (paroleDurationMs - (Date.now() - paroleStartTime)) / 1000,
+            );
+            console.log(
+                `[ReleaseSystem] Parole check for ${character.MemberNumber}: ${remaining}s remaining`,
+            );
+
+            // Send notifications at specific intervals
+            if (remaining === 300) {
+                // 5 minutes remaining
+                this.whisper(character, "*Parole: 5 minutes remaining*");
+            } else if (remaining === 120) {
+                // 2 minutes remaining
+                this.whisper(character, "*Parole: 2 minutes remaining*");
+            } else if (remaining === 60) {
+                // 1 minute remaining
+                this.whisper(character, "*Parole: 1 minute remaining*");
+            }
+
+            await wait(checkIntervalMs);
+        }
+
+        // Parole duration has expired, perform final check
+        console.log(
+            `[ReleaseSystem] Parole duration expired for ${character.MemberNumber}, performing final check`,
+        );
+
+        const finalNakedCheck = this.isCharacterNaked(character);
+        if (!finalNakedCheck) {
+            console.log(
+                `[ReleaseSystem] PAROLE FAILED: Character ${character.MemberNumber} clothed at expiration`,
+            );
+            this.whisper(
+                character,
+                "*Your parole has expired while clothed. Violation triggered!*",
+            );
+            await this.enforceParoleViolation(character, "parole_timeout");
+            return;
+        }
+
+        // SUCCESS: Character completed parole successfully
+        console.log(
+            `[ReleaseSystem] PAROLE COMPLETED: Character ${character.MemberNumber} successfully completed parole`,
+        );
+
+        this.whisper(
+            character,
+            "*Congratulations! Your parole has completed successfully. You are now free!*",
+        );
+
+        // Clear parole state
+        if (this.characterProfileStore) {
+            await this.characterProfileStore.clearReleaseParole(
+                character.MemberNumber,
+            );
+            this.paroleMetadata.delete(character.MemberNumber);
+            this.paroleAppearanceTracking.delete(character.MemberNumber);
+        }
+
+        await this.recordReleaseEvent(
+            character,
+            "successful_parole_completion",
+        );
+    }
+
+    /**
+     * Handle parole violation by restarting release sequence from Stage 2
+     * This is called recursively when a violation is detected during parole
+     */
+    private async enforceParoleViolation(
+        character: API_Character,
+        reason: string,
+    ): Promise<void> {
+        if (!this.locationStore) {
+            console.log(
+                `[ReleaseSystem] Could not enforce violation: location store unavailable`,
+            );
+            return;
+        }
+
+        // Get punishment room location for teleport
+        const location = await this.locationStore.getLocation(
+            RELEASE_PUNISHMENT_ROOM_KEY,
+        );
+        if (!location || location.x === undefined || location.y === undefined) {
+            console.log(
+                `[ReleaseSystem] Could not find punishment room for violation enforcement`,
+            );
+            return;
+        }
+
+        console.log(
+            `[ReleaseSystem] Enforcing parole violation for ${character.MemberNumber}: ${reason}`,
+        );
+
+        // Teleport character back to punishment room
+        const punishmentRoomPos = { X: location.x, Y: location.y };
+        character.mapTeleport(punishmentRoomPos);
+        this.whisper(
+            character,
+            "*You violated parole! You've been dragged back to the release room.*",
+        );
+        await wait(500);
+
+        // Get tracking information for re-restraining
+        const paroleMetadata = this.paroleMetadata.get(character.MemberNumber);
+        if (!paroleMetadata) {
+            console.log(
+                `[ReleaseSystem] Could not find parole metadata for ${character.MemberNumber}`,
+            );
+            return;
+        }
+
+        // Get parole state from database to get removed items
+        const paroleState =
+            await this.characterProfileStore?.getReleaseParoleState(
+                character.MemberNumber,
+            );
+        if (!paroleState || !paroleState.removedBondageItems) {
+            console.log(
+                `[ReleaseSystem] Could not find removed bondage items for ${character.MemberNumber}`,
+            );
+            return;
+        }
+
+        // Re-equip all removed bondage items
+        console.log(
+            `[ReleaseSystem] Re-equipping ${paroleState.removedBondageItems.length} bondage items...`,
+        );
+        let reequippedCount = 0;
+        for (const removedItem of paroleState.removedBondageItems) {
+            try {
+                const asset = AssetGet(removedItem.group);
+                if (!asset) {
+                    console.log(
+                        `[ReleaseSystem]   - Could not find asset for group: ${removedItem.group}`,
+                    );
+                    continue;
+                }
+
+                // Re-add the item (with original properties if possible)
+                character.Appearance.AddItem(asset, removedItem.color);
+                reequippedCount++;
+                await wait(50);
+            } catch (e) {
+                console.log(
+                    `[ReleaseSystem]   - Error re-adding ${removedItem.group}:`,
+                    e,
+                );
+            }
+        }
+
+        console.log(
+            `[ReleaseSystem] Re-equipped ${reequippedCount} bondage items for ${character.MemberNumber}`,
+        );
+        this.whisper(
+            character,
+            `*${reequippedCount} bondage items have been reapplied. Starting release over from Stage 2.*`,
+        );
+        await wait(500);
+
+        // Record the violation
+        await this.recordReleaseEvent(character, `parole_violation_${reason}`);
+
+        // Now restart the release sequence from Stage 2
+        // Clear old parole metadata and restart
+        this.paroleMetadata.delete(character.MemberNumber);
+        this.paroleAppearanceTracking.delete(character.MemberNumber);
+
+        // Restart from Stage 2 inline (free from confinement, strip, nudity check, access code, new parole)
+        try {
+            console.log(
+                `[ReleaseSystem] RESTART: Stage 2 - Freeing from confinement for ${character.MemberNumber}`,
+            );
+            await this.freeFromConfinement(character);
+            await wait(300);
+
+            console.log(
+                `[ReleaseSystem] RESTART: Stage 3 - Stripping non-owner items for ${character.MemberNumber}`,
+            );
+            const removedBondageItems =
+                await this.stripNonOwnerItems(character);
+
+            // Re-start parole tracking
+            if (this.characterProfileStore) {
+                await this.characterProfileStore.startReleaseParole(
+                    character.MemberNumber,
+                    removedBondageItems,
+                    paroleMetadata.startingLocation,
+                    RELEASE_PAROLE_DURATION_MS,
+                );
+                console.log(
+                    `[ReleaseSystem] Parole restarted for ${character.MemberNumber}`,
+                );
+
+                // Update parole metadata
+                const currentAppearance =
+                    character.Appearance.getAppearanceData();
+                const startingItems = new Set<string>();
+                for (const item of currentAppearance) {
+                    if (item.Group) {
+                        startingItems.add(item.Group);
+                    }
+                }
+
+                this.paroleMetadata.set(character.MemberNumber, {
+                    startingItems,
+                    startingLocation: paroleMetadata.startingLocation,
+                    paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
+                });
+
+                this.trackParoleCharacter(character);
+            }
+
+            await wait(300);
+
+            console.log(
+                `[ReleaseSystem] RESTART: Stage 5 - Checking for nudity for ${character.MemberNumber}`,
+            );
+            const isNaked = await this.waitForNudity(
+                character,
+                RELEASE_NUDITY_TIMEOUT_MS,
+            );
+
+            if (!isNaked) {
+                console.log(
+                    `[ReleaseSystem] Nudity check failed during restart for ${character.MemberNumber}`,
+                );
+                this.whisper(
+                    character,
+                    "You failed to strip again. Release cancelled.",
+                );
+                if (this.characterProfileStore) {
+                    await this.characterProfileStore.clearReleaseParole(
+                        character.MemberNumber,
+                    );
+                    this.paroleMetadata.delete(character.MemberNumber);
+                    this.paroleAppearanceTracking.delete(
+                        character.MemberNumber,
+                    );
+                }
+                return;
+            }
+
+            // Update naked state
+            const nakedAppearance = character.Appearance.getAppearanceData();
+            const nakedItems = new Set<string>();
+            for (const item of nakedAppearance) {
+                if (item.Group) {
+                    nakedItems.add(item.Group);
+                }
+            }
+            const restartMetadata = this.paroleMetadata.get(
+                character.MemberNumber,
+            );
+            if (restartMetadata) {
+                restartMetadata.startingItems = nakedItems;
+            }
+
+            await wait(500);
+
+            console.log(
+                `[ReleaseSystem] RESTART: Stage 6 - Granting door access for ${character.MemberNumber}`,
+            );
+            const granted = await this.grantDoorAccess(character);
+            if (!granted) {
+                this.whisper(
+                    character,
+                    "Door access could not be granted. Try finding the exit manually.",
+                );
+            }
+
+            // Stage 6b: Wait for character to leave and notify
+            await this.waitForCharacterToLeaveRoom(
+                character,
+                paroleMetadata.startingLocation,
+            );
+            this.whisper(
+                character,
+                "*Parole restarted!* You are NOT allowed to wear ANY clothing. You have 10 minutes.",
+            );
+
+            // Stage 7: Monitor new parole period
+            console.log(
+                `[ReleaseSystem] RESTART: Stage 7 - Starting new parole monitoring for ${character.MemberNumber}`,
+            );
+            await this.monitorParoleExpiration(character);
+        } catch (e) {
+            console.error(
+                `[ReleaseSystem] Error during violation enforcement restart:`,
+                e,
+            );
+            this.whisper(
+                character,
+                "An error occurred during the restart sequence.",
+            );
+        }
     }
 
     /**
