@@ -373,7 +373,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
             }
 
-            // Start parole tracking with removed items and starting location
+            // Start parole tracking with starting location
+            // NOTE: Target state is "FULLY NUDE = 0 clothing items"
+            // We will silently enforce this during parole monitoring (not violation-based)
             if (this.characterProfileStore) {
                 await this.characterProfileStore.startReleaseParole(
                     character.MemberNumber,
@@ -382,18 +384,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     RELEASE_PAROLE_DURATION_MS,
                 );
                 console.log(
-                    `[ReleaseSystem] Parole started for ${character.MemberNumber} with ${removedBondageItems.length} tracked items at location (${startingLocation.X}, ${startingLocation.Y})`,
+                    `[ReleaseSystem] Parole started for ${character.MemberNumber} at location (${startingLocation.X}, ${startingLocation.Y})`,
+                );
+                console.log(
+                    `[ReleaseSystem] Target state: FULLY NUDE (0 clothing items) - will be enforced silently`,
                 );
             }
 
             // Store parole metadata for cross-room enforcement
-            // BIDIRECTIONAL: Track both removed items and what we're currently detecting
+            // TARGET: Fully nude state (empty Set = 0 clothing items allowed)
+            // STRATEGY: Silently remove any clothing detected, no violations
             this.paroleMetadata.set(character.MemberNumber, {
-                startingItems: removedClothingMap, // What we removed
+                startingItems: new Map(), // Target: empty = no clothing allowed
                 startingLocation,
                 paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
-                removedClothingItems: removedClothingMap, // Track what was removed
-                detectedClothingItems: detectedClothingAfterStrip, // Track what we detect now
+                removedClothingItems: new Map(), // Target state enforcement (empty = fully nude)
+                detectedClothingItems: new Set(), // Track any clothing detected for removal
             });
 
             await wait(300);
@@ -2015,181 +2021,57 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         startingItems: Set<string> | Map<string, string>,
     ): Promise<void> {
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK START ===============`,
+            `[ReleaseSystem:PAROLE_CHECK] =============== PAROLE NUDITY ENFORCEMENT ===============`,
         );
         console.log(
             `[ReleaseSystem:PAROLE_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
         );
 
-        // Get metadata for bidirectional validation
-        const metadata = this.paroleMetadata.get(character.MemberNumber);
-
         // Use direct API call to check clothing (matches bed system pattern)
         const currentEquippedClothing = this.getEquippedClothing(character);
 
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Analyzing ${currentEquippedClothing.length} equipped clothing items for violations`,
+            `[ReleaseSystem:PAROLE_CHECK] Checking clothing state: ${currentEquippedClothing.length} item(s)`,
         );
 
-        // STALE CACHE DETECTION: Track detected clothing to identify persistent stale data
-        const currentClothingDetected = new Set<string>();
-        for (const item of currentEquippedClothing) {
-            currentClothingDetected.add(`${item.name}:${item.group}`);
-        }
-
-        const previousClothing = this.paroleAppearanceTracking.get(
-            character.MemberNumber,
-        );
-        if (previousClothing && previousClothing.size > 0) {
-            // Compare current detected clothing against previous detected clothing
-            const sameItems =
-                currentClothingDetected.size === previousClothing.size &&
-                Array.from(currentClothingDetected).every((item) =>
-                    previousClothing.has(item),
-                );
-
-            if (sameItems && currentClothingDetected.size > 0) {
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] ⚠️  STALE CACHE WARNING: Detected clothing identical to last check`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] Items this check: ${Array.from(currentClothingDetected).join(", ")}`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] Items last check: ${Array.from(previousClothing).join(", ")}`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] ⚠️  POSSIBLE STALE CACHE - BC library not refreshing appearance data properly`,
-                );
-            }
-        }
-
-        // Update tracking for next check
-        this.paroleAppearanceTracking.set(
-            character.MemberNumber,
-            currentClothingDetected,
-        );
-
-        // If no clothing detected, they're compliant
+        // TARGET STATE: Fully nude = 0 clothing items
+        // If no clothing detected, enforcement is complete
         if (currentEquippedClothing.length === 0) {
             console.log(
-                `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: No clothing detected - character is naked`,
+                `[ReleaseSystem:PAROLE_CHECK] ✓ Target state met: Character is fully naked`,
             );
             console.log(
-                `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (COMPLIANT) ===============`,
+                `[ReleaseSystem:PAROLE_CHECK] =============== ENFORCEMENT COMPLETE (COMPLIANT) ===============`,
             );
             return;
         }
 
-        // Clothing detected - log it but don't trigger violation yet
-        console.log(`[ReleaseSystem:PAROLE_CHECK] ---- CLOTHING DETECTED ----`);
+        // Clothing detected - SILENTLY ENFORCE NUDITY
+        // No violations triggered, just remove the clothing
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] ⚠️  Clothing detected during parole - enforcing nudity silently`,
+        );
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] Will remove ${currentEquippedClothing.length} item(s):`,
+        );
+
         for (const item of currentEquippedClothing) {
             console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Found: "${item.name}" in group "${item.group}"`,
+                `[ReleaseSystem:PAROLE_CHECK]   - Removing: "${item.name}" (${item.group})`,
             );
+            // Silently remove the clothing
+            character.Appearance.RemoveItem(item.group);
+            await wait(100); // Small delay between removals
         }
 
-        // Method 1: Log absolute rule (for reference, but only triggers if Method 2 fails)
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ---- METHOD 1: ABSOLUTE RULE (REFERENCE ONLY) ----`,
+            `[ReleaseSystem:PAROLE_CHECK] ✓ Enforcement complete: ${currentEquippedClothing.length} item(s) removed`,
         );
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Rule: Character MUST have ZERO clothing items`,
+            `[ReleaseSystem:PAROLE_CHECK] Character will remain monitored for continued nudity enforcement`,
         );
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Current status: Has ${currentEquippedClothing.length} clothing item(s)`,
-        );
-
-        // Method 2: Bidirectional check (if metadata available)
-        if (metadata && metadata.removedClothingItems) {
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] ---- METHOD 2: BIDIRECTIONAL VALIDATION ----`,
-            );
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Expected removed items: ${Array.from(metadata.removedClothingItems.values()).join(", ") || "NONE"}`,
-            );
-
-            const currentClothingMap = new Map<string, string>();
-            for (const item of currentEquippedClothing) {
-                if (item.group && item.name) {
-                    currentClothingMap.set(item.group, item.name);
-                }
-            }
-
-            // Check direction 1: Are removed items still missing?
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Validating removed items are still missing...`,
-            );
-            for (const [group, name] of metadata.removedClothingItems) {
-                if (currentClothingMap.has(group)) {
-                    const currentName = currentClothingMap.get(group);
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION DETECTED (Method 2a) ***`,
-                    );
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] Item we removed is back: ${name} (${group})`,
-                    );
-                    if (currentName !== name) {
-                        console.log(
-                            `[ReleaseSystem:PAROLE_CHECK] NOTE: Different item in same group: ${currentName} instead of ${name}`,
-                        );
-                    }
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
-                    );
-                    await this.handleParoleViolation(character, "dressed");
-                    return;
-                }
-            }
-
-            // Check direction 2: Are there NEW items we didn't remove?
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Validating no new items added...`,
-            );
-            for (const [group, name] of currentClothingMap) {
-                if (!metadata.removedClothingItems.has(group)) {
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION DETECTED (Method 2b) ***`,
-                    );
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] NEW clothing item added during parole: ${name} (${group})`,
-                    );
-                    console.log(
-                        `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
-                    );
-                    await this.handleParoleViolation(character, "dressed");
-                    return;
-                }
-            }
-        }
-
-        // If Method 2 couldn't run (no metadata), fall back to Method 1 (absolute rule)
-        if (!metadata || !metadata.removedClothingItems) {
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] ---- METHOD 1: FALLBACK (No metadata for bidirectional check) ----`,
-            );
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION DETECTED (Method 1 Fallback) ***`,
-            );
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] No parole metadata found - enforcing absolute rule`,
-            );
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Parole violation: CHARACTER MUST BE COMPLETELY NAKED`,
-            );
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
-            );
-            await this.handleParoleViolation(character, "dressed");
-            return;
-        }
-
-        // Method 2 passed - all clothing checks compliant
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: All validation methods passed`,
-        );
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (COMPLIANT) ===============`,
+            `[ReleaseSystem:PAROLE_CHECK] =============== ENFORCEMENT COMPLETE (SILENT REMOVAL) ===============`,
         );
     }
 }
