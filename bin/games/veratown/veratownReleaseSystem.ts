@@ -552,6 +552,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Foot/leg coverage
             "Shoes",
+            "Socks",
+            "Stockings",
+
+            // Hand/arm coverage
+            "Gloves",
+
+            // Head/hair coverage
+            "Hat",
+            "Hair",
+            "Mask",
+
             // General clothing categories
             "Cloth",
             "ClothAccessory",
