@@ -102,4 +102,14 @@ export class KennelSystem implements VeratownFeatureSystem {
         // d: 1 = door closed
         kennel.setProperty("TypeRecord", { d: 1, p: 1 });
     };
+
+    /**
+     * Remove the Kennel device if the character is wearing one
+     */
+    public freeCharacterIfKenneled(character: API_Character): void {
+        const kennel = character.Appearance.getItemData("ItemDevices");
+        if (kennel?.Name === "Kennel") {
+            character.Appearance.RemoveItem("ItemDevices", "Kennel");
+        }
+    }
 }
