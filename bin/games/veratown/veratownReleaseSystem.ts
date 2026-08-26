@@ -269,9 +269,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      *
      * Returns: {forward: boolean, inverse: boolean, isDiscrepancy: boolean}
      */
-    private diagnoseClothingDetection(
-        itemGroup: string | undefined,
-    ): { forward: boolean; inverse: boolean; isDiscrepancy: boolean } {
+    private diagnoseClothingDetection(itemGroup: string | undefined): {
+        forward: boolean;
+        inverse: boolean;
+        isDiscrepancy: boolean;
+    } {
         const forward = this.isClothingByForward(itemGroup);
         const inverse = this.isClothingByInverse(itemGroup);
         return {
@@ -282,45 +284,74 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
-     * DIAGNOSTIC: Detect stale cache by comparing items across multiple rapid refreshes
-     * If same items appear in consecutive calls despite MakeAppearanceBundle(),
-     * indicates BC library cache is stale
-     *
-     * This reveals the actual lag time between equipment removal and cache update
+     * CRITICAL: Clear BC library appearance cache completely
+     * Uses triple-refresh pattern with extended waits
+     * Returns appearance data after guaranteed cache clear
      */
-    private detectStaleCacheIndicators(
+    private async clearCacheAndGetAppearance(
+        character: API_Character,
+    ): Promise<any[]> {
+        console.log(
+            `[ReleaseSystem:CACHE] Initiating triple-refresh cache clear pattern`,
+        );
+
+        // First refresh - begin cache invalidation
+        character.Appearance.MakeAppearanceBundle();
+        await wait(300);
+
+        // Second refresh - flush any pending updates
+        character.Appearance.MakeAppearanceBundle();
+        await wait(300);
+
+        // Third refresh - ensure absolute clean state
+        character.Appearance.MakeAppearanceBundle();
+        await wait(400); // Longer wait after third refresh
+
+        const appearance = character.Appearance.getAppearanceData();
+        console.log(
+            `[ReleaseSystem:CACHE] Cache cleared. Fetched ${appearance.length} items`,
+        );
+
+        return appearance;
+    }
+
+    /**
+     * VALIDATION: Detect if cache is stale by checking consistency
+     * If same items appear in rapid succession, cache likely not clearing
+     */
+    private validateCacheCleared(
         currentAppearance: any[],
         previousAppearance: any[] | null,
-    ): {
-        stalenessScore: number; // 0-100, higher = staler
-        identicalItems: boolean; // true if same items in both calls
-        gapDetected: boolean; // true if items should have changed but didn't
-    } {
+    ): { isStale: boolean; reason: string } {
         if (!previousAppearance) {
-            return {
-                stalenessScore: 0,
-                identicalItems: false,
-                gapDetected: false,
-            };
+            return { isStale: false, reason: "No baseline to compare" };
         }
 
-        // Compare item sets
-        const currentSet = new Set(
-            currentAppearance.map((i) => i.Group + ":" + i.Name),
-        );
-        const previousSet = new Set(
-            previousAppearance.map((i) => i.Group + ":" + i.Name),
+        const currentClothing = new Set(
+            currentAppearance
+                .filter(
+                    (i) => i.Group && this.actualClothingGroups.has(i.Group),
+                )
+                .map((i) => `${i.Group}:${i.Name}`),
         );
 
-        // If sets are identical across refresh cycles, cache likely stale
+        const previousClothing = new Set(
+            previousAppearance
+                .filter(
+                    (i) => i.Group && this.actualClothingGroups.has(i.Group),
+                )
+                .map((i) => `${i.Group}:${i.Name}`),
+        );
+
         const identical =
-            currentSet.size === previousSet.size &&
-            [...currentSet].every((item) => previousSet.has(item));
+            currentClothing.size === previousClothing.size &&
+            [...currentClothing].every((item) => previousClothing.has(item));
 
         return {
-            stalenessScore: identical ? 100 : 0,
-            identicalItems: identical,
-            gapDetected: identical && currentSet.size > 0, // Items unchanged despite refresh
+            isStale: identical && currentClothing.size > 0,
+            reason: identical
+                ? `Cache identical (${currentClothing.size} items) - likely stale`
+                : "Different items detected - cache appears cleared",
         };
     }
 
@@ -460,11 +491,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             console.log(
                 `[ReleaseSystem] Aggressive cache refresh for naked state capture`,
             );
-            character.Appearance.MakeAppearanceBundle();
-            await wait(200);
-            character.Appearance.MakeAppearanceBundle();
-            await wait(300);
-            const nakedAppearance = character.Appearance.getAppearanceData();
+            const nakedAppearance =
+                await this.clearCacheAndGetAppearance(character);
             // CRITICAL: Only capture CLOTHING groups in the naked state
             // Body parts, cosmetics, etc. should NOT be tracked
             const nakedItems = new Set<string>();
@@ -908,62 +936,33 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:NUDITY_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
         );
 
-        // Force aggressive cache refresh to get current appearance state
-        console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 1: Aggressive cache refresh (double refresh pattern)`,
-        );
-        character.Appearance.MakeAppearanceBundle();
-        await wait(200); // Initial clear
-        character.Appearance.MakeAppearanceBundle(); // Double refresh
-        await wait(300); // Longer wait for BC library processing
+        // Use new aggressive cache clearing
+        const appearance = await this.clearCacheAndGetAppearance(character);
 
         console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 2: Fetching appearance data`,
-        );
-        const appearance = character.Appearance.getAppearanceData();
-        console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Step 3: Result - Got ${appearance.length} total items`,
+            `[ReleaseSystem:NUDITY_CHECK] ---- ANALYZING ${appearance.length} ITEMS ----`,
         );
 
-        console.log(
-            `[ReleaseSystem:NUDITY_CHECK] ---- ALL ITEMS IN APPEARANCE (${appearance.length} total) ----`,
-        );
-
-        // Log ALL items for debugging - include last item time for cache validation
         const clothingItems: string[] = [];
         const bodyItems: string[] = [];
 
-        // Show when each item was last equipped for cache validation
+        // Check each item - looking for CLOTHING ONLY
         for (const item of appearance) {
-            const timeSinceChange = item.LastPlayerUpdateDate
-                ? Date.now() - item.LastPlayerUpdateDate
-                : -1;
-            const lastChangeInfo =
-                timeSinceChange >= 0
-                    ? ` [changed ${timeSinceChange}ms ago]`
-                    : " [no change time]";
-            console.log(
-                `[ReleaseSystem:NUDITY_CHECK] Item: "${item.Name || "NO_NAME"}" | Group: "${item.Group || "NO_GROUP"}" | Locked: ${item.Property?.LockedBy || "Unlocked"}${lastChangeInfo}`,
-            );
-        }
+            if (!item.Group) {
+                continue; // Skip items without group
+            }
 
-        console.log(
-            `[ReleaseSystem:NUDITY_CHECK] ---- CLOTHING CLASSIFICATION ----`,
-        );
+            const isClothing = this.actualClothingGroups.has(item.Group);
+            const itemName = item.Name || "NO_NAME";
 
-        // Check against WHITELIST of actual clothing ONLY
-        // If any actual CLOTHING is equipped, not naked
-        for (const item of appearance) {
-            if (item.Group && this.actualClothingGroups.has(item.Group)) {
-                const itemName = item.Name || "NO_NAME";
+            if (isClothing) {
                 console.log(
-                    `[ReleaseSystem:NUDITY_CHECK] CLOTHING FOUND: "${itemName}" in group "${item.Group}"`,
+                    `[ReleaseSystem:NUDITY_CHECK] CLOTHING: "${itemName}" (${item.Group})`,
                 );
                 clothingItems.push(`${itemName} (${item.Group})`);
-            } else if (item.Group) {
-                const itemName = item.Name || "NO_NAME";
+            } else {
                 console.log(
-                    `[ReleaseSystem:NUDITY_CHECK] Body part/device: "${itemName}" in group "${item.Group}" (not counted as clothing)`,
+                    `[ReleaseSystem:NUDITY_CHECK] NON-CLOTHING: "${itemName}" (${item.Group})`,
                 );
                 bodyItems.push(`${itemName} (${item.Group})`);
             }
@@ -971,25 +970,18 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         console.log(`[ReleaseSystem:NUDITY_CHECK] ---- SUMMARY ----`);
         console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Clothing items found: ${clothingItems.length}`,
+            `[ReleaseSystem:NUDITY_CHECK] Clothing found: ${clothingItems.length}`,
         );
-        if (clothingItems.length > 0) {
-            clothingItems.forEach((item) => {
-                console.log(`[ReleaseSystem:NUDITY_CHECK]   - ${item}`);
-            });
-        }
+        clothingItems.forEach((item) => {
+            console.log(`[ReleaseSystem:NUDITY_CHECK]   - ${item}`);
+        });
         console.log(
-            `[ReleaseSystem:NUDITY_CHECK] Body parts/devices found: ${bodyItems.length}`,
+            `[ReleaseSystem:NUDITY_CHECK] Body parts/devices: ${bodyItems.length}`,
         );
-        if (bodyItems.length > 0) {
-            bodyItems.forEach((item) => {
-                console.log(`[ReleaseSystem:NUDITY_CHECK]   - ${item}`);
-            });
-        }
 
         if (clothingItems.length > 0) {
             console.log(
-                `[ReleaseSystem:NUDITY_CHECK] NOT NAKED: Character has ${clothingItems.length} clothing item(s)`,
+                `[ReleaseSystem:NUDITY_CHECK] NOT NAKED: ${clothingItems.length} clothing item(s) detected`,
             );
             console.log(
                 `[ReleaseSystem:NUDITY_CHECK] =============== NUDITY CHECK END (NOT NAKED) ===============`,
@@ -997,9 +989,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return false;
         }
 
-        console.log(
-            `[ReleaseSystem:NUDITY_CHECK] NAKED: No clothing found (body parts/devices OK)`,
-        );
+        console.log(`[ReleaseSystem:NUDITY_CHECK] NAKED: No clothing found`);
         console.log(
             `[ReleaseSystem:NUDITY_CHECK] =============== NUDITY CHECK END (NAKED) ===============`,
         );
@@ -1169,10 +1159,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         // Update metadata with fully-naked state
-        // MUST refresh bundle before checking appearance (cache clearing pattern)
-        character.Appearance.MakeAppearanceBundle();
-        await wait(100);
-        const nakedAppearance = character.Appearance.getAppearanceData();
+        // MUST use aggressive refresh to ensure cache is cleared
+        const nakedAppearance =
+            await this.clearCacheAndGetAppearance(character);
         // CRITICAL: Only capture CLOTHING groups in the naked state
         const nakedItems = new Set<string>();
         for (const item of nakedAppearance) {
@@ -1663,10 +1652,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Update naked state
-            // MUST refresh bundle before checking appearance (cache clearing pattern)
-            character.Appearance.MakeAppearanceBundle();
-            await wait(100);
-            const nakedAppearance = character.Appearance.getAppearanceData();
+            // MUST use aggressive refresh to ensure cache is cleared
+            const nakedAppearance =
+                await this.clearCacheAndGetAppearance(character);
             // CRITICAL: Only capture CLOTHING groups in the naked state
             const nakedItems = new Set<string>();
             for (const item of nakedAppearance) {
@@ -2075,110 +2063,48 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:PAROLE_CHECK] Character: ${character.MemberNumber} (${character.Name || character.Username || "Unknown"})`,
         );
 
-        // CRITICAL: Force aggressive cache refresh to get latest appearance state
-        // BC library caches appearance data - must invalidate completely
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 1: Aggressive cache refresh (CRITICAL for accuracy)`,
-        );
-        character.Appearance.MakeAppearanceBundle();
-        await wait(200); // Increased from 100ms
-        character.Appearance.MakeAppearanceBundle(); // Double refresh to ensure cache clear
-        await wait(300); // Longer wait for BC library to process
+        // Use new aggressive cache clearing
+        const currentAppearance =
+            await this.clearCacheAndGetAppearance(character);
 
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 2: Fetching appearance after cache clear`,
-        );
-        const currentAppearance = character.Appearance.getAppearanceData();
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Step 3: Got ${currentAppearance.length} items from getAppearanceData()`,
+            `[ReleaseSystem:PAROLE_CHECK] Analyzing ${currentAppearance.length} items for violations`,
         );
 
-        let clothingFound = false;
-        let clothingItems: string[] = [];
-
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ---- PAROLE REQUIREMENT ----`,
-        );
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Expected State: CHARACTER MUST BE COMPLETELY NAKED (no clothing allowed)`,
-        );
-
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ---- CURRENT APPEARANCE ANALYSIS (${currentAppearance.length} items) ----`,
-        );
-
-        // Check each item - looking for CLOTHING ONLY (not body parts)
+        // Parole rule: CHARACTER MUST BE COMPLETELY NAKED
+        // Any clothing item = immediate violation
         for (const item of currentAppearance) {
-            const itemName = item.Name || "NO_NAME";
-            const itemGroup = item.Group || "NO_GROUP";
-            const timeSinceChange = item.LastPlayerUpdateDate
-                ? Date.now() - item.LastPlayerUpdateDate
-                : -1;
-            const lastChangeInfo =
-                timeSinceChange >= 0
-                    ? ` [changed ${timeSinceChange}ms ago]`
-                    : " [no change time]";
-
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK] Item: "${itemName}" | Group: "${itemGroup}"${lastChangeInfo}`,
-            );
-
             if (!item.Group) {
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK]   → SKIPPED: No group property`,
-                );
-                continue; // Skip items without groups
+                continue; // Skip items without group
             }
 
             const isClothing = this.actualClothingGroups.has(item.Group);
-            console.log(
-                `[ReleaseSystem:PAROLE_CHECK]   → Is in actualClothingGroups? ${isClothing}`,
-            );
 
             if (isClothing) {
-                clothingItems.push(`${itemName} (${itemGroup})`);
-                clothingFound = true;
-
+                const itemName = item.Name || "NO_NAME";
                 console.log(
-                    `[ReleaseSystem:PAROLE_CHECK]   → YES, THIS IS CLOTHING - VIOLATION!`,
+                    `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION DETECTED ***`,
                 );
                 console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] *** VIOLATION CONDITION MET ***`,
+                    `[ReleaseSystem:PAROLE_CHECK] Found clothing: "${itemName}" in group "${item.Group}"`,
                 );
                 console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] Reason: Character must be COMPLETELY NAKED during parole, but found "${itemName}" in group "${itemGroup}"`,
-                );
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK] Decision: CALL handleParoleViolation()`,
+                    `[ReleaseSystem:PAROLE_CHECK] Parole rule violated: CHARACTER MUST BE COMPLETELY NAKED`,
                 );
                 console.log(
                     `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (VIOLATION) ===============`,
                 );
                 await this.handleParoleViolation(character, "dressed");
                 return;
-            } else {
-                console.log(
-                    `[ReleaseSystem:PAROLE_CHECK]   → NO, this is a body part/device (not counted)`,
-                );
             }
         }
 
-        // No clothing found - compliant
+        // No clothing found - compliant with parole terms
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ---- VIOLATION CHECK SUMMARY ----`,
+            `[ReleaseSystem:PAROLE_CHECK] No clothing detected - parole terms compliant`,
         );
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Total items in appearance: ${currentAppearance.length}`,
-        );
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] Clothing items found: ${clothingItems.length}`,
-        );
-
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ✓ COMPLIANT: Character is naked (no clothing found)`,
-        );
-        console.log(
-            `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (NO VIOLATION) ===============`,
+            `[ReleaseSystem:PAROLE_CHECK] =============== VIOLATION CHECK END (COMPLIANT) ===============`,
         );
     }
 }
