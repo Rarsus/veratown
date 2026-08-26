@@ -48,6 +48,8 @@ export interface RemovedBondageItem {
     name: string;
     lockType?: string; // "Owner", "Timers", etc.
     lockedBy?: string; // Member name
+    color?: string; // Item color if applicable
+    difficulty?: number; // Item difficulty if applicable
 }
 
 export interface ReleaseParoleState {
@@ -55,6 +57,7 @@ export interface ReleaseParoleState {
     paroleStartedAt?: number; // When release was initiated
     paroleExpiresAt?: number; // When parole ends (10 minutes from start)
     removedBondageItems?: RemovedBondageItem[]; // Items to reapply if parole violated
+    releasedFromLocation?: ChatRoomMapPos; // Location where /bot release was called
 }
 
 export interface AuditLogEntry {
@@ -530,6 +533,7 @@ export class VeratownCharacterProfileStore {
     public async startReleaseParole(
         memberNumber: number,
         removedItems: RemovedBondageItem[],
+        location?: ChatRoomMapPos,
         paroleDurationMs: number = 10 * 60 * 1000, // 10 minutes default
     ): Promise<void> {
         await this.init();
@@ -540,6 +544,7 @@ export class VeratownCharacterProfileStore {
             paroleStartedAt: now,
             paroleExpiresAt: now + paroleDurationMs,
             removedBondageItems: removedItems,
+            releasedFromLocation: location,
         };
 
         await this.profiles.updateOne(
@@ -560,6 +565,9 @@ export class VeratownCharacterProfileStore {
             {
                 paroleDurationMs,
                 removedItemsCount: removedItems.length,
+                location: location
+                    ? `(${location.X}, ${location.Y})`
+                    : "unknown",
             },
         );
     }

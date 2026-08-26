@@ -90,6 +90,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private releaseCooldowns = new Map<number, number>();
     // Track previous appearances for characters on parole (memberNumber -> itemGroups set)
     private paroleAppearanceTracking = new Map<number, Set<string>>();
+    // Store full parole metadata for cross-room enforcement
+    private paroleMetadata = new Map<
+        number,
+        {
+            startingItems: Set<string>; // Item groups at release time
+            startingLocation: { X: number; Y: number };
+            paroleExpiresAt: number;
+        }
+    >();
     // Parole monitoring interval
     private paroleMonitoringInterval?: NodeJS.Timer;
 
@@ -159,6 +168,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 `[ReleaseSystem] Starting release for ${character.MemberNumber}`,
             );
 
+            // Stage 0: Capture starting state (location, items)
+            const startingLocation = { ...character.MapPos };
+            console.log(
+                `[ReleaseSystem] Stage 0: Captured starting location (${startingLocation.X}, ${startingLocation.Y})`,
+            );
+
             // Check if can release (admin bypass, cooldown, etc.)
             if (
                 !(await this.checkCanRelease(character)) &&
@@ -188,18 +203,35 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             const removedBondageItems =
                 await this.stripNonOwnerItems(character);
 
-            // Start parole tracking with removed items
+            // Start parole tracking with removed items and starting location
             if (this.characterProfileStore) {
                 await this.characterProfileStore.startReleaseParole(
                     character.MemberNumber,
                     removedBondageItems,
+                    startingLocation,
                     RELEASE_PAROLE_DURATION_MS,
                 );
                 console.log(
-                    `[ReleaseSystem] Parole started for ${character.MemberNumber} with ${removedBondageItems.length} tracked items`,
+                    `[ReleaseSystem] Parole started for ${character.MemberNumber} with ${removedBondageItems.length} tracked items at location (${startingLocation.X}, ${startingLocation.Y})`,
                 );
 
-                // Start monitoring their appearance for parole violations
+                // Store parole metadata for cross-room enforcement
+                const currentAppearance =
+                    character.Appearance.getAppearanceData();
+                const startingItems = new Set<string>();
+                for (const item of currentAppearance) {
+                    if (item.Group) {
+                        startingItems.add(item.Group);
+                    }
+                }
+
+                this.paroleMetadata.set(character.MemberNumber, {
+                    startingItems,
+                    startingLocation,
+                    paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
+                });
+
+                // Track individual items for detailed comparison
                 this.trackParoleCharacter(character);
             }
 
@@ -268,6 +300,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 await this.characterProfileStore.clearReleaseParole(
                     character.MemberNumber,
                 );
+                // Clean up parole metadata
+                this.paroleMetadata.delete(character.MemberNumber);
+                this.paroleAppearanceTracking.delete(character.MemberNumber);
             }
 
             await this.recordReleaseEvent(character, "successful_release");
@@ -356,7 +391,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Remove only BONDAGE ITEMS, preserving all clothing
-     * Returns list of removed items for parole tracking
+     * Returns list of removed items with full property state for parole tracking
      * Character must manually remove their own clothing
      */
     private async stripNonOwnerItems(
@@ -390,15 +425,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     `[ReleaseSystem] Will preserve clothing: ${item.Name} (${item.Group})`,
                 );
             } else {
-                // Not clothing = bondage/device/restraint - track it
+                // Not clothing = bondage/device/restraint - track it with full properties
                 removedItems.push({
                     group: item.Group,
                     name: item.Name,
                     lockType: item.Property?.Lock,
                     lockedBy: item.Property?.LockedBy,
+                    color: item.Color ? String(item.Color) : undefined,
+                    difficulty: item.Difficulty,
                 });
                 console.log(
-                    `[ReleaseSystem] Will remove bondage: ${item.Name} (${item.Group})`,
+                    `[ReleaseSystem] Will remove bondage: ${item.Name} (${item.Group}) [Lock: ${item.Property?.Lock || "none"}]`,
                 );
             }
         }
@@ -695,6 +732,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] Parole violation for ${character.Nickname}: ${reason}`,
         );
 
+        // Get parole state to get original location and items
+        const paroleState =
+            await this.characterProfileStore.getReleaseParoleState(
+                character.MemberNumber,
+            );
+
+        if (!paroleState) {
+            console.log(
+                `[ReleaseSystem] No parole state found for ${character.Nickname}`,
+            );
+            return;
+        }
+
         // Get and clear parole state, getting removed items
         const itemsToReapply =
             await this.characterProfileStore.violateReleaseParole(
@@ -709,7 +759,40 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return;
         }
 
-        // Reapply the bondage items
+        // Step 1: Restore to original location
+        const originalLocation = paroleState.releasedFromLocation;
+        if (
+            originalLocation &&
+            originalLocation.X !== undefined &&
+            originalLocation.Y !== undefined
+        ) {
+            try {
+                character.mapTeleport({
+                    X: originalLocation.X,
+                    Y: originalLocation.Y,
+                });
+                console.log(
+                    `[ReleaseSystem] Restored ${character.Nickname} to location (${originalLocation.X}, ${originalLocation.Y})`,
+                );
+                this.whisper(
+                    character,
+                    `*You are dragged back to where you started by an invisible force! (${originalLocation.X}, ${originalLocation.Y})*`,
+                );
+
+                // Update profile position
+                await this.characterProfileStore.updatePosition(
+                    character.MemberNumber,
+                    originalLocation,
+                );
+            } catch (e) {
+                console.error(
+                    `[ReleaseSystem] Error restoring location for ${character.Nickname}:`,
+                    e,
+                );
+            }
+        }
+
+        // Step 2: Reapply all bondage items with original lock states
         console.log(
             `[ReleaseSystem] Reapplying ${itemsToReapply.length} items for parole violation`,
         );
@@ -732,7 +815,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     }
 
                     console.log(
-                        `[ReleaseSystem] Reapplied: ${item.name} in ${item.group}`,
+                        `[ReleaseSystem] Reapplied: ${item.name} in ${item.group} [Lock: ${item.lockType || "none"}]`,
                     );
                 } else {
                     console.warn(
@@ -747,7 +830,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
-        // Warn character
+        // Step 3: Start new parole period
         const reasonText =
             reason === "timeout"
                 ? "You ran out of time to escape."
@@ -755,8 +838,34 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         this.whisper(
             character,
-            `**PAROLE VIOLATION: ${reasonText}** Your restraints have been reapplied. You now have another 10 minutes to try again.`,
+            `**PAROLE VIOLATION: ${reasonText}** You have been returned to your starting location, and your restraints have been reapplied. You now have another 10 minutes to try again.`,
         );
+
+        // Start new parole period with same items and location
+        await this.characterProfileStore.startReleaseParole(
+            character.MemberNumber,
+            itemsToReapply,
+            originalLocation,
+            RELEASE_PAROLE_DURATION_MS,
+        );
+
+        // Update parole metadata for this new parole period
+        const currentAppearance = character.Appearance.getAppearanceData();
+        const newStartingItems = new Set<string>();
+        for (const item of currentAppearance) {
+            if (item.Group) {
+                newStartingItems.add(item.Group);
+            }
+        }
+
+        this.paroleMetadata.set(character.MemberNumber, {
+            startingItems: newStartingItems,
+            startingLocation: originalLocation || { X: 0, Y: 0 },
+            paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
+        });
+
+        // Reset parole tracking
+        this.trackParoleCharacter(character);
 
         // Record the violation
         await this.recordReleaseEvent(character, `parole_violation_${reason}`);
@@ -818,9 +927,23 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
 
             for (const parole of activeParoles) {
-                const character = this.conn.chatRoom.GetCharacter(
-                    parole.memberNumber,
+                const character = this.conn.chatRoom.Characters.find(
+                    (c) => c.MemberNumber === parole.memberNumber,
                 );
+
+                // Load parole metadata for this character
+                if (parole.paroleState) {
+                    this.paroleMetadata.set(parole.memberNumber, {
+                        startingItems: new Set<string>(), // Will be updated when they enter room
+                        startingLocation: parole.paroleState
+                            .releasedFromLocation || {
+                            X: 0,
+                            Y: 0,
+                        },
+                        paroleExpiresAt:
+                            parole.paroleState.paroleExpiresAt || 0,
+                    });
+                }
 
                 if (parole.isExpired) {
                     console.log(
@@ -830,6 +953,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     await this.characterProfileStore.clearReleaseParole(
                         parole.memberNumber,
                     );
+                    this.paroleMetadata.delete(parole.memberNumber);
                 } else if (character) {
                     console.log(
                         `[ReleaseSystem] Parole active for ${parole.name} (${parole.memberNumber}) - monitoring`,
@@ -902,6 +1026,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Check all characters on parole for violations
+     * Works cross-room by comparing to stored parole metadata
      */
     private async checkAllParoleViolations(): Promise<void> {
         if (!this.characterProfileStore) {
@@ -915,8 +1040,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         for (const parole of activeParoles) {
             // Check timeout
             if (parole.isExpired) {
-                const character = this.conn.chatRoom.GetCharacter(
-                    parole.memberNumber,
+                const character = this.conn.chatRoom.Characters.find(
+                    (c) => c.MemberNumber === parole.memberNumber,
                 );
                 if (character) {
                     console.log(
@@ -925,75 +1050,101 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     await this.handleParoleViolation(character, "timeout");
                 } else {
                     // Clear expired parole
+                    console.log(
+                        `[ReleaseSystem] Parole expired for ${parole.name} (${parole.memberNumber}) - clearing`,
+                    );
                     await this.characterProfileStore.clearReleaseParole(
                         parole.memberNumber,
                     );
+                    this.paroleMetadata.delete(parole.memberNumber);
                 }
                 continue;
             }
 
-            // Check if character is in room
+            // Check if character is in current room
             const character = this.conn.chatRoom.Characters.find(
                 (c) => c.MemberNumber === parole.memberNumber,
             );
+
             if (!character) {
+                // Character not in current room - they could be in another room
+                // If they were being tracked and now aren't, they might have left
+                // Continue monitoring for when they rejoin
                 continue;
             }
 
-            // Start tracking if not already
-            if (!this.paroleAppearanceTracking.has(character.MemberNumber)) {
+            // Character is in room - check for violations
+            const metadata = this.paroleMetadata.get(character.MemberNumber);
+            if (!metadata) {
+                // First time seeing them after parole was created
+                // Initialize their metadata
+                const currentAppearance =
+                    character.Appearance.getAppearanceData();
+                const startingItems = new Set<string>();
+                for (const item of currentAppearance) {
+                    if (item.Group) {
+                        startingItems.add(item.Group);
+                    }
+                }
+
+                this.paroleMetadata.set(character.MemberNumber, {
+                    startingItems,
+                    startingLocation: parole.paroleState
+                        .releasedFromLocation || {
+                        X: 0,
+                        Y: 0,
+                    },
+                    paroleExpiresAt: parole.paroleState.paroleExpiresAt || now,
+                });
                 this.trackParoleCharacter(character);
                 continue;
             }
 
-            // Check for clothing added (parole violation)
-            await this.checkParoleViolation(character);
+            // Check if they've added clothing (parole violation)
+            await this.checkParoleViolation(character, metadata.startingItems);
         }
     }
 
     /**
-     * Check if a paroled character has added clothing
+     * Check if a paroled character has added clothing beyond their starting state
      */
     private async checkParoleViolation(
         character: API_Character,
+        startingItems: Set<string>,
     ): Promise<void> {
-        const previousGroups = this.paroleAppearanceTracking.get(
-            character.MemberNumber,
-        );
-        if (!previousGroups) {
-            return;
-        }
-
         const currentAppearance = character.Appearance.getAppearanceData();
-        const currentGroups = new Set<string>();
+        const currentItems = new Set<string>();
 
+        // Build set of current clothing items
         for (const item of currentAppearance) {
-            if (item.Group) {
-                currentGroups.add(item.Group);
+            if (item.Group && this.actualClothingGroups.has(item.Group)) {
+                currentItems.add(item.Group);
             }
         }
 
-        // Check if any new item groups were added (parole violation)
-        for (const group of currentGroups) {
-            if (!previousGroups.has(group)) {
-                // New item group added - could be clothing or bondage
+        // Check if any NEW CLOTHING items were added (violation)
+        for (const group of currentItems) {
+            if (!startingItems.has(group)) {
+                // New clothing item added - this is a violation
                 const item = currentAppearance.find((i) => i.Group === group);
-                if (item && this.actualClothingGroups.has(group)) {
+                if (item) {
                     console.log(
-                        `[ReleaseSystem] Parole violation - clothing added: ${item.Name} (${group})`,
+                        `[ReleaseSystem] Parole violation detected - new clothing: ${item.Name} (${group})`,
                     );
                     await this.handleParoleViolation(character, "dressed");
-                    // Reset tracking for new parole period
-                    this.trackParoleCharacter(character);
                     return;
                 }
             }
         }
 
         // Update tracking to current state
-        this.paroleAppearanceTracking.set(
+        const previousGroups = this.paroleAppearanceTracking.get(
             character.MemberNumber,
-            currentGroups,
         );
+        if (previousGroups) {
+            for (const group of currentItems) {
+                previousGroups.add(group);
+            }
+        }
     }
 }
