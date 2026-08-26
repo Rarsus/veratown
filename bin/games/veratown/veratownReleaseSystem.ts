@@ -44,6 +44,42 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     public readonly label = "Emergency Release System";
     public enabled = true;
 
+    // WHITELIST of ACTUAL CLOTHING GROUPS ONLY
+    // Everything else (body parts, devices, intimate items) do NOT count as "clothed"
+    private readonly actualClothingGroups = new Set([
+        // Garments that cover the body
+        "Bra",
+        "Corset",
+        "Shirt",
+        "Top",
+        "Panties",
+        "Bottom",
+        "Dress",
+        "Swimsuit",
+        "Uniform",
+        "Jacket",
+        "OuterClothes",
+
+        // Foot/leg coverage
+        "Shoes",
+        "Socks",
+        "Stockings",
+
+        // Hand/arm coverage
+        "Gloves",
+
+        // Head/hair coverage
+        "Hat",
+        "Hair",
+        "Mask",
+
+        // General clothing categories
+        "Cloth",
+        "ClothAccessory",
+        "ClothLower",
+        "ClothUpper",
+    ]);
+
     // Track active releases (memberNumber -> Promise)
     private activeReleases = new Map<number, Promise<void>>();
     // Track release cooldowns (memberNumber -> nextReleaseTime)
@@ -279,80 +315,66 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
-     * Strip all non-owner-locked items
-     * stripBulk with stripLocked=false keeps items where Property?.LockedBy exists
+     * Remove only BONDAGE ITEMS, preserving all clothing
+     * Character must manually remove their own clothing
      */
     private async stripNonOwnerItems(character: API_Character): Promise<void> {
-        // Get all appearance items BEFORE stripping
+        // Get all appearance items
         const appearance = character.Appearance.getAppearanceData();
 
-        // Identify locked items that must be preserved
-        const lockedItems: Array<{
-            group: string;
-            name: string;
-            lockType: string;
-            lockedBy: string;
-        }> = [];
+        // Track what we're removing
+        const removedItems: Array<{ name: string; group: string }> = [];
+        const preservedItems: Array<{ name: string; group: string }> = [];
 
+        // Remove only NON-CLOTHING items (bondage, restraints, devices, body parts)
         for (const item of appearance) {
             if (!item.Group || !item.Name) {
                 continue;
             }
 
-            const isOwnerLocked =
-                item.Property?.LockedBy &&
-                item.Property?.Lock === "Owner" &&
-                item.Property.LockedBy !== "";
-            const isTimeLocked =
-                item.Property?.LockedBy &&
-                item.Property?.Lock === "Timers" &&
-                item.Property.Difficulty !== undefined;
-
-            if (isOwnerLocked || isTimeLocked) {
-                lockedItems.push({
-                    group: item.Group,
+            // If it's actual clothing, PRESERVE it - character must strip manually
+            if (this.actualClothingGroups.has(item.Group)) {
+                preservedItems.push({
                     name: item.Name,
-                    lockType: item.Property?.Lock ?? "Unknown",
-                    lockedBy: item.Property?.LockedBy ?? "Unknown",
+                    group: item.Group,
                 });
                 console.log(
-                    `[ReleaseSystem] Will preserve ${item.Name} (${item.Property?.Lock || "Unknown"} lock)`,
+                    `[ReleaseSystem] PRESERVED clothing: ${item.Name} (${item.Group})`,
+                );
+                continue;
+            }
+
+            // Not clothing = bondage/device/restraint - REMOVE it
+            try {
+                character.Appearance.RemoveItem(item.Group);
+                removedItems.push({
+                    name: item.Name,
+                    group: item.Group,
+                });
+                console.log(
+                    `[ReleaseSystem] REMOVED bondage item: ${item.Name} (${item.Group})`,
+                );
+            } catch (e) {
+                console.error(
+                    `[ReleaseSystem] Error removing ${item.Name} from group ${item.Group}:`,
+                    e,
                 );
             }
         }
 
-        // Strip ALL items (including locked, we'll re-add them)
-        console.log(`[ReleaseSystem] Stripping all items...`);
-        character.Appearance.stripBulk({ item: true }, true); // stripLocked=true removes everything
+        // Notify character
+        if (removedItems.length > 0) {
+            this.whisper(
+                character,
+                `*${removedItems.length} restraint${removedItems.length !== 1 ? "s" : ""} fall away...*`,
+            );
+        }
 
-        // Re-add locked items
-        console.log(
-            `[ReleaseSystem] Re-adding ${lockedItems.length} locked items...`,
-        );
-        for (const lockedItem of lockedItems) {
-            try {
-                const asset = AssetGet(lockedItem.group, lockedItem.name);
-                if (asset) {
-                    const addedItem = character.Appearance.AddItem(asset);
-                    // Restore lock properties
-                    if (addedItem && addedItem.Property) {
-                        addedItem.Property.Lock = lockedItem.lockType;
-                        addedItem.Property.LockedBy = lockedItem.lockedBy;
-                    }
-                    console.log(
-                        `[ReleaseSystem] Re-added locked item: ${lockedItem.name}`,
-                    );
-                } else {
-                    console.warn(
-                        `[ReleaseSystem] Could not find asset for ${lockedItem.group}/${lockedItem.name}`,
-                    );
-                }
-            } catch (e) {
-                console.error(
-                    `[ReleaseSystem] Error re-adding locked item ${lockedItem.name}:`,
-                    e,
-                );
-            }
+        if (preservedItems.length > 0) {
+            this.whisper(
+                character,
+                `*${preservedItems.length} piece${preservedItems.length !== 1 ? "s" : ""} of clothing remain. You must remove ${preservedItems.length === 1 ? "it" : "them"} yourself to escape.*`,
+            );
         }
 
         // Update profile with current state
@@ -381,12 +403,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 remainingRestraints,
             );
         }
-
-        const totalRemoved = appearance.length - lockedItems.length;
-        this.whisper(
-            character,
-            `*${totalRemoved} item${totalRemoved !== 1 ? "s" : ""} fall away...*`,
-        );
     }
 
     /**
@@ -534,45 +550,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        // WHITELIST of ACTUAL CLOTHING GROUPS ONLY
-        // Everything else (body parts, devices, intimate items) do NOT count as "clothed"
-        const actualClothingGroups = new Set([
-            // Garments that cover the body
-            "Bra",
-            "Corset",
-            "Shirt",
-            "Top",
-            "Panties",
-            "Bottom",
-            "Dress",
-            "Swimsuit",
-            "Uniform",
-            "Jacket",
-            "OuterClothes",
-
-            // Foot/leg coverage
-            "Shoes",
-            "Socks",
-            "Stockings",
-
-            // Hand/arm coverage
-            "Gloves",
-
-            // Head/hair coverage
-            "Hat",
-            "Hair",
-            "Mask",
-
-            // General clothing categories
-            "Cloth",
-            "ClothAccessory",
-            "ClothLower",
-            "ClothUpper",
-        ]);
-
+        // Check against WHITELIST of actual clothing ONLY
         // If any actual CLOTHING is equipped, not naked
         for (const item of appearance) {
-            if (item.Group && actualClothingGroups.has(item.Group)) {
+            if (item.Group && this.actualClothingGroups.has(item.Group)) {
                 console.log(
                     `[ReleaseSystem] NOT NAKED: Found clothing ${item.Name} in group ${item.Group}`,
                 );
