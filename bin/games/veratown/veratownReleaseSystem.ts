@@ -367,43 +367,66 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         // Track what we're removing
         const removedItems: RemovedBondageItem[] = [];
-        const preservedItems: Array<{ name: string; group: string }> = [];
+        const preservedClothing: Array<{
+            group: string;
+            name: string;
+            asset?: unknown;
+        }> = [];
 
-        // Remove only NON-CLOTHING items (bondage, restraints, devices, body parts)
+        // First pass: identify clothing to preserve and items to remove
         for (const item of appearance) {
             if (!item.Group || !item.Name) {
                 continue;
             }
 
-            // If it's actual clothing, PRESERVE it - character must strip manually
             if (this.actualClothingGroups.has(item.Group)) {
-                preservedItems.push({
+                // Actual clothing - preserve it
+                preservedClothing.push({
                     name: item.Name,
                     group: item.Group,
+                    asset: AssetGet(item.Group, item.Name),
                 });
                 console.log(
-                    `[ReleaseSystem] PRESERVED clothing: ${item.Name} (${item.Group})`,
+                    `[ReleaseSystem] Will preserve clothing: ${item.Name} (${item.Group})`,
                 );
-                continue;
-            }
-
-            // Not clothing = bondage/device/restraint - REMOVE it
-            try {
-                // Capture lock info before removing
+            } else {
+                // Not clothing = bondage/device/restraint - track it
                 removedItems.push({
                     group: item.Group,
                     name: item.Name,
                     lockType: item.Property?.Lock,
                     lockedBy: item.Property?.LockedBy,
                 });
-
-                character.Appearance.RemoveItem(item.Group);
                 console.log(
-                    `[ReleaseSystem] REMOVED bondage item: ${item.Name} (${item.Group})`,
+                    `[ReleaseSystem] Will remove bondage: ${item.Name} (${item.Group})`,
                 );
+            }
+        }
+
+        // Second pass: strip EVERYTHING
+        console.log(`[ReleaseSystem] Stripping ALL items...`);
+        character.Appearance.stripBulk({ item: true }, true);
+        await wait(100);
+
+        // Third pass: re-add only clothing items
+        console.log(
+            `[ReleaseSystem] Re-adding ${preservedClothing.length} clothing items...`,
+        );
+        for (const clothing of preservedClothing) {
+            try {
+                if (clothing.asset) {
+                    character.Appearance.AddItem(clothing.asset);
+                    console.log(
+                        `[ReleaseSystem] Re-added clothing: ${clothing.name}`,
+                    );
+                } else {
+                    console.warn(
+                        `[ReleaseSystem] Could not find asset for ${clothing.group}/${clothing.name}`,
+                    );
+                }
             } catch (e) {
                 console.error(
-                    `[ReleaseSystem] Error removing ${item.Name} from group ${item.Group}:`,
+                    `[ReleaseSystem] Error re-adding clothing ${clothing.name}:`,
                     e,
                 );
             }
@@ -417,10 +440,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        if (preservedItems.length > 0) {
+        if (preservedClothing.length > 0) {
             this.whisper(
                 character,
-                `*${preservedItems.length} piece${preservedItems.length !== 1 ? "s" : ""} of clothing remain. You must remove ${preservedItems.length === 1 ? "it" : "them"} yourself to escape.*`,
+                `*${preservedClothing.length} piece${preservedClothing.length !== 1 ? "s" : ""} of clothing remain. You must remove ${preservedClothing.length === 1 ? "it" : "them"} yourself to escape.*`,
             );
         }
 
@@ -910,8 +933,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Check if character is in room
-            const character = this.conn.chatRoom.GetCharacter(
-                parole.memberNumber,
+            const character = this.conn.chatRoom.Characters.find(
+                (c) => c.MemberNumber === parole.memberNumber,
             );
             if (!character) {
                 continue;
