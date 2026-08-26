@@ -1043,23 +1043,52 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] Starting 10-minute parole monitoring for ${character.MemberNumber}`,
         );
 
+        // CRITICAL: Initial stabilization period
+        // After violation restart, character needs time to sync to naked state
+        // Don't check immediately - wait for appearance data to stabilize
+        console.log(
+            `[ReleaseSystem] Stabilizing appearance state for ${character.MemberNumber}...`,
+        );
+        await wait(2000); // 2 second grace period for appearance sync
+
+        let consecutiveClothedChecks = 0;
+        const CLOTHED_VIOLATION_THRESHOLD = 2; // Require 2 consecutive clothed checks to trigger violation
+
         while (Date.now() - paroleStartTime < paroleDurationMs) {
-            // Check if character added clothing (violation)
+            // Check if character has clothing (violation)
             const isNaked = await this.isCharacterNaked(character);
+
             if (!isNaked) {
+                consecutiveClothedChecks++;
                 console.log(
-                    `[ReleaseSystem] Parole violation detected for ${character.MemberNumber}: character clothed during monitoring`,
+                    `[ReleaseSystem] Clothed check #${consecutiveClothedChecks} for ${character.MemberNumber}`,
                 );
-                await this.enforceParoleViolation(character, "dressed");
-                // enforceParoleViolation will restart from Stage 2 recursively
-                return;
+
+                // Only trigger violation after multiple consecutive clothed checks
+                // This prevents false positives from mid-transition states
+                if (consecutiveClothedChecks >= CLOTHED_VIOLATION_THRESHOLD) {
+                    console.log(
+                        `[ReleaseSystem] Parole violation detected for ${character.MemberNumber}: ${consecutiveClothedChecks} consecutive clothed checks`,
+                    );
+                    await this.enforceParoleViolation(character, "dressed");
+                    // enforceParoleViolation will restart from Stage 2 recursively
+                    return;
+                }
+            } else {
+                // Character is naked - reset violation counter
+                if (consecutiveClothedChecks > 0) {
+                    console.log(
+                        `[ReleaseSystem] Character ${character.MemberNumber} is naked - violation counter reset from ${consecutiveClothedChecks}`,
+                    );
+                }
+                consecutiveClothedChecks = 0;
             }
 
             const remaining = Math.ceil(
                 (paroleDurationMs - (Date.now() - paroleStartTime)) / 1000,
             );
             console.log(
-                `[ReleaseSystem] Parole check for ${character.MemberNumber}: ${remaining}s remaining`,
+                `[ReleaseSystem] Parole check for ${character.MemberNumber}: ${remaining}s remaining (clothed checks: ${consecutiveClothedChecks}/${CLOTHED_VIOLATION_THRESHOLD})`,
             );
 
             // Send notifications at specific intervals
