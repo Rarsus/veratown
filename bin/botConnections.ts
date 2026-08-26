@@ -203,7 +203,9 @@ export async function closeBotConnections(
         connections.secondary,
     ]);
     for (const connection of uniqueConnections) {
-        connection.disconnect();
+        if (connection) {
+            connection.disconnect();
+        }
     }
 }
 
