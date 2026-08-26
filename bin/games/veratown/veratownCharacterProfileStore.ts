@@ -43,6 +43,20 @@ export interface RoleplayFlags {
     lastFlagChange: number;
 }
 
+export interface RemovedBondageItem {
+    group: string;
+    name: string;
+    lockType?: string; // "Owner", "Timers", etc.
+    lockedBy?: string; // Member name
+}
+
+export interface ReleaseParoleState {
+    isOnParole: boolean;
+    paroleStartedAt?: number; // When release was initiated
+    paroleExpiresAt?: number; // When parole ends (10 minutes from start)
+    removedBondageItems?: RemovedBondageItem[]; // Items to reapply if parole violated
+}
+
 export interface AuditLogEntry {
     action: string; // "caged", "freed", "stripped", "kicked", "cheat_detected", etc.
     performedBy?: number; // memberNumber of admin
@@ -70,6 +84,9 @@ export interface VeratownCharacterProfileDoc {
     totalTimeInKennels: number; // Total ms in any kennel
 
     currentRestraints: CurrentRestraint[];
+
+    // Release/parole state
+    releaseParoleState?: ReleaseParoleState;
 
     // Roleplay flags
     roleplayFlags: RoleplayFlags;
@@ -502,5 +519,148 @@ export class VeratownCharacterProfileStore {
                 .length,
             recentAuditLog: profile.auditLog.slice(-10),
         };
+    }
+
+    /**
+     * Start release parole - track removed bondage items and parole timer
+     * @param memberNumber - Character's member number
+     * @param removedItems - Bondage items that were removed
+     * @param paroleDurationMs - How long parole lasts (default 10 minutes)
+     */
+    public async startReleaseParole(
+        memberNumber: number,
+        removedItems: RemovedBondageItem[],
+        paroleDurationMs: number = 10 * 60 * 1000, // 10 minutes default
+    ): Promise<void> {
+        await this.init();
+
+        const now = Date.now();
+        const paroleState: ReleaseParoleState = {
+            isOnParole: true,
+            paroleStartedAt: now,
+            paroleExpiresAt: now + paroleDurationMs,
+            removedBondageItems: removedItems,
+        };
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    releaseParoleState: paroleState,
+                    updatedAt: Date.now(),
+                },
+            },
+            { upsert: true },
+        );
+
+        await this.addAuditLog(
+            memberNumber,
+            "release_parole_started",
+            undefined,
+            {
+                paroleDurationMs,
+                removedItemsCount: removedItems.length,
+            },
+        );
+    }
+
+    /**
+     * Get current parole state for a character
+     */
+    public async getReleaseParoleState(
+        memberNumber: number,
+    ): Promise<ReleaseParoleState | null> {
+        await this.init();
+
+        const profile = await this.profiles.findOne({ _id: memberNumber });
+        if (!profile?.releaseParoleState) {
+            return null;
+        }
+
+        const parole = profile.releaseParoleState;
+
+        // Check if parole has expired
+        if (
+            parole.isOnParole &&
+            parole.paroleExpiresAt &&
+            Date.now() > parole.paroleExpiresAt
+        ) {
+            // Parole expired - they failed to escape in time
+            return parole;
+        }
+
+        return parole;
+    }
+
+    /**
+     * Clear parole (successful escape)
+     */
+    public async clearReleaseParole(memberNumber: number): Promise<void> {
+        await this.init();
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    releaseParoleState: {
+                        isOnParole: false,
+                    },
+                    "roleplayFlags.isEscaped": true,
+                    "roleplayFlags.lastFlagChange": Date.now(),
+                    updatedAt: Date.now(),
+                },
+            },
+            { upsert: true },
+        );
+
+        await this.addAuditLog(
+            memberNumber,
+            "release_parole_cleared",
+            undefined,
+            { reason: "Successfully escaped" },
+        );
+    }
+
+    /**
+     * Reapply parole bondage items (violation or timeout)
+     * Returns the list of items that were reapplied
+     */
+    public async violateReleaseParole(
+        memberNumber: number,
+        reason: "timeout" | "dressed" | "manual",
+    ): Promise<RemovedBondageItem[]> {
+        await this.init();
+
+        const profile = await this.profiles.findOne({ _id: memberNumber });
+        if (!profile?.releaseParoleState?.removedBondageItems) {
+            return [];
+        }
+
+        const itemsToReapply = profile.releaseParoleState.removedBondageItems;
+
+        // Clear parole state
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    releaseParoleState: {
+                        isOnParole: false,
+                    },
+                    updatedAt: Date.now(),
+                },
+            },
+        );
+
+        await this.addAuditLog(
+            memberNumber,
+            "release_parole_violated",
+            undefined,
+            {
+                reason,
+                reappliedItemsCount: itemsToReapply.length,
+            },
+        );
+
+        return itemsToReapply;
     }
 }

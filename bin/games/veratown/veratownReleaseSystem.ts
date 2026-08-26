@@ -19,13 +19,17 @@ import {
     VeratownLocationStore,
     VeratownLocationDoc,
 } from "./veratownLocationStore";
-import { VeratownCharacterProfileStore } from "./veratownCharacterProfileStore";
+import {
+    VeratownCharacterProfileStore,
+    RemovedBondageItem,
+} from "./veratownCharacterProfileStore";
 import {
     RELEASE_COOLDOWN_MS,
     RELEASE_NUDITY_CHECK_INTERVAL_MS,
     RELEASE_NUDITY_TIMEOUT_MS,
     RELEASE_PUNISHMENT_ROOM_KEY,
     RELEASE_KEYPAD_KEY,
+    RELEASE_PAROLE_DURATION_MS,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
 import { NarratorBot } from "./veratownNarrationUtils";
@@ -170,7 +174,21 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Stage 3: Strip non-owner-locked items
             console.log(`[ReleaseSystem] Stage 3: Stripping non-owner items`);
-            await this.stripNonOwnerItems(character);
+            const removedBondageItems =
+                await this.stripNonOwnerItems(character);
+
+            // Start parole tracking with removed items
+            if (this.characterProfileStore) {
+                await this.characterProfileStore.startReleaseParole(
+                    character.MemberNumber,
+                    removedBondageItems,
+                    RELEASE_PAROLE_DURATION_MS,
+                );
+                console.log(
+                    `[ReleaseSystem] Parole started for ${character.MemberNumber} with ${removedBondageItems.length} tracked items`,
+                );
+            }
+
             await wait(300);
 
             // Stage 4: Teleport to punishment room
@@ -230,6 +248,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             console.log(
                 `[ReleaseSystem] Stage 7: Recording successful release`,
             );
+
+            // Clear parole on successful escape
+            if (this.characterProfileStore) {
+                await this.characterProfileStore.clearReleaseParole(
+                    character.MemberNumber,
+                );
+            }
+
             await this.recordReleaseEvent(character, "successful_release");
 
             // Set cooldown if configured
@@ -316,14 +342,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     /**
      * Remove only BONDAGE ITEMS, preserving all clothing
+     * Returns list of removed items for parole tracking
      * Character must manually remove their own clothing
      */
-    private async stripNonOwnerItems(character: API_Character): Promise<void> {
+    private async stripNonOwnerItems(
+        character: API_Character,
+    ): Promise<RemovedBondageItem[]> {
         // Get all appearance items
         const appearance = character.Appearance.getAppearanceData();
 
         // Track what we're removing
-        const removedItems: Array<{ name: string; group: string }> = [];
+        const removedItems: RemovedBondageItem[] = [];
         const preservedItems: Array<{ name: string; group: string }> = [];
 
         // Remove only NON-CLOTHING items (bondage, restraints, devices, body parts)
@@ -346,11 +375,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             // Not clothing = bondage/device/restraint - REMOVE it
             try {
-                character.Appearance.RemoveItem(item.Group);
+                // Capture lock info before removing
                 removedItems.push({
-                    name: item.Name,
                     group: item.Group,
+                    name: item.Name,
+                    lockType: item.Property?.Lock,
+                    lockedBy: item.Property?.LockedBy,
                 });
+
+                character.Appearance.RemoveItem(item.Group);
                 console.log(
                     `[ReleaseSystem] REMOVED bondage item: ${item.Name} (${item.Group})`,
                 );
@@ -403,6 +436,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 remainingRestraints,
             );
         }
+
+        return removedItems;
     }
 
     /**
@@ -605,6 +640,89 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             console.error(`[ReleaseSystem] Failed to grant door access`, e);
             return false;
         }
+    }
+
+    /**
+     * Handle parole violation - reapply removed bondage items when character violates parole
+     * Called when character gets dressed while on parole in punishment room
+     */
+    public async handleParoleViolation(
+        character: API_Character,
+        reason: "dressed" | "timeout",
+    ): Promise<void> {
+        if (!this.characterProfileStore) {
+            return;
+        }
+
+        console.log(
+            `[ReleaseSystem] Parole violation for ${character.Nickname}: ${reason}`,
+        );
+
+        // Get and clear parole state, getting removed items
+        const itemsToReapply =
+            await this.characterProfileStore.violateReleaseParole(
+                character.MemberNumber,
+                reason === "timeout" ? "timeout" : "dressed",
+            );
+
+        if (itemsToReapply.length === 0) {
+            console.log(
+                `[ReleaseSystem] No items to reapply for ${character.Nickname}`,
+            );
+            return;
+        }
+
+        // Reapply the bondage items
+        console.log(
+            `[ReleaseSystem] Reapplying ${itemsToReapply.length} items for parole violation`,
+        );
+
+        for (const item of itemsToReapply) {
+            try {
+                const asset = AssetGet(item.group, item.name);
+                if (asset) {
+                    const addedItem = character.Appearance.AddItem(asset);
+
+                    // Restore lock if it had one
+                    if (
+                        addedItem &&
+                        addedItem.Property &&
+                        item.lockType &&
+                        item.lockedBy
+                    ) {
+                        addedItem.Property.Lock = item.lockType;
+                        addedItem.Property.LockedBy = item.lockedBy;
+                    }
+
+                    console.log(
+                        `[ReleaseSystem] Reapplied: ${item.name} in ${item.group}`,
+                    );
+                } else {
+                    console.warn(
+                        `[ReleaseSystem] Could not find asset for ${item.group}/${item.name}`,
+                    );
+                }
+            } catch (e) {
+                console.error(
+                    `[ReleaseSystem] Error reapplying ${item.name}:`,
+                    e,
+                );
+            }
+        }
+
+        // Warn character
+        const reasonText =
+            reason === "timeout"
+                ? "You ran out of time to escape."
+                : "You got dressed while on parole.";
+
+        this.whisper(
+            character,
+            `**PAROLE VIOLATION: ${reasonText}** Your restraints have been reapplied. You now have another 10 minutes to try again.`,
+        );
+
+        // Record the violation
+        await this.recordReleaseEvent(character, `parole_violation_${reason}`);
     }
 
     /**

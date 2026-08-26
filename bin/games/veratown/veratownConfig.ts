@@ -335,6 +335,7 @@ export const RELEASE_NUDITY_CHECK_INTERVAL_MS = 2500; // Check every 2.5 seconds
 export const RELEASE_NUDITY_TIMEOUT_MS = 60 * 1000; // 60 second max to strip
 export const RELEASE_PUNISHMENT_ROOM_KEY = "punishment_room_entrance"; // Location key
 export const RELEASE_KEYPAD_KEY = "keypad_punishment"; // Keypad location key
+export const RELEASE_PAROLE_DURATION_MS = 10 * 60 * 1000; // 10 minutes parole period
 
 // --- Shared helpers ---
 
