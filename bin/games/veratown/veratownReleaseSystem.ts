@@ -152,6 +152,30 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         "Hair",
     ]);
 
+    private readonly cosplayGroups = new Set<string>([
+        "BodyCosplay", // Tattoos, makeup, scars, etc.
+        "Wings",
+        "Ears",
+        "Tails",
+        "Cape",
+        "Cloak",
+        "Horns",
+        "AntennaSet",
+        "Antennae",
+        "Piercing",
+        "Pendant",
+        "Necklace",
+        "Choker",
+        "Collar", // Non-bondage collars (cosmetic)
+        "Mittens", // Decorative
+        "Veil",
+        "Accessory",
+        "Eyewear",
+        "Head",
+        "Glasses",
+        "Blindfold", // Some cosmetic blindfolds
+    ]);
+
     public registerTriggers(): void {
         this.initializeReleaseParoles().catch((e) => {
             console.error(`[ReleaseSystem] Failed to initialize paroles`, e);
@@ -985,10 +1009,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const appearance = character.Appearance.Items || [];
         const removedItems: RemovedBondageItem[] = [];
         const ownerLockedItems: RemovedBondageItem[] = [];
+        const preservedCosplayItems: RemovedBondageItem[] = [];
 
-        // Separate owner-locked items from removable items
-        // Only items with OwnerPadlock or OwnerTimerPadlock are preserved
-        // Other lock types (Timer, Password, Combination, etc.) are removable
+        // Separate items into categories:
+        // - Owner-locked: preserved due to lock type
+        // - Cosplay/Cosmetics: preserved as non-bondage, non-clothing items
+        // - Removable: clothing and bondage items without owner locks
         for (const item of appearance) {
             if (!item?.Group || !item?.Name) {
                 continue;
@@ -1014,7 +1040,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 console.log(
                     `[ReleaseSystem] Preserving owner-locked item: ${item.Name} (lock: ${item.Property.Lock})`,
                 );
+            } else if (this.cosplayGroups.has(item.Group)) {
+                // Preserve cosmetic and cosplay items (wings, tails, tattoos, etc.)
+                preservedCosplayItems.push(bondageItem);
+                console.log(
+                    `[ReleaseSystem] Preserving cosmetic/cosplay item: ${item.Name} (group: ${item.Group})`,
+                );
             } else {
+                // Remove clothing and bondage items without owner locks
                 removedItems.push(bondageItem);
             }
         }
@@ -1065,7 +1098,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         console.log(
-            `[ReleaseSystem] Owner-locked items preserved: ${ownerLockedItems.length}`,
+            `[ReleaseSystem] Strip summary: removed ${removedItems.length} clothing/bondage items, preserved ${ownerLockedItems.length} owner-locked + ${preservedCosplayItems.length} cosmetic items`,
         );
 
         // Update database with removed items (excluding owner-locked)
