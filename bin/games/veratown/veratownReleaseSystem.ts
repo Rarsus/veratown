@@ -514,6 +514,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async monitorParoleExpiration(
         character: API_Character,
     ): Promise<void> {
+        console.log(
+            `[ReleaseSystem] MONITORING DISABLED: Skipping parole monitoring for ${character.MemberNumber}`,
+        );
+        return;
+
+        // DISABLED CODE BELOW
         const paroleStartTime = Date.now();
         const paroleDurationMs = RELEASE_PAROLE_DURATION_MS;
 
@@ -560,8 +566,26 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     private async enforceParoleNudity(character: API_Character): Promise<void> {
-        // Proactively strip all items
-        character.Appearance.stripBulk({ item: true }, true);
+        // Proactively enforce nudity by stripping clothing AND bondage items
+        // Use slowlyStripBulk() to avoid triggering WCE anti-cheat detection
+        // which flags rapid repeated strip calls as potential exploits
+        try {
+            await character.Appearance.slowlyStripBulk(
+                { clothing: true, item: true }, // Strip both clothing and restraints
+                true, // stripLocked: also remove locked items
+            );
+        } catch (e) {
+            console.error(
+                `[ReleaseSystem] Error enforcing parole nudity with slowlyStripBulk:`,
+                e,
+            );
+            // Fallback to instant strip if slow strip fails
+            character.Appearance.stripBulk(
+                { clothing: true, item: true },
+                true,
+            );
+        }
+
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
     }
 
@@ -884,8 +908,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             });
         }
 
-        // Strip all items
-        character.Appearance.stripBulk({ item: true }, true);
+        // Strip all items (both clothing and bondage) using slowlyStripBulk
+        // to avoid triggering WCE anti-cheat detection
+        try {
+            await character.Appearance.slowlyStripBulk(
+                { clothing: true, item: true }, // Strip both clothing and restraints
+                true, // stripLocked: also remove locked items
+            );
+        } catch (e) {
+            console.error(`[ReleaseSystem] Error during slowlyStripBulk:`, e);
+            // Fallback to instant strip if slow strip fails
+            character.Appearance.stripBulk(
+                { clothing: true, item: true },
+                true,
+            );
+        }
+
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
 
         // Verify
@@ -1248,6 +1286,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     // ===== PAROLE INITIALIZATION & RECOVERY =====
 
     private async initializeReleaseParoles(): Promise<void> {
+        console.log(
+            `[ReleaseSystem] MONITORING DISABLED: Skipping parole initialization on startup`,
+        );
+        return;
+
+        // DISABLED CODE BELOW
         if (!this.characterProfileStore) {
             return;
         }
@@ -1321,6 +1365,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     private startParoleMonitoring(): void {
+        console.log(
+            `[ReleaseSystem] MONITORING DISABLED: Skipping parole monitoring start`,
+        );
+        return;
+
+        // DISABLED CODE BELOW
         if (this.paroleMonitoringInterval) {
             return;
         }
@@ -1343,6 +1393,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     private async checkAllParoleViolations(): Promise<void> {
+        console.log(
+            `[ReleaseSystem] MONITORING DISABLED: Skipping violation checks`,
+        );
+        return;
+
+        // DISABLED CODE BELOW
         if (!this.characterProfileStore || !this.conn?.chatRoom?.characters) {
             return;
         }
