@@ -1054,21 +1054,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return true;
         }
 
-        if (RELEASE_COOLDOWN_MS > 0) {
-            const nextRelease = this.releaseCooldowns.get(
-                character.MemberNumber,
-            );
-            if (nextRelease && Date.now() < nextRelease) {
-                const remaining = Math.ceil((nextRelease - Date.now()) / 1000);
-                const minutes = Math.ceil(remaining / 60);
-                this.whisper(
-                    character,
-                    `Emergency release on cooldown. Available in ${minutes} minute(s).`,
-                );
-                return false;
-            }
-        }
-
         if (this.locationStore) {
             const punishmentRoom = await this.locationStore.getLocation(
                 RELEASE_PUNISHMENT_ROOM_KEY,
