@@ -1581,11 +1581,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
-     * Track a character on parole - record their current appearance
-     * CRITICAL: Uses direct getItemData() API (not stale getAppearanceData() cache)
-     */
-
-    /**
      * Start periodic monitoring for parole violations
      */
     private startParoleMonitoring(): void {
