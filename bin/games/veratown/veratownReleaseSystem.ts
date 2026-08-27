@@ -14,25 +14,19 @@
 
 import { API_Connector, API_Character, AssetGet, isNaked } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
-import {
-    VeratownLocationStore,
-    VeratownLocationDoc,
-} from "./veratownLocationStore";
+import { VeratownFeatureSystem } from "./featureSystem";
+import { VeratownLocationStore } from "./veratownLocationStore";
 import {
     VeratownCharacterProfileStore,
     RemovedBondageItem,
 } from "./veratownCharacterProfileStore";
 import {
-    RELEASE_COOLDOWN_MS,
     RELEASE_NUDITY_CHECK_INTERVAL_MS,
     RELEASE_NUDITY_TIMEOUT_MS,
     RELEASE_PUNISHMENT_ROOM_KEY,
     RELEASE_KEYPAD_KEY,
     RELEASE_PAROLE_DURATION_MS,
-    isCharacterAtAnyPosition,
 } from "./veratownConfig";
-import { NarratorBot } from "./veratownNarrationUtils";
 
 /**
  * Refactored Release System with:
@@ -62,10 +56,7 @@ type ReleaseStage =
     | "failed";
 
 interface ParoleMetadata {
-    startingItems: Map<string, string> | Set<string>;
-    startingLocation: { X: number; Y: number };
     paroleExpiresAt: number;
-    removedClothingItems: Map<string, string>;
     stage: ReleaseStage;
     restartAttempts: number; // Track violation restart attempts
 }
@@ -74,13 +65,6 @@ interface ConfirmationState {
     memberId: number;
     expiresAt: number;
     resolve: (confirmed: boolean) => void;
-}
-
-interface MonitoringLoop {
-    memberId: number;
-    startTime: number;
-    controller: AbortController;
-    loopPromise: Promise<void>;
 }
 
 export class ReleaseSystem implements VeratownFeatureSystem {
@@ -104,28 +88,40 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     // ===== STATE TRACKING =====
     private activeReleases = new Map<number, Promise<void>>();
-    private releaseCooldowns = new Map<number, number>();
     private paroleMetadata = new Map<number, ParoleMetadata>();
     private pendingConfirmations = new Map<number, ConfirmationState>();
-    private activeMonitoringLoops = new Map<number, MonitoringLoop>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
-    private paroleMonitoringInterval?: NodeJS.Timer;
-
-    private readonly releaseTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(
         private conn: API_Connector,
         private locationStore?: VeratownLocationStore,
         private characterProfileStore?: VeratownCharacterProfileStore,
-        private cageSystem?: {
-            freeCharacterIfCaged: (c: API_Character) => void;
-        },
-        private kennelSystem?: {
-            freeCharacterIfKenneled: (c: API_Character) => void;
-        },
-    ) {
-        this.releaseTrigger = guardHandler(this.key, this.handleRelease);
-    }
+    ) {}
+
+    private readonly actualClothingGroups = new Set<string>([
+        "Bra",
+        "Corset",
+        "Panties",
+        "Socks",
+        "Shoes",
+        "Cloth",
+        "ClothLower",
+        "ClothAccessory",
+        "ClothUpper",
+        "Hat",
+        "Jacket",
+        "Shirt",
+        "Suit",
+        "SuitLower",
+        "Stockings",
+        "Swimsuit",
+        "Top",
+        "Uniform",
+        "Dress",
+        "Bottom",
+        "Mask",
+        "Hair",
+    ]);
 
     public registerTriggers(): void {
         this.initializeReleaseParoles().catch((e) => {
@@ -133,7 +129,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         });
     }
 
-    public reloadLocations(): void {
+    public async reloadLocations(): Promise<void> {
         // No location-specific triggers needed
     }
 
@@ -667,7 +663,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
         this.paroleMetadata.delete(character.MemberNumber);
-        this.stopMonitoringLoop(character.MemberNumber);
 
         await this.recordReleaseEvent(
             character,
@@ -739,11 +734,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         await wait(this.TIMINGS.VIOLATION_NOTIFICATION);
 
         // Restart the full sequence
-        await this.restartReleaseSequence(
-            character,
-            metadata.startingLocation,
-            metadata.restartAttempts,
-        );
+        await this.restartReleaseSequence(character, metadata.restartAttempts);
     }
 
     /**
@@ -752,7 +743,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      */
     private async restartReleaseSequence(
         character: API_Character,
-        originalLocation: ChatRoomMapPos,
         restartAttempt: number,
     ): Promise<void> {
         try {
@@ -893,18 +883,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
 
-        // Update database
+        // Update database with removed items
         if (this.characterProfileStore) {
-            await this.executeWithRetry(
-                () =>
-                    this.characterProfileStore!.updateAppearance(
-                        character.MemberNumber,
-                        equippedAfterStrip,
-                    ),
-                2,
-                "update_appearance_after_strip",
-            );
-
             await this.executeWithRetry(
                 () =>
                     this.characterProfileStore!.updateRestraints(
@@ -997,10 +977,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         removedItems: RemovedBondageItem[],
     ): Promise<void> {
         this.paroleMetadata.set(character.MemberNumber, {
-            startingItems: new Set(), // Simplified: not tracking initial state
-            startingLocation: { ...character.MapPos },
             paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
-            removedClothingItems: new Map(),
             stage: "monitoring_parole",
             restartAttempts: 0,
         });
@@ -1178,98 +1155,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         );
     }
 
-    // ===== MONITORING LOOP LIFECYCLE =====
-
-    private stopMonitoringLoop(memberId: number): void {
-        const loop = this.activeMonitoringLoops.get(memberId);
-        if (loop) {
-            loop.controller.abort();
-            this.activeMonitoringLoops.delete(memberId);
-            console.log(
-                `[ReleaseSystem] Stopped monitoring loop for ${memberId}`,
-            );
-        }
-    }
-
     // ===== PAROLE INITIALIZATION & RECOVERY =====
 
-    private async initializeReleaseParoles(): Promise<void> {
+    public async initializeReleaseParoles(): Promise<void> {
         console.log(
             `[ReleaseSystem] MONITORING DISABLED: Skipping parole initialization on startup`,
         );
         return;
-
-        // DISABLED CODE BELOW
-        if (!this.characterProfileStore) {
-            return;
-        }
-
-        console.log(`[ReleaseSystem] Initializing release paroles on startup`);
-
-        try {
-            const activeParoles =
-                await this.characterProfileStore.getActiveParoles();
-
-            if (activeParoles.length === 0) {
-                this.startParoleMonitoring();
-                return;
-            }
-
-            console.log(
-                `[ReleaseSystem] Found ${activeParoles.length} active parole(s)`,
-            );
-
-            for (const parole of activeParoles) {
-                if (parole.isExpired) {
-                    await this.executeWithRetry(
-                        () =>
-                            this.characterProfileStore!.clearReleaseParole(
-                                parole.memberNumber,
-                            ),
-                        2,
-                        "clear_expired_parole",
-                    );
-                    this.paroleMetadata.delete(parole.memberNumber);
-                    continue;
-                }
-
-                // Initialize metadata
-                if (parole.paroleState) {
-                    this.paroleMetadata.set(parole.memberNumber, {
-                        startingItems: new Map(),
-                        startingLocation: parole.paroleState
-                            .releasedFromLocation || {
-                            X: 0,
-                            Y: 0,
-                        },
-                        paroleExpiresAt:
-                            parole.paroleState.paroleExpiresAt || 0,
-                        removedClothingItems: new Map(),
-                        stage: "monitoring_parole",
-                        restartAttempts: 0,
-                    });
-                }
-
-                // Check if in room
-                const character = this.conn?.chatRoom?.characters?.find(
-                    (c) => c.MemberNumber === parole.memberNumber,
-                );
-
-                if (character) {
-                    const isNaked = !this.hasAnyClothing(character);
-                    if (!isNaked) {
-                        console.log(
-                            `[ReleaseSystem] Violation on restart for ${parole.memberNumber}`,
-                        );
-                        await this.handleParoleViolation(character, "dressed");
-                    }
-                }
-            }
-
-            this.startParoleMonitoring();
-        } catch (e) {
-            console.error(`[ReleaseSystem] Error initializing paroles:`, e);
-        }
     }
 
     private startParoleMonitoring(): void {
@@ -1277,19 +1169,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] MONITORING DISABLED: Skipping parole monitoring start`,
         );
         return;
-
-        // DISABLED CODE BELOW
-        if (this.paroleMonitoringInterval) {
-            return;
-        }
-
-        console.log(`[ReleaseSystem] Starting parole monitoring`);
-
-        this.paroleMonitoringInterval = setInterval(() => {
-            this.checkAllParoleViolations().catch((e) => {
-                console.error(`[ReleaseSystem] Monitoring error:`, e);
-            });
-        }, this.PAROLE_CHECK_INTERVAL_MS);
     }
 
     public stopParoleMonitoring(): void {
@@ -1355,10 +1234,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     public async shutdown(): Promise<void> {
         this.stopParoleMonitoring();
-        for (const [_, loop] of this.activeMonitoringLoops) {
-            loop.controller.abort();
-        }
-        this.activeMonitoringLoops.clear();
         console.log(`[ReleaseSystem] Shutdown complete`);
     }
 
