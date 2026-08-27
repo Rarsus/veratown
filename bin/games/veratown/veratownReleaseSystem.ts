@@ -876,25 +876,78 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem:DEBUG] getEquippedClothing: checking ${this.actualClothingGroups.size} clothing groups`,
         );
 
+        // Method 1: Use getItemData() (potentially cached)
+        console.log(`[ReleaseSystem:DEBUG] === METHOD 1: getItemData() ===`);
         for (const clothingGroup of this.actualClothingGroups) {
             const item = character.Appearance.getItemData(clothingGroup);
-            console.log(
-                `[ReleaseSystem:DEBUG] Group "${clothingGroup}": ${item && item.Name ? `EQUIPPED "${item.Name}"` : "empty"}`,
-            );
             if (item && item.Name) {
+                console.log(
+                    `[ReleaseSystem:DEBUG] Group "${clothingGroup}": EQUIPPED "${item.Name}"`,
+                );
                 equippedClothing.push({
                     group: clothingGroup,
                     name: item.Name,
                 });
+            } else {
+                console.log(
+                    `[ReleaseSystem:DEBUG] Group "${clothingGroup}": empty`,
+                );
             }
         }
 
         console.log(
-            `[ReleaseSystem:DEBUG] getEquippedClothing TOTAL: ${equippedClothing.length} items found`,
+            `[ReleaseSystem:DEBUG] METHOD 1 TOTAL: ${equippedClothing.length} items found`,
+        );
+
+        // Method 2: Check raw Appearance.Items array (actual live data, bypasses cache)
+        console.log(
+            `[ReleaseSystem:DEBUG] === METHOD 2: Raw Appearance.Items ===`,
+        );
+        const rawEquipped: Array<{ group: string; name: string }> = [];
+        if (character.Appearance.Items) {
+            for (const item of character.Appearance.Items) {
+                if (item && item.Group && item.Name) {
+                    if (this.actualClothingGroups.has(item.Group)) {
+                        rawEquipped.push({
+                            group: item.Group,
+                            name: item.Name,
+                        });
+                        console.log(
+                            `[ReleaseSystem:DEBUG] Raw item: "${item.Name}" (${item.Group})`,
+                        );
+                    }
+                }
+            }
+        }
+        console.log(
+            `[ReleaseSystem:DEBUG] METHOD 2 TOTAL: ${rawEquipped.length} items found`,
+        );
+
+        // Compare methods to detect cache staleness
+        if (equippedClothing.length !== rawEquipped.length) {
+            console.log(`[ReleaseSystem:DEBUG] ⚠️  CACHE STALENESS DETECTED!`);
+            console.log(
+                `[ReleaseSystem:DEBUG]    getItemData() reports: ${equippedClothing.length} items`,
+            );
+            console.log(
+                `[ReleaseSystem:DEBUG]    Raw Items array shows: ${rawEquipped.length} items`,
+            );
+        }
+
+        // Use raw data (live) if it differs from cached data
+        if (rawEquipped.length < equippedClothing.length) {
+            console.log(
+                `[ReleaseSystem:DEBUG] Using raw Appearance.Items data (${rawEquipped.length} items) instead of cached getItemData() (${equippedClothing.length} items)`,
+            );
+            equippedClothing.length = 0; // Clear
+            equippedClothing.push(...rawEquipped); // Use raw data
+        }
+
+        console.log(
+            `[ReleaseSystem:DEBUG] getEquippedClothing FINAL: ${equippedClothing.length} items`,
         );
 
         // DIAGNOSTIC: Check if there are items in groups NOT in our whitelist
-        // This helps identify if clothing is in an unexpected group
         console.log(
             `[ReleaseSystem:DEBUG] Checking ALL appearance groups for items outside whitelist...`,
         );
@@ -2013,9 +2066,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     /**
-     * Check if a paroled character has added clothing beyond their starting state
-     * During parole, the character must remain COMPLETELY NAKED (no clothing groups)
-     * Any clothing item found = violation
+     * Check if a paroled character has clothing and SILENTLY REMOVE IT
+     * During parole, the character MUST remain COMPLETELY NAKED (no clothing groups)
+     * If clothing is detected, silently remove it (no violations, just enforcement)
+     * Logs live vs cached data comparison to detect staleness
      */
     private async checkParoleViolation(
         character: API_Character,
@@ -2065,8 +2119,28 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             await wait(100); // Small delay between removals
         }
 
+        // VERIFY removal by checking again
         console.log(
-            `[ReleaseSystem:PAROLE_CHECK] ✓ Enforcement complete: ${currentEquippedClothing.length} item(s) removed`,
+            `[ReleaseSystem:PAROLE_CHECK] Verifying removal - checking clothing state again...`,
+        );
+        const afterRemovalClothing = this.getEquippedClothing(character);
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] After removal: ${afterRemovalClothing.length} item(s) still equipped`,
+        );
+
+        if (afterRemovalClothing.length > 0) {
+            console.log(
+                `[ReleaseSystem:PAROLE_CHECK] ⚠️  WARNING: Items still equipped after removal attempt:`,
+            );
+            for (const item of afterRemovalClothing) {
+                console.log(
+                    `[ReleaseSystem:PAROLE_CHECK]   - Still present: "${item.name}" (${item.group})`,
+                );
+            }
+        }
+
+        console.log(
+            `[ReleaseSystem:PAROLE_CHECK] ✓ Enforcement complete: removed ${currentEquippedClothing.length} item(s), ${afterRemovalClothing.length} remain`,
         );
         console.log(
             `[ReleaseSystem:PAROLE_CHECK] Character will remain monitored for continued nudity enforcement`,
