@@ -13,7 +13,7 @@
  */
 
 import { API_Connector, API_Character, AssetGet, isNaked } from "bc-bot";
-import { isClothing, isCosplay, isBind } from "../../assetHelpers";
+import { isClothing, isCosplay, isBind } from "../../../src/assetHelpers";
 import { wait } from "../../hub/utils";
 import { VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationStore } from "./veratownLocationStore";
