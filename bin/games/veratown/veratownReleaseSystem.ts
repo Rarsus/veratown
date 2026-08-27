@@ -1235,44 +1235,16 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         );
         await wait(2000); // 2 second grace period for appearance sync
 
-        let consecutiveClothedChecks = 0;
-        const CLOTHED_VIOLATION_THRESHOLD = 2; // Require 2 consecutive clothed checks to trigger violation
-
         while (Date.now() - paroleStartTime < paroleDurationMs) {
-            // Check if character has clothing (violation)
-            const isNaked = await this.isCharacterNaked(character);
-
-            if (!isNaked) {
-                consecutiveClothedChecks++;
-                console.log(
-                    `[ReleaseSystem] Clothed check #${consecutiveClothedChecks} for ${character.MemberNumber}`,
-                );
-
-                // Only trigger violation after multiple consecutive clothed checks
-                // This prevents false positives from mid-transition states
-                if (consecutiveClothedChecks >= CLOTHED_VIOLATION_THRESHOLD) {
-                    console.log(
-                        `[ReleaseSystem] Parole violation detected for ${character.MemberNumber}: ${consecutiveClothedChecks} consecutive clothed checks`,
-                    );
-                    await this.enforceParoleViolation(character, "dressed");
-                    // enforceParoleViolation will restart from Stage 2 recursively
-                    return;
-                }
-            } else {
-                // Character is naked - reset violation counter
-                if (consecutiveClothedChecks > 0) {
-                    console.log(
-                        `[ReleaseSystem] Character ${character.MemberNumber} is naked - violation counter reset from ${consecutiveClothedChecks}`,
-                    );
-                }
-                consecutiveClothedChecks = 0;
-            }
+            // ENFORCEMENT: Silently remove any clothing detected (no violations)
+            // This continuously enforces the "fully nude = 0 clothing" target state
+            await this.checkParoleViolation(character, new Map());
 
             const remaining = Math.ceil(
                 (paroleDurationMs - (Date.now() - paroleStartTime)) / 1000,
             );
             console.log(
-                `[ReleaseSystem] Parole check for ${character.MemberNumber}: ${remaining}s remaining (clothed checks: ${consecutiveClothedChecks}/${CLOTHED_VIOLATION_THRESHOLD})`,
+                `[ReleaseSystem] Parole check for ${character.MemberNumber}: ${remaining}s remaining`,
             );
 
             // CRITICAL: Update database with current appearance and parole progress
