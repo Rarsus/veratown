@@ -986,8 +986,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const removedItems: RemovedBondageItem[] = [];
         const ownerLockedItems: RemovedBondageItem[] = [];
 
-        // Separate owner-locked items (items with locks) from removable items
-        // Items with locks must remain in place and are never stripped
+        // Separate owner-locked items from removable items
+        // Only items with OwnerPadlock or OwnerTimerPadlock are preserved
+        // Other lock types (Timer, Password, Combination, etc.) are removable
         for (const item of appearance) {
             if (!item?.Group || !item?.Name) {
                 continue;
@@ -1002,8 +1003,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 difficulty: item.Difficulty,
             };
 
-            // If item has a lock, it's owner-locked and must never be touched
-            if (item.Property?.Lock) {
+            // Only OwnerPadlock and OwnerTimerPadlock indicate true owner-locked items
+            // These are the only locks that should be preserved during emergency release
+            const isOwnerLocked =
+                item.Property?.Lock === "OwnerPadlock" ||
+                item.Property?.Lock === "OwnerTimerPadlock";
+
+            if (isOwnerLocked) {
                 ownerLockedItems.push(bondageItem);
                 console.log(
                     `[ReleaseSystem] Preserving owner-locked item: ${item.Name} (lock: ${item.Property.Lock})`,
