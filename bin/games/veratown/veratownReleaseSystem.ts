@@ -13,6 +13,7 @@
  */
 
 import { API_Connector, API_Character, AssetGet, isNaked } from "bc-bot";
+import { isClothing, isCosplay, isBind } from "../../assetHelpers";
 import { wait } from "../../hub/utils";
 import { VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationStore } from "./veratownLocationStore";
@@ -150,30 +151,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         "Bottom",
         "Mask",
         "Hair",
-    ]);
-
-    private readonly cosplayGroups = new Set<string>([
-        "BodyCosplay", // Tattoos, makeup, scars, etc.
-        "Wings",
-        "Ears",
-        "Tails",
-        "Cape",
-        "Cloak",
-        "Horns",
-        "AntennaSet",
-        "Antennae",
-        "Piercing",
-        "Pendant",
-        "Necklace",
-        "Choker",
-        "Collar", // Non-bondage collars (cosmetic)
-        "Mittens", // Decorative
-        "Veil",
-        "Accessory",
-        "Eyewear",
-        "Head",
-        "Glasses",
-        "Blindfold", // Some cosmetic blindfolds
     ]);
 
     public registerTriggers(): void {
@@ -1011,9 +988,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const ownerLockedItems: RemovedBondageItem[] = [];
         const preservedCosplayItems: RemovedBondageItem[] = [];
 
-        // Separate items into categories:
-        // - Owner-locked: preserved due to lock type
-        // - Cosplay/Cosmetics: preserved as non-bondage, non-clothing items
+        // Separate items into categories based on their actual asset definitions:
+        // - Owner-locked: preserved due to lock type (OwnerPadlock/OwnerTimerPadlock)
+        // - Cosplay/Cosmetics: preserved (BodyCosplay items like tattoos, wings, tails)
         // - Removable: clothing and bondage items without owner locks
         for (const item of appearance) {
             if (!item?.Group || !item?.Name) {
@@ -1040,8 +1017,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 console.log(
                     `[ReleaseSystem] Preserving owner-locked item: ${item.Name} (lock: ${item.Property.Lock})`,
                 );
-            } else if (this.cosplayGroups.has(item.Group)) {
-                // Preserve cosmetic and cosplay items (wings, tails, tattoos, etc.)
+            } else if (isCosplay(item)) {
+                // Preserve cosmetic and cosplay items using actual BC asset definitions
                 preservedCosplayItems.push(bondageItem);
                 console.log(
                     `[ReleaseSystem] Preserving cosmetic/cosplay item: ${item.Name} (group: ${item.Group})`,
