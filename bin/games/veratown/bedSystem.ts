@@ -152,9 +152,6 @@ export class BedSystem implements VeratownFeatureSystem {
                 const hasBed =
                     character.Appearance.getItemData("ItemDevices")?.Name ===
                     "Bed";
-                const hasCovers =
-                    character.Appearance.getItemData("ItemAddon")?.Name ===
-                    "Covers";
 
                 if (isAsleep && !hasBed) {
                     console.log(
@@ -191,7 +188,11 @@ export class BedSystem implements VeratownFeatureSystem {
                         console.log(
                             `[BedSystem] presync: ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
                         );
-                        character.Appearance.Sync();
+                        character.Appearance.allItems.forEach((item) => {
+                            console.log(
+                                `[BedSystem] Item applied: ${item.Name}`,
+                            );
+                        });
                         console.log(
                             `[BedSystem] ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
                         );
