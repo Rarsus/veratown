@@ -185,16 +185,16 @@ export class BedSystem implements VeratownFeatureSystem {
                             AssetGet("ItemAddon", "Covers"),
                         );
 
+                        // CRITICAL: Sync appearance to server before checking it again.
+                        // Without this, the server doesn't know about the Bed/Covers,
+                        // and the next loop iteration will think hasBed is still false.
+                        character.Appearance.MakeAppearanceBundle();
+
+                        // Wait for appearance sync to stabilize before reading again
+                        await wait(100);
+
                         console.log(
-                            `[BedSystem] presync: ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
-                        );
-                        for (const item of character.Appearance.allItems()) {
-                            console.log(
-                                `[BedSystem] [Item applied]: ${item.Name}`,
-                            );
-                        }
-                        console.log(
-                            `[BedSystem] ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
+                            `[BedSystem] postsync: ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
                         );
                         hasBed = true;
                         console.log(
@@ -210,14 +210,11 @@ export class BedSystem implements VeratownFeatureSystem {
                     console.log(
                         `[BedSystem] ${character.MemberNumber} woke up or left bed, removing bed items`,
                     );
-                    // Only remove if we actually have the items (prevent unnecessary removals)
-                    if (hasBed) {
-                        character.Appearance.RemoveItem("ItemDevices");
-                    }
+                    // Sync removal to server
+                    character.Appearance.RemoveItem("ItemDevices");
+                    character.Appearance.MakeAppearanceBundle();
+                    await wait(50);
                 }
-                console.log(
-                    `[BedSystem] DEBUG ${character.MemberNumber} bed check complete`,
-                );
                 await wait(BED_CHECK_INTERVAL_MS);
             }
         } finally {
@@ -229,6 +226,8 @@ export class BedSystem implements VeratownFeatureSystem {
                 character.Appearance.getItemData("ItemDevices")?.Name === "Bed"
             ) {
                 character.Appearance.RemoveItem("ItemDevices");
+                character.Appearance.MakeAppearanceBundle();
+                await wait(50);
             }
             this.sleepingCharacters.delete(character.MemberNumber);
         }
