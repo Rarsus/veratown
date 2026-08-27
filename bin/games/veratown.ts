@@ -313,7 +313,21 @@ export class Veratown {
 
         this.commandParser.register("help", this.onCommandHelp);
         this.commandParser.register("release", async (sender, msg, args) => {
-            await this.releaseSystem?.executeRelease(sender);
+            // Handle confirmation subcommands for release confirmation mechanism
+            if (args[0]?.toLowerCase() === "yes") {
+                await this.releaseSystem?.handleConfirmationResponse(
+                    sender,
+                    true,
+                );
+            } else if (args[0]?.toLowerCase() === "no") {
+                await this.releaseSystem?.handleConfirmationResponse(
+                    sender,
+                    false,
+                );
+            } else {
+                // No argument = initiate release
+                await this.releaseSystem?.executeRelease(sender);
+            }
         });
         // Keep freeandleave as backward compat alias
         this.commandParser.register("freeandleave", (sender, msg, args) =>
