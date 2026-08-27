@@ -83,11 +83,6 @@ interface MonitoringLoop {
     loopPromise: Promise<void>;
 }
 
-interface ClothingCacheEntry {
-    timestamp: number;
-    items: Array<{ group: string; name: string }>;
-}
-
 export class ReleaseSystem implements VeratownFeatureSystem {
     public readonly key = "release";
     public readonly label = "Emergency Release System";
@@ -100,14 +95,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         STATE_SYNC_GRACE_PERIOD: 2000,
         BETWEEN_STAGES: 300,
         VIOLATION_NOTIFICATION: 500,
-        APPEARANCE_CACHE_TTL: 500, // Cache for 500ms
         MIN_NOTIFICATION_INTERVAL: 5000, // Min 5s between same notification type
     } as const;
 
     private readonly CONFIRMATION_TIMEOUT_MS = 20000; // 20 seconds
     private readonly MAX_PAROLE_RESTART_ATTEMPTS = 3;
     private readonly PAROLE_CHECK_INTERVAL_MS = 5000; // 5 seconds
-    private readonly CLOTHING_CACHE_SIZE = 100; // Max cached clothing states
 
     // ===== STATE TRACKING =====
     private activeReleases = new Map<number, Promise<void>>();
@@ -115,7 +108,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private paroleMetadata = new Map<number, ParoleMetadata>();
     private pendingConfirmations = new Map<number, ConfirmationState>();
     private activeMonitoringLoops = new Map<number, MonitoringLoop>();
-    private clothingCache = new Map<number, ClothingCacheEntry>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
     private paroleMonitoringInterval?: NodeJS.Timer;
 
@@ -514,12 +506,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async monitorParoleExpiration(
         character: API_Character,
     ): Promise<void> {
-        console.log(
-            `[ReleaseSystem] MONITORING DISABLED: Skipping parole monitoring for ${character.MemberNumber}`,
-        );
-        return;
-
-        // DISABLED CODE BELOW
         const paroleStartTime = Date.now();
         const paroleDurationMs = RELEASE_PAROLE_DURATION_MS;
 
@@ -536,7 +522,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     (paroleDurationMs - (Date.now() - paroleStartTime)) / 1000,
                 );
 
-                // Enforce nudity
+                // Enforce nudity (strip any re-equipped clothing)
                 try {
                     await this.enforceParoleNudity(character);
                 } catch (e) {
@@ -546,8 +532,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     );
                 }
 
-                // Update database
-                await this.updateParoleProgress(character);
+                // Check for parole violation (character dressed themselves)
+                if (!isNaked(character)) {
+                    console.log(
+                        `[ReleaseSystem] Parole violation detected: ${character.MemberNumber} is clothed`,
+                    );
+                    await this.handleParoleViolation(character, "dressed");
+                    return;
+                }
 
                 // Send notifications
                 this.sendParoleNotification(character, remaining);
@@ -588,32 +580,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
-    }
-
-    private async updateParoleProgress(
-        character: API_Character,
-    ): Promise<void> {
-        if (!this.characterProfileStore) {
-            return;
-        }
-
-        try {
-            const equippedClothing = this.getEquippedClothing(character);
-            await this.executeWithRetry(
-                () =>
-                    this.characterProfileStore!.updateAppearance(
-                        character.MemberNumber,
-                        equippedClothing,
-                    ),
-                2,
-                "update_appearance_progress",
-            );
-        } catch (e) {
-            console.error(
-                `[ReleaseSystem] Failed to update parole progress:`,
-                e,
-            );
-        }
     }
 
     private sendParoleNotification(
@@ -927,12 +893,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
 
-        // Verify
-        const equippedAfterStrip = this.getEquippedClothing(character);
-        console.log(
-            `[ReleaseSystem] After strip: ${equippedAfterStrip.length} clothing items remaining`,
-        );
-
         // Update database
         if (this.characterProfileStore) {
             await this.executeWithRetry(
@@ -1030,71 +990,18 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     // ===== CLOTHING DETECTION WITH CACHING =====
 
-    /**
-     * Get equipped clothing with caching to reduce API calls
-     */
-    private getEquippedClothing(
-        character: API_Character,
-    ): Array<{ group: string; name: string }> {
-        // Check cache
-        const cached = this.clothingCache.get(character.MemberNumber);
-        if (
-            cached &&
-            Date.now() - cached.timestamp < this.TIMINGS.APPEARANCE_CACHE_TTL
-        ) {
-            return cached.items;
-        }
-
-        const equippedClothing: Array<{ group: string; name: string }> = [];
-
-        if (character.Appearance.Items) {
-            for (const item of character.Appearance.Items) {
-                if (item?.Group && item?.Name) {
-                    if (this.actualClothingGroups.has(item.Group)) {
-                        equippedClothing.push({
-                            group: item.Group,
-                            name: item.Name,
-                        });
-                    }
-                }
-            }
-        }
-
-        // Cache it (with size limit)
-        if (this.clothingCache.size >= this.CLOTHING_CACHE_SIZE) {
-            // Remove oldest entry
-            const firstKey = this.clothingCache.keys().next().value;
-            if (firstKey) {
-                this.clothingCache.delete(firstKey);
-            }
-        }
-
-        this.clothingCache.set(character.MemberNumber, {
-            timestamp: Date.now(),
-            items: equippedClothing,
-        });
-
-        return equippedClothing;
-    }
-
     // ===== PAROLE INITIALIZATION =====
 
     private async initializeParoleMetadata(
         character: API_Character,
         removedItems: RemovedBondageItem[],
     ): Promise<void> {
-        const nakedState = this.getEquippedClothing(character);
-        const nakedItems = new Set<string>();
-        for (const item of nakedState) {
-            nakedItems.add(item.group);
-        }
-
         this.paroleMetadata.set(character.MemberNumber, {
-            startingItems: nakedItems,
+            startingItems: new Set(), // Simplified: not tracking initial state
             startingLocation: { ...character.MapPos },
             paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
             removedClothingItems: new Map(),
-            stage: "pending_confirmation",
+            stage: "monitoring_parole",
             restartAttempts: 0,
         });
 
