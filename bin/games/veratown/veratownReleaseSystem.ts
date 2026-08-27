@@ -26,6 +26,7 @@ import {
     RELEASE_PUNISHMENT_ROOM_KEY,
     RELEASE_KEYPAD_KEY,
     RELEASE_PAROLE_DURATION_MS,
+    RELEASE_COOLDOWN_MS,
 } from "./veratownConfig";
 
 /**
@@ -88,6 +89,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     // ===== STATE TRACKING =====
     private activeReleases = new Map<number, Promise<void>>();
+    private releaseCooldowns = new Map<number, number>(); // memberId -> nextReleaseTime
     private paroleMetadata = new Map<number, ParoleMetadata>();
     private pendingConfirmations = new Map<number, ConfirmationState>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
@@ -288,6 +290,14 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             console.log(
                 `[ReleaseSystem] Release completed successfully for ${character.MemberNumber}`,
             );
+
+            // Set cooldown if configured
+            if (RELEASE_COOLDOWN_MS > 0) {
+                this.releaseCooldowns.set(
+                    character.MemberNumber,
+                    Date.now() + RELEASE_COOLDOWN_MS,
+                );
+            }
         } catch (e) {
             console.error(`[ReleaseSystem] Release failed:`, e);
             this.whisper(character, "Release sequence encountered an error.");
@@ -1052,6 +1062,21 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async checkCanRelease(character: API_Character): Promise<boolean> {
         if (character.IsRoomAdmin()) {
             return true;
+        }
+
+        if (RELEASE_COOLDOWN_MS > 0) {
+            const nextRelease = this.releaseCooldowns.get(
+                character.MemberNumber,
+            );
+            if (nextRelease && Date.now() < nextRelease) {
+                const remaining = Math.ceil((nextRelease - Date.now()) / 1000);
+                const minutes = Math.ceil(remaining / 60);
+                this.whisper(
+                    character,
+                    `Emergency release on cooldown. Available in ${minutes} minute(s).`,
+                );
+                return false;
+            }
         }
 
         if (this.locationStore) {
