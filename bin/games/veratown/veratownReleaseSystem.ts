@@ -979,7 +979,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
     ): Promise<RemovedBondageItem[]> {
         console.log(
-            `[ReleaseSystem] stripNonOwnerItems: Stripping items (preserving owner-locked)`,
+            `[ReleaseSystem] stripNonOwnerItems: Removing unlocked items only`,
         );
 
         const appearance = character.Appearance.Items || [];
@@ -987,6 +987,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const ownerLockedItems: RemovedBondageItem[] = [];
 
         // Separate owner-locked items (items with locks) from removable items
+        // Items with locks must remain in place and are never stripped
         for (const item of appearance) {
             if (!item?.Group || !item?.Name) {
                 continue;
@@ -1001,60 +1002,65 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 difficulty: item.Difficulty,
             };
 
-            // If item has a lock, it's owner-locked and should be preserved
+            // If item has a lock, it's owner-locked and must never be touched
             if (item.Property?.Lock) {
                 ownerLockedItems.push(bondageItem);
                 console.log(
-                    `[ReleaseSystem] Marking as owner-locked: ${item.Name} (lock: ${item.Property.Lock})`,
+                    `[ReleaseSystem] Preserving owner-locked item: ${item.Name} (lock: ${item.Property.Lock})`,
                 );
             } else {
                 removedItems.push(bondageItem);
             }
         }
 
-        // Strip all items (both clothing and bondage) using slowlyStripBulk
-        // to avoid triggering WCE anti-cheat detection
+        // Strip clothing using slowlyStripBulk to avoid WCE anti-cheat detection
+        // Clothing never has locks, so this is safe
         try {
             await character.Appearance.slowlyStripBulk(
-                { clothing: true, item: true }, // Strip both clothing and restraints
-                true, // stripLocked: also remove locked items
+                { clothing: true, item: false }, // Only strip clothing, NOT bondage items
+                false, // stripLocked: false since no locks on clothing
             );
         } catch (e) {
-            console.error(`[ReleaseSystem] Error during slowlyStripBulk:`, e);
-            // Fallback to instant strip if slow strip fails
+            console.error(`[ReleaseSystem] Error during clothing strip:`, e);
+            // Fallback to instant strip
             character.Appearance.stripBulk(
-                { clothing: true, item: true },
-                true,
+                { clothing: true, item: false },
+                false,
             );
         }
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
 
-        // Re-apply owner-locked items to keep them in place
-        if (ownerLockedItems.length > 0) {
+        // Remove unlocked bondage items individually and slowly
+        // This avoids both WCE detection and any interference with owner-locked items
+        if (removedItems.length > 0) {
             console.log(
-                `[ReleaseSystem] Re-applying ${ownerLockedItems.length} owner-locked items`,
+                `[ReleaseSystem] Removing ${removedItems.length} unlocked bondage items`,
             );
-            for (const item of ownerLockedItems) {
+
+            for (const item of removedItems) {
                 try {
                     const asset = AssetGet("Female3DCG", item.group, item.name);
                     if (asset) {
-                        character.Appearance.AddItem(
-                            asset,
-                            item.color || undefined,
-                        );
+                        character.Appearance.RemoveItem(asset);
                         console.log(
-                            `[ReleaseSystem] Re-applied locked item: ${item.name}`,
+                            `[ReleaseSystem] Removed unlocked item: ${item.name}`,
                         );
                     }
                 } catch (e) {
                     console.error(
-                        `[ReleaseSystem] Error restoring owner-locked item ${item.name}:`,
+                        `[ReleaseSystem] Error removing item ${item.name}:`,
                         e,
                     );
                 }
+                // Small delay between removals to further avoid WCE detection
+                await wait(50);
             }
         }
+
+        console.log(
+            `[ReleaseSystem] Owner-locked items preserved: ${ownerLockedItems.length}`,
+        );
 
         // Update database with removed items (excluding owner-locked)
         if (this.characterProfileStore) {
