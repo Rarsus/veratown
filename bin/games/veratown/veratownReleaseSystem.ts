@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import { API_Connector, API_Character, AssetGet, isNaked } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
@@ -109,32 +109,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private readonly PAROLE_CHECK_INTERVAL_MS = 5000; // 5 seconds
     private readonly CLOTHING_CACHE_SIZE = 100; // Max cached clothing states
 
-    // WHITELIST of ACTUAL CLOTHING GROUPS ONLY
-    private readonly actualClothingGroups = new Set([
-        "Bra",
-        "Corset",
-        "Shirt",
-        "Top",
-        "Panties",
-        "Bottom",
-        "Dress",
-        "Swimsuit",
-        "Uniform",
-        "Jacket",
-        "OuterClothes",
-        "Shoes",
-        "Socks",
-        "Stockings",
-        "Gloves",
-        "Hat",
-        "Hair",
-        "Mask",
-        "Cloth",
-        "ClothAccessory",
-        "ClothLower",
-        "ClothUpper",
-    ]);
-
     // ===== STATE TRACKING =====
     private activeReleases = new Map<number, Promise<void>>();
     private releaseCooldowns = new Map<number, number>();
@@ -191,7 +165,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return;
         }
 
-        if (this.hasAnyClothing(character)) {
+        if (!isNaked(character)) {
             console.log(
                 `[ReleaseSystem] Parole violation on shower entry: ${character.MemberNumber}`,
             );
@@ -475,7 +449,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Check nudity
-            if (!this.hasAnyClothing(character)) {
+            if (isNaked(character)) {
                 this.whisper(character, "*The barrier dissolves...*");
                 return true;
             }
@@ -663,7 +637,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         await this.updateParoleProgress(character);
 
         // Final nudity check
-        const finalNakedCheck = !this.hasAnyClothing(character);
+        const finalNakedCheck = isNaked(character);
 
         if (!finalNakedCheck) {
             console.log(
@@ -1062,19 +1036,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         });
 
         return equippedClothing;
-    }
-
-    /**
-     * Check if character has any clothing
-     */
-    private hasAnyClothing(character: API_Character): boolean {
-        for (const clothingGroup of this.actualClothingGroups) {
-            const item = character.Appearance.getItemData(clothingGroup);
-            if (item?.Name) {
-                return true;
-            }
-        }
-        return false;
     }
 
     // ===== PAROLE INITIALIZATION =====
