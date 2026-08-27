@@ -566,12 +566,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     }
 
     private async enforceParoleNudity(character: API_Character): Promise<void> {
-        // Proactively enforce nudity by stripping clothing AND bondage items
+        // Proactively enforce nudity by stripping clothing only
+        // Bondage items are stripped once during initial release, not repeatedly
         // Use slowlyStripBulk() to avoid triggering WCE anti-cheat detection
         // which flags rapid repeated strip calls as potential exploits
         try {
             await character.Appearance.slowlyStripBulk(
-                { clothing: true, item: true }, // Strip both clothing and restraints
+                { clothing: true }, // Strip clothing ONLY (no items)
                 true, // stripLocked: also remove locked items
             );
         } catch (e) {
@@ -581,7 +582,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
             // Fallback to instant strip if slow strip fails
             character.Appearance.stripBulk(
-                { clothing: true, item: true },
+                { clothing: true }, // Strip clothing ONLY
                 true,
             );
         }
