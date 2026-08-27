@@ -215,7 +215,9 @@ export class BedSystem implements VeratownFeatureSystem {
                         character.Appearance.RemoveItem("ItemDevices");
                     }
                 }
-
+                console.log(
+                    `[BedSystem] DEBUG ${character.MemberNumber} bed check complete`,
+                );
                 await wait(BED_CHECK_INTERVAL_MS);
             }
         } finally {
@@ -228,7 +230,6 @@ export class BedSystem implements VeratownFeatureSystem {
             ) {
                 character.Appearance.RemoveItem("ItemDevices");
             }
-            this.sleepingCharacters.delete(character.MemberNumber);
             this.sleepingCharacters.delete(character.MemberNumber);
         }
     };
