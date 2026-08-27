@@ -750,9 +750,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] Parole duration expired for ${character.MemberNumber}`,
         );
 
-        // Update final state
-        await this.updateParoleProgress(character);
-
         // Final nudity check
         const finalNakedCheck = isNaked(character);
 
