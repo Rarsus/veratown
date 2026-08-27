@@ -84,58 +84,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         "ClothUpper",
     ]);
 
-    /**
-     * ALTERNATIVE APPROACH: Inverse whitelist of body parts/cosmetics/intimate items
-     * If item.Group NOT in this set → it's considered clothing
-     * Useful if cache issues persist with forward whitelist approach
-     * Reference: BC Item Groups that are NOT clothing
-     */
-    private readonly bodyPartsAndNonClothingGroups = new Set([
-        // Body modifications
-        "BodyStyle",
-        "BodyLower",
-        "BodyUpper",
-        "Pussy",
-        "Nipples",
-
-        // Face/head cosmetics
-        "Eyes",
-        "Eyes2",
-        "Eyebrows",
-        "EyeShadow",
-        "Blush",
-        "Mouth",
-
-        // Hair (natural)
-        "HairFront",
-        "HairBack",
-
-        // Physical characteristics
-        "Height",
-        "Pronouns",
-        "Head",
-
-        // Arm/hand positions
-        "ArmsLeft",
-        "ArmsRight",
-        "HandsLeft",
-        "HandsRight",
-
-        // Intimate piercings/devices
-        "ItemNipplesPiercings",
-        "ItemNeck",
-
-        // Visual effects
-        "Emoticon",
-        "Fluids",
-    ]);
-
     // Track active releases (memberNumber -> Promise)
     private activeReleases = new Map<number, Promise<void>>();
     // Track release cooldowns (memberNumber -> nextReleaseTime)
     private releaseCooldowns = new Map<number, number>();
-    // Track previous appearances for characters on parole (memberNumber -> itemGroups set)
-    private paroleAppearanceTracking = new Map<number, Set<string>>();
+
     // Store full parole metadata for cross-room enforcement
     private paroleMetadata = new Map<
         number,
@@ -143,8 +96,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             startingItems: Map<string, string> | Set<string>; // Backwards compat: can be Map or Set
             startingLocation: { X: number; Y: number };
             paroleExpiresAt: number;
-            removedClothingItems: Map<string, string>; // BIDIRECTIONAL: Track items we removed (group -> name)
-            detectedClothingItems: Set<string>; // BIDIRECTIONAL: Track items actually in appearance after stripping
+            removedClothingItems: Map<string, string>; // Track items we removed (group -> name)
         }
     >();
     // Parole monitoring interval
@@ -245,48 +197,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
     }
 
-    /**
-     * Execute the full release sequence
-     */
-    /**
-     * HELPER: Check if an item is clothing using FORWARD logic (current approach)
-     * If item.Group is in actualClothingGroups → it's clothing
-     *
-     * Current strategy: Use forward whitelist (faster, more explicit)
-     * Fallback: Switch to isClothingByInverse() if cache issues persist
-     */
-    private isClothingByForward(itemGroup: string | undefined): boolean {
-        if (!itemGroup) return false;
-        return this.actualClothingGroups.has(itemGroup);
-    }
-
-    /**
-     * DIAGNOSTIC: Compare forward and inverse clothing checks
-     * If both approaches disagree on what's clothing, indicates potential cache issues
-     * or definition gaps in whitelist/blacklist
-     *
-     * Returns: {forward: boolean, inverse: boolean, isDiscrepancy: boolean}
-     */
-    private diagnoseClothingDetection(itemGroup: string | undefined): {
-        forward: boolean;
-        inverse: boolean;
-        isDiscrepancy: boolean;
-    } {
-        const forward = this.isClothingByForward(itemGroup);
-        const inverse = this.isClothingByInverse(itemGroup);
-        return {
-            forward,
-            inverse,
-            isDiscrepancy: forward !== inverse,
-        };
-    }
-
-    // DEPRECATED METHODS REMOVED (lines 283-455 in previous versions)
-    // - clearCacheAndGetAppearance() - Failed attempt at cache invalidation
-    // - validateCacheCleared() - Cache validation helper
-    // Reason: Now using direct getItemData() API (proven working pattern)
-    // See: getEquippedClothing(), hasAnyClothing(), isCharacterNaked()
-
     private async performRelease(character: API_Character): Promise<void> {
         try {
             console.log(
@@ -350,8 +260,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             const removedBondageItems =
                 await this.stripNonOwnerItems(character);
 
-            // BIDIRECTIONAL VALIDATION: Track what we removed AND what's actually present
-            // Extract clothing items from removedBondageItems
+            // Extract clothing items from removed items
             const removedClothingMap = new Map<string, string>();
             for (const item of removedBondageItems) {
                 if (this.actualClothingGroups.has(item.group)) {
@@ -391,15 +300,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
             }
 
-            // Store parole metadata for cross-room enforcement
-            // TARGET: Fully nude state (empty Set = 0 clothing items allowed)
-            // STRATEGY: Silently remove any clothing detected, no violations
+            // Store parole metadata for cross-room enforcement (target: fully nude)
             this.paroleMetadata.set(character.MemberNumber, {
-                startingItems: new Map(), // Target: empty = no clothing allowed
+                startingItems: new Map(),
                 startingLocation,
                 paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
                 removedClothingItems: new Map(), // Target state enforcement (empty = fully nude)
-                detectedClothingItems: new Set(), // Track any clothing detected for removal
             });
 
             await wait(300);
@@ -425,23 +331,17 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         character.MemberNumber,
                     );
                     this.paroleMetadata.delete(character.MemberNumber);
-                    this.paroleAppearanceTracking.delete(
-                        character.MemberNumber,
-                    );
                 }
                 await this.recordReleaseEvent(character, "failed_nudity_check");
                 return;
             }
 
-            // CRITICAL: Update parole metadata with fully-naked state
-            // Any clothing added during parole from this point is a violation
-            // Using direct API call (matches bed system pattern, no cache issues)
+            // Capture fully-naked state for parole enforcement
             console.log(
                 `[ReleaseSystem] Capturing fully-naked state for parole violation detection`,
             );
             const equippedAtNakedState = this.getEquippedClothing(character);
-            // CRITICAL: Only capture CLOTHING groups in the naked state
-            // Body parts, cosmetics, etc. should NOT be tracked
+            // Capture clothing groups only (exclude body parts, cosmetics)
             const nakedItems = new Set<string>();
             for (const item of equippedAtNakedState) {
                 nakedItems.add(item.group);
@@ -630,11 +530,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
         }
 
-        // CRITICAL: Do NOT re-add clothing here!
-        // Character must be FULLY NAKED during parole enforcement (Stages 5-7)
-        // Clothing will be returned AFTER parole completes successfully in Stage 8
-        // If we return clothing now, nudity check will fail and parole system breaks
-
+        // Do NOT re-add clothing during parole - character must stay fully naked
         const clothingCount = removedItems.filter((item) =>
             this.actualClothingGroups.has(item.group),
         ).length;
@@ -797,16 +693,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         return false;
     }
 
-    // DEPRECATED: inspectAppearanceObject() - Diagnostic helper for cache debugging
-    // Removed: No longer needed with direct getItemData() approach
-
     /**
-     * Check if character has no clothing (only body items remain)
-     * Nudity = no actual CLOTHING. Body parts and intimate devices are OK.
-     * ASYNC: Waits for appearance cache refresh after MakeAppearanceBundle()
-     */
-    /**
-     * Get all currently equipped clothing items using direct getItemData() approach
+     * Get all currently equipped clothing items from live appearance data
      * This mirrors the bed system's proven pattern that WORKS.
      * Returns: Array of clothing items {group, name}
      */
@@ -990,7 +878,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] RESTART: Stripped ${nowRemovedItems.length} items`,
         );
 
-        // Update bidirectional metadata for restart
+        // Extract clothing items from stripped items for tracking
         const restartRemovedClothingMap = new Map<string, string>();
         for (const item of nowRemovedItems) {
             if (this.actualClothingGroups.has(item.group)) {
@@ -1027,12 +915,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 character.MemberNumber,
             );
             this.paroleMetadata.delete(character.MemberNumber);
-            this.paroleAppearanceTracking.delete(character.MemberNumber);
             await this.recordReleaseEvent(character, "parole_restart_failed");
             return;
         }
 
-        // Update metadata with fully-naked state using bidirectional validation
+        // Update metadata with fully-naked state
         const nakedEquippedClothing = this.getEquippedClothing(character);
         const nakedDetectedClothing = new Set<string>();
         for (const item of nakedEquippedClothing) {
@@ -1044,7 +931,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             startingLocation: originalLocation || { X: 0, Y: 0 },
             paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
             removedClothingItems: restartRemovedClothingMap, // Track what was removed
-            detectedClothingItems: nakedDetectedClothing, // Track what we detect now
         });
 
         await wait(500);
@@ -1082,7 +968,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             RELEASE_PAROLE_DURATION_MS,
         );
 
-        this.trackParoleCharacter(character);
         await this.monitorParoleExpiration(character);
 
         // Record the violation and restart
@@ -1139,9 +1024,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] Starting 10-minute parole monitoring for ${character.MemberNumber}`,
         );
 
-        // CRITICAL: Initial stabilization period
-        // After violation restart, character needs time to sync to naked state
-        // Don't check immediately - wait for appearance data to stabilize
+        // Wait for appearance data to stabilize before enforcement
         console.log(
             `[ReleaseSystem] Stabilizing appearance state for ${character.MemberNumber}...`,
         );
@@ -1162,7 +1045,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
             }
 
-            // CRITICAL: Update database with current appearance and parole progress
+            // Update database with current appearance
             if (this.characterProfileStore) {
                 try {
                     const equippedClothing =
@@ -1293,7 +1176,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 character.MemberNumber,
             );
             this.paroleMetadata.delete(character.MemberNumber);
-            this.paroleAppearanceTracking.delete(character.MemberNumber);
         }
 
         await this.recordReleaseEvent(
@@ -1404,7 +1286,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Now restart the release sequence from Stage 2
         // Clear old parole metadata and restart
         this.paroleMetadata.delete(character.MemberNumber);
-        this.paroleAppearanceTracking.delete(character.MemberNumber);
 
         // Restart from Stage 2 inline (free from confinement, strip, nudity check, access code, new parole)
         try {
@@ -1420,7 +1301,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             const removedBondageItems =
                 await this.stripNonOwnerItems(character);
 
-            // BIDIRECTIONAL VALIDATION: Track what we removed AND what's actually present
+            // Extract clothing items from stripped items
             const removedClothingMap = new Map<string, string>();
             for (const item of removedBondageItems) {
                 if (this.actualClothingGroups.has(item.group)) {
@@ -1446,16 +1327,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     `[ReleaseSystem] Parole restarted for ${character.MemberNumber}`,
                 );
 
-                // Update parole metadata with bidirectional validation
+                // Update parole metadata with restart info
                 this.paroleMetadata.set(character.MemberNumber, {
                     startingItems: removedClothingMap, // Clothing items we removed
                     startingLocation: paroleMetadata.startingLocation,
                     paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
                     removedClothingItems: removedClothingMap, // Track what was removed
-                    detectedClothingItems: detectedClothingAfterRestrip, // Track what we detect now
                 });
-
-                this.trackParoleCharacter(character);
             }
 
             await wait(300);
@@ -1481,9 +1359,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         character.MemberNumber,
                     );
                     this.paroleMetadata.delete(character.MemberNumber);
-                    this.paroleAppearanceTracking.delete(
-                        character.MemberNumber,
-                    );
                 }
                 return;
             }
@@ -1491,7 +1366,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             // Update naked state
             // Using direct API call (matches bed system pattern, no cache issues)
             const nakedEquippedItems = this.getEquippedClothing(character);
-            // CRITICAL: Only capture CLOTHING groups in the naked state
+            // Capture clothing groups in naked state
             const nakedItems = new Set<string>();
             for (const item of nakedEquippedItems) {
                 nakedItems.add(item.group);
@@ -1629,9 +1504,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     `[ReleaseSystem] Character lookup: ${parole.name} (${parole.memberNumber}) - ${character ? "FOUND in room" : "NOT in room"}`,
                 );
 
-                // Load parole metadata for this character
-                // CRITICAL: Always initialize metadata, even if character not in room yet
-                // This prevents the violation check from re-initializing with current appearance
+                // Initialize parole metadata even if character not in room yet
                 if (parole.paroleState) {
                     this.paroleMetadata.set(parole.memberNumber, {
                         startingItems: new Map<string, string>(), // Empty = should be completely naked
@@ -1643,7 +1516,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         paroleExpiresAt:
                             parole.paroleState.paroleExpiresAt || 0,
                         removedClothingItems: new Map<string, string>(), // No tracking data from DB, assume empty (truly naked)
-                        detectedClothingItems: new Set<string>(), // Will be populated on first violation check
                     });
                     console.log(
                         `[ReleaseSystem] Initialized parole metadata for ${parole.name} (${parole.memberNumber}) - expected state: completely naked`,
@@ -1690,8 +1562,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         console.log(
                             `[ReleaseSystem] Parole resuming for ${parole.name} (${parole.memberNumber}) - still naked, resuming monitoring`,
                         );
-                        // Character still compliant - resume tracking
-                        this.trackParoleCharacter(character);
+                        // Character still compliant - continue monitoring
                     }
                 } else {
                     console.log(
@@ -1713,22 +1584,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
      * Track a character on parole - record their current appearance
      * CRITICAL: Uses direct getItemData() API (not stale getAppearanceData() cache)
      */
-    private trackParoleCharacter(character: API_Character): void {
-        const groups = new Set<string>();
-
-        // Use direct API calls matching the bed system pattern (proven working, no cache issues)
-        for (const clothingGroup of this.actualClothingGroups) {
-            const item = character.Appearance.getItemData(clothingGroup);
-            if (item && item.Name) {
-                groups.add(clothingGroup);
-            }
-        }
-
-        this.paroleAppearanceTracking.set(character.MemberNumber, groups);
-        console.log(
-            `[ReleaseSystem] Tracking parole for ${character.MemberNumber} (${character.Name || character.Username || "Unknown"}): ${groups.size} clothing group(s) with items`,
-        );
-    }
 
     /**
      * Start periodic monitoring for parole violations
@@ -1814,7 +1669,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     },
                     paroleExpiresAt: parole.paroleState.paroleExpiresAt || now,
                     removedClothingItems: new Map<string, string>(),
-                    detectedClothingItems: new Set<string>(),
                 };
                 this.paroleMetadata.set(character.MemberNumber, newMetadata);
             }
