@@ -124,12 +124,14 @@ export class BedSystem implements VeratownFeatureSystem {
             console.log(`[BedSystem] System disabled, ignoring`);
             return;
         }
+
         if (this.sleepingCharacters.has(character.MemberNumber)) {
             console.log(
                 `[BedSystem] ${character.MemberNumber} already sleeping, ignoring`,
             );
             return;
         }
+
         this.sleepingCharacters.add(character.MemberNumber);
 
         const isOnBed = () => {
@@ -194,14 +196,11 @@ export class BedSystem implements VeratownFeatureSystem {
                             bedError,
                         );
                     }
-                } else if (!isAsleep && (hasBed || hasCovers)) {
+                } else if (!isAsleep && hasBed) {
                     console.log(
                         `[BedSystem] ${character.MemberNumber} woke up or left bed, removing bed items`,
                     );
                     // Only remove if we actually have the items (prevent unnecessary removals)
-                    if (hasCovers) {
-                        character.Appearance.RemoveItem("ItemAddon");
-                    }
                     if (hasBed) {
                         character.Appearance.RemoveItem("ItemDevices");
                     }
@@ -218,11 +217,6 @@ export class BedSystem implements VeratownFeatureSystem {
                 character.Appearance.getItemData("ItemDevices")?.Name === "Bed"
             ) {
                 character.Appearance.RemoveItem("ItemDevices");
-            }
-            if (
-                character.Appearance.getItemData("ItemAddon")?.Name === "Covers"
-            ) {
-                character.Appearance.RemoveItem("ItemAddon");
             }
             this.sleepingCharacters.delete(character.MemberNumber);
             this.sleepingCharacters.delete(character.MemberNumber);
