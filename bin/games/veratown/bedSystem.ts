@@ -149,7 +149,7 @@ export class BedSystem implements VeratownFeatureSystem {
                 const isAsleep =
                     character.Appearance.getItemData("Emoticon")?.Property
                         ?.Expression === "Sleep";
-                const hasBed =
+                let hasBed =
                     character.Appearance.getItemData("ItemDevices")?.Name ===
                     "Bed";
 
@@ -188,15 +188,15 @@ export class BedSystem implements VeratownFeatureSystem {
                         console.log(
                             `[BedSystem] presync: ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
                         );
-                        character.Appearance.allItems.forEach((item) => {
+                        for (const item of character.Appearance.allItems()) {
                             console.log(
-                                `[BedSystem] Item applied: ${item.Name}`,
+                                `[BedSystem] [Item applied]: ${item.Name}`,
                             );
-                        });
+                        }
                         console.log(
                             `[BedSystem] ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
                         );
-
+                        hasBed = true;
                         console.log(
                             `[BedSystem] ${character.MemberNumber} bed applied successfully`,
                         );
