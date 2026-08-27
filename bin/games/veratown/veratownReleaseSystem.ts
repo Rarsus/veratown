@@ -68,6 +68,26 @@ interface ConfirmationState {
     resolve: (confirmed: boolean) => void;
 }
 
+/**
+ * Options to customize release behavior per call
+ */
+interface ReleaseOptions {
+    durationMs?: number; // Override default 10-minute parole duration
+    strictMode?: boolean; // If true, kick on first violation (no restarts)
+    allowedRestarts?: number; // Override max 3 restart attempts
+    notificationIntervals?: number[]; // Custom notification times (in seconds)
+}
+
+/**
+ * Parole status query result
+ */
+interface ParoleStatus {
+    isOnParole: boolean;
+    remainingMs?: number; // Time until parole expires
+    violationCount?: number; // Number of violations (restarts used)
+    stage?: ReleaseStage; // Current stage in release process
+}
+
 export class ReleaseSystem implements VeratownFeatureSystem {
     public readonly key = "release";
     public readonly label = "Emergency Release System";
@@ -94,6 +114,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private pendingConfirmations = new Map<number, ConfirmationState>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
     private paroleMonitoringInterval?: NodeJS.Timeout; // Bot restart monitoring loop
+    private stageTimings = new Map<
+        number,
+        Map<string, { start: number; end?: number }>
+    >(); // memberId -> (stageName -> timing)
 
     public constructor(
         private conn: API_Connector,
@@ -205,6 +229,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Stage 1: Announce release
+            this.recordStage(
+                character.MemberNumber,
+                "pending_confirmation",
+                "start",
+            );
             this.whisper(
                 character,
                 "*You press the emergency release button. Alarms sound...*",
@@ -225,18 +254,39 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     character,
                     "Release cancelled. You did not confirm in time.",
                 );
+                this.recordStage(
+                    character.MemberNumber,
+                    "pending_confirmation",
+                    "end",
+                );
+                this.stageTimings.delete(character.MemberNumber);
                 return;
             }
+            this.recordStage(
+                character.MemberNumber,
+                "pending_confirmation",
+                "end",
+            );
 
             // Stage 3: Teleport to punishment room FIRST (reordered from Stage 4)
+            this.recordStage(character.MemberNumber, "teleporting", "start");
             await this.executeTeleport(character, startingLocation);
+            this.recordStage(character.MemberNumber, "teleporting", "end");
 
             // Stage 4: Strip ALL items (reordered from Stage 3)
             // Note: Freeing from cage/kennel is implicit via stripNonOwnerItems
+            this.recordStage(character.MemberNumber, "stripping", "start");
             const removedItems = await this.executeStrip(character);
+            this.recordStage(character.MemberNumber, "stripping", "end");
 
             // Stage 5: Force nudity check
+            this.recordStage(
+                character.MemberNumber,
+                "checking_nudity",
+                "start",
+            );
             const isNaked = await this.executeNudityCheck(character);
+            this.recordStage(character.MemberNumber, "checking_nudity", "end");
 
             if (!isNaked) {
                 console.log(
@@ -257,6 +307,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     );
                 }
                 this.paroleMetadata.delete(character.MemberNumber);
+                this.stageTimings.delete(character.MemberNumber);
                 await this.recordReleaseEvent(character, "failed_nudity_check");
                 return;
             }
@@ -265,7 +316,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             await this.initializeParoleMetadata(character, removedItems);
 
             // Stage 6: Grant door access
+            this.recordStage(
+                character.MemberNumber,
+                "granting_access",
+                "start",
+            );
             const granted = await this.executeGrantDoorAccess(character);
+            this.recordStage(character.MemberNumber, "granting_access", "end");
             if (!granted) {
                 this.whisper(
                     character,
@@ -274,11 +331,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
 
             // Stage 6b: Wait for character to leave
+            this.recordStage(character.MemberNumber, "waiting_exit", "start");
             const punishmentRoom = await this.getPunishmentRoomLocation();
             await this.waitForCharacterToLeaveRoom(character, {
                 X: punishmentRoom.x,
                 Y: punishmentRoom.y,
             });
+            this.recordStage(character.MemberNumber, "waiting_exit", "end");
 
             this.whisper(
                 character,
@@ -286,7 +345,20 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
 
             // Stage 7: Monitor parole
+            this.recordStage(
+                character.MemberNumber,
+                "monitoring_parole",
+                "start",
+            );
             await this.monitorParoleExpiration(character);
+            this.recordStage(
+                character.MemberNumber,
+                "monitoring_parole",
+                "end",
+            );
+
+            // Record stage timings to database for audit trail
+            await this.recordStageTimingsToDatabase(character);
 
             console.log(
                 `[ReleaseSystem] Release completed successfully for ${character.MemberNumber}`,
@@ -303,6 +375,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             console.error(`[ReleaseSystem] Release failed:`, e);
             this.whisper(character, "Release sequence encountered an error.");
             await this.recordReleaseEvent(character, "release_error");
+            this.stageTimings.delete(character.MemberNumber);
         }
     }
 
@@ -1198,6 +1271,74 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         );
     }
 
+    /**
+     * Record stage timing for audit trail and performance analysis.
+     * Tracks when each stage started and ended.
+     */
+    private recordStage(
+        memberId: number,
+        stage: string,
+        action: "start" | "end",
+    ): void {
+        if (!this.stageTimings.has(memberId)) {
+            this.stageTimings.set(memberId, new Map());
+        }
+
+        const timings = this.stageTimings.get(memberId)!;
+
+        if (action === "start") {
+            timings.set(stage, { start: Date.now() });
+            this.log("info", `Stage start: ${stage}`, { memberId, stage });
+        } else if (action === "end") {
+            const timing = timings.get(stage);
+            if (timing) {
+                timing.end = Date.now();
+                const durationMs = timing.end - timing.start;
+                this.log("info", `Stage end: ${stage}`, {
+                    memberId,
+                    stage,
+                    durationMs,
+                });
+            }
+        }
+    }
+
+    /**
+     * Cleanup stage timings after release completes
+     */
+    private async recordStageTimingsToDatabase(
+        character: API_Character,
+    ): Promise<void> {
+        const timings = this.stageTimings.get(character.MemberNumber);
+        if (!timings) {
+            return;
+        }
+
+        const stageTimingsObj: Record<string, { start: number; end?: number }> =
+            {};
+        for (const [stage, timing] of timings) {
+            stageTimingsObj[stage] = timing;
+        }
+
+        await this.executeWithRetry(
+            () =>
+                this.characterProfileStore!.recordCheat(
+                    character.MemberNumber,
+                    "stage_timings",
+                    {
+                        action: "release_completed",
+                        timestamp: Date.now(),
+                        stageTimings: stageTimingsObj,
+                    },
+                ),
+            2,
+            "record_stage_timings",
+        );
+
+        // Cleanup
+        this.stageTimings.delete(character.MemberNumber);
+    }
+
     // ===== PAROLE INITIALIZATION & RECOVERY =====
 
     /**
@@ -1298,6 +1439,29 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             this.paroleMonitoringInterval = undefined;
             console.log(`[ReleaseSystem] Stopped parole monitoring`);
         }
+    }
+
+    /**
+     * Query parole status for a character.
+     * Useful for other features (ShowerSystem, LockdownSystem, etc.) to check if character is on parole.
+     */
+    public async getParoleStatus(
+        memberId: number,
+    ): Promise<ParoleStatus | null> {
+        const metadata = this.paroleMetadata.get(memberId);
+        if (!metadata) {
+            return null;
+        }
+
+        const now = Date.now();
+        const remainingMs = Math.max(0, metadata.paroleExpiresAt - now);
+
+        return {
+            isOnParole: remainingMs > 0,
+            remainingMs,
+            violationCount: metadata.restartAttempts,
+            stage: metadata.stage,
+        };
     }
 
     /**
