@@ -187,6 +187,15 @@ export class BedSystem implements VeratownFeatureSystem {
                         character.Appearance.AddItem(
                             AssetGet("ItemAddon", "Covers"),
                         );
+
+                        console.log(
+                            `[BedSystem] presync: ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
+                        );
+                        character.Appearance.Sync();
+                        console.log(
+                            `[BedSystem] ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
+                        );
+
                         console.log(
                             `[BedSystem] ${character.MemberNumber} bed applied successfully`,
                         );
