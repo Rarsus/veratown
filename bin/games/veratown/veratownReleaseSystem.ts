@@ -60,6 +60,7 @@ interface ParoleMetadata {
     paroleExpiresAt: number;
     stage: ReleaseStage;
     restartAttempts: number; // Track violation restart attempts
+    paroleDurationMs: number; // Current parole duration (can escalate on re-release)
 }
 
 interface ConfirmationState {
@@ -111,6 +112,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private activeReleases = new Map<number, Promise<void>>();
     private releaseCooldowns = new Map<number, number>(); // memberId -> nextReleaseTime
     private paroleMetadata = new Map<number, ParoleMetadata>();
+    private escalatedParoleDurations = new Map<number, number>(); // memberId -> custom duration for escalated paroles
     private pendingConfirmations = new Map<number, ConfirmationState>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
     private paroleMonitoringInterval?: NodeJS.Timeout; // Bot restart monitoring loop
@@ -198,6 +200,41 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 "You're already in the process of releasing yourself. Wait a moment.",
             );
             return;
+        }
+
+        // Check if already on parole and handle escalation
+        const existingParole = this.paroleMetadata.get(character.MemberNumber);
+        if (existingParole) {
+            // Calculate new parole duration (double previous, capped at 24 hours)
+            const maxParoleDurationMs = 24 * 60 * 60 * 1000; // 24 hours
+            const newDurationMs = Math.min(
+                existingParole.paroleDurationMs * 2,
+                maxParoleDurationMs,
+            );
+
+            console.log(
+                `[ReleaseSystem] Re-release requested by ${character.MemberNumber}, escalating parole from ${existingParole.paroleDurationMs}ms to ${newDurationMs}ms`,
+            );
+
+            // Clear existing parole and metadata
+            if (this.characterProfileStore) {
+                await this.executeWithRetry(
+                    () =>
+                        this.characterProfileStore!.clearReleaseParole(
+                            character.MemberNumber,
+                        ),
+                    2,
+                    "clear_parole_escalation",
+                );
+            }
+            this.paroleMetadata.delete(character.MemberNumber);
+            this.violationHistory.delete(character.MemberNumber);
+
+            // Store the escalated duration for this release
+            this.escalatedParoleDurations.set(
+                character.MemberNumber,
+                newDurationMs,
+            );
         }
 
         const releasePromise = this.performRelease(character);
@@ -307,13 +344,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     );
                 }
                 this.paroleMetadata.delete(character.MemberNumber);
+                this.escalatedParoleDurations.delete(character.MemberNumber);
                 this.stageTimings.delete(character.MemberNumber);
                 await this.recordReleaseEvent(character, "failed_nudity_check");
                 return;
             }
 
-            // Initialize parole metadata
-            await this.initializeParoleMetadata(character, removedItems);
+            // Initialize parole tracking with escalated duration if applicable
+            const durationMs = this.escalatedParoleDurations.get(
+                character.MemberNumber,
+            );
+            await this.initializeParoleMetadata(
+                character,
+                removedItems,
+                durationMs,
+            );
+            this.escalatedParoleDurations.delete(character.MemberNumber);
 
             // Stage 6: Grant door access
             this.recordStage(
@@ -862,6 +908,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     "clear_parole_restart_failed",
                 );
                 this.paroleMetadata.delete(character.MemberNumber);
+                this.escalatedParoleDurations.delete(character.MemberNumber);
                 await this.recordReleaseEvent(
                     character,
                     "parole_restart_failed",
@@ -1059,11 +1106,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async initializeParoleMetadata(
         character: API_Character,
         removedItems: RemovedBondageItem[],
+        customDurationMs?: number,
     ): Promise<void> {
+        const paroleDurationMs = customDurationMs ?? RELEASE_PAROLE_DURATION_MS;
+
         this.paroleMetadata.set(character.MemberNumber, {
-            paroleExpiresAt: Date.now() + RELEASE_PAROLE_DURATION_MS,
+            paroleExpiresAt: Date.now() + paroleDurationMs,
             stage: "monitoring_parole",
             restartAttempts: 0,
+            paroleDurationMs,
         });
 
         if (this.characterProfileStore) {
@@ -1073,7 +1124,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         character.MemberNumber,
                         removedItems,
                         { ...character.MapPos },
-                        RELEASE_PAROLE_DURATION_MS,
+                        paroleDurationMs,
                     ),
                 2,
                 "start_release_parole",
