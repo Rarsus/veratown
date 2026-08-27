@@ -872,13 +872,42 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     ): Array<{ group: string; name: string }> {
         const equippedClothing: Array<{ group: string; name: string }> = [];
 
+        console.log(
+            `[ReleaseSystem:DEBUG] getEquippedClothing: checking ${this.actualClothingGroups.size} clothing groups`,
+        );
+
         for (const clothingGroup of this.actualClothingGroups) {
             const item = character.Appearance.getItemData(clothingGroup);
+            console.log(
+                `[ReleaseSystem:DEBUG] Group "${clothingGroup}": ${item && item.Name ? `EQUIPPED "${item.Name}"` : "empty"}`,
+            );
             if (item && item.Name) {
                 equippedClothing.push({
                     group: clothingGroup,
                     name: item.Name,
                 });
+            }
+        }
+
+        console.log(
+            `[ReleaseSystem:DEBUG] getEquippedClothing TOTAL: ${equippedClothing.length} items found`,
+        );
+
+        // DIAGNOSTIC: Check if there are items in groups NOT in our whitelist
+        // This helps identify if clothing is in an unexpected group
+        console.log(
+            `[ReleaseSystem:DEBUG] Checking ALL appearance groups for items outside whitelist...`,
+        );
+        const allAppearance = character.Appearance.getAppearanceData();
+        if (allAppearance) {
+            for (const item of allAppearance) {
+                if (item.Group && item.Name) {
+                    if (!this.actualClothingGroups.has(item.Group)) {
+                        console.log(
+                            `[ReleaseSystem:DEBUG] EXTERNAL GROUP: "${item.Name}" in "${item.Group}" (not in whitelist)`,
+                        );
+                    }
+                }
             }
         }
 
