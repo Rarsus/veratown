@@ -688,10 +688,16 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Bondage items are stripped once during initial release, not repeatedly
         // Use slowlyStripBulk() to avoid triggering WCE anti-cheat detection
         // which flags rapid repeated strip calls as potential exploits
+        const NudeConfig = {
+            appearance: false,
+            bodyCosplay: false,
+            clothing: true,
+            item: false,
+        };
         try {
             await character.Appearance.slowlyStripBulk(
-                { clothing: true }, // Strip clothing ONLY (no items)
-                true, // stripLocked: also remove locked items
+                NudeConfig, // Strip clothing ONLY (no items)
+                false, // stripLocked: also remove locked items
             );
         } catch (e) {
             console.error(
@@ -700,8 +706,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
             // Fallback to instant strip if slow strip fails
             character.Appearance.stripBulk(
-                { clothing: true }, // Strip clothing ONLY
-                true,
+                NudeConfig, // Strip clothing ONLY
+                false,
             );
         }
 
@@ -972,25 +978,38 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async stripNonOwnerItems(
         character: API_Character,
     ): Promise<RemovedBondageItem[]> {
-        console.log(`[ReleaseSystem] stripNonOwnerItems: Stripping all items`);
+        console.log(
+            `[ReleaseSystem] stripNonOwnerItems: Stripping items (preserving owner-locked)`,
+        );
 
         const appearance = character.Appearance.Items || [];
         const removedItems: RemovedBondageItem[] = [];
+        const ownerLockedItems: RemovedBondageItem[] = [];
 
-        // Identify all items
+        // Separate owner-locked items (items with locks) from removable items
         for (const item of appearance) {
             if (!item?.Group || !item?.Name) {
                 continue;
             }
 
-            removedItems.push({
+            const bondageItem: RemovedBondageItem = {
                 group: item.Group,
                 name: item.Name,
                 lockType: item.Property?.Lock,
                 lockedBy: item.Property?.LockedBy,
                 color: item.Color ? String(item.Color) : undefined,
                 difficulty: item.Difficulty,
-            });
+            };
+
+            // If item has a lock, it's owner-locked and should be preserved
+            if (item.Property?.Lock) {
+                ownerLockedItems.push(bondageItem);
+                console.log(
+                    `[ReleaseSystem] Marking as owner-locked: ${item.Name} (lock: ${item.Property.Lock})`,
+                );
+            } else {
+                removedItems.push(bondageItem);
+            }
         }
 
         // Strip all items (both clothing and bondage) using slowlyStripBulk
@@ -1011,7 +1030,33 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
 
-        // Update database with removed items
+        // Re-apply owner-locked items to keep them in place
+        if (ownerLockedItems.length > 0) {
+            console.log(
+                `[ReleaseSystem] Re-applying ${ownerLockedItems.length} owner-locked items`,
+            );
+            for (const item of ownerLockedItems) {
+                try {
+                    const asset = AssetGet("Female3DCG", item.group, item.name);
+                    if (asset) {
+                        character.Appearance.AddItem(
+                            asset,
+                            item.color || undefined,
+                        );
+                        console.log(
+                            `[ReleaseSystem] Re-applied locked item: ${item.name}`,
+                        );
+                    }
+                } catch (e) {
+                    console.error(
+                        `[ReleaseSystem] Error restoring owner-locked item ${item.name}:`,
+                        e,
+                    );
+                }
+            }
+        }
+
+        // Update database with removed items (excluding owner-locked)
         if (this.characterProfileStore) {
             await this.executeWithRetry(
                 () =>
