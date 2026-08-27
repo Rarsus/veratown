@@ -93,6 +93,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private paroleMetadata = new Map<number, ParoleMetadata>();
     private pendingConfirmations = new Map<number, ConfirmationState>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
+    private paroleMonitoringInterval?: NodeJS.Timeout; // Bot restart monitoring loop
 
     public constructor(
         private conn: API_Connector,
@@ -814,7 +815,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             this.whisper(
                 character,
-                "*Parole restarted!* You are NOT allowed to wear ANY clothing. You have 10 minutes. (Attempt ${restartAttempt}/${this.MAX_PAROLE_RESTART_ATTEMPTS})",
+                `*Parole restarted!* You are NOT allowed to wear ANY clothing. You have 10 minutes. (Attempt ${restartAttempt}/${this.MAX_PAROLE_RESTART_ATTEMPTS})`,
             );
 
             // Re-initialize parole metadata
@@ -1098,25 +1099,57 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     /**
      * Execute operation with retry logic
      */
+    /**
+     * Execute operation with exponential backoff retry logic.
+     * Throws exception if all retries are exhausted, allowing caller to handle failure.
+     */
     private async executeWithRetry<T>(
         operation: () => Promise<T>,
         maxRetries: number = 3,
         operationName: string = "operation",
-    ): Promise<T | undefined> {
+    ): Promise<T> {
+        let lastError: Error | null = null;
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await operation();
             } catch (e) {
-                console.error(
-                    `[ReleaseSystem] ${operationName} failed (attempt ${attempt}/${maxRetries}):`,
-                    e,
+                lastError = e as Error;
+                this.log(
+                    "error",
+                    `${operationName} failed (attempt ${attempt}/${maxRetries})`,
+                    { error: lastError.message, attempt, maxRetries },
                 );
                 if (attempt < maxRetries) {
                     await wait(Math.pow(2, attempt - 1) * 100); // Exponential backoff
                 }
             }
         }
-        return undefined;
+
+        // Throw after all retries exhausted
+        throw new Error(
+            `${operationName} failed after ${maxRetries} attempts: ${lastError?.message}`,
+        );
+    }
+
+    /**
+     * Structured logging with consistent format and optional extra context
+     */
+    private log(
+        level: "info" | "warn" | "error",
+        message: string,
+        extra?: Record<string, any>,
+    ): void {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            level,
+            feature: "release",
+            message,
+            ...(extra && { extra }),
+        };
+        console[level](`[ReleaseSystem] ${message}`, extra || "");
+        // Could also send to structured logging service (DataDog, Sentry, etc.)
     }
 
     /**
@@ -1167,18 +1200,96 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     // ===== PAROLE INITIALIZATION & RECOVERY =====
 
+    /**
+     * Initialize parole monitoring on bot startup.
+     * Restores active paroles from database and resumes monitoring.
+     * Allows bot restart without players escaping their parole.
+     */
     public async initializeReleaseParoles(): Promise<void> {
-        console.log(
-            `[ReleaseSystem] MONITORING DISABLED: Skipping parole initialization on startup`,
-        );
-        return;
+        if (!this.characterProfileStore) {
+            return;
+        }
+
+        try {
+            const activeParoles =
+                await this.characterProfileStore.getActiveParoles();
+
+            if (activeParoles.length === 0) {
+                this.log("info", "No active paroles to restore on startup");
+                return;
+            }
+
+            this.log(
+                "info",
+                `Restoring ${activeParoles.length} active parole(s)`,
+                {
+                    paroles: activeParoles.length,
+                },
+            );
+
+            // Restore each active parole
+            for (const parole of activeParoles) {
+                // Check if parole already expired while bot was down
+                if (Date.now() > parole.paroleState.paroleExpiresAt) {
+                    await this.executeWithRetry(
+                        () =>
+                            this.characterProfileStore!.clearReleaseParole(
+                                parole.memberNumber,
+                            ),
+                        2,
+                        "clear_expired_parole_on_init",
+                    );
+                    continue;
+                }
+
+                // Initialize metadata for this character
+                this.paroleMetadata.set(parole.memberNumber, {
+                    paroleExpiresAt: parole.paroleState.paroleExpiresAt,
+                    stage: "monitoring_parole",
+                    restartAttempts: parole.paroleState.restartAttempts ?? 0,
+                });
+
+                this.log(
+                    "info",
+                    `Restored parole for member ${parole.memberNumber}`,
+                    {
+                        memberId: parole.memberNumber,
+                        expiresAt: parole.paroleState.paroleExpiresAt,
+                        restartAttempts: parole.paroleState.restartAttempts,
+                    },
+                );
+            }
+
+            // Start the monitoring loop
+            this.startParoleMonitoring();
+        } catch (e) {
+            this.log("error", "Error initializing paroles on startup", {
+                error: (e as Error).message,
+            });
+        }
     }
 
+    /**
+     * Start the background monitoring loop for all active paroles.
+     * Checks for violations and expired paroles periodically.
+     */
     private startParoleMonitoring(): void {
-        console.log(
-            `[ReleaseSystem] MONITORING DISABLED: Skipping parole monitoring start`,
-        );
-        return;
+        if (this.paroleMonitoringInterval) {
+            this.log("warn", "Parole monitoring already running");
+            return;
+        }
+
+        this.log("info", "Starting parole monitoring loop");
+
+        this.paroleMonitoringInterval = setInterval(async () => {
+            try {
+                await this.checkAllParoleViolations();
+            } catch (e) {
+                this.log("error", "Error in parole monitoring loop", {
+                    error: (e as Error).message,
+                });
+            }
+        }, this.PAROLE_CHECK_INTERVAL_MS);
     }
 
     public stopParoleMonitoring(): void {
@@ -1189,13 +1300,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
     }
 
+    /**
+     * Check all active paroles for violations and expirations.
+     * Called periodically by the monitoring loop.
+     */
     private async checkAllParoleViolations(): Promise<void> {
-        console.log(
-            `[ReleaseSystem] MONITORING DISABLED: Skipping violation checks`,
-        );
-        return;
-
-        // DISABLED CODE BELOW
         if (!this.characterProfileStore || !this.conn?.chatRoom?.characters) {
             return;
         }
