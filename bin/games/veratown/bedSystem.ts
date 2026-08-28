@@ -37,7 +37,9 @@ export class BedSystem implements VeratownFeatureSystem {
     public readonly label = "Beds";
     public enabled = true;
 
-    private sleepingCharacters = new Set<number>();
+    private readonly activeMonitors = new Set<number>();
+    7;
+    //   private sleepingCharacters = new Set<number>();
     private bedPositions: Array<{ X: number; Y: number }> = [];
     private readonly bedTrigger: ReturnType<typeof guardHandler>;
 
@@ -118,7 +120,7 @@ export class BedSystem implements VeratownFeatureSystem {
         }
     }
 
-    private onCharacterEnterBed = async (character: API_Character) => {
+    /*private onCharacterEnterBed = async (character: API_Character) => {
         console.log(`[BedSystem] ${character.MemberNumber} entered bed tile`);
         if (!this.enabled) {
             console.log(`[BedSystem] System disabled, ignoring`);
@@ -149,7 +151,7 @@ export class BedSystem implements VeratownFeatureSystem {
                 const isAsleep =
                     character.Appearance.getItemData("Emoticon")?.Property
                         ?.Expression === "Sleep";
-                let hasBed =
+                const hasBed =
                     character.Appearance.getItemData("ItemDevices")?.Name ===
                     "Bed";
 
@@ -168,38 +170,44 @@ export class BedSystem implements VeratownFeatureSystem {
                         await wait(BED_CHECK_INTERVAL_MS);
                         continue;
                     }
-
                     try {
-                        const bed = character.Appearance.AddItem(
-                            AssetGet("ItemDevices", "Bed"),
-                        );
-                        bed.SetCraft({
-                            Name: "Bed",
-                            Description: `${character} is fast asleep`,
-                        });
+                        try {
+                            const bed = character.Appearance.AddItem(
+                                AssetGet("ItemDevices", "Bed"),
+                            );
+                            bed.SetCraft({
+                                Name: "Bed",
+                                Description: `${character} is fast asleep`,
+                            });
 
-                        // The blanket ("Covers") requires the Bed to already be
-                        // equipped (Prerequisite: "OnBed"), so it's added right
-                        // after the Bed itself.
-                        character.Appearance.AddItem(
-                            AssetGet("ItemAddon", "Covers"),
-                        );
+                        } catch (e) {
+                            console.error(
+                                `Failed to add ItemDevices/Bed`,
+                                e,
+                            );
+                        }
+                        try {
+                            const blanket = character.Appearance.AddItem(
+                                AssetGet("ItemAddon", "Covers"),
+                            );
 
-                        // CRITICAL: Sync appearance to server before checking it again.
+                            blanket.SetCraft({
+                                Name: "Comfy blanket",
+                                Description: `${character} is covered by a comfy blanket`,
+                            });
+
+                        } catch (e) {
+                            console.error(
+                                `Failed to add ItemAddon/Covers`,
+                                e,
+                            );
+                        }                        // CRITICAL: Sync appearance to server before checking it again.
                         // Without this, the server doesn't know about the Bed/Covers,
                         // and the next loop iteration will think hasBed is still false.
                         character.Appearance.MakeAppearanceBundle();
 
                         // Wait for appearance sync to stabilize before reading again
                         await wait(100);
-
-                        console.log(
-                            `[BedSystem] postsync: ${character.Appearance.getItemData("ItemDevices")?.Name} is applied`,
-                        );
-                        hasBed = true;
-                        console.log(
-                            `[BedSystem] ${character.MemberNumber} bed applied successfully`,
-                        );
                     } catch (bedError) {
                         console.error(
                             `[BedSystem] Failed to add bed for ${character.MemberNumber}:`,
@@ -231,5 +239,139 @@ export class BedSystem implements VeratownFeatureSystem {
             }
             this.sleepingCharacters.delete(character.MemberNumber);
         }
+    }; */
+
+    private onCharacterEnterBed = async (
+        character: API_Character,
+    ): Promise<void> => {
+        if (!this.enabled) {
+            return;
+        }
+
+        const memberNumber = character.MemberNumber;
+
+        // Idempotent:
+        // If we're already monitoring this character,
+        // don't start another loop.
+        if (this.activeMonitors.has(memberNumber)) {
+            console.log(
+                `[BedSystem] monitor already active for ${memberNumber}`,
+            );
+            return;
+        }
+
+        this.activeMonitors.add(memberNumber);
+
+        console.log(`[BedSystem] starting monitor for ${memberNumber}`);
+
+        try {
+            await this.monitorCharacter(character);
+        } finally {
+            this.activeMonitors.delete(memberNumber);
+
+            console.log(`[BedSystem] stopped monitor for ${memberNumber}`);
+        }
     };
+
+    private async monitorCharacter(character: API_Character): Promise<void> {
+        const memberNumber = character.MemberNumber;
+
+        const isOnBed = () => {
+            if (!this.conn.chatRoom.getCharacter(memberNumber)) {
+                return false;
+            }
+
+            return isCharacterAtAnyPosition(character, this.bedPositions);
+        };
+
+        try {
+            while (this.enabled && isOnBed()) {
+                const isAsleep =
+                    character.Appearance.getItemData("Emoticon")?.Property
+                        ?.Expression === "Sleep";
+
+                const hasBed =
+                    character.Appearance.getItemData("ItemDevices")?.Name ===
+                    "Bed";
+
+                console.log(
+                    `[BedSystem] ${memberNumber}: asleep=${isAsleep} bed=${hasBed}`,
+                );
+
+                if (isAsleep) {
+                    await this.ensureBed(character);
+                } else {
+                    await this.ensureNoBed(character);
+                }
+
+                await wait(BED_CHECK_INTERVAL_MS);
+            }
+        } finally {
+            await this.ensureNoBed(character);
+        }
+    }
+
+    private async ensureBed(character: API_Character): Promise<void> {
+        const memberNumber = character.MemberNumber;
+
+        const existingItem = character.Appearance.getItemData("ItemDevices");
+
+        // Already equipped?
+        if (existingItem?.Name === "Bed") {
+            return;
+        }
+
+        // Conflicting device?
+        if (existingItem && existingItem.Name !== "Bed") {
+            console.log(
+                `[BedSystem] ${memberNumber} has conflicting device: ${existingItem.Name}`,
+            );
+            return;
+        }
+
+        console.log(`[BedSystem] ${memberNumber} applying bed`);
+
+        try {
+            const bed = character.Appearance.AddItem(
+                AssetGet("ItemDevices", "Bed"),
+            );
+
+            bed.SetCraft({
+                Name: "Bed",
+                Description: `${character} is fast asleep`,
+            });
+        } catch (err) {
+            console.error(`[BedSystem] failed adding bed`, err);
+        }
+
+        try {
+            const blanket = character.Appearance.AddItem(
+                AssetGet("ItemAddon", "Covers"),
+            );
+
+            blanket.SetCraft({
+                Name: "Comfy blanket",
+                Description: `${character} is covered by a comfy blanket`,
+            });
+        } catch (err) {
+            console.error(`[BedSystem] failed adding covers`, err);
+        }
+
+        character.Appearance.MakeAppearanceBundle();
+    }
+
+    private async ensureNoBed(character: API_Character): Promise<void> {
+        const hasBed =
+            character.Appearance.getItemData("ItemDevices")?.Name === "Bed";
+
+        if (!hasBed) {
+            return;
+        }
+
+        console.log(`[BedSystem] removing bed from ${character.MemberNumber}`);
+
+        character.Appearance.RemoveItem("ItemDevices");
+
+        character.Appearance.MakeAppearanceBundle();
+    }
 }
