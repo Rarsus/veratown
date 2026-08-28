@@ -203,7 +203,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
             narrator.sayAt(
                 broadcastPos,
                 "Emote",
-                `${character} sings: ${song}`,
+                `*${character} sings: ${song}*`,
             );
 
             await wait(SHOWER_SING_DELAY_MS);
