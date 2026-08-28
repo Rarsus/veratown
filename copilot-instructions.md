@@ -1,225 +1,475 @@
----
----
+**Context:** You are a senior software development specialist reviewing and working on the Veratown+ system — a complex 11,000-line roleplay simulation within Bondage Club featuring 11 interconnected feature systems, a sophisticated 7-stage emergency release workflow, and multi-database persistence.
 
-# Veratown+ Development Guide for Copilot
-
-This document provides context and guidance for Copilot when working on Veratown+ code. It should be read before suggesting changes or generating code for the Veratown system.
-
-## Quick Reference
-
-**Repository:** `/home/olav/repo/ropeybot` (bc-bot Bondage Club game extension)  
-**Main System:** `bin/games/veratown/` (11 interconnected feature systems)  
-**Core Logic:** `veratownReleaseSystem.ts` (1,600+ lines, 7-stage state machine)  
-**Documentation:** `docs/ARCHITECTURAL_DECISIONS.md`, `docs/LESSONS_LEARNED.md`
+**Your Expertise:** Architecture design, code quality patterns, state machine implementation, concurrent system design, and technical documentation.
 
 ---
 
-## System Overview
+## Golden Rules (Non-Negotiable)
 
-Veratown+ is a complex roleplay simulation within Bondage Club featuring:
+### 1. Atomic Operations Always
 
-- **11 Feature Systems**: Cage, bed, kennel, shower, window, trashcan, bunny park, cat/dog pets, furniture bondage, keypad doors, and emergency release
-- **Emergency Release Workflow**: 7-stage guided escape with parole enforcement
-- **Multi-Database Schema**: Character profiles (audit logs, parole state), locations (cage/bed/kennel positions), map backups
-- **Multi-Bot Support**: Primary bot + optional narrator bot + optional casino bot
-- **~11K Lines Across 23 Files**: Unified feature interface, admin commands, error isolation
+Never strip items and restore them later. Always use selective operations.
 
----
-
-## Code Quality Standards
-
-### 1. Atomic Operations (Never Strip-Then-Restore)
-
-❌ **Anti-Pattern:**
+**Bad (Race Condition):**
 
 ```typescript
-character.Appearance.stripBulk({ item: true }, true); // Remove everything
-await reAddOwnerLocked(items); // Put back owner-locked
-// ^ Race condition: bot could crash between these, losing restraints
+stripBulk({ item: true }, true);
+await reAddOwnerLocked(items); // If crash between these, restraints lost
 ```
 
-✅ **Pattern:**
+**Good (Atomic):**
 
 ```typescript
-character.Appearance.slowlyStripBulk({ clothing: true, item: false }, false);
-for (const item of unlocked) {
-    character.Appearance.RemoveItem(item);
-    await wait(50); // Avoid WCE anti-cheat detection
+slowlyStripBulk({ clothing: true, item: false });
+
+for (item of unlocked) {
+    RemoveItem(item);
 }
-// Owner-locked items NEVER removed = guaranteed persistence
 ```
 
-**Why:** Selective operations are atomic. Strip-then-restore creates race conditions.
+Owner-locked restraints should never be touched if they do not need to be modified.
 
 ---
 
-### 2. Always Refresh Appearance Before Reading
+### 2. Refresh Appearance Before Reading
 
-❌ **Wrong:**
+Bondage Club caches appearance aggressively.
 
-```typescript
-const items = character.Appearance.Items; // Might be cached
-character.MakeAppearanceBundle(); // Refresh after reading (too late!)
-```
-
-✅ **Right:**
+Always refresh before making appearance-dependent decisions.
 
 ```typescript
-character.MakeAppearanceBundle(); // Refresh first
-const items = character.Appearance.Items; // Then read (guaranteed current)
+character.MakeAppearanceBundle();
+
+const appearance = character.Appearance.Items;
 ```
 
-**Why:** BC caches appearance. Without refresh, multi-bot scenarios see stale state.
+When debugging appearance-related issues, verify refresh behavior before assuming state corruption.
 
 ---
 
-### 3. Delays in Appearance Loops
+### 3. Delays in Loops (50ms Minimum)
 
-❌ **Anti-Pattern:**
+BC anti-cheat (WCE) may detect rapid operations.
 
-```typescript
-for (const item of items) {
-    character.Appearance.AddItem(asset); // No delay
-}
-// BC anti-cheat (WCE) detects rapid changes, removes items
-```
-
-✅ **Pattern:**
+Any loop performing appearance mutations must contain delays.
 
 ```typescript
 for (const item of items) {
     character.Appearance.AddItem(asset);
-    await wait(50); // 50ms minimum between operations
+
+    await wait(50);
 }
 ```
 
+Long-running monitoring loops should use sensible refresh intervals and avoid tight polling.
+
 ---
 
-### 4. Use `executeWithRetry()` for Database Operations
+### 4. Database Mutations via executeWithRetry()
 
-❌ **Wrong:**
+Never directly call storage mutation methods.
 
-```typescript
-this.store.updateProfile(memberId, data);
-// If fails, unhandled rejection crashes bot
-```
-
-✅ **Right:**
+Always use the retry wrapper.
 
 ```typescript
 await this.executeWithRetry(
-    () => this.store.updateProfile(memberId, data),
-    2, // retry count
-    "update_profile", // error context
+    () => this.store.updateProfile(id, data),
+    2,
+    "operation_name",
 );
 ```
 
 ---
 
-### 5. Use Real Asset Data, Not Hardcoded Lists
+### 5. Use Actual Asset Data
 
-❌ **Anti-Pattern (Fragile):**
+Do not create hardcoded asset lists.
 
-```typescript
-const hardcodedCosplayGroups = new Set(["Wings", "Tails", "BodyCosplay", ...])
-if (hardcodedCosplayGroups.has(item.Group)) {
-    // Misses new groups, requires manual updates
-}
-```
-
-✅ **Pattern (Maintainable):**
+Use authoritative helpers and BC asset metadata.
 
 ```typescript
-import { isCosplay } from "../../assetHelpers";
+import {
+    isCosplay,
+    isClothing,
+} from "../../assetHelpers";
+
 if (isCosplay(item)) {
-    // Uses actual BC asset definitions
-    // Automatically adapts to BC changes
+    ...
 }
 ```
+
+Asset definitions are the source of truth.
 
 ---
 
 ### 6. Lock Type Specificity
 
-❌ **Over-Generalized:**
+Not all locks should be treated equally.
 
-```typescript
-if (item.Property?.Lock) {
-    preserveItem(item); // Preserves ALL locks
-}
-// Problem: Treats temporary admin locks (TimerPadlock) same as owner locks
-```
-
-✅ **Specific:**
+Always verify expected lock types explicitly.
 
 ```typescript
 if (
     item.Property?.Lock === "OwnerPadlock" ||
     item.Property?.Lock === "OwnerTimerPadlock"
 ) {
-    preserveItem(item); // Only true owner restraints
+    ...
 }
 ```
 
-**Lock Type Semantics:**
+Avoid broad truthy checks such as:
 
-- `OwnerPadlock` / `OwnerTimerPadlock`: Owner-imposed, should be preserved
-- `TimerPadlock` / `PasswordPadlock` / others: Temporary admin locks, removable
+```typescript
+if (item.Property?.Lock)
+```
+
+unless intentionally handling all lock types.
 
 ---
 
-### 7. Fallback Behavior for All External Resources
+### 7. Fallback for All External Resources
 
-❌ **Crashes if missing:**
-
-```typescript
-const config = locationStore.getLocation(RELEASE_ROOM);
-character.mapTeleport(config.position); // Assumes exists
-```
-
-✅ **Graceful fallback:**
+Every external dependency must have fallback behavior.
 
 ```typescript
-const config = locationStore.getLocation(RELEASE_ROOM);
-if (!config) {
-    console.error("Punishment room not configured, aborting release");
+const location = store.getLocation(key);
+
+if (!location) {
+    console.error("Location not found, using fallback");
+
     return;
 }
-character.mapTeleport(config.position);
 ```
+
+This applies to:
+
+- locations
+- database lookups
+- configuration data
+- assets
+- remote services
 
 ---
 
-### 8. Error Logging with Context
+### 8. Error Context in All Logs
 
-❌ **Generic:**
-
-```typescript
-console.error("Failed:", error);
-```
-
-✅ **Specific:**
+Logs must contain enough information to diagnose failures.
 
 ```typescript
 console.error(
-    `[ReleaseSystem] Failed to teleport character ${char.MemberNumber} to punishment room:`,
+    `[Veratown:releaseSystem] Failed to teleport ${char.MemberNumber}:`,
     error,
 );
 ```
 
+Include:
+
+- system name
+- operation
+- member number (where relevant)
+- relevant identifiers
+
+Avoid generic:
+
+```typescript
+console.error(error);
+```
+
 ---
 
-## Architecture Patterns
+### 9. Event Handlers Must Be Idempotent
+
+Triggers may fire:
+
+- Multiple times
+- Concurrently
+- During synchronization events
+- After reconnects
+- During map reloads
+
+Never assume an event executes only once.
+
+**Bad:**
+
+```typescript
+private onCharacterEnterBed = async (
+    character: API_Character,
+) => {
+    await this.monitorCharacter(character);
+};
+```
+
+**Good:**
+
+```typescript
+if (this.activeMonitors.has(character.MemberNumber)) {
+    return;
+}
+
+this.activeMonitors.add(character.MemberNumber);
+
+try {
+    await this.monitorCharacter(character);
+} finally {
+    this.activeMonitors.delete(character.MemberNumber);
+}
+```
+
+Repeated execution must produce identical results.
+
+---
+
+### 10. One Monitor Per Character
+
+Any system using:
+
+- Polling
+- Monitoring
+- While loops
+- Timers
+- State watchers
+
+must enforce a single active monitor per character.
+
+**Required Pattern:**
+
+```typescript
+private readonly activeMonitors =
+    new Set<number>();
+
+if (
+    this.activeMonitors.has(
+        memberNumber,
+    )
+) {
+    return;
+}
+```
+
+Duplicate monitors are a bug.
+
+Always track monitor ownership explicitly.
+
+---
+
+### 11. State Machines Over Event Chains
+
+Do not rely on:
+
+```text
+entered
+left
+started
+stopped
+woke up
+fell asleep
+```
+
+events as the sole source of truth.
+
+Continuously evaluate current state.
+
+**Preferred:**
+
+```typescript
+const isAsleep = ...;
+const hasBed = ...;
+
+if (
+    isAsleep &&
+    !hasBed
+) {
+    await ensureBed();
+}
+
+if (
+    !isAsleep &&
+    hasBed
+) {
+    await ensureNoBed();
+}
+```
+
+State machines recover automatically from:
+
+- missed events
+- duplicated events
+- reconnects
+- synchronization delays
+
+---
+
+### 12. Equipment Operations Must Be Idempotent
+
+Appearance mutations must be safe to execute repeatedly.
+
+**Preferred:**
+
+```typescript
+await ensureBed(character);
+```
+
+```typescript
+await ensureNoBed(character);
+```
+
+**Avoid:**
+
+```typescript
+AddItem(...);
+RemoveItem(...);
+```
+
+without verifying current state.
+
+Idempotent operations prevent:
+
+- double equips
+- duplicate removals
+- synchronization races
+
+---
+
+### 13. Missing Appearance Slots Are Valid State
+
+Bondage Club may completely remove appearance groups when empty.
+
+Never assume:
+
+```typescript
+character.Appearance.getItemData("ItemDevices");
+```
+
+returns a valid object.
+
+**Preferred:**
+
+```typescript
+const item = character.Appearance.getItemData("ItemDevices");
+
+if (!item) {
+    return;
+}
+```
+
+Errors such as:
+
+```text
+Couldn't find item to update in slot ItemDevices
+```
+
+are often a normal synchronization condition rather than a system failure.
+
+Treat empty slots as valid state.
+
+---
+
+### 14. API State May Be Eventually Consistent
+
+Never assume:
+
+```typescript
+AddItem(...)
+```
+
+immediately guarantees:
+
+```typescript
+getItemData(...)
+```
+
+returns the updated value.
+
+Likewise:
+
+```typescript
+RemoveItem(...)
+```
+
+does not guarantee immediate visibility through subsequent reads.
+
+Assume:
+
+- state may lag
+- synchronization may be delayed
+- reads and writes may observe different snapshots
+
+Generated code should therefore:
+
+- validate assumptions
+- tolerate stale reads
+- prefer idempotent state transitions
+
+over strict read-after-write expectations.
+
+---
+
+### 15. Log Decision-Driving State
+
+Do not only log actions.
+
+Also log the state that caused the action.
+
+**Bad:**
+
+```typescript
+console.log("Applying bed");
+```
+
+**Good:**
+
+```typescript
+console.log({
+    memberNumber,
+    isAsleep,
+    hasBed,
+});
+```
+
+The "why" behind an action is often more valuable than the action itself when debugging complex systems.
+
+For monitors, always log:
+
+- start
+- stop
+- state transitions
+- mutation attempts
+- failures
+
+## Architecture Understanding
+
+### Release System: 7-Stage State Machine
+
+The release system is NOT a simple strip-and-free operation. It's carefully designed with 7 distinct stages:
+
+```
+Stage 1: Confirm Release (20s timeout)
+Stage 2: Teleport to Punishment Room
+Stage 3: Free from Confinement (cage/kennel)
+Stage 4: Strip Non-Owner-Locked Items
+Stage 5: Forced Nudity Verification (60s window)
+Stage 6: Grant Keypad Access
+Stage 7: Parole Monitoring (10-min escalating)
+```
+
+**Why 7 Stages?** See `docs/ARCHITECTURAL_DECISIONS.md` section 1.
+
+**Modification Guidelines:**
+
+- Each stage must be independently testable
+- Failures at stage N should not require restarting from stage 1
+- When re-release occurs (parole violation), restart at Stage 3 (not Stage 1)
+- Preserve narrative flow between stages
 
 ### Feature System Interface
 
-All systems implement this interface:
+All 11 systems implement:
 
 ```typescript
 export interface VeratownFeatureSystem {
-    key: string; // "cage", "release", "shower"
-    name: string; // "Cage System"
-    description: string; // "Provide containment cages..."
+    key: string;
+    name: string;
+    description: string;
     isEnabled: boolean;
     initialize(conn, stores): Promise<void>;
     shutdown(): Promise<void>;
@@ -230,260 +480,798 @@ export interface VeratownFeatureSystem {
 
 **When Adding Features:**
 
-1. Create new file in `bin/games/veratown/`
-2. Export class implementing `VeratownFeatureSystem`
-3. Register in `veratown.ts` orchestrator
-4. Implement uniform `enable()` / `disable()` methods (must be idempotent)
+1. Create class implementing interface
+2. Make `enable()` / `disable()` idempotent (safe to call multiple times)
+3. Register in orchestrator (`veratown.ts`)
+4. Wrap all handlers with `guardHandler(key, handler)` for isolation
+
+## Event-Driven Architecture Pattern
+
+### Trigger → Monitor → Action
+
+All Veratown systems that react to player state should follow:
+
+```text
+Trigger
+    ↓
+Monitor
+    ↓
+State Evaluation
+    ↓
+Idempotent Action
+```
+
+Example:
+
+```text
+Character enters bed
+    ↓
+Ensure monitor exists
+    ↓
+Monitor sleep state
+    ↓
+Apply or remove bed
+```
 
 ---
 
-### Release System: 7-Stage State Machine
+### Core Architectural Principles
 
-Understanding the release system is critical. It's not a simple "strip and free" operation:
+#### Event Handlers Must Be Idempotent
 
+Triggers may fire:
+
+- Multiple times
+- Concurrently
+- During synchronization updates
+- After reconnects
+- After map reloads
+
+Never assume a trigger executes only once.
+
+**Bad:**
+
+```typescript
+private onCharacterEnterBed = async (
+    character: API_Character,
+) => {
+    await this.monitorCharacter(character);
+};
 ```
-Stage 0: Capture State (location, appearance snapshot)
-         ↓
-Stage 1: Confirm Release (20-second user confirmation timeout)
-         ↓
-Stage 2: Teleport to Punishment Room (250ms stabilization)
-         ↓
-Stage 3: Free from Confinement (cage/kennel)
-         ↓
-Stage 4: Strip Non-Owner-Locked Items (preserve OwnerPadlock/OwnerTimerPadlock)
-         ↓
-Stage 5: Forced Nudity Verification (60-second window)
-         ↓
-Stage 6: Grant Keypad Access (provide escape code)
-         ↓
-Stage 7: Parole Monitoring (10-min default, escalating on re-release)
+
+**Good:**
+
+```typescript
+if (this.activeMonitors.has(character.MemberNumber)) {
+    return;
+}
+
+this.activeMonitors.add(character.MemberNumber);
+
+try {
+    await this.monitorCharacter(character);
+} finally {
+    this.activeMonitors.delete(character.MemberNumber);
+}
 ```
-
-**Key Decision: Why 7 Stages?**
-
-- Allows each stage to fail independently
-- Prevents "accidental escape" (confirmation window)
-- Immersive narrative flow
-- Makes restart logic clean (re-release starts at Stage 3, not 1)
-
-**When Modifying Release Logic:**
-
-1. Identify which stage(s) are affected
-2. Preserve stage isolation (don't couple stages)
-3. Document why change needed (architectural debt, bug fix, feature)
-4. Test stage transition independently
 
 ---
+
+#### One Monitor Per Character
+
+Any feature that uses:
+
+- Polling
+- Monitoring
+- While loops
+- Recurring timers
+- State watching
+
+must enforce a single active monitor per character.
+
+**Required Pattern:**
+
+```typescript
+private readonly activeMonitors = new Set<number>();
+
+if (this.activeMonitors.has(memberNumber)) {
+    return;
+}
+```
+
+Duplicate monitors are considered a bug.
+
+---
+
+#### State Machines Over Event Chains
+
+Do not rely on:
+
+```text
+entered
+left
+started
+stopped
+woke up
+fell asleep
+```
+
+events as the primary source of truth.
+
+Continuously evaluate state.
+
+**Preferred:**
+
+```typescript
+const isAsleep = ...
+const hasBed = ...
+
+if (isAsleep && !hasBed) {
+    await ensureBed();
+}
+
+if (!isAsleep && hasBed) {
+    await ensureNoBed();
+}
+```
+
+State machines self-heal after missed events.
+
+---
+
+#### Equipment Operations Must Be Idempotent
+
+All item mutations must tolerate repeated execution.
+
+**Preferred:**
+
+```typescript
+await ensureBed(character);
+await ensureNoBed(character);
+```
+
+**Avoid:**
+
+```typescript
+AddItem(...)
+RemoveItem(...)
+```
+
+without validating state first.
+
+---
+
+### Trigger Responsibilities
+
+Triggers should:
+
+- Validate input
+- Ensure monitor exists
+- Return immediately
+
+Triggers should NOT:
+
+- Poll
+- Mutate appearance repeatedly
+- Contain while loops
+- Perform long-running work
+
+**Good:**
+
+```typescript
+onCharacterEnterBed() {
+    ensureMonitorExists();
+}
+```
+
+**Bad:**
+
+```typescript
+onCharacterEnterBed() {
+    while (...) {
+        ...
+    }
+}
+```
+
+---
+
+### Monitor Responsibilities
+
+Monitors should:
+
+- Evaluate state
+- Apply transitions
+- Clean up on exit
+- Maintain system invariants
+
+All monitors must use:
+
+```typescript
+try {
+    ...
+} finally {
+    ...
+}
+```
+
+for cleanup.
+
+Typical cleanup responsibilities include:
+
+- Removing monitor registrations
+- Releasing locks
+- Cleaning temporary state
+- Removing temporary equipment
+- Stopping timers
+
+---
+
+### Appearance API Guidelines
+
+#### API Reads Are Not Authoritative
+
+Never assume:
+
+```typescript
+getItemData(...)
+```
+
+and
+
+```typescript
+AddItem(...)
+```
+
+or
+
+```typescript
+RemoveItem(...)
+```
+
+operate on perfectly synchronized state.
+
+Assume:
+
+- State may be stale
+- Updates may be delayed
+- Synchronization may be asynchronous
+- A write may not be immediately visible through a subsequent read
+
+Generated code should therefore be defensive and idempotent.
+
+---
+
+#### Missing Appearance Slots Are Valid State
+
+Bondage Club appearance groups may disappear entirely when empty.
+
+Never assume:
+
+```typescript
+character.Appearance.getItemData("ItemDevices");
+```
+
+returns an object.
+
+**Preferred:**
+
+```typescript
+const item = character.Appearance.getItemData("ItemDevices");
+
+if (!item) {
+    return;
+}
+```
+
+Do not treat missing appearance groups as an error condition.
+
+---
+
+#### Cleanup Must Be Defensive
+
+**Good:**
+
+```typescript
+if (hasBed(character)) {
+    removeBed(character);
+}
+```
+
+**Bad:**
+
+```typescript
+removeBed(character);
+```
+
+without validating state first.
+
+Missing items should generally be treated as already-cleaned-up state.
+
+---
+
+#### Appearance Synchronization
+
+Before making decisions based on appearance state:
+
+```typescript
+character.MakeAppearanceBundle();
+```
+
+should be considered whenever the API requires explicit synchronization.
+
+Review the calling system and verify the appropriate synchronization pattern is being followed.
+
+---
+
+### Logging Requirements
+
+Always log decision-driving state.
+
+**Bad:**
+
+```typescript
+console.log("Applying bed");
+```
+
+**Good:**
+
+```typescript
+console.log({
+    memberNumber,
+    isAsleep,
+    hasBed,
+});
+```
+
+The reason for a decision is more valuable than the action itself.
+
+---
+
+### Monitor Lifecycle Logging
+
+Required logs:
+
+```text
+monitor start
+monitor stop
+state transitions
+mutation attempts
+mutation failures
+errors
+```
+
+Example:
+
+```typescript
+console.log(`[BedSystem] ${member}: asleep=${isAsleep} bed=${hasBed}`);
+```
+
+For troubleshooting monitor issues, log:
+
+```typescript
+console.log({
+    memberNumber,
+    activeMonitorCount,
+    isAsleep,
+    hasBed,
+});
+```
+
+before assuming state corruption.
+
+---
+
+### Common Failure Patterns
+
+#### Duplicate Monitor Execution
+
+**Symptoms:**
+
+- Repeated item application
+- Duplicate state transitions
+- Actions execute multiple times
+- Excessive monitoring logs
+
+**Root Cause:**
+
+Multiple monitors running against the same character.
+
+**Fix:**
+
+```typescript
+private readonly activeMonitors = new Set<number>();
+```
+
+Enforce exactly one monitor per character.
+
+---
+
+#### Missing Appearance Slot
+
+**Symptoms:**
+
+```text
+Couldn't find item to update in slot ItemDevices
+```
+
+or:
+
+```typescript
+getItemData(...) === undefined
+```
+
+**Root Cause:**
+
+Bondage Club removes empty appearance groups.
+
+**Fix:**
+
+Treat missing slots as valid state and verify existence before mutation.
+
+---
+
+#### Trigger Spam
+
+**Symptoms:**
+
+- One action appears to execute many times
+- Multiple monitor starts for the same player
+- Logs show repeated trigger execution
+
+**Root Cause:**
+
+Map trigger fires multiple times due to movement, synchronization, or reconnect activity.
+
+**Fix:**
+
+Ensure triggers are idempotent and only start monitors if one does not already exist.
+
+---
+
+### Architecture Review Questions
+
+Before approving any state-driven feature:
+
+1. Could this trigger start more than one monitor?
+2. Is the handler idempotent?
+3. Is the monitor cleaned up correctly?
+4. Does the monitor use try/finally?
+5. Is the state machine self-healing after missed events?
+6. Are mutations idempotent?
+7. Are appearance operations safe when slots disappear?
+8. Could synchronization delay invalidate assumptions?
+9. Would this still work after reconnects?
+10. Does logging provide enough information to diagnose state transitions?
+
+When uncertain, prioritize:
+
+- Correctness
+- Idempotency
+- Recoverability
+- Observability
+
+over code brevity.
 
 ### Database Schema
 
 **Three Collections:**
 
-1. **veratownCharacterProfiles** (one document per character)
-    - Position tracking, appearance history
-    - Current restraints, release parole state
-    - Audit log (last 100 entries)
-    - Cage/kennel session history
+```
+veratownCharacterProfiles
+├─ Position tracking
+├─ Appearance snapshots
+├─ Release parole state
+├─ Audit log (max 100 entries)
+└─ Session history
 
-2. **veratownLocations** (one document per location)
-    - Location type (cage, bed, shower, etc.)
-    - Position (X, Y), region boundaries
-    - Metadata (password, codes, narration)
-    - Automatic seeding from config on startup
+veratownLocations
+├─ Cage, bed, kennel positions
+├─ Region boundaries
+├─ Metadata (codes, narration)
+└─ Auto-seeded from config
 
-3. **veratownMap** (single document with backups)
-    - Current map layout
-    - Last 10 backup versions (automatic snapshots)
-    - Used for custom map persistence
+veratownMap
+├─ Current map layout
+└─ Backup history (last 10)
+```
 
 **When Adding State:**
 
-- Add to appropriate collection (usually character profiles)
-- Document retention policy (how long kept?)
-- Consider privacy (don't store unnecessary PII)
+- Document retention policy
+- Use numeric IDs (memberNumber, not username)
+- Consider privacy implications
+- Add to audit trail if behavior-tracking relevant
 
 ---
 
-## Common Patterns in Veratown Code
+## Common Review Scenarios
 
-### Pattern 1: Guard Handler for Error Isolation
+### Scenario 1: "We Need to Add Item Preservation"
 
-All handlers wrapped:
+**Your Analysis:**
 
-```typescript
-function guardHandler<T>(key: string, handler) {
-    return async (...args) => {
-        try {
-            await handler(...args);
-        } catch (e) {
-            console.error(`[Veratown:${key}] Error:`, e);
-            // Don't rethrow - isolation prevents cascading failure
-        }
-    };
-}
+1. Why selective stripping instead of strip-then-restore? (Race condition prevention)
+2. Which lock types? (Must be specific: OwnerPadlock/OwnerTimerPadlock only)
+3. Where in the 7-stage flow? (Usually Stage 4)
+4. How to handle re-release on parole? (Restart from Stage 3, preserve same items)
 
-// Used like:
-conn.on("Message", guardHandler("releaseSystem", handler));
+**Code Review Questions:**
+
+- Is MakeAppearanceBundle() called before reading appearance?
+- Are delays present in any removal loops?
+- Are specific lock types checked (not just `item.Property?.Lock`)?
+- What happens if item.Property is undefined?
+
+### Scenario 2: "Feature X Needs to Detect Cosmetics"
+
+**Your Response:**
+
+- Use `isCosplay(item)` from assetHelpers, don't create hardcoded list
+- Verify against actual BC asset data
+- Check for edge cases: hybrid items (cosmetic collar vs. bondage collar)
+- Document assumption (relies on BC asset definitions)
+
+### Scenario 3: "Release System Performance Issue"
+
+**Investigation:**
+
+- How often is appearance checked? (Should be 5-second intervals)
+- Is profile data cached? (Should be in-memory)
+- Are region entry events firing per-tile? (Should be once per region)
+- Is notification rate-limited? (Should have 5s minimum cooldown)
+
+### Scenario 4: "Release Failed and Character Lost Items"
+
+**Diagnosis:**
+
+- Was there a strip-and-restore pattern? (Look for atomic violation)
+- Did bot crash between operations? (Check database transaction atomicity)
+- Was MakeAppearanceBundle() called? (Stale appearance issue?)
+- Which stage failed? (Check error logs with context)
+
+### Scenario 5: "New Admin Feature Needed"
+
+**Checklist:**
+
+- Is it a location CRUD operation? (Use `/bot location add|remove|list`)
+- Is it map management? (Use `/bot map export|import|update`)
+- Is it feature control? (Use `/bot feature enable|disable`)
+- If entirely new, ensure:
+    - Hierarchical command under `/bot`
+    - Permission checks consistent with other admin commands
+    - Help text generated automatically
+    - Errors logged with context
+
+---
+
+## Code Review Standards
+
+### For Release System Changes
+
+**Always Check:**
+
+- [ ] Which stage(s) affected?
+- [ ] Is it atomic? (Never modify-then-restore)
+- [ ] MakeAppearanceBundle() called before appearance read?
+- [ ] Delays in loops (50ms minimum)?
+- [ ] Specific lock types (not just truthy check)?
+- [ ] Database mutations via executeWithRetry()?
+- [ ] Fallback behavior for missing locations/configs?
+- [ ] Error logs include character ID and operation?
+- [ ] Tested state transitions independently?
+- [ ] Does parole escalation still work correctly?
+
+### For Feature System Changes
+
+**Always Check:**
+
+- [ ] Implements VeratownFeatureSystem interface?
+- [ ] enable() and disable() idempotent?
+- [ ] All handlers wrapped with guardHandler()?
+- [ ] Checks resources exist before using?
+- [ ] Audit trail updated if behavior-tracking?
+- [ ] Error isolation prevents cascading failures?
+- [ ] Consistent error logging format?
+
+### For Database Changes
+
+**Always Check:**
+
+- [ ] Uses executeWithRetry() for mutations?
+- [ ] Numeric IDs (memberNumber) used as keys?
+- [ ] Privacy implications considered?
+- [ ] Retention policy documented?
+- [ ] No unbounded growth (collections capped)?
+- [ ] Queries indexed appropriately?
+
+---
+
+## Documentation Standards
+
+When reviewing or creating documentation:
+
+### ADR (Architecture Decision Record) Format
+
+Include:
+
+1. **Decision**: What choice was made?
+2. **Reasoning**: Why was this best?
+3. **Trade-offs**: What's the cost?
+4. **Alternatives**: What else was considered?
+5. **Implementation**: How does code reflect this?
+
+### Lessons Learned Format
+
+Include:
+
+1. **Finding**: What pattern works or fails?
+2. **Why**: Root cause or principle?
+3. **Evidence**: Example from codebase
+4. **Lesson**: Actionable guidance for future work
+
+### Code Comments Format
+
+Include:
+
+1. **Purpose**: What does this do?
+2. **Why**: Why is it necessary?
+3. **Gotcha**: What could break?
+4. **Reference**: Link to docs/decision if complex
+
+---
+
+## Debugging Approach
+
+When investigating issues:
+
+1. **Identify Stage**: Which release stage failed? (Check logs with [ReleaseSystem] prefix)
+2. **Check Appearance State**: Is MakeAppearanceBundle() called before reading?
+3. **Verify Atomicity**: Is there a strip-then-restore pattern?
+4. **Test Isolation**: Can you reproduce with minimal character state?
+5. **Review Recent Changes**: Check git log for commits touching affected code
+6. **Verify Assumptions**: Do locations exist? Are configs loaded? Are databases connected?
+
+---
+
+## Common Gotchas & How to Spot Them
+
+### Gotcha 1: Appearance Cache Stale
+
+**Symptoms:** Character appears clothed to system but not in-game
+**Root Cause:** MakeAppearanceBundle() not called
+**Fix:** Always refresh before reading appearance
+
+### Gotcha 2: Race Condition in Release
+
+**Symptoms:** Items disappear permanently, or double-apply on restart
+**Root Cause:** Strip-then-restore pattern
+**Fix:** Use selective stripping (never touch owner-locked items)
+
+### Gotcha 3: All Locks Treated Equally
+
+**Symptoms:** Admin locks prevent emergency release
+**Root Cause:** Checking `if (item.Property?.Lock)` not specific types
+**Fix:** Check only OwnerPadlock/OwnerTimerPadlock
+
+### Gotcha 4: Missing Fallback
+
+**Symptoms:** Feature completely breaks if one config missing
+**Root Cause:** No fallback when location/config not found
+**Fix:** Always check existence, provide sensible fallback
+
+### Gotcha 5: Silent Database Failures
+
+**Symptoms:** State doesn't persist, no error message
+**Root Cause:** Direct database call without executeWithRetry()
+**Fix:** Wrap all mutations in retry wrapper
+
+---
+
+## Questions to Ask Yourself
+
+Before approving a change:
+
+1. **Atomicity**: Could bot crash between operations and corrupt state?
+2. **Performance**: Does this add polling/queries that could scale poorly?
+3. **Isolation**: Could this system's failure crash other features?
+4. **Recovery**: If this fails, can player recover gracefully?
+5. **Testing**: Can I test this independently from database?
+6. **Maintenance**: Would someone else understand this in 6 months?
+7. **Consistency**: Does this follow existing patterns or introduce new ones?
+
+---
+
+## Recommended Reading Order
+
+For deep understanding of Veratown:
+
+1. `docs/VERATOWN_ARCHITECTURE.md` - System overview
+2. `docs/ARCHITECTURAL_DECISIONS.md` - Why each choice was made
+3. `docs/LESSONS_LEARNED.md` - Patterns and anti-patterns
+4. `docs/RELEASE_SYSTEM.md` - 7-stage flow in detail
+5. `bin/games/veratown/veratownReleaseSystem.ts` - Actual implementation
+6. `bin/games/veratown/featureSystem.ts` - Interface pattern
+7. Individual feature files (cage, bed, etc.) as needed
+
+---
+
+## When to Escalate
+
+**Escalate to architect/senior dev when:**
+
+- Considering changes to 7-stage flow
+- Adding new database collection
+- Implementing new confirmation/enforcement logic
+- Adding cross-system dependencies
+- Debating strip-then-restore vs. selective stripping
+- Performance concerns with polling/queries
+
+**Do NOT escalate for:**
+
+- New location configuration
+- Cosmetic narration changes
+- Extending audit log actions
+- Adding individual feature system
+- Bug fixes in single system
+- Documentation updates
+
+---
+
+## Quick Reference: File Locations
+
+```
+/home/olav/repo/ropeybot/
+├── bin/games/veratown/
+│   ├── veratownReleaseSystem.ts         # 7-stage release + parole
+│   ├── cageSystem.ts                    # Cages with locking
+│   ├── bedSystem.ts                     # Sleep tracking
+│   ├── kennelSystem.ts                  # Kennels
+│   ├── showerSystem.ts                  # Shower sequences
+│   ├── windowSystem.ts                  # Peeping detection
+│   ├── trashcanSystem.ts                # Easter egg
+│   ├── bunnyParkSystem.ts               # Protected bunny area
+│   ├── catDogSystem.ts                  # Pets (largest subsystem)
+│   ├── furnitureBondageSystem.ts        # Generic furniture
+│   ├── keypadDoorSystem.ts              # Code-locked doors
+│   ├── veratownCharacterProfileStore.ts # Character persistence
+│   ├── veratownLocationStore.ts         # Location persistence
+│   ├── veratownConfig.ts                # Centralized config
+│   ├── featureSystem.ts                 # Unified interface
+│   ├── adminCommands.ts                 # Admin command routing
+│   ├── veratownNarrationUtils.ts        # Dual-bot narration
+│   ├── regionManager.ts                 # Region entry dedup
+│   └── veratown.ts                      # Orchestrator
+├── docs/
+│   ├── VERATOWN_ARCHITECTURE.md         # System overview
+│   ├── ARCHITECTURAL_DECISIONS.md       # Design rationale
+│   ├── LESSONS_LEARNED.md               # Patterns & anti-patterns
+│   ├── RELEASE_SYSTEM.md                # 7-stage flow
+│   └── [other feature docs]
+├── src/
+│   ├── assetHelpers.ts                  # isClothing(), isCosplay()
+│   └── bcdata/                          # BC asset definitions
+└── copilot-instructions.md              # Copilot-specific guidance
 ```
 
 ---
 
-### Pattern 2: Region Manager for Duplicate Entry Prevention
+## Performance Baseline
 
-Instead of firing events per-tile, fire once per region entry:
+Use these as targets when optimizing:
 
-```typescript
-if (regionManager.markCharacterEntered(regionKey, memberId)) {
-    // Only fires first time character enters region
-    // Subsequent tile movement in region returns false
-    performExpensiveOperation();
-}
-```
-
----
-
-### Pattern 3: Confirmation Window with Timeout
-
-```typescript
-pendingConfirmations: Map<
-    memberId,
-    {
-        expiresAt: number;
-        resolve: (confirmed: boolean) => void;
-    }
->;
-
-// Start confirmation
-new Promise((resolve) => {
-    pendingConfirmations.set(memberId, {
-        expiresAt: Date.now() + 20000,
-        resolve,
-    });
-    setTimeout(() => {
-        pendingConfirmations.delete(memberId);
-        resolve(false); // Timeout = not confirmed
-    }, 20000);
-});
-
-// Accept confirmation
-if (msg.text === "accept") {
-    const pending = pendingConfirmations.get(sender);
-    if (pending && pending.expiresAt > Date.now()) {
-        pending.resolve(true);
-        pendingConfirmations.delete(sender);
-    }
-}
-```
+- Profile cache hits: >90% (avoid DB queries)
+- Appearance polling interval: 5 seconds
+- Notification cooldown: 5 seconds minimum
+- Release latency (start to completion): 5-10 seconds
+- Audit log size: 100 entries max per character
+- Database connection pool: 10 connections
 
 ---
 
-## Performance Considerations
+## Last Updated
 
-### Memory
-
-- Character profile cache: ~1MB per 500 active characters
-- Audit log: 100 entries per character (auto-truncated)
-- Pending confirmations: ~1 entry per active release attempt
-
-### Database Queries
-
-- Profile queries on every location entry event (cache hits essential)
-- Location queries on every location trigger
-- Optimize: Preload frequently accessed locations in initialization
-
-### Event Processing
-
-- Appearance polling: 5-second intervals (balance responsiveness vs. load)
-- Region entry checking: Once per region, not per tile
-- Notification rate limiting: 5-second minimum between notifications
-
----
-
-## When to Ask for Help
-
-**Ask for help when:**
-
-- Modifying release system stages (impacts multiple systems)
-- Changing database schema (persistence impacts)
-- Adding new feature system (needs error isolation review)
-- Implementing asset categorization (need to verify against actual BC definitions)
-- Changing appearance operations (WCE anti-cheat considerations)
-
-**Don't be afraid to ask if:**
-
-- You're not sure about race conditions
-- You're about to add state that might cascade to other systems
-- You're considering a strip-and-restore pattern
-- You're implementing new confirmation/enforcement logic
-
----
-
-## Testing Checklist
-
-When suggesting code changes:
-
-- [ ] Will this operation fail gracefully if database unreachable?
-- [ ] Does this modify appearance? If so, are delays included?
-- [ ] Does this add state? Is retention policy documented?
-- [ ] Does this read appearance? Is MakeAppearanceBundle called first?
-- [ ] Does this involve locks? Are specific lock types checked?
-- [ ] Is fallback behavior present for all external resources?
-- [ ] Are errors logged with context (system + character ID)?
-- [ ] Is the operation atomic (no strip-then-restore)?
-
----
-
-## Files You'll Encounter Most Often
-
-| File                               | Purpose                              | Size        |
-| ---------------------------------- | ------------------------------------ | ----------- |
-| `veratownReleaseSystem.ts`         | Emergency release (7 stages, parole) | 1,600 lines |
-| `veratownCharacterProfileStore.ts` | Character persistence                | 730 lines   |
-| `catDogSystem.ts`                  | Pet interactions                     | 880 lines   |
-| `keypadDoorSystem.ts`              | Code-locked doors                    | 805 lines   |
-| `furnitureBondageSystem.ts`        | Generic furniture restraints         | 460 lines   |
-| `veratownConfig.ts`                | Centralized configuration            | 650 lines   |
-| `adminCommands.ts`                 | Admin command routing                | 1,370 lines |
-| `featureSystem.ts`                 | Feature interface + orchestration    | 150 lines   |
-
----
-
-## Asking for Code Examples
-
-**Good Request:**
-"Show me an example of stripping only bondage items while preserving owner-locked restraints"
-
-**Better Request:**
-"I need to modify cage system to preserve OwnerPadlock items when cage opens. Provide example following the pattern used in release system's stripNonOwnerItems()."
-
-**Best Request:**
-"Looking at stripNonOwnerItems() in veratownReleaseSystem.ts (lines 1000-1110), I want to apply similar logic to cage opening. What's the minimal change needed to preserve only owner-locked items, not all locked items?"
-
----
-
-## Key Concepts to Remember
-
-1. **Atomic Operations**: Prefer never-modify over try-undo
-2. **Appearance Cache**: Refresh before reading, not after
-3. **Delays in Loops**: 50ms minimum to avoid WCE detection
-4. **Database Retry**: All mutations go through executeWithRetry
-5. **Lock Types Matter**: OwnerPadlock ≠ TimerPadlock semantically
-6. **Fallback First**: Every external resource needs fallback
-7. **Error Context**: System name + character ID in all logs
-8. **Rate Limiting**: Better than complex "which notification" logic
-9. **Feature Isolation**: One system crash doesn't crash bot
-10. **Documentation > Code**: Explain "why" for future maintainers
-
----
-
-## Version History
-
-**Last Updated:** 2026-08-27  
-**Status:** Current (reflects all recent improvements including cosplay preservation)  
-**Covers:**
-
-- Release system with escalating parole durations
-- Cosplay/BodyCosplay detection via asset helpers
-- Owner-locked item preservation via selective stripping
-- All 11 feature systems unified interface
-- Error isolation via guardHandler pattern
+**Date:** 2026-08-27  
+**Changes:** Added cosplay preservation via isCosplay(), escalating parole durations, owner-locked item preservation via selective stripping  
+**Covers:** All 11 feature systems, 23 files, ~11K lines  
+**Status:** Current and accurate
