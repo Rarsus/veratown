@@ -22,6 +22,7 @@ import {
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor, createSystemLogger } from "./shared";
 
 // While a character remains on a bed tile, keeps checking whether they have
 // the "Sleep" Emoticon expression active: equips a Bed device while both are
@@ -38,7 +39,9 @@ export class BedSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private readonly activeMonitors = new Set<number>();
-    7;
+    private monitor = createIdempotentMonitor<API_Character>("BedSystem");
+    private logger = createSystemLogger("BedSystem");
+
     //   private sleepingCharacters = new Set<number>();
     private bedPositions: Array<{ X: number; Y: number }> = [];
     private readonly bedTrigger: ReturnType<typeof guardHandler>;
@@ -56,9 +59,9 @@ export class BedSystem implements VeratownFeatureSystem {
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
         try {
-            console.log(
-                `[BedSystem] reloadLocations called with ${locations.length} total locations`,
-            );
+            this.logger.info("Reloading bed locations", {
+                totalLocations: locations.length,
+            });
 
             for (const bedPos of this.bedPositions) {
                 this.conn.chatRoom.map.removeTileTrigger(
@@ -71,13 +74,8 @@ export class BedSystem implements VeratownFeatureSystem {
             const bedLocations = locations.filter(
                 (loc) => loc.type === "bed" && loc.enabled,
             );
-            console.log(
-                `[BedSystem] Found ${bedLocations.length} bed locations in database`,
-            );
-            bedLocations.forEach((bed) => {
-                console.log(
-                    `[BedSystem]   - ${bed.key}: (${bed.x}, ${bed.y}) enabled=${bed.enabled}`,
-                );
+            this.logger.info("Found bed locations in database", {
+                count: bedLocations.length,
             });
 
             this.bedPositions = bedLocations.map((bed) => ({
@@ -86,8 +84,8 @@ export class BedSystem implements VeratownFeatureSystem {
             }));
 
             if (this.bedPositions.length === 0) {
-                console.log(
-                    "[BedSystem] No bed locations in database, using config defaults",
+                this.logger.info(
+                    "No bed locations in database, using config defaults",
                 );
                 this.bedPositions = [...BED_POSITIONS];
             }
@@ -98,148 +96,32 @@ export class BedSystem implements VeratownFeatureSystem {
                         bedPos,
                         this.bedTrigger,
                     );
-                    console.log(
-                        `[BedSystem] Registered trigger for bed at (${bedPos.X}, ${bedPos.Y})`,
-                    );
+                    this.logger.debug("Registered trigger for bed", {
+                        x: bedPos.X,
+                        y: bedPos.Y,
+                    });
                 } catch (e) {
-                    console.error(
-                        `[BedSystem] Failed to register trigger for bed at (${bedPos.X}, ${bedPos.Y}):`,
-                        e,
+                    this.logger.error(
+                        "Failed to register trigger for bed",
+                        e as Error,
+                        {
+                            x: bedPos.X,
+                            y: bedPos.Y,
+                        },
                     );
                 }
             }
 
-            console.log(
-                `[BedSystem] Registered ${this.bedPositions.length} bed location(s)`,
-            );
+            this.logger.info("Bed location registration complete", {
+                count: this.bedPositions.length,
+            });
         } catch (e) {
-            console.error(
-                "[BedSystem] Unexpected error during initialization",
-                e,
+            this.logger.error(
+                "Unexpected error during initialization",
+                e as Error,
             );
         }
     }
-
-    /*private onCharacterEnterBed = async (character: API_Character) => {
-        console.log(`[BedSystem] ${character.MemberNumber} entered bed tile`);
-        if (!this.enabled) {
-            console.log(`[BedSystem] System disabled, ignoring`);
-            return;
-        }
-
-        if (this.sleepingCharacters.has(character.MemberNumber)) {
-            console.log(
-                `[BedSystem] ${character.MemberNumber} already sleeping, ignoring`,
-            );
-            return;
-        }
-
-        this.sleepingCharacters.add(character.MemberNumber);
-
-        const isOnBed = () => {
-            if (!this.conn.chatRoom.getCharacter(character.MemberNumber))
-                return false;
-
-            return isCharacterAtAnyPosition(character, this.bedPositions);
-        };
-
-        try {
-            // Also polls this.enabled so an admin disabling beds mid-nap
-            // promptly ends the current sleepers' Bed/Covers instead of only
-            // blocking new arrivals.
-            while (isOnBed() && this.enabled) {
-                const isAsleep =
-                    character.Appearance.getItemData("Emoticon")?.Property
-                        ?.Expression === "Sleep";
-                const hasBed =
-                    character.Appearance.getItemData("ItemDevices")?.Name ===
-                    "Bed";
-
-                if (isAsleep && !hasBed) {
-                    console.log(
-                        `[BedSystem] ${character.MemberNumber} is sleeping and has no bed, adding bed`,
-                    );
-                    // Check if character already has something else equipped in the bed slot
-                    const existingBedItem =
-                        character.Appearance.getItemData("ItemDevices");
-                    if (existingBedItem && existingBedItem.Name !== "Bed") {
-                        console.log(
-                            `[BedSystem] ${character.MemberNumber} has conflicting item in bed slot: ${existingBedItem.Name}`,
-                        );
-                        // Character has another item in the bed slot, don't allow sleep
-                        await wait(BED_CHECK_INTERVAL_MS);
-                        continue;
-                    }
-                    try {
-                        try {
-                            const bed = character.Appearance.AddItem(
-                                AssetGet("ItemDevices", "Bed"),
-                            );
-                            bed.SetCraft({
-                                Name: "Bed",
-                                Description: `${character} is fast asleep`,
-                            });
-
-                        } catch (e) {
-                            console.error(
-                                `Failed to add ItemDevices/Bed`,
-                                e,
-                            );
-                        }
-                        try {
-                            const blanket = character.Appearance.AddItem(
-                                AssetGet("ItemAddon", "Covers"),
-                            );
-
-                            blanket.SetCraft({
-                                Name: "Comfy blanket",
-                                Description: `${character} is covered by a comfy blanket`,
-                            });
-
-                        } catch (e) {
-                            console.error(
-                                `Failed to add ItemAddon/Covers`,
-                                e,
-                            );
-                        }                        // CRITICAL: Sync appearance to server before checking it again.
-                        // Without this, the server doesn't know about the Bed/Covers,
-                        // and the next loop iteration will think hasBed is still false.
-                        character.Appearance.MakeAppearanceBundle();
-
-                        // Wait for appearance sync to stabilize before reading again
-                        await wait(100);
-                    } catch (bedError) {
-                        console.error(
-                            `[BedSystem] Failed to add bed for ${character.MemberNumber}:`,
-                            bedError,
-                        );
-                    }
-                } else if (!isAsleep && hasBed) {
-                    console.log(
-                        `[BedSystem] ${character.MemberNumber} woke up or left bed, removing bed items`,
-                    );
-                    // Sync removal to server
-                    character.Appearance.RemoveItem("ItemDevices");
-                    character.Appearance.MakeAppearanceBundle();
-                    await wait(50);
-                }
-                await wait(BED_CHECK_INTERVAL_MS);
-            }
-        } finally {
-            console.log(
-                `[BedSystem] ${character.MemberNumber} left bed, cleaning up`,
-            );
-            // Clean up bed items when character leaves or system is disabled
-            if (
-                character.Appearance.getItemData("ItemDevices")?.Name === "Bed"
-            ) {
-                character.Appearance.RemoveItem("ItemDevices");
-                character.Appearance.MakeAppearanceBundle();
-                await wait(50);
-            }
-            this.sleepingCharacters.delete(character.MemberNumber);
-        }
-    }; */
 
     private onCharacterEnterBed = async (
         character: API_Character,
@@ -248,29 +130,17 @@ export class BedSystem implements VeratownFeatureSystem {
             return;
         }
 
-        const memberNumber = character.MemberNumber;
+        await this.monitor.run(character, async () => {
+            this.logger.info("Character entered bed", {
+                memberNumber: character.MemberNumber,
+            });
 
-        // Idempotent:
-        // If we're already monitoring this character,
-        // don't start another loop.
-        if (this.activeMonitors.has(memberNumber)) {
-            console.log(
-                `[BedSystem] monitor already active for ${memberNumber}`,
-            );
-            return;
-        }
-
-        this.activeMonitors.add(memberNumber);
-
-        console.log(`[BedSystem] starting monitor for ${memberNumber}`);
-
-        try {
             await this.monitorCharacter(character);
-        } finally {
-            this.activeMonitors.delete(memberNumber);
 
-            console.log(`[BedSystem] stopped monitor for ${memberNumber}`);
-        }
+            this.logger.info("Character left bed or system disabled", {
+                memberNumber: character.MemberNumber,
+            });
+        });
     };
 
     private async monitorCharacter(character: API_Character): Promise<void> {
@@ -294,9 +164,11 @@ export class BedSystem implements VeratownFeatureSystem {
                     character.Appearance.getItemData("ItemDevices")?.Name ===
                     "Bed";
 
-                console.log(
-                    `[BedSystem] ${memberNumber}: asleep=${isAsleep} bed=${hasBed}`,
-                );
+                this.logger.debug("Bed monitor check", {
+                    memberNumber,
+                    isAsleep,
+                    hasBed,
+                });
 
                 if (isAsleep) {
                     await this.ensureBed(character);
@@ -314,9 +186,6 @@ export class BedSystem implements VeratownFeatureSystem {
     private async ensureBed(character: API_Character): Promise<void> {
         const memberNumber = character.MemberNumber;
 
-        for (const item of character.Appearance.allItems()) {
-            console.log(`[BedSystem] slot=${item.Group} item=${item.Name}`);
-        }
         const existingItem = character.Appearance.getItemData("ItemDevices");
 
         // Already equipped?
@@ -326,13 +195,16 @@ export class BedSystem implements VeratownFeatureSystem {
 
         // Conflicting device?
         if (existingItem && existingItem.Name !== "Bed") {
-            console.log(
-                `[BedSystem] ${memberNumber} has conflicting device: ${existingItem.Name}`,
-            );
+            this.logger.debug("Conflicting device prevents bed application", {
+                memberNumber,
+                conflictingDevice: existingItem.Name,
+            });
             return;
         }
 
-        console.log(`[BedSystem] ${memberNumber} applying bed`);
+        this.logger.info("Applying bed to sleeping character", {
+            memberNumber,
+        });
 
         try {
             const bed = character.Appearance.AddItem(
@@ -344,7 +216,9 @@ export class BedSystem implements VeratownFeatureSystem {
                 Description: `${character} is fast asleep`,
             });
         } catch (err) {
-            console.error(`[BedSystem] failed adding bed`, err);
+            this.logger.error("Failed adding bed", err as Error, {
+                memberNumber,
+            });
         }
 
         try {
@@ -357,25 +231,26 @@ export class BedSystem implements VeratownFeatureSystem {
                 Description: `${character} is covered by a comfy blanket`,
             });
         } catch (err) {
-            console.error(`[BedSystem] failed adding covers`, err);
+            this.logger.error("Failed adding covers", err as Error, {
+                memberNumber,
+            });
         }
 
         character.Appearance.MakeAppearanceBundle();
     }
 
     private async ensureNoBed(character: API_Character): Promise<void> {
+        const memberNumber = character.MemberNumber;
         const hasBed =
             character.Appearance.getItemData("ItemDevices")?.Name === "Bed";
-
-        for (const item of character.Appearance.allItems()) {
-            console.log(`[BedSystem] slot=${item.Group} item=${item.Name}`);
-        }
 
         if (!hasBed) {
             return;
         }
 
-        console.log(`[BedSystem] removing bed from ${character.MemberNumber}`);
+        this.logger.info("Removing bed from character", {
+            memberNumber,
+        });
 
         character.Appearance.RemoveItem("ItemDevices");
 
