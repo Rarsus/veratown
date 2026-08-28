@@ -9,7 +9,7 @@
  *   const item = getAppearanceItem(character, "ItemDevices");
  */
 
-import { wait } from "../../../utils"; // Adjust path as needed
+import { wait } from "../../../hub/utils"; // Adjust path as needed
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 

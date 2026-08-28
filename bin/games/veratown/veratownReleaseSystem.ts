@@ -29,6 +29,7 @@ import {
     RELEASE_PAROLE_DURATION_MS,
     RELEASE_COOLDOWN_MS,
 } from "./veratownConfig";
+import { createIdempotentMonitor, createSystemLogger } from "./shared";
 
 /**
  * Refactored Release System with:
@@ -121,6 +122,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         number,
         Map<string, { start: number; end?: number }>
     >(); // memberId -> (stageName -> timing)
+
+    // Monitor for preventing duplicate parole expiration monitoring
+    private paroleMonitor = createIdempotentMonitor<API_Character>(
+        "ReleaseSystem.parole",
+    );
+    private logger = createSystemLogger("ReleaseSystem");
 
     public constructor(
         private conn: API_Connector,
@@ -633,55 +640,66 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async monitorParoleExpiration(
         character: API_Character,
     ): Promise<void> {
-        const paroleStartTime = Date.now();
-        const paroleDurationMs = RELEASE_PAROLE_DURATION_MS;
+        await this.paroleMonitor.run(character, async () => {
+            const paroleStartTime = Date.now();
+            const paroleDurationMs = RELEASE_PAROLE_DURATION_MS;
 
-        console.log(
-            `[ReleaseSystem] Stage 7: Starting parole monitoring for ${character.MemberNumber}`,
-        );
+            this.logger.info("Starting parole monitoring", {
+                memberNumber: character.MemberNumber,
+                durationMs: paroleDurationMs,
+            });
 
-        // Stabilize appearance state
-        await wait(this.TIMINGS.STATE_SYNC_GRACE_PERIOD);
+            // Stabilize appearance state
+            await wait(this.TIMINGS.STATE_SYNC_GRACE_PERIOD);
 
-        try {
-            while (Date.now() - paroleStartTime < paroleDurationMs) {
-                const remaining = Math.ceil(
-                    (paroleDurationMs - (Date.now() - paroleStartTime)) / 1000,
+            try {
+                while (Date.now() - paroleStartTime < paroleDurationMs) {
+                    const remaining = Math.ceil(
+                        (paroleDurationMs - (Date.now() - paroleStartTime)) /
+                            1000,
+                    );
+
+                    // Enforce nudity (strip any re-equipped clothing)
+                    try {
+                        await this.enforceParoleNudity(character);
+                    } catch (e) {
+                        this.logger.error(
+                            "Error enforcing parole nudity",
+                            e as Error,
+                            { memberNumber: character.MemberNumber },
+                        );
+                    }
+
+                    // Check for parole violation (character dressed themselves)
+                    if (!isNaked(character)) {
+                        this.logger.info("Parole violation detected", {
+                            memberNumber: character.MemberNumber,
+                            violation: "dressed",
+                        });
+                        await this.handleParoleViolation(character, "dressed");
+                        return;
+                    }
+
+                    // Send notifications
+                    this.sendParoleNotification(character, remaining);
+
+                    await wait(this.PAROLE_CHECK_INTERVAL_MS);
+                }
+
+                // Parole expired - final check
+                await this.finalizeParoleExpiration(character);
+
+                this.logger.info("Parole monitoring completed", {
+                    memberNumber: character.MemberNumber,
+                });
+            } catch (e) {
+                this.logger.error(
+                    "Error in parole monitoring loop",
+                    e as Error,
+                    { memberNumber: character.MemberNumber },
                 );
-
-                // Enforce nudity (strip any re-equipped clothing)
-                try {
-                    await this.enforceParoleNudity(character);
-                } catch (e) {
-                    console.error(
-                        `[ReleaseSystem] Error enforcing parole nudity:`,
-                        e,
-                    );
-                }
-
-                // Check for parole violation (character dressed themselves)
-                if (!isNaked(character)) {
-                    console.log(
-                        `[ReleaseSystem] Parole violation detected: ${character.MemberNumber} is clothed`,
-                    );
-                    await this.handleParoleViolation(character, "dressed");
-                    return;
-                }
-
-                // Send notifications
-                this.sendParoleNotification(character, remaining);
-
-                await wait(this.PAROLE_CHECK_INTERVAL_MS);
             }
-
-            // Parole expired - final check
-            await this.finalizeParoleExpiration(character);
-        } catch (e) {
-            console.error(
-                `[ReleaseSystem] Error in parole monitoring loop:`,
-                e,
-            );
-        }
+        });
     }
 
     private async enforceParoleNudity(character: API_Character): Promise<void> {

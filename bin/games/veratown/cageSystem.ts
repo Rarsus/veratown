@@ -26,6 +26,7 @@ import {
     CRATE_LOCK_PASSWORD,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor, createSystemLogger } from "./shared";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -43,6 +44,10 @@ export class CageSystem implements VeratownFeatureSystem {
         number,
         { character: API_Character; cageName: string }
     >();
+
+    // Monitor for preventing duplicate cage entry handlers
+    private monitor = createIdempotentMonitor<API_Character>("CageSystem");
+    private logger = createSystemLogger("CageSystem");
 
     // Maps loaded from the database. Indexed by position for fast lookup.
     // Format: key is "X,Y" string, value is location doc + related metadata.
@@ -259,70 +264,84 @@ export class CageSystem implements VeratownFeatureSystem {
     private onCharacterEnterCage = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        const cagePos = { ...character.MapPos };
-        const stillInCage = () =>
-            character.MapPos.X === cagePos.X &&
-            character.MapPos.Y === cagePos.Y;
+        await this.monitor.run(character, async () => {
+            const cagePos = { ...character.MapPos };
+            const stillInCage = () =>
+                character.MapPos.X === cagePos.X &&
+                character.MapPos.Y === cagePos.Y;
 
-        await wait(100);
-        if (!stillInCage()) return;
+            await wait(100);
+            if (!stillInCage()) return;
 
-        const posKey = `${cagePos.X},${cagePos.Y}`;
-        const cage = this.cagesByPos.get(posKey);
-        const cageName = cage?.doc.name ?? "Unknown cage";
-        const lockExpiry = Date.now() + (cage?.durationMs ?? 30 * 60 * 1000);
+            const posKey = `${cagePos.X},${cagePos.Y}`;
+            const cage = this.cagesByPos.get(posKey);
+            const cageName = cage?.doc.name ?? "Unknown cage";
+            const lockExpiry =
+                Date.now() + (cage?.durationMs ?? 30 * 60 * 1000);
 
-        const crate = character.Appearance.AddItem(
-            AssetGet("ItemDevices", "FuturisticCrate"),
-        );
-        crate.SetCraft({
-            Name: `Veratown Futuristic Crate`,
-            Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+            const crate = character.Appearance.AddItem(
+                AssetGet("ItemDevices", "FuturisticCrate"),
+            );
+            crate.SetCraft({
+                Name: `Veratown Futuristic Crate`,
+                Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+            });
+            crate.setProperty("TypeRecord", {
+                w: 2, // Big window
+                l: 3,
+                a: 3,
+                d: 1,
+                t: 1,
+                h: 4,
+            });
+            crate.setProperty("Mode", "Deny");
+
+            crate.lock("TimerPasswordPadlock", character.MemberNumber, {
+                Password: CRATE_LOCK_PASSWORD,
+                RemoveItem: true,
+                RemoveTimer: lockExpiry,
+                ShowTimer: true,
+                LockSet: true,
+            });
+            this.cagedCharacters.set(character.MemberNumber, {
+                character,
+                cageName,
+            });
+
+            this.logger.info("Character caged", {
+                memberNumber: character.MemberNumber,
+                cageName,
+                durationDescription: cage?.durationDescription,
+            });
+
+            character.Tell(
+                "Whisper",
+                `(You are locked in the Futuristic Crate for ${remainingTimeString(lockExpiry)}.`,
+            );
+
+            // Wait for the lock to actually expire, re-reading the crate's lock
+            // data each time in case it has been extended (or shortened) since
+            // it was first applied.
+            let expiry = this.getCageLockExpiry(character);
+            while (expiry !== undefined && Date.now() < expiry) {
+                await wait(Math.min(expiry - Date.now(), 10 * 1000));
+                if (!this.cagedCharacters.has(character.MemberNumber)) return;
+                expiry = this.getCageLockExpiry(character);
+            }
+
+            if (!this.cagedCharacters.delete(character.MemberNumber)) return;
+
+            character.Appearance.RemoveItem("ItemDevices");
+            character.Tell(
+                "Whisper",
+                "(The Futuristic Crate unlocks and releases you.",
+            );
+
+            this.logger.info("Character released from cage", {
+                memberNumber: character.MemberNumber,
+                cageName,
+            });
         });
-        crate.setProperty("TypeRecord", {
-            w: 2, // Big window
-            l: 3,
-            a: 3,
-            d: 1,
-            t: 1,
-            h: 4,
-        });
-        crate.setProperty("Mode", "Deny");
-
-        crate.lock("TimerPasswordPadlock", character.MemberNumber, {
-            Password: CRATE_LOCK_PASSWORD,
-            RemoveItem: true,
-            RemoveTimer: lockExpiry,
-            ShowTimer: true,
-            LockSet: true,
-        });
-        this.cagedCharacters.set(character.MemberNumber, {
-            character,
-            cageName,
-        });
-
-        character.Tell(
-            "Whisper",
-            `(You are locked in the Futuristic Crate for ${remainingTimeString(lockExpiry)}.`,
-        );
-
-        // Wait for the lock to actually expire, re-reading the crate's lock
-        // data each time in case it has been extended (or shortened) since
-        // it was first applied.
-        let expiry = this.getCageLockExpiry(character);
-        while (expiry !== undefined && Date.now() < expiry) {
-            await wait(Math.min(expiry - Date.now(), 10 * 1000));
-            if (!this.cagedCharacters.has(character.MemberNumber)) return;
-            expiry = this.getCageLockExpiry(character);
-        }
-
-        if (!this.cagedCharacters.delete(character.MemberNumber)) return;
-
-        character.Appearance.RemoveItem("ItemDevices");
-        character.Tell(
-            "Whisper",
-            "(The Futuristic Crate unlocks and releases you.",
-        );
     };
 
     /**

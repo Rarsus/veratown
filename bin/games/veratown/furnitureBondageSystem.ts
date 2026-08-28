@@ -16,6 +16,7 @@ import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor, createSystemLogger } from "./shared";
 
 interface BondageRestraint {
     group: string;
@@ -88,6 +89,12 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
     private activeTimers = new Map<number, CharacterTimerState>();
     private notifiedPlayers = new Set<number>();
     private readonly furnitureTrigger: ReturnType<typeof guardHandler>;
+
+    // Monitor for preventing duplicate furniture activation
+    private monitor = createIdempotentMonitor<API_Character>(
+        "FurnitureBondageSystem",
+    );
+    private logger = createSystemLogger("FurnitureBondageSystem");
 
     public constructor(private conn: API_Connector) {
         this.furnitureTrigger = guardHandler(
@@ -284,27 +291,34 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
     private onCharacterEnterFurniture = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        const tile = this.tiles.find(
-            (t) =>
-                character.MapPos.X === t.location.x &&
-                character.MapPos.Y === t.location.y,
-        );
-
-        if (!tile) return;
-
-        // Notify player once per session about !bindme option
-        if (!this.notifiedPlayers.has(character.MemberNumber)) {
-            character.Tell(
-                "Whisper",
-                `(Tip: You can use !bindme to manually activate ${tile.location.name} or use other bondage furniture. Type !bindme when standing on furniture to activate it.)`,
+        await this.monitor.run(character, async () => {
+            const tile = this.tiles.find(
+                (t) =>
+                    character.MapPos.X === t.location.x &&
+                    character.MapPos.Y === t.location.y,
             );
-            this.notifiedPlayers.add(character.MemberNumber);
-        }
 
-        // Auto-activate if not disabled
-        if (tile.config.furnitureProperties?.disableAutoApply !== true) {
-            this.activateFurniture(character, tile);
-        }
+            if (!tile) return;
+
+            this.logger.info("Character entered furniture tile", {
+                memberNumber: character.MemberNumber,
+                location: tile.location.name,
+            });
+
+            // Notify player once per session about !bindme option
+            if (!this.notifiedPlayers.has(character.MemberNumber)) {
+                character.Tell(
+                    "Whisper",
+                    `(Tip: You can use !bindme to manually activate ${tile.location.name} or use other bondage furniture. Type !bindme when standing on furniture to activate it.)`,
+                );
+                this.notifiedPlayers.add(character.MemberNumber);
+            }
+
+            // Auto-activate if not disabled
+            if (tile.config.furnitureProperties?.disableAutoApply !== true) {
+                this.activateFurniture(character, tile);
+            }
+        });
     };
 
     private activateFurniture = async (
@@ -368,10 +382,18 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                     try {
                         this.removeRestraints(character, tile.config);
                         this.activeTimers.delete(character.MemberNumber);
+                        this.logger.info("Restraints removed after duration", {
+                            memberNumber: character.MemberNumber,
+                            location: tile.location.name,
+                        });
                     } catch (e) {
-                        console.error(
-                            `[FurnitureBondageSystem] Error removing restraints after duration:`,
-                            e,
+                        this.logger.error(
+                            "Error removing restraints after duration",
+                            e as Error,
+                            {
+                                memberNumber: character.MemberNumber,
+                                location: tile.location.name,
+                            },
                         );
                     }
                 }, tile.config.durationMs);
@@ -383,9 +405,10 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 });
             }
         } catch (e) {
-            console.error(
-                `[FurnitureBondageSystem] Error processing furniture for ${character.Name}:`,
-                e,
+            this.logger.error(
+                `Error processing furniture for ${character.Name}`,
+                e as Error,
+                { memberNumber: character.MemberNumber },
             );
         }
     };
