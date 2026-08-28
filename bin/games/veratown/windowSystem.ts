@@ -18,6 +18,8 @@ import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor } from "./shared/idempotentMonitor";
+import { createSystemLogger } from "./shared/systemLogger";
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
@@ -33,6 +35,9 @@ export class WindowSystem implements VeratownFeatureSystem {
 
     private windowPositions: Array<{ X: number; Y: number }> = [];
     private readonly windowTrigger: ReturnType<typeof guardHandler>;
+    private readonly monitor =
+        createIdempotentMonitor<API_Character>("WindowSystem");
+    private readonly logger = createSystemLogger("WindowSystem");
 
     public constructor(private conn: API_Connector) {
         this.windowTrigger = guardHandler(
@@ -85,13 +90,23 @@ export class WindowSystem implements VeratownFeatureSystem {
     private onCharacterPeepThroughWindow = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        const pos = { ...character.MapPos };
-        const stillThere = () =>
-            character.MapPos.X === pos.X && character.MapPos.Y === pos.Y;
+        // Use idempotent monitor to prevent duplicate detection
+        await this.monitor.run(character, async () => {
+            const pos = { ...character.MapPos };
+            const stillThere = () =>
+                character.MapPos.X === pos.X && character.MapPos.Y === pos.Y;
 
-        await wait(WINDOW_PEEP_DELAY_MS);
-        if (!stillThere()) return;
+            await wait(WINDOW_PEEP_DELAY_MS);
+            if (!stillThere()) return;
 
-        this.conn.SendMessage("Emote", `*Peeping Tom detected: ${character}`);
+            this.conn.SendMessage(
+                "Emote",
+                `*Peeping Tom detected: ${character}`,
+            );
+            this.logger.info("Peeping detected", {
+                memberNumber: character.MemberNumber,
+                location: "window",
+            });
+        });
     };
 }

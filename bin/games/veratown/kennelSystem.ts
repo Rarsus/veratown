@@ -18,6 +18,8 @@ import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor } from "./shared/idempotentMonitor";
+import { createSystemLogger } from "./shared/systemLogger";
 
 // Owns the kennel tiles: equips a Kennel device (door open, padded) on
 // entry, then automatically closes the door after a short delay as long as
@@ -33,6 +35,9 @@ export class KennelSystem implements VeratownFeatureSystem {
 
     private kennelPositions: Array<{ X: number; Y: number }> = [];
     private readonly kennelTrigger: ReturnType<typeof guardHandler>;
+    private readonly monitor =
+        createIdempotentMonitor<API_Character>("KennelSystem");
+    private readonly logger = createSystemLogger("KennelSystem");
 
     public constructor(private conn: API_Connector) {
         this.kennelTrigger = guardHandler(
@@ -85,22 +90,33 @@ export class KennelSystem implements VeratownFeatureSystem {
     private onCharacterEnterKennel = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        const kennel = character.Appearance.AddItem(
-            AssetGet("ItemDevices", "Kennel"),
-        );
-        kennel.SetCraft({
-            Name: "Kennel",
-            Description: `${character} is relaxing in their Kennel`,
+        // Use idempotent monitor to prevent duplicate execution
+        await this.monitor.run(character, async () => {
+            const kennel = character.Appearance.AddItem(
+                AssetGet("ItemDevices", "Kennel"),
+            );
+            kennel.SetCraft({
+                Name: "Kennel",
+                Description: `${character} is relaxing in their Kennel`,
+            });
+            // d: 0 = door open, p: 1 = padding enabled
+            kennel.setProperty("TypeRecord", { d: 0, p: 1 });
+
+            await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name !==
+                "Kennel"
+            )
+                return;
+
+            // d: 1 = door closed
+            kennel.setProperty("TypeRecord", { d: 1, p: 1 });
+
+            this.logger.info("Kennel door closed", {
+                memberNumber: character.MemberNumber,
+                location: "kennel",
+            });
         });
-        // d: 0 = door open, p: 1 = padding enabled
-        kennel.setProperty("TypeRecord", { d: 0, p: 1 });
-
-        await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
-        if (character.Appearance.getItemData("ItemDevices")?.Name !== "Kennel")
-            return;
-
-        // d: 1 = door closed
-        kennel.setProperty("TypeRecord", { d: 1, p: 1 });
     };
 
     /**

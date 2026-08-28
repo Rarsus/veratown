@@ -48,6 +48,11 @@ import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import { VeratownCharacterProfileStore } from "./veratown/veratownCharacterProfileStore";
 import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
 import {
+    syncAppearanceMutation,
+    filterOwnerLocked,
+} from "./veratown/shared/appearanceSync";
+import { createSystemLogger } from "./veratown/shared/systemLogger";
+import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
     GAME_MISTRESS_POSITION,
@@ -544,12 +549,39 @@ export class Veratown {
     };
 
     private freeCharacter(character: API_Character): void {
-        // Strip every bind item (locked or not) regardless of which bot
-        // system placed it - dare game bondage/pillory/kennel, casino
-        // forfeits, veratown cages, etc. Collars (ItemNeck/
-        // ItemNeckAccessories) are intentionally left alone by stripBulk.
-        character.Appearance.stripBulk({ item: true }, true);
+        const logger = createSystemLogger("Veratown.freeCharacter");
 
-        this.cageSystem?.freeCharacterIfCaged(character);
+        // Use atomic appearance sync to prevent data corruption if process crashes
+        // during strip-then-restore sequence
+        syncAppearanceMutation(
+            character,
+            async () => {
+                try {
+                    // Strip every bind item (locked or not) regardless of which bot
+                    // system placed it - dare game bondage/pillory/kennel, casino
+                    // forfeits, veratown cages, etc. Collars (ItemNeck/
+                    // ItemNeckAccessories) are intentionally left alone by stripBulk.
+                    character.Appearance.stripBulk({ item: true }, true);
+                    logger.info("Character freed from bondage", {
+                        memberNumber: character.MemberNumber,
+                    });
+                } catch (e) {
+                    logger.error("Failed to strip bondage items", e as Error, {
+                        memberNumber: character.MemberNumber,
+                    });
+                }
+
+                try {
+                    this.cageSystem?.freeCharacterIfCaged(character);
+                } catch (e) {
+                    logger.error("Failed to free from cage", e as Error, {
+                        memberNumber: character.MemberNumber,
+                    });
+                }
+            },
+            100,
+        ).catch((err) => {
+            logger.error("freeCharacter mutation failed", err as Error);
+        });
     }
 }

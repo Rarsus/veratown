@@ -15,6 +15,8 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor } from "./shared/idempotentMonitor";
+import { createSystemLogger } from "./shared/systemLogger";
 
 interface CatDogAction {
     type: "emote" | "bondage" | "vibrator";
@@ -71,6 +73,9 @@ export class CatDogSystem implements VeratownFeatureSystem {
     private readonly petTrigger: ReturnType<typeof guardHandler>;
     private botOriginalX: number = 0;
     private botOriginalY: number = 0;
+    private readonly monitor =
+        createIdempotentMonitor<API_Character>("CatDogSystem");
+    private readonly logger = createSystemLogger("CatDogSystem");
 
     public constructor(
         private conn: API_Connector,
@@ -308,56 +313,70 @@ export class CatDogSystem implements VeratownFeatureSystem {
             return;
         }
 
-        const characterPos = character.MapPos;
-        console.log(
-            `[CatDogSystem] Character position: (${characterPos.X}, ${characterPos.Y})`,
-        );
-        console.log(
-            `[CatDogSystem] Available tiles:`,
-            this.tiles.map(
-                (t) => `${t.petType} at (${t.location.x}, ${t.location.y})`,
-            ),
-        );
-
-        const tile = this.tiles.find(
-            (t) =>
-                characterPos.X === t.location.x &&
-                characterPos.Y === t.location.y,
-        );
-
-        if (!tile) {
+        // Use idempotent monitor to prevent duplicate actions
+        await this.monitor.run(character, async () => {
+            const characterPos = character.MapPos;
             console.log(
-                `[CatDogSystem] No matching tile found for position (${characterPos.X}, ${characterPos.Y})`,
+                `[CatDogSystem] Character position: (${characterPos.X}, ${characterPos.Y})`,
             );
-            return;
-        }
+            console.log(
+                `[CatDogSystem] Available tiles:`,
+                this.tiles.map(
+                    (t) => `${t.petType} at (${t.location.x}, ${t.location.y})`,
+                ),
+            );
 
-        console.log(
-            `[CatDogSystem] Found matching tile: ${tile.petType} with ${tile.config.actions.length} actions`,
-        );
+            const tile = this.tiles.find(
+                (t) =>
+                    characterPos.X === t.location.x &&
+                    characterPos.Y === t.location.y,
+            );
 
-        try {
-            // Execute each action
-            for (const action of tile.config.actions) {
-                console.log(`[CatDogSystem] Executing action: ${action.type}`);
-                if (action.type === "emote") {
-                    await this.performEmoteAction(
-                        character,
-                        action,
-                        tile.petType,
-                    );
-                } else if (action.type === "bondage") {
-                    this.performBondageAction(character, action);
-                } else if (action.type === "vibrator") {
-                    this.performVibratorAction(character, action, tile.petType);
-                }
+            if (!tile) {
+                console.log(
+                    `[CatDogSystem] No matching tile found for position (${characterPos.X}, ${characterPos.Y})`,
+                );
+                return;
             }
-        } catch (e) {
-            console.error(
-                `[CatDogSystem] Error executing action for ${character.Name}:`,
-                e,
+
+            console.log(
+                `[CatDogSystem] Found matching tile: ${tile.petType} with ${tile.config.actions.length} actions`,
             );
-        }
+
+            try {
+                // Execute each action
+                for (const action of tile.config.actions) {
+                    console.log(
+                        `[CatDogSystem] Executing action: ${action.type}`,
+                    );
+                    if (action.type === "emote") {
+                        await this.performEmoteAction(
+                            character,
+                            action,
+                            tile.petType,
+                        );
+                    } else if (action.type === "bondage") {
+                        this.performBondageAction(character, action);
+                    } else if (action.type === "vibrator") {
+                        this.performVibratorAction(
+                            character,
+                            action,
+                            tile.petType,
+                        );
+                    }
+                }
+
+                this.logger.info("Pet interaction completed", {
+                    memberNumber: character.MemberNumber,
+                    petType: tile.petType,
+                });
+            } catch (e) {
+                this.logger.error(
+                    `Error executing action for ${character.Name}:`,
+                    e as Error,
+                );
+            }
+        });
     };
 
     private async performEmoteAction(

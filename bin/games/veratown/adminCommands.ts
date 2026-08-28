@@ -28,6 +28,8 @@ import {
     VeratownLocationStore,
     VeratownLocationDoc,
 } from "./veratownLocationStore";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
+import { createSystemLogger } from "./shared/systemLogger";
 import { RegionManager, VeratownRegion } from "./regionManager";
 import {
     getLocationTemplate,
@@ -48,6 +50,7 @@ export class VeratownAdminCommands {
     // Guards against overlapping "!maintenance" runs (eg. a second admin
     // triggering it while the one-minute warning is still counting down).
     private maintenanceInProgress = false;
+    private readonly logger = createSystemLogger("VeratownAdminCommands");
 
     public constructor(
         private conn: API_Connector,
@@ -150,7 +153,26 @@ export class VeratownAdminCommands {
             return;
         }
 
-        target.Appearance.stripBulk({ clothing: true });
+        // Use appearance sync to ensure clothing is stripped safely
+        await syncAppearanceMutation(
+            target,
+            async () => {
+                try {
+                    target.Appearance.stripBulk({ clothing: true });
+                    this.logger.info("Character stripped via admin command", {
+                        memberNumber: target.MemberNumber,
+                        strippedBy: sender.MemberNumber,
+                    });
+                } catch (e) {
+                    this.logger.error("Failed to strip character", e as Error, {
+                        memberNumber: target.MemberNumber,
+                    });
+                    throw e;
+                }
+            },
+            50,
+        );
+
         this.conn.reply(msg, `${target} has been stripped of their clothing.`);
     };
 

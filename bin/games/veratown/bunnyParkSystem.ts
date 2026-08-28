@@ -23,6 +23,9 @@ import {
     BUNNY_ROPE_CRAFT_DESCRIPTION,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createIdempotentMonitor } from "./shared/idempotentMonitor";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
+import { createSystemLogger } from "./shared/systemLogger";
 
 // Owns the bunny park: warns visitors on entry, then punishes anyone who
 // steps on one of the protected bunnies with a randomly-chosen rope
@@ -40,6 +43,9 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
     private parkRegion: MapRegion = PARK;
     private readonly bunnyTrigger: ReturnType<typeof guardHandler>;
     private readonly parkTrigger: ReturnType<typeof guardHandler>;
+    private readonly monitor =
+        createIdempotentMonitor<API_Character>("BunnyParkSystem");
+    private readonly logger = createSystemLogger("BunnyParkSystem");
 
     public constructor(private conn: API_Connector) {
         this.bunnyTrigger = guardHandler(this.key, this.onCharacterStepOnBunny);
@@ -123,49 +129,68 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
     private onCharacterStepOnBunny = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        character.Tell(
-            "Whisper",
-            "(You step on one of the park's bunnies! Rope seems to shoot out from nowhere, quickly " +
-                "binding you as punishment for your carelessness...",
-        );
+        // Use idempotent monitor and appearance sync to prevent duplicate punishment
+        await this.monitor.run(character, async () => {
+            await syncAppearanceMutation(
+                character,
+                async () => {
+                    character.Tell(
+                        "Whisper",
+                        "(You step on one of the park's bunnies! Rope seems to shoot out from nowhere, quickly " +
+                            "binding you as punishment for your carelessness...",
+                    );
 
-        // Add the sign first so it's never skipped if adding one of the
-        // restraint pieces below happens to fail.
-        try {
-            const sign = character.Appearance.AddItem(
-                AssetGet("ItemMisc", "WoodenSign"),
-            );
-            sign.setProperty("Text", "I step on");
-            sign.setProperty("Text2", "Bunnies");
-        } catch (e) {
-            console.error("Failed to add bunny-punishment sign", e);
-        }
+                    // Add the sign first so it's never skipped if adding one of the
+                    // restraint pieces below happens to fail.
+                    try {
+                        const sign = character.Appearance.AddItem(
+                            AssetGet("ItemMisc", "WoodenSign"),
+                        );
+                        sign.setProperty("Text", "I step on");
+                        sign.setProperty("Text2", "Bunnies");
+                    } catch (e) {
+                        this.logger.error(
+                            "Failed to add bunny-punishment sign",
+                            e as Error,
+                        );
+                    }
 
-        const config =
-            BUNNY_RESTRAINT_CONFIGS[
-                Math.floor(Math.random() * BUNNY_RESTRAINT_CONFIGS.length)
-            ];
+                    const config =
+                        BUNNY_RESTRAINT_CONFIGS[
+                            Math.floor(
+                                Math.random() * BUNNY_RESTRAINT_CONFIGS.length,
+                            )
+                        ];
 
-        for (const piece of config.pieces) {
-            try {
-                const item = character.Appearance.AddItem(
-                    AssetGet(piece.group, piece.asset),
-                );
-                if (piece.extendedType) {
-                    item?.Extended?.SetType(piece.extendedType);
-                }
-                item?.SetDifficulty(20);
-                item?.SetColor(BUNNY_ROPE_COLOR);
-                item?.SetCraft({
-                    Name: piece.asset,
-                    Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
-                });
-            } catch (e) {
-                console.error(
-                    `Failed to add bunny-punishment piece ${piece.group}/${piece.asset}`,
-                    e,
-                );
-            }
-        }
+                    for (const piece of config.pieces) {
+                        try {
+                            const item = character.Appearance.AddItem(
+                                AssetGet(piece.group, piece.asset),
+                            );
+                            if (piece.extendedType) {
+                                item?.Extended?.SetType(piece.extendedType);
+                            }
+                            item?.SetDifficulty(20);
+                            item?.SetColor(BUNNY_ROPE_COLOR);
+                            item?.SetCraft({
+                                Name: piece.asset,
+                                Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
+                            });
+                        } catch (e) {
+                            this.logger.error(
+                                `Failed to add bunny-punishment piece ${piece.group}/${piece.asset}`,
+                                e as Error,
+                            );
+                        }
+                    }
+
+                    this.logger.info("Bunny punishment applied", {
+                        memberNumber: character.MemberNumber,
+                        location: "bunny_park",
+                    });
+                },
+                100,
+            ); // Wait 100ms for appearance sync
+        });
     };
 }
