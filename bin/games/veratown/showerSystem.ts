@@ -200,7 +200,11 @@ export class ShowerSystem implements VeratownFeatureSystem {
 
             const song =
                 SHOWER_SONGS[Math.floor(Math.random() * SHOWER_SONGS.length)];
-            narrator.sayAt(broadcastPos, "Emote", `${character} sings: ${song}`);
+            narrator.sayAt(
+                broadcastPos,
+                "Emote",
+                `${character} sings: ${song}`,
+            );
 
             await wait(SHOWER_SING_DELAY_MS);
             if (!isInShower()) return abortShower();
