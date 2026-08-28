@@ -196,13 +196,6 @@ private onCharacterEnterKennel = async (character: API_Character) => {
 - ✅ Logging built-in
 - ✅ Guaranteed cleanup
 - ✅ Reusable across 6+ systems
-  );
-
-                  consoleSpy.mockRestore();
-              });
-          });
-
-    });
 
 ```
 
