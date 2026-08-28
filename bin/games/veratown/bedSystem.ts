@@ -314,6 +314,11 @@ export class BedSystem implements VeratownFeatureSystem {
     private async ensureBed(character: API_Character): Promise<void> {
         const memberNumber = character.MemberNumber;
 
+         for (const item of character.Appearance.allItems()) {
+            console.log(
+                `[BedSystem] slot=${item.Group} item=${item.Name}`,
+         );
+        }
         const existingItem = character.Appearance.getItemData("ItemDevices");
 
         // Already equipped?
@@ -363,6 +368,12 @@ export class BedSystem implements VeratownFeatureSystem {
     private async ensureNoBed(character: API_Character): Promise<void> {
         const hasBed =
             character.Appearance.getItemData("ItemDevices")?.Name === "Bed";
+
+        for (const item of character.Appearance.allItems()) {
+            console.log(
+                `[BedSystem] slot=${item.Group} item=${item.Name}`,
+            );
+        }
 
         if (!hasBed) {
             return;
