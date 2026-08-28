@@ -22,6 +22,7 @@ import {
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
+import { createTimerManager, createSystemLogger } from "./shared";
 
 // The trashcan easter egg: searching the trash (an "Emote" containing both
 // "search" and "trash") while standing at one of the trashcan tiles finds a
@@ -38,6 +39,11 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private trashcanPositions: Array<{ X: number; Y: number }> = [];
+    private readonly searchCooldown = createTimerManager<number>(
+        "TrashcanSystem.searchCooldown",
+    );
+    private readonly logger = createSystemLogger("TrashcanSystem");
+    private readonly COOLDOWN_MS = 7000; // 7 second cooldown between searches
 
     public constructor(private conn: API_Connector) {}
 
@@ -56,13 +62,13 @@ export class TrashcanSystem implements VeratownFeatureSystem {
                 this.trashcanPositions = [...TRASHCAN_SEARCH_LOCATIONS];
             }
 
-            console.log(
-                `[TrashcanSystem] Loaded ${this.trashcanPositions.length} trashcan location(s)`,
-            );
+            this.logger.info("Loaded trashcan locations", {
+                count: this.trashcanPositions.length,
+            });
         } catch (e) {
-            console.error(
-                "[TrashcanSystem] Unexpected error during initialization",
-                e,
+            this.logger.error(
+                "Unexpected error during initialization",
+                e as Error,
             );
         }
     }
@@ -81,12 +87,42 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     };
 
     private onCharacterSearchTrash = async (character: API_Character) => {
+        const memberNumber = character.MemberNumber;
+
+        // Check if character is on cooldown
+        if (this.searchCooldown.has(memberNumber)) {
+            this.logger.debug("Character tried to search while on cooldown", {
+                memberNumber,
+            });
+            return;
+        }
+
+        // Set cooldown for this character
+        this.searchCooldown.set(
+            memberNumber,
+            () => {
+                this.logger.debug("Cooldown expired for character", {
+                    memberNumber,
+                });
+            },
+            this.COOLDOWN_MS,
+        );
+
+        this.logger.info("Character searching trash", {
+            memberNumber,
+        });
+
         await wait(1500);
 
         const item =
             TRASHCAN_FOUND_ITEMS[
                 Math.floor(Math.random() * TRASHCAN_FOUND_ITEMS.length)
             ];
+
+        this.logger.info("Character found item in trash", {
+            memberNumber,
+            item,
+        });
 
         this.conn.SendMessage(
             "Emote",

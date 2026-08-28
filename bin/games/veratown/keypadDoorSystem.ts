@@ -10,6 +10,7 @@ import {
     VeratownLocationDoc,
     VeratownLocationStore,
 } from "./veratownLocationStore";
+import { createTimerManager, createSystemLogger } from "./shared";
 
 // A keypad_door location uses this data shape:
 // {
@@ -46,7 +47,6 @@ interface KeypadDoorConfig {
 interface KeypadDoor {
     location: VeratownLocationDoc;
     config: KeypadDoorConfig;
-    timer?: ReturnType<typeof setTimeout>;
 }
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
@@ -184,11 +184,16 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private doors: KeypadDoor[] = [];
     private readonly keypadTrigger: ReturnType<typeof guardHandler>;
     private readonly autoOpenTrigger: ReturnType<typeof guardHandler>;
-    private notificationTimers = new Map<
-        string,
-        ReturnType<typeof setTimeout>
-    >();
-    private autoOpenTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly doorUnlockTimers = createTimerManager<string>(
+        "KeypadDoorSystem.doorUnlock",
+    );
+    private readonly notificationTimers = createTimerManager<string>(
+        "KeypadDoorSystem.notifications",
+    );
+    private readonly autoOpenTimers = createTimerManager<string>(
+        "KeypadDoorSystem.autoOpen",
+    );
+    private readonly logger = createSystemLogger("KeypadDoorSystem");
 
     public constructor(
         private conn: API_Connector,
@@ -224,20 +229,21 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         );
     }
 
+    private getDoorKey(door: KeypadDoor): string {
+        return `door_${door.config.doorX}_${door.config.doorY}`;
+    }
+
     public async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
-        for (const door of this.doors) {
-            if (door.timer) clearTimeout(door.timer);
-        }
-        for (const timer of this.notificationTimers.values()) {
-            clearTimeout(timer);
-        }
-        this.notificationTimers.clear();
-        for (const timer of this.autoOpenTimers.values()) {
-            clearTimeout(timer);
-        }
-        this.autoOpenTimers.clear();
+        // Clean up all existing timers
+        this.doorUnlockTimers.clearAll();
+        this.notificationTimers.clearAll();
+        this.autoOpenTimers.clearAll();
+
+        this.logger.info("Cleaning up timers during location reload", {
+            doorCount: this.doors.length,
+        });
 
         for (const door of this.doors) {
             if (
@@ -303,23 +309,37 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         if (!door) return;
 
         const notificationKey = `${door.location.key}:${character.MemberNumber}`;
-        const existingTimer = this.notificationTimers.get(notificationKey);
-        if (existingTimer) clearTimeout(existingTimer);
 
-        const timer = setTimeout(() => {
-            this.notificationTimers.delete(notificationKey);
-            const stillAtKeypad =
-                character.MapPos.X === door.location.x &&
-                character.MapPos.Y === door.location.y;
-            if (!stillAtKeypad) return;
+        // Clear any existing notification timer for this character
+        if (this.notificationTimers.has(notificationKey)) {
+            this.notificationTimers.clear(notificationKey);
+        }
 
-            character.Tell(
-                "Whisper",
-                "You are standing at a keypad. Whisper /bot code followed by your access code to try this door.",
-            );
-        }, KEYPAD_NOTIFICATION_DELAY_MS);
+        this.logger.debug("Character at keypad", {
+            doorX: door.config.doorX,
+            doorY: door.config.doorY,
+            memberNumber: character.MemberNumber,
+        });
 
-        this.notificationTimers.set(notificationKey, timer);
+        this.notificationTimers.set(
+            notificationKey,
+            () => {
+                const stillAtKeypad =
+                    character.MapPos.X === door.location.x &&
+                    character.MapPos.Y === door.location.y;
+                if (!stillAtKeypad) return;
+
+                this.logger.debug("Sending keypad notification", {
+                    memberNumber: character.MemberNumber,
+                });
+
+                character.Tell(
+                    "Whisper",
+                    "You are standing at a keypad. Whisper /bot code followed by your access code to try this door.",
+                );
+            },
+            KEYPAD_NOTIFICATION_DELAY_MS,
+        );
     };
 
     private onCharacterAtAutoOpenTile = (character: API_Character): void => {
@@ -327,25 +347,41 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         if (!door || door.config.insideRegion) return;
 
         const autoOpenKey = `${door.location.key}:auto:${character.MemberNumber}`;
-        const existingTimer = this.autoOpenTimers.get(autoOpenKey);
-        if (existingTimer) clearTimeout(existingTimer);
 
-        const timer = setTimeout(() => {
-            this.autoOpenTimers.delete(autoOpenKey);
-            const stillAtAutoOpenTile =
-                character.MapPos.X === door.config.autoOpenTile?.X &&
-                character.MapPos.Y === door.config.autoOpenTile?.Y;
-            if (!stillAtAutoOpenTile) return;
+        // Clear any existing auto-open timer for this character
+        if (this.autoOpenTimers.has(autoOpenKey)) {
+            this.autoOpenTimers.clear(autoOpenKey);
+        }
 
-            this.unlockDoor(
-                door,
-                "admin",
-                character,
-                door.config.unlockDurationMs,
-            );
-        }, AUTO_OPEN_TRIGGER_DELAY_MS);
+        this.logger.debug("Character at auto-open tile", {
+            doorX: door.config.doorX,
+            doorY: door.config.doorY,
+            memberNumber: character.MemberNumber,
+        });
 
-        this.autoOpenTimers.set(autoOpenKey, timer);
+        this.autoOpenTimers.set(
+            autoOpenKey,
+            () => {
+                const stillAtAutoOpenTile =
+                    character.MapPos.X === door.config.autoOpenTile?.X &&
+                    character.MapPos.Y === door.config.autoOpenTile?.Y;
+                if (!stillAtAutoOpenTile) return;
+
+                this.logger.info("Auto-opening door", {
+                    doorX: door.config.doorX,
+                    doorY: door.config.doorY,
+                    memberNumber: character.MemberNumber,
+                });
+
+                this.unlockDoor(
+                    door,
+                    "admin",
+                    character,
+                    door.config.unlockDurationMs,
+                );
+            },
+            AUTO_OPEN_TRIGGER_DELAY_MS,
+        );
     };
 
     private onCodeCommandParser = async (): Promise<void> => {
@@ -647,9 +683,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                     );
                     return;
                 }
-                if (door.timer) clearTimeout(door.timer);
-                door.timer = undefined;
+                const doorKey = this.getDoorKey(door);
+                if (this.doorUnlockTimers.has(doorKey)) {
+                    this.doorUnlockTimers.clear(doorKey);
+                }
                 this.setDoorLocked(door);
+                this.logger.info("Door manually locked by admin", {
+                    doorX: door.config.doorX,
+                    doorY: door.config.doorY,
+                });
                 this.replyDoor(msg.message, "The door was locked immediately.");
                 return;
             }
@@ -751,15 +793,30 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): void {
         if (!this.conn.chatRoom?.map) return;
 
-        if (door.timer) clearTimeout(door.timer);
+        const doorKey = this.getDoorKey(door);
+
+        // Clear any existing unlock timer before creating new one
+        if (this.doorUnlockTimers.has(doorKey)) {
+            this.doorUnlockTimers.clear(doorKey);
+        }
+
         this.setDoorTile(door, door.config.unlockedTile);
+        this.logger.info("Door unlocked", {
+            doorX: door.config.doorX,
+            doorY: door.config.doorY,
+            group,
+            memberNumber: character.MemberNumber,
+            durationMs,
+        });
+
         this.conn.SendMessage(
             "Whisper",
             `Keypad accepted for ${group}. Door unlocked for ${durationMs / 1000} seconds.`,
             character.MemberNumber,
         );
 
-        door.timer = setTimeout(
+        this.doorUnlockTimers.set(
+            doorKey,
             () => this.scheduleLockWhenEmpty(door),
             durationMs,
         );
@@ -767,7 +824,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     private scheduleLockWhenEmpty(door: KeypadDoor): void {
         if (this.hasInsideOccupants(door)) {
-            door.timer = setTimeout(
+            const doorKey = this.getDoorKey(door);
+            this.doorUnlockTimers.set(
+                doorKey,
                 () => this.scheduleLockWhenEmpty(door),
                 1000,
             );
@@ -775,7 +834,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         this.setDoorLocked(door);
-        door.timer = undefined;
     }
 
     private setDoorLocked(door: KeypadDoor): void {
