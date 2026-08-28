@@ -8,7 +8,7 @@
  *   if (isOwnerLocked(item)) { ... }
  */
 
-import { wait } from "../../../utils"; // Adjust path as needed
+import { wait } from "../../../hub/utils"; // Adjust path as needed
 
 /**
  * Wrap a handler with consistent error handling

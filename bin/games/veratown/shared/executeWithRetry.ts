@@ -11,7 +11,7 @@
  *   );
  */
 
-import { wait } from "../../../utils"; // Adjust path as needed
+import { wait } from "../../../hub/utils"; // Adjust path as needed
 
 /**
  * Configuration for retry behavior
