@@ -65,3 +65,6 @@ export {
     getCharacterName,
     truncate,
 } from "./featureHelpers";
+
+// Posture preservation (prevents pose reset during appearance mutations)
+export { PosturePreserver } from "./postureHelper";

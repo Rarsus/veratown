@@ -29,7 +29,11 @@ import {
     RELEASE_PAROLE_DURATION_MS,
     RELEASE_COOLDOWN_MS,
 } from "./veratownConfig";
-import { createIdempotentMonitor, createSystemLogger } from "./shared";
+import {
+    createIdempotentMonitor,
+    createSystemLogger,
+    PosturePreserver,
+} from "./shared";
 
 /**
  * Refactored Release System with:
@@ -1001,6 +1005,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             `[ReleaseSystem] stripNonOwnerItems: Removing unlocked items only`,
         );
 
+        // Preserve character's posture before stripping (Golden Rule #12)
+        // Stripping operations can reset pose/kneeling state; we'll restore it after
+        const posturePreserver = new PosturePreserver(character);
+
         const appearance = character.Appearance.Items || [];
         const removedItems: RemovedBondageItem[] = [];
         const ownerLockedItems: RemovedBondageItem[] = [];
@@ -1095,6 +1103,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         console.log(
             `[ReleaseSystem] Strip summary: removed ${removedItems.length} clothing/bondage items, preserved ${ownerLockedItems.length} owner-locked + ${preservedCosplayItems.length} cosmetic items`,
         );
+
+        // Restore character's posture after stripping (Golden Rule #12)
+        // This ensures the character maintains their pose/kneeling state
+        posturePreserver.restore(character);
 
         // Update database with removed items (excluding owner-locked)
         if (this.characterProfileStore) {
