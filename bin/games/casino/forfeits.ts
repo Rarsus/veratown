@@ -14,6 +14,7 @@
 
 import { API_Character, AssetGet, BC_AppearanceItem } from "bc-bot";
 import { generatePassword } from "../../utils";
+import { wait } from "../../hub/utils";
 import { PET_EARS } from "../veratown";
 
 interface Forfeit {
@@ -416,12 +417,12 @@ export function describeForfeitOutcome(
  * own baked-in duration when newly applied, since overriding those isn't
  * supported - but an already-equipped one can still have its timer extended.
  */
-export function applyForfeitForDare(
+export async function applyForfeitForDare(
     character: API_Character,
     lockMemberNumber: number,
     forfeitKey: string,
     durationMsOverride?: number,
-): ForfeitApplyResult | undefined {
+): Promise<ForfeitApplyResult | undefined> {
     const forfeit = FORFEITS[forfeitKey];
     if (!forfeit) return undefined;
 
@@ -429,8 +430,15 @@ export function applyForfeitForDare(
     if (probeItems.length !== 1) return undefined;
     const group = probeItems[0].Group;
 
+    console.log(
+        `[Casino] Applying forfeit ${forfeitKey} to ${character.MemberNumber}`,
+    );
+
     const existing = character.Appearance.InventoryGet(group);
     if (existing) {
+        console.log(
+            `[Casino] Extending existing item in group ${group} for forfeit ${forfeitKey}`,
+        );
         const extendMs =
             durationMsOverride ?? forfeit.lockTimeMs ?? 20 * 60 * 1000;
         const currentExpiry =
@@ -439,13 +447,27 @@ export function applyForfeitForDare(
         existing.setProperty("RemoveTimer", newExpiry);
         existing.setProperty("ShowTimer", true);
         existing.setProperty("RemoveItem", true);
+
+        // Refresh appearance after modifying item properties
+        character.Appearance.MakeAppearanceBundle();
+        await wait(50);
+
         if (!existing.getData().Property?.LockedBy) {
             existing.lock("TimerPasswordPadlock", lockMemberNumber, {
                 Password: generatePassword(),
                 Hint: "Dare in progress!",
                 LockSet: true,
             });
+
+            // Refresh appearance after locking
+            character.Appearance.MakeAppearanceBundle();
+            await wait(50);
         }
+
+        console.log(
+            `[Casino] Extended forfeit ${forfeitKey} for ${extendMs}ms`,
+        );
+
         return {
             forfeit,
             forfeitKey,
@@ -456,7 +478,15 @@ export function applyForfeitForDare(
     }
 
     if (forfeit.applyItems) {
+        console.log(
+            `[Casino] Using custom applyItems for forfeit ${forfeitKey}`,
+        );
         forfeit.applyItems(character, lockMemberNumber);
+
+        // Refresh appearance after custom item application
+        character.Appearance.MakeAppearanceBundle();
+        await wait(50);
+
         return {
             forfeit,
             forfeitKey,
@@ -469,8 +499,17 @@ export function applyForfeitForDare(
     const items = probeItems;
     if (items.length !== 1) return undefined;
 
+    console.log(
+        `[Casino] Adding item ${items[0].Name} for forfeit ${forfeitKey}`,
+    );
+
     const hairColor = character.Appearance.InventoryGet("HairFront").GetColor();
     const added = character.Appearance.AddItem(items[0]);
+
+    // Refresh appearance after adding item
+    character.Appearance.MakeAppearanceBundle();
+    await wait(50);
+
     try {
         const base = (
             Array.isArray(hairColor) ? hairColor[0] : hairColor
@@ -486,6 +525,8 @@ export function applyForfeitForDare(
         } else {
             added.SetColor(base);
         }
+
+        console.log(`[Casino] Set color for forfeit ${forfeitKey}`);
     } catch (e) {
         console.error(`Failed to set color for dare item ${items[0].Name}`, e);
         added.SetColor("Default");
@@ -497,8 +538,13 @@ export function applyForfeitForDare(
         Description: "Equipped as part of a dare. Better luck next time!",
     });
 
+    // Refresh appearance after setting cosmetics
+    character.Appearance.MakeAppearanceBundle();
+    await wait(50);
+
     const lockTime = durationMsOverride ?? forfeit.lockTimeMs;
     if (lockTime) {
+        console.log(`[Casino] Locking forfeit ${forfeitKey} for ${lockTime}ms`);
         added.lock("TimerPasswordPadlock", lockMemberNumber, {
             Password: generatePassword(),
             Hint: "Dare in progress!",
@@ -507,7 +553,15 @@ export function applyForfeitForDare(
             ShowTimer: true,
             LockSet: true,
         });
+
+        // Refresh appearance after locking
+        character.Appearance.MakeAppearanceBundle();
+        await wait(50);
     }
+
+    console.log(
+        `[Casino] Successfully applied forfeit ${forfeitKey} to ${character.MemberNumber}`,
+    );
 
     return {
         forfeit,

@@ -1700,7 +1700,7 @@ Game Overview
                     // key instead so one bad item can't sink the others.
                     let result;
                     try {
-                        result = applyForfeitForDare(
+                        result = await applyForfeitForDare(
                             target,
                             this.conn.Player.MemberNumber,
                             forfeitKey,
