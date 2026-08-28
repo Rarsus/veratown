@@ -31,6 +31,7 @@ import {
 } from "./casino/forfeits";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
+import { createSystemLogger } from "./veratown/shared";
 
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
@@ -247,6 +248,7 @@ Game Overview
     private region?: MapRegion;
     private dareRegion?: MapRegion;
     private configuredRegion?: MapRegion;
+    private readonly logger = createSystemLogger("Dare");
 
     public constructor(
         private conn: API_Connector,
@@ -260,7 +262,7 @@ Game Overview
         this.region = config?.region;
         this.configuredRegion = config?.region;
         this.ready = this.loadState().catch((e) => {
-            console.error("[dare] Failed to load persisted state", e);
+            this.logger.error("Failed to load persisted state", { error: e });
         });
     }
 
@@ -314,8 +316,8 @@ Game Overview
             };
             this.region = this.dareRegion;
         }
-        console.log(
-            `[dare] Loaded dare region: ${this.dareRegion ? "from database" : "using config fallback or none"}`,
+        this.logger.info(
+            `Loaded dare region: ${this.dareRegion ? "from database" : "using config fallback or none"}`,
         );
     }
 
@@ -796,8 +798,9 @@ Game Overview
             }
             case "list": {
                 try {
-                    console.log(
-                        `!dare list from ${senderCharacter} (${senderCharacter.MemberNumber}), admin=${senderCharacter.IsRoomAdmin()}, args=${JSON.stringify(args)}`,
+                    this.logger.info(
+                        `List command from ${senderCharacter.MemberNumber}, admin=${senderCharacter.IsRoomAdmin()}, args=${JSON.stringify(args)}`,
+                        { memberNumber: senderCharacter.MemberNumber },
                     );
 
                     if (!senderCharacter.IsRoomAdmin()) {
@@ -808,7 +811,10 @@ Game Overview
                         return;
                     }
                     const dares = await this.store.listDares();
-                    console.log(`!dare list found ${dares.length} dares`);
+                    this.logger.info(`List command found dares`, {
+                        count: dares.length,
+                        memberNumber: senderCharacter.MemberNumber,
+                    });
                     if (dares.length === 0) {
                         this.whisper(
                             senderCharacter.MemberNumber,
@@ -839,7 +845,10 @@ Game Overview
                         lines.join("\n"),
                     );
                 } catch (e) {
-                    console.error("!dare list failed", e);
+                    this.logger.error("Failed to list dares", {
+                        error: e,
+                        memberNumber: senderCharacter.MemberNumber,
+                    });
                     this.whisper(
                         senderCharacter.MemberNumber,
                         "Something went wrong listing dares, sorry!",
@@ -1017,6 +1026,8 @@ Game Overview
             if (!character) continue;
 
             character.Appearance.stripBulk({ clothing: true }, false, stripCap);
+            // Refresh appearance cache before reading state (Golden Rule #2)
+            character.Appearance.MakeAppearanceBundle();
 
             const stillBound = character.Appearance.getAppearanceData().some(
                 (item) =>
@@ -1028,10 +1039,10 @@ Game Overview
 
             this.dressingBlocked.delete(memberNumber);
             void this.restoreOriginalOutfit(character).catch((e) =>
-                console.error(
-                    `[dare] Failed to restore ${memberNumber}'s original outfit`,
-                    e,
-                ),
+                this.logger.error("Failed to restore original outfit", {
+                    memberNumber,
+                    error: e,
+                }),
             );
         }
     };
@@ -1428,10 +1439,10 @@ Game Overview
         if (winnerCharacter) {
             this.dressingBlocked.delete(winner);
             void this.restoreOriginalOutfit(winnerCharacter).catch((e) =>
-                console.error(
-                    `[dare] Failed to restore ${winner}'s original outfit`,
-                    e,
-                ),
+                this.logger.error("Failed to restore winner outfit", {
+                    memberNumber: winner,
+                    error: e,
+                }),
             );
         }
 
@@ -1545,10 +1556,10 @@ Game Overview
 
         void this.applyDareEffect(character, dare)
             .catch((e) =>
-                console.error(
-                    `[dare] Failed to auto-apply bondage dare for ${memberNumber}`,
-                    e,
-                ),
+                this.logger.error("Failed to auto-apply bondage dare", {
+                    memberNumber,
+                    error: e,
+                }),
             )
             .then(() => this.finishTurn(memberNumber));
     };
@@ -1558,7 +1569,7 @@ Game Overview
     // losing the lobby, in-progress games, or per-member bookkeeping.
     private persistState = (): void => {
         void this.buildAndSaveState().catch((e) =>
-            console.error("[dare] Failed to persist state", e),
+            this.logger.error("Failed to persist state", { error: e }),
         );
     };
 
@@ -1707,10 +1718,11 @@ Game Overview
                             dare.durationMs,
                         );
                     } catch (e) {
-                        console.error(
-                            `[dare] Failed to apply forfeitKey "${forfeitKey}" to ${target.MemberNumber}`,
-                            e,
-                        );
+                        this.logger.error("Failed to apply forfeit", {
+                            forfeitKey,
+                            memberNumber: target.MemberNumber,
+                            error: e,
+                        });
                         continue;
                     }
                     if (!result) continue;
@@ -1743,8 +1755,9 @@ Game Overview
                         `*${drawer} wins ${dare.chips} casino chips!`,
                     );
                 } else if (dare.chips) {
-                    console.log(
-                        "CasinoStore not configured; skipping chip reward for dare.",
+                    this.logger.warn(
+                        "CasinoStore not configured; skipping chip reward",
+                        { chips: dare.chips },
                     );
                 }
                 break;
