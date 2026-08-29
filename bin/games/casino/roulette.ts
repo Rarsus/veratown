@@ -364,11 +364,6 @@ export class RouletteGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (this.resetTimer.isActive()) {
-            this.conn.reply(msg, "The next game hasn't started yet");
-            return;
-        }
-
         if (!this.bettingOpen) {
             this.conn.reply(
                 msg,
