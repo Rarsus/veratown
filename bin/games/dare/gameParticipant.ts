@@ -54,11 +54,17 @@ export interface GameParticipant {
         canRedress: boolean; // Whether player can remove it
     }>;
 
-    // Performance metrics
+    // Dare-specific metrics
     forfeitsCount: number; // Times player forfeited dare
+    passCounts: number; // Times player passed on a dare (used for pillory escalation)
     turnsSkipped: number; // Times turn was skipped
     missedTurns: number; // Times player missed turn while disconnected
     score: number; // Game score
+    bindCounts: number; // Bondage items applied to this player
+
+    // Dressing block state
+    dressingBlocked: boolean; // True if player can't get dressed
+    dressingBlockedCap: number | undefined; // Cap level (undefined = all items blocked)
 
     // Current state
     currentDareId: string | null; // If null, no active dare
@@ -89,9 +95,14 @@ export function createGameParticipant(
         bondageItems: [],
 
         forfeitsCount: 0,
+        passCounts: 0,
         turnsSkipped: 0,
         missedTurns: 0,
         score: 0,
+        bindCounts: 0,
+
+        dressingBlocked: false,
+        dressingBlockedCap: undefined,
 
         currentDareId: null,
         currentDareDrawnAt: null,
