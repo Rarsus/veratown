@@ -26,6 +26,7 @@ import { Bet, Game } from "./game";
 import { ROULETTE_WHEEL } from "./rouletteWheelBundle";
 import { BetValidator } from "./betValidator";
 import { GameTimer } from "./gameTimer";
+import { CommandValidator } from "../shared/commandValidator";
 
 const ROULETTECOMMANDMESSAGE = `
 Available commands:
@@ -140,6 +141,7 @@ export class RouletteGame implements Game {
     private lastCallAnnounced = false;
     private bettingOpen = true;
     private betValidator = new BetValidator();
+    private commandValidator = new CommandValidator();
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -240,7 +242,12 @@ export class RouletteGame implements Game {
         args: string[],
     ): RouletteBet | undefined {
         // Validate argument count (2 for Roulette: bet kind + stake)
-        const argCountResult = this.betValidator.validateArgumentCount(args, 2);
+        // Use CommandValidator for generic argument validation (Phase 2B consolidation)
+        const argCountResult = this.commandValidator.validateArgumentCount(
+            args,
+            2,
+            "!bet <color|range> <amount>",
+        );
         if (!argCountResult.valid) {
             this.conn.reply(
                 msg,

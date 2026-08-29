@@ -5,6 +5,7 @@ import { Bet, Game } from "./game";
 import { Card, createDeck, getCardString, shuffleDeck } from "./pokerCards";
 import { BetValidator } from "./betValidator";
 import { GameTimer } from "./gameTimer";
+import { CommandValidator } from "../shared/commandValidator";
 import {
     API_Character,
     API_Connector,
@@ -101,6 +102,7 @@ export class BlackjackGame implements Game {
     private autoStandTimer = new GameTimer(); // after the deal until all players stand
     private bettingOpen = true;
     private betValidator = new BetValidator();
+    private commandValidator = new CommandValidator();
 
     public HELPMESSAGE = FULLBLACKJACKHELP;
     public EXAMPLES = BLACKJACKEXAMPLES;
@@ -263,7 +265,12 @@ export class BlackjackGame implements Game {
         }
 
         // Validate argument count (1 for Blackjack)
-        const argCountResult = this.betValidator.validateArgumentCount(args, 1);
+        // Use CommandValidator for generic argument validation (Phase 2B consolidation)
+        const argCountResult = this.commandValidator.validateArgumentCount(
+            args,
+            1,
+            "!bet <amount>",
+        );
         if (!argCountResult.valid) {
             this.conn.SendMessage(
                 "Whisper",
