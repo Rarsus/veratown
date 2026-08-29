@@ -4,9 +4,30 @@
 
 The `!door` command has been extended with advanced custom group management capabilities, enabling room admins to create flexible access control beyond the three hardcoded groups (admin, whitelist, guest).
 
-**Commit**: 8e05764  
+**Commit**: 8e05764 (initial), 5f588f1 (code validation)  
 **Feature**: KeypadAccessGroupManager integration with KeypadDoorSystem  
 **Status**: ✅ Implemented and integrated
+
+## How Code Access Works
+
+When a character enters a code at a keypad door:
+
+1. **Check hardcoded group**: The system first checks if the code matches the character's hardcoded group (admin/whitelist/guest based on their status)
+2. **Check custom groups**: Then it checks if the code matches ANY custom group the character is a member of
+3. **Unlock on match**: If the code matches any group the character belongs to, the door unlocks
+
+This means:
+
+- A character can be a member of **multiple custom groups** with **different codes**
+- A character can use **any** of those codes to unlock the door
+- Characters use the code from whichever group is most convenient
+- Room admins can assign characters to groups for different purposes (security, medical, visitor, etc.)
+
+**Example**: If `PlayerA` is in both the "security" and "medical" groups:
+
+- They can unlock with the security code
+- They can unlock with the medical code
+- Either code will work to open the door
 
 ## Hardcoded Groups (Always Available)
 
@@ -21,6 +42,13 @@ These groups cannot be deleted but can have their codes changed.
 ## Custom Groups (Advanced)
 
 Admins can create unlimited custom access groups with their own codes and member lists.
+
+### Key Behaviors
+
+- **Multiple Membership**: A character can be a member of **multiple groups simultaneously**
+- **Any Code Works**: If a character belongs to multiple groups, they can use the code from **any** of those groups to unlock the door
+- **No Priority**: All groups are equivalent—there's no "primary" or "secondary" group
+- **Independent Codes**: Each group has its own unique code; sharing a code between groups is not supported
 
 ### Usage
 
@@ -130,6 +158,17 @@ Hardcoded groups: admin, whitelist, guest. Custom groups: security, medical, mai
 /w bot !door group-create visitors temp-code-2024
 /w bot !door group-add visitors 99999
 ```
+
+### Multi-Role Access
+
+Members can belong to multiple groups simultaneously to handle different responsibilities:
+
+```
+/w bot !door group-add security 12345
+/w bot !door group-add medical 12345
+```
+
+Now member 12345 can unlock the door using either the security code or the medical code.
 
 ## Database Integration
 
