@@ -11,6 +11,7 @@ import {
     VeratownLocationStore,
 } from "./veratownLocationStore";
 import { createTimerManager, createSystemLogger } from "./shared";
+import { KeypadAccessGroupManager } from "./keypadAccessGroupManager";
 
 // A keypad_door location uses this data shape:
 // {
@@ -200,6 +201,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private commandParser?: CommandParser,
         private locationStore?: VeratownLocationStore,
         private reloadLocationsCallback?: () => Promise<void>,
+        private keypadAccessGroupManager?: KeypadAccessGroupManager,
     ) {
         this.keypadTrigger = guardHandler(this.key, this.onCharacterAtKeypad);
         this.autoOpenTrigger = guardHandler(
@@ -515,7 +517,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             if (isAdmin) {
                 this.replyDoor(
                     msg.message,
-                    "Admin commands: !door change-code <admin|whitelist|guest> <code>; !door add-user <member>; !door remove-user <member>; !door list; !door list-whitelist; !door lock; !door unlock [sec]; !door enable; !door disable",
+                    "Admin commands: !door change-code <admin|whitelist|guest> <code>; !door add-user <member>; !door remove-user <member>; !door list; !door list-whitelist; !door lock; !door unlock [sec]; !door enable; !door disable; !door group-list; !door group-create <name>; !door group-delete <name>; !door group-add <group> <member>; !door group-remove <group> <member>; !door group-code <group> <code>",
                 );
             } else if (isWhitelisted) {
                 this.replyDoor(
@@ -714,6 +716,317 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                     return;
                 }
                 this.unlockDoor(door, "admin", msg.sender, seconds * 1000);
+                return;
+            }
+            case "group-list": {
+                if (!isAdmin && !isWhitelisted) {
+                    this.replyDoor(
+                        msg.message,
+                        "You do not have permission to manage this door.",
+                    );
+                    return;
+                }
+
+                const hardcodedGroups = ["admin", "whitelist", "guest"]
+                    .filter((g) => door.config.codes[g as KeypadAccessGroup])
+                    .join(", ");
+
+                let customGroups = "none";
+                if (this.keypadAccessGroupManager) {
+                    try {
+                        const doorKey = door.location.key;
+                        const customGroupList =
+                            await this.keypadAccessGroupManager.listGroups(
+                                doorKey,
+                            );
+                        if (customGroupList && customGroupList.length > 0) {
+                            customGroups = customGroupList
+                                .map((g) => g.groupName)
+                                .join(", ");
+                        }
+                    } catch (e) {
+                        this.logger.error(
+                            "Failed to fetch custom groups",
+                            e as Error,
+                        );
+                    }
+                }
+
+                this.replyDoor(
+                    msg.message,
+                    `Hardcoded groups: ${hardcodedGroups || "none"}. Custom groups: ${customGroups}.`,
+                );
+                return;
+            }
+            case "group-create": {
+                if (!isAdmin) {
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can create custom groups.",
+                    );
+                    return;
+                }
+
+                if (!this.keypadAccessGroupManager) {
+                    this.replyDoor(
+                        msg.message,
+                        "Custom groups are not available (database not configured).",
+                    );
+                    return;
+                }
+
+                const groupName = args[1]?.toLowerCase();
+                const groupCode = args[2];
+
+                if (!groupName || !groupCode) {
+                    this.replyDoor(
+                        msg.message,
+                        "Usage: !door group-create <name> <code>",
+                    );
+                    return;
+                }
+
+                try {
+                    const doorKey = door.location.key;
+                    await this.keypadAccessGroupManager.createGroup(
+                        doorKey,
+                        groupName,
+                        groupCode,
+                    );
+                    this.replyDoor(
+                        msg.message,
+                        `Custom group "${groupName}" created with code "${groupCode}".`,
+                    );
+                } catch (e: any) {
+                    this.replyDoor(
+                        msg.message,
+                        `Failed to create group: ${e.message || "Unknown error"}`,
+                    );
+                    this.logger.error(
+                        "Failed to create custom group",
+                        e as Error,
+                    );
+                }
+                return;
+            }
+            case "group-delete": {
+                if (!isAdmin) {
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can delete custom groups.",
+                    );
+                    return;
+                }
+
+                if (!this.keypadAccessGroupManager) {
+                    this.replyDoor(
+                        msg.message,
+                        "Custom groups are not available (database not configured).",
+                    );
+                    return;
+                }
+
+                const groupName = args[1]?.toLowerCase();
+
+                if (!groupName) {
+                    this.replyDoor(
+                        msg.message,
+                        "Usage: !door group-delete <name>",
+                    );
+                    return;
+                }
+
+                try {
+                    const doorKey = door.location.key;
+                    await this.keypadAccessGroupManager.deleteGroup(
+                        doorKey,
+                        groupName,
+                    );
+                    this.replyDoor(
+                        msg.message,
+                        `Custom group "${groupName}" deleted.`,
+                    );
+                } catch (e: any) {
+                    this.replyDoor(
+                        msg.message,
+                        `Failed to delete group: ${e.message || "Unknown error"}`,
+                    );
+                    this.logger.error(
+                        "Failed to delete custom group",
+                        e as Error,
+                    );
+                }
+                return;
+            }
+            case "group-add": {
+                if (!isAdmin && !isWhitelisted) {
+                    this.replyDoor(
+                        msg.message,
+                        "You do not have permission to manage this door.",
+                    );
+                    return;
+                }
+
+                if (!this.keypadAccessGroupManager) {
+                    this.replyDoor(
+                        msg.message,
+                        "Custom groups are not available (database not configured).",
+                    );
+                    return;
+                }
+
+                const groupName = args[1]?.toLowerCase();
+                const rawMemberNumber = args[2];
+
+                if (!groupName || !rawMemberNumber) {
+                    this.replyDoor(
+                        msg.message,
+                        "Usage: !door group-add <name> <member number>",
+                    );
+                    return;
+                }
+
+                const memberNumber = Number(rawMemberNumber);
+                if (!Number.isInteger(memberNumber) || memberNumber <= 0) {
+                    this.replyDoor(
+                        msg.message,
+                        "Member number must be a positive integer.",
+                    );
+                    return;
+                }
+
+                try {
+                    const doorKey = door.location.key;
+                    await this.keypadAccessGroupManager.addMember(
+                        doorKey,
+                        groupName,
+                        memberNumber,
+                    );
+                    this.replyDoor(
+                        msg.message,
+                        `Member ${memberNumber} added to custom group "${groupName}".`,
+                    );
+                } catch (e: any) {
+                    this.replyDoor(
+                        msg.message,
+                        `Failed to add member: ${e.message || "Unknown error"}`,
+                    );
+                    this.logger.error(
+                        "Failed to add member to custom group",
+                        e as Error,
+                    );
+                }
+                return;
+            }
+            case "group-remove": {
+                if (!isAdmin && !isWhitelisted) {
+                    this.replyDoor(
+                        msg.message,
+                        "You do not have permission to manage this door.",
+                    );
+                    return;
+                }
+
+                if (!this.keypadAccessGroupManager) {
+                    this.replyDoor(
+                        msg.message,
+                        "Custom groups are not available (database not configured).",
+                    );
+                    return;
+                }
+
+                const groupName = args[1]?.toLowerCase();
+                const rawMemberNumber = args[2];
+
+                if (!groupName || !rawMemberNumber) {
+                    this.replyDoor(
+                        msg.message,
+                        "Usage: !door group-remove <name> <member number>",
+                    );
+                    return;
+                }
+
+                const memberNumber = Number(rawMemberNumber);
+                if (!Number.isInteger(memberNumber) || memberNumber <= 0) {
+                    this.replyDoor(
+                        msg.message,
+                        "Member number must be a positive integer.",
+                    );
+                    return;
+                }
+
+                try {
+                    const doorKey = door.location.key;
+                    await this.keypadAccessGroupManager.removeMember(
+                        doorKey,
+                        groupName,
+                        memberNumber,
+                    );
+                    this.replyDoor(
+                        msg.message,
+                        `Member ${memberNumber} removed from custom group "${groupName}".`,
+                    );
+                } catch (e: any) {
+                    this.replyDoor(
+                        msg.message,
+                        `Failed to remove member: ${e.message || "Unknown error"}`,
+                    );
+                    this.logger.error(
+                        "Failed to remove member from custom group",
+                        e as Error,
+                    );
+                }
+                return;
+            }
+            case "group-code": {
+                if (!isAdmin) {
+                    this.replyDoor(
+                        msg.message,
+                        "Only room admins can change group codes.",
+                    );
+                    return;
+                }
+
+                if (!this.keypadAccessGroupManager) {
+                    this.replyDoor(
+                        msg.message,
+                        "Custom groups are not available (database not configured).",
+                    );
+                    return;
+                }
+
+                const groupName = args[1]?.toLowerCase();
+                const newCode = args[2];
+
+                if (!groupName || !newCode) {
+                    this.replyDoor(
+                        msg.message,
+                        "Usage: !door group-code <name> <code>",
+                    );
+                    return;
+                }
+
+                try {
+                    const doorKey = door.location.key;
+                    await this.keypadAccessGroupManager.updateCode(
+                        doorKey,
+                        groupName,
+                        newCode,
+                    );
+                    this.replyDoor(
+                        msg.message,
+                        `Code for custom group "${groupName}" updated.`,
+                    );
+                } catch (e: any) {
+                    this.replyDoor(
+                        msg.message,
+                        `Failed to update group code: ${e.message || "Unknown error"}`,
+                    );
+                    this.logger.error(
+                        "Failed to update custom group code",
+                        e as Error,
+                    );
+                }
                 return;
             }
             default:

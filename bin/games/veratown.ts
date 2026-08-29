@@ -279,6 +279,7 @@ export class Veratown {
                     this.commandParser,
                     this.locationStore,
                     () => this.reloadLocations(),
+                    this.keypadAccessGroupManager,
                 ),
         );
         this.catDogSystem = this.initFeature(
