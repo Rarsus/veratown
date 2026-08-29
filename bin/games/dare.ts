@@ -23,6 +23,7 @@ import {
 } from "bc-bot";
 import { wait } from "../hub/utils";
 import { GameTimer } from "./casino/gameTimer";
+import { CommandValidator } from "./shared/commandValidator";
 import { DareStore, DareDoc } from "./dareStore";
 import { CasinoStore } from "./casino/casinostore";
 import {
@@ -247,6 +248,7 @@ Game Overview
     private dareRegion?: MapRegion;
     private configuredRegion?: MapRegion;
     private readonly logger = createSystemLogger("Dare");
+    private commandValidator = new CommandValidator();
 
     public constructor(
         private conn: API_Connector,
@@ -347,6 +349,28 @@ Game Overview
             this.conn.SendMessage(
                 "Emote",
                 "*" + (await this.store.getSummary()),
+            );
+            return;
+        }
+
+        const subcommand = args[0].toLowerCase();
+
+        // Validate argument count based on subcommand (Phase 2C consolidation)
+        // Most dare subcommands take just 1 argument (the subcommand itself)
+        // except "forfeit" which takes 2 (subcommand + forfeit item)
+        let expectedArgCount = 1;
+        if (subcommand === "forfeit") {
+            expectedArgCount = 2;
+        }
+
+        const argCountResult = this.commandValidator.validateArgumentCount(
+            args,
+            expectedArgCount,
+        );
+        if (!argCountResult.valid) {
+            this.whisper(
+                senderCharacter.MemberNumber,
+                argCountResult.message || "Invalid command arguments.",
             );
             return;
         }
