@@ -1068,5 +1068,480 @@ describe("Veratown Multi-Bot Coordination", () => {
 
 ---
 
-**Last Updated**: 2026-08-04  
-**Version**: 1.0
+## EPIC 1.3: Architecture Layer - Manager Pattern
+
+### Overview
+
+EPIC 1.3 establishes the foundational architecture for Veratown systems with 5 core features using the **Manager Pattern**. Each system encapsulates a single domain concern with focused methods, MongoDB persistence, comprehensive error handling, and independent testability.
+
+### The 5 EPIC 1.3 Systems
+
+#### 1. Keypad Access Group Manager (`keypadAccessGroupManager.ts`)
+
+**Purpose**: Manage custom access groups for keypad-locked doors
+
+**Domain**: Door access control with multiple access codes per door
+
+**Key Capabilities**:
+
+- Create/delete custom access groups per door
+- Add/remove members from groups with duplicate prevention
+- Update and retrieve access codes per group
+- Query group membership and access permissions
+- Built-in groups (admin, whitelist, guest) cannot be deleted
+
+**Core Methods**:
+
+```typescript
+public async createGroup(
+    doorKey: string,
+    groupName: string,
+    code: string,
+    description?: string,
+): Promise<KeypadAccessGroup>
+
+public async addMember(
+    doorKey: string,
+    groupName: string,
+    memberNumber: number,
+): Promise<void>
+
+public async removeMember(
+    doorKey: string,
+    groupName: string,
+    memberNumber: number,
+): Promise<void>
+
+public async hasMemberAccess(
+    doorKey: string,
+    memberNumber: number,
+): Promise<boolean>
+
+public async getMemberCode(
+    doorKey: string,
+    memberNumber: number,
+): Promise<string | undefined>
+```
+
+**Database**: `keypadAccessGroups` collection with per-door isolation
+
+**Use Case**: Guards can create custom access groups (e.g., "trustees" get yard access, "segregation" gets limited areas)
+
+---
+
+#### 2. Furniture Interaction System (`furnitureInteractionSystem.ts`)
+
+**Purpose**: Pre/post interaction callbacks with occupancy tracking
+
+**Domain**: Complex furniture interactions with multi-player scenarios
+
+**Key Capabilities**:
+
+- Register pre/post interaction callbacks
+- Execute interactions with context passing
+- Track occupancy with max capacity constraints
+- Persistent furniture state management
+- Prevent duplicate member occupancy
+
+**Core Methods**:
+
+```typescript
+public async registerInteraction(
+    furnitureKey: string,
+    interaction: FurnitureInteraction,
+): Promise<void>
+
+public async executePreInteraction(
+    character: API_Character,
+    furnitureKey: string,
+    interactionType: string,
+    context?: Record<string, unknown>,
+): Promise<void>
+
+public async executePostInteraction(
+    character: API_Character,
+    furnitureKey: string,
+    interactionType: string,
+    context?: Record<string, unknown>,
+): Promise<void>
+
+public async addOccupant(
+    furnitureKey: string,
+    memberNumber: number,
+): Promise<void>
+
+public async getOccupancyCount(
+    furnitureKey: string,
+): Promise<number>
+
+public async isOccupied(
+    furnitureKey: string,
+): Promise<boolean>
+```
+
+**Database**: `furnitureInteractionState` collection with occupancy arrays
+
+**Use Case**: Furniture with multiple positions (e.g., shared bed, orgy pit) where different interactions apply based on occupancy
+
+---
+
+#### 3. Appearance Audit Trail (`appearanceAuditTrail.ts`)
+
+**Purpose**: Complete audit logging for all appearance changes (Compliance)
+
+**Domain**: Appearance mutation tracking for investigation and compliance
+
+**Key Capabilities**:
+
+- Log all appearance changes with actor, timestamp, before/after snapshots
+- Query changes by date range, actor, or type
+- Detect suspicious activity (high change frequency)
+- Export audit data for compliance review
+- Automatic 30-day retention with TTL index
+
+**Core Methods**:
+
+```typescript
+public async logChange(
+    memberNumber: number,
+    change: AppearanceChange,
+    characterName?: string,
+): Promise<void>
+
+public async getChangesByDateRange(
+    memberNumber: number,
+    startTime: number,
+    endTime: number,
+): Promise<AppearanceChange[]>
+
+public async getRecentChanges(
+    memberNumber: number,
+    days?: number,
+): Promise<AppearanceChange[]>
+
+public async getChangesByActor(
+    memberNumber: number,
+    actorMemberNumber: number,
+): Promise<AppearanceChange[]>
+
+public async checkSuspiciousActivity(
+    memberNumber: number,
+    hoursWindow?: number,
+    threshold?: number,
+): Promise<SuspiciousActivity | null>
+
+public async exportForCompliance(
+    memberNumber: number,
+    startTime: number,
+    endTime: number,
+): Promise<ComplianceExport>
+```
+
+**Database**: `appearanceAuditLogs` collection with TTL index (30 days auto-deletion)
+
+**Use Case**: Track who changed what when (cosmetics, bondage, forced items), detect rapid changes, export for disciplinary review
+
+---
+
+#### 4. Location Event System (`locationEventSystem.ts`)
+
+**Purpose**: Dynamic location-based events with multiple trigger types
+
+**Domain**: Ambient events and location mechanics
+
+**Key Capabilities**:
+
+- Support 4 trigger types: occupancy-based, daily scheduled, random chance, manual
+- Execute events with affected member tracking
+- Track event execution history
+- Automatically disable after 3+ consecutive failures
+- Query events by location and type
+
+**Trigger Types**:
+
+1. **Occupancy**: Triggers when location has N+ characters
+2. **Daily**: Triggers at specific UTC time each day
+3. **Random**: Triggers with X% chance every Y milliseconds
+4. **Manual**: Triggered via command/API call
+
+**Core Methods**:
+
+```typescript
+public async createEvent(
+    locationKey: string,
+    event: Omit<LocationEvent, 'timestamps'>,
+): Promise<LocationEvent>
+
+public async executeEvent(
+    eventId: string,
+    affectedMembers: number[],
+    triggeredBy: "occupancy" | "daily" | "random" | "manual",
+): Promise<LocationEventExecution>
+
+public async checkOccupancyEvents(
+    locationKey: string,
+    currentOccupancy: number,
+): Promise<LocationEvent[]>
+
+public async checkDailyEvents(
+    locationKey: string,
+): Promise<LocationEvent[]>
+
+public async checkRandomEvents(
+    locationKey: string,
+): Promise<LocationEvent[]>
+
+public async getEventsByTriggerType(
+    locationKey: string,
+    triggerType: "occupancy" | "daily" | "random" | "manual",
+): Promise<LocationEvent[]>
+```
+
+**Database**:
+
+- `locationEvents` collection (event definitions)
+- `locationEventExecutions` collection (execution history)
+
+**Use Case**: Morning roll call at 6am, random guard patrols, lunch when 5+ people in dining hall, rain/weather events
+
+---
+
+#### 5. Player Role System (`playerRoleSystem.ts`)
+
+**Purpose**: Role-based access control for locations, items, and actions
+
+**Domain**: Character roles and permissions
+
+**Predefined Roles**:
+
+- **Guard**: Security access (security room, lock_down action)
+- **Nurse**: Medical access (infirmary, heal action)
+- **Prisoner**: Standard access (cells, common areas)
+- **Visitor**: Restricted access (visiting room only)
+- **Staff**: Administrative access (all locations/actions)
+
+**Key Capabilities**:
+
+- Assign/remove roles with optional expiration
+- Custom role creation with custom permissions
+- Role-based access checks (location, item, action)
+- Role-specific narration
+- Automatic cleanup of expired roles
+- Role distribution statistics
+
+**Core Methods**:
+
+```typescript
+public async assignRole(
+    memberNumber: number,
+    roleId: PlayerRole,
+    options?: {
+        characterName?: string;
+        assignedBy?: number;
+        expiresAt?: number;
+        reason?: string;
+    },
+): Promise<CharacterRole>
+
+public async getCharacterRole(
+    memberNumber: number,
+): Promise<CharacterRole | null>
+
+public async removeRole(
+    memberNumber: number,
+): Promise<void>
+
+public async canAccessResource(
+    memberNumber: number,
+    resourceType: "location" | "item" | "action" | "custom",
+    resourceId: string,
+): Promise<boolean>
+
+public async getCharacterPermissions(
+    memberNumber: number,
+): Promise<RolePermission[]>
+
+public async getCharactersWithRole(
+    roleId: PlayerRole,
+): Promise<CharacterRole[]>
+
+public async getRoleNarration(
+    memberNumber: number,
+    narrationKey: string,
+): Promise<string | undefined>
+```
+
+**Database**: `playerRoles` collection with role assignment and permission tracking
+
+**Use Case**: Guards see security narration, nurses get healing ability, prisoners see different location descriptions, visitor restrictions
+
+---
+
+### Manager Pattern Characteristics
+
+All EPIC 1.3 systems follow this consistent pattern:
+
+**1. Single Responsibility**
+
+```typescript
+// One class, one domain concern
+export class KeypadAccessGroupManager {
+    // Only handles keypad door access groups
+}
+```
+
+**2. Lazy Initialization**
+
+```typescript
+private inited = false;
+
+private async init(): Promise<void> {
+    if (this.inited) return;
+    // Create indexes
+    await this.collection.createIndex({ key: 1 });
+    this.inited = true;
+}
+
+public async publicMethod(): Promise<T> {
+    await this.init();
+    // Implementation
+}
+```
+
+**3. MongoDB Persistence**
+
+```typescript
+// Dedicated collection per manager
+private collection: Collection<DocumentType>;
+
+constructor(private db: Db) {
+    this.collection = this.db.collection<DocumentType>(
+        "collectionName"
+    );
+}
+```
+
+**4. Comprehensive Logging**
+
+```typescript
+private readonly logger = createSystemLogger("ManagerName");
+
+public async operation(): Promise<void> {
+    this.logger.info("Operation started", { context });
+    // Work
+    this.logger.info("Operation complete", { result });
+}
+```
+
+**5. Error Handling**
+
+```typescript
+public async operation(): Promise<void> {
+    if (!resource) {
+        throw new Error(
+            `Resource not found: ${resourceId}`
+        );
+    }
+    // Implementation with validation
+}
+```
+
+**6. Scalable Operations**
+
+```typescript
+// Prevent unbounded growth
+const MAX_AUDIT_ENTRIES = 1000;
+const RETENTION_DAYS = 30;
+
+public async pruneOldEntries(): Promise<number> {
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    return this.collection.deleteMany({ createdAt: { $lt: cutoff } });
+}
+```
+
+### Testing Strategy
+
+Each EPIC 1.3 system includes 25-40+ test cases covering:
+
+1. **CRUD Operations**: Create, read, update, delete with validation
+2. **Access Control**: Verify permissions and denials
+3. **Constraints**: Max entries, occupancy limits, uniqueness
+4. **Edge Cases**: Missing resources, expiration, cleanup
+5. **Error Handling**: Database failures, invalid input
+6. **State Isolation**: Multi-entity independence
+7. **Concurrent Operations**: Race condition prevention
+
+**Test Infrastructure**:
+
+- Uses `MongoMemoryServer` for clean, isolated databases
+- Each test suite: 25-40+ test cases
+- Total EPIC 1.3: 260+ tests
+- ~1,850 lines of test code
+
+```typescript
+describe("Manager System", () => {
+    let mongoServer: MongoMemoryServer;
+    let db: Db;
+    let manager: Manager;
+
+    before(async () => {
+        mongoServer = await MongoMemoryServer.create();
+        db = new MongoClient(mongoServer.getUri()).db("test");
+        manager = new Manager(db);
+    });
+
+    after(async () => {
+        await client.close();
+        await mongoServer.stop();
+    });
+
+    it("should perform operation", async () => {
+        const result = await manager.operation();
+        assert.equal(result.field, expectedValue);
+    });
+});
+```
+
+### Integration Points with Existing Systems
+
+EPIC 1.3 managers are designed to integrate seamlessly:
+
+| Manager          | Integrates With        | Integration Point               |
+| ---------------- | ---------------------- | ------------------------------- |
+| Keypad Groups    | keypadDoorSystem       | Access code verification        |
+| Furniture System | furnitureBondageSystem | Interaction callback execution  |
+| Audit Trail      | All systems            | Log appearance mutations        |
+| Location Events  | Region triggers        | Event execution on region entry |
+| Player Roles     | tileTriggerSystem      | Access check on tile entry      |
+
+### Future Architecture (EPIC 1.4+)
+
+The Manager Pattern is the standard for all future Veratown systems:
+
+- **EPIC 1.4**: Inventory Management System (items, containers, weight)
+- **EPIC 1.5**: Skill/Ability Trees (character progression, learning)
+- **EPIC 1.6**: Quest/Task System (missions, objectives, rewards)
+
+All will follow:
+
+- Single domain responsibility
+- MongoDB persistence
+- 25-40+ test cases per system
+- Manager Pattern with lazy initialization
+- Comprehensive logging and error handling
+
+### Performance Targets for Manager Systems
+
+When implementing or optimizing manager systems:
+
+- **Initialization**: < 100ms for index creation
+- **Method calls**: < 50ms for typical operations
+- **Database queries**: Indexed (see query plan before production)
+- **Memory**: No unbounded collections (implement pruning)
+- **Errors**: All operations have try-catch with logging
+- **Logging**: Decision-driving state in all logs
+
+---
+
+**Last Updated**: 2026-08-29  
+**Version**: 1.1 (EPIC 1.3: Manager Pattern Added)

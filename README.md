@@ -33,12 +33,13 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 **For different roles**:
 
 - **Players & Game Masters**: [Quick Start Guide](docs/VERATOWN_DOCUMENTATION_INDEX.md#quick-start-guide), [Commands Reference](docs/VERATOWN_DOCUMENTATION_INDEX.md#commands-reference), [Troubleshooting](docs/VERATOWN_DOCUMENTATION_INDEX.md#troubleshooting)
-- **Developers**: [Architecture Deep Dive](docs/VERATOWN_ARCHITECTURE.md), [Development Guide](docs/VERATOWN_COMPLETE_GUIDE.md#development-guide), [Database Design](docs/VERATOWN_ARCHITECTURE.md#database-design)
+- **Developers**: [Architecture Deep Dive](docs/VERATOWN_ARCHITECTURE.md), [Development Guide](docs/VERATOWN_COMPLETE_GUIDE.md#development-guide), [EPIC 1.3: Architecture Layer](docs/EPIC1.3-ARCHITECTURE-LAYER.md) (Manager Pattern), [Database Design](docs/VERATOWN_ARCHITECTURE.md#database-design)
 - **Map Designers**: [Map & Regions](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md), [Region Definitions](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#region-definitions), [Planned Improvements](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md#planned-improvements)
 - **DevOps & Operations**: [Google Cloud Deployment](docs/GOOGLE_CLOUD_DEPLOYMENT.md) (persistent MongoDB + GitHub auto-deploy), [Build & Setup](docs/BUILD_SETUP.md)
 
 **New documentation files**:
 
+- [docs/EPIC1.3-ARCHITECTURE-LAYER.md](docs/EPIC1.3-ARCHITECTURE-LAYER.md) - **EPIC 1.3 Features** (Keypad Groups, Furniture Interactions, Audit Trail, Location Events, Player Roles) - Manager Pattern architecture with 260+ tests
 - [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Navigation index for all docs
 - [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) - **Environment variable configuration** (required for cloud deployment)
 - [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) - **Easiest cloud deployment** (10 min setup, $5/month, GitHub auto-deploy)
