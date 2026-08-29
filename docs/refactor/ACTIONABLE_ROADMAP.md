@@ -827,6 +827,8 @@ and enable player-driven roleplay.
 
 ---
 
+# EPIC 2: Casino Integration into Veratown
+
 ## Summary
 
 Transform Casino from standalone game to location-based Veratown feature with logical separation between game logic (Veratown bot) and narration/UI (Casino narrator bot).
