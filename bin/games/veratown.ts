@@ -47,6 +47,11 @@ import { VeratownAdminCommands } from "./veratown/adminCommands";
 import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import { VeratownCharacterProfileStore } from "./veratown/veratownCharacterProfileStore";
 import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
+import { KeypadAccessGroupManager } from "./veratown/keypadAccessGroupManager";
+import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSystem";
+import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
+import { LocationEventSystem } from "./veratown/locationEventSystem";
+import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import {
     syncAppearanceMutation,
     filterOwnerLocked,
@@ -169,6 +174,13 @@ export class Veratown {
     private furnitureBondageSystem?: FurnitureBondageSystem;
     private releaseSystem?: ReleaseSystem;
 
+    // EPIC 1.3: Veratown Architecture Systems
+    private keypadAccessGroupManager?: KeypadAccessGroupManager;
+    private furnitureInteractionSystem?: FurnitureInteractionSystem;
+    private appearanceAuditTrail?: AppearanceAuditTrail;
+    private locationEventSystem?: LocationEventSystem;
+    private playerRoleSystem?: PlayerRoleSystem;
+
     // Every successfully-initialized room feature, in registration order.
     // Backs the "/bot feature list|enable|disable" command; systems that
     // failed to construct or register (see initFeature()) are simply
@@ -223,6 +235,18 @@ export class Veratown {
                     ),
             );
             this.mapStore = new VeratownMapStore(db);
+
+            // EPIC 1.3: Initialize Veratown Architecture Systems (Phase 2 Integration)
+            // These systems provide core functionality: access control, furniture interactions,
+            // audit trails, location events, and role management
+            this.keypadAccessGroupManager = new KeypadAccessGroupManager(db);
+            this.furnitureInteractionSystem = new FurnitureInteractionSystem(
+                db,
+                this.conn,
+            );
+            this.appearanceAuditTrail = new AppearanceAuditTrail(db);
+            this.locationEventSystem = new LocationEventSystem(db);
+            this.playerRoleSystem = new PlayerRoleSystem(db);
         } else {
             console.log(
                 "mongo_uri/mongo_db must be configured to enable the dare/pick commands and persistent map storage in Veratown; skipping.",
@@ -583,5 +607,28 @@ export class Veratown {
         ).catch((err) => {
             logger.error("freeCharacter mutation failed", err as Error);
         });
+    }
+
+    // EPIC 1.3 System Accessors
+    public getKeypadAccessGroupManager(): KeypadAccessGroupManager | undefined {
+        return this.keypadAccessGroupManager;
+    }
+
+    public getFurnitureInteractionSystem():
+        | FurnitureInteractionSystem
+        | undefined {
+        return this.furnitureInteractionSystem;
+    }
+
+    public getAppearanceAuditTrail(): AppearanceAuditTrail | undefined {
+        return this.appearanceAuditTrail;
+    }
+
+    public getLocationEventSystem(): LocationEventSystem | undefined {
+        return this.locationEventSystem;
+    }
+
+    public getPlayerRoleSystem(): PlayerRoleSystem | undefined {
+        return this.playerRoleSystem;
     }
 }
