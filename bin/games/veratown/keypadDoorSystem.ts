@@ -418,23 +418,57 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 continue;
             }
 
-            const group = getKeypadAccessGroup(
+            // Check hardcoded groups
+            const hardcodedGroup = getKeypadAccessGroup(
                 msg.sender,
                 door.config.whitelistMemberNumbers,
             );
-            if (!door.config.codes[group]) {
-                this.conn.reply(
-                    msg.message,
-                    `${group} access is not enabled for this keypad.`,
-                );
-                return;
-            }
-            if (door.config.codes[group] !== code) {
-                this.conn.reply(msg.message, "Invalid keypad code.");
+
+            // Try hardcoded group code first
+            if (
+                door.config.codes[hardcodedGroup] &&
+                door.config.codes[hardcodedGroup] === code
+            ) {
+                this.unlockDoor(door, hardcodedGroup, msg.sender);
                 return;
             }
 
-            this.unlockDoor(door, group, msg.sender);
+            // Try custom groups
+            if (this.keypadAccessGroupManager) {
+                try {
+                    const groupConfig =
+                        await this.keypadAccessGroupManager.getDoorGroups(
+                            door.location.key,
+                        );
+                    const memberCustomGroups =
+                        await this.keypadAccessGroupManager.getMemberGroups(
+                            door.location.key,
+                            msg.sender.MemberNumber,
+                        );
+
+                    for (const customGroup of memberCustomGroups) {
+                        if (groupConfig.groups[customGroup]?.code === code) {
+                            this.unlockDoor(door, hardcodedGroup, msg.sender);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    this.logger.error(
+                        "Failed to check custom groups for code",
+                        e as Error,
+                    );
+                }
+            }
+
+            // If we get here, no code matched
+            if (!door.config.codes[hardcodedGroup]) {
+                this.conn.reply(
+                    msg.message,
+                    `${hardcodedGroup} access is not enabled for this keypad.`,
+                );
+            } else {
+                this.conn.reply(msg.message, "Invalid keypad code.");
+            }
             return;
         }
     };
@@ -456,23 +490,57 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             return;
         }
 
-        const group = getKeypadAccessGroup(
+        const code = match[1];
+        const hardcodedGroup = getKeypadAccessGroup(
             msg.sender,
             door.config.whitelistMemberNumbers,
         );
-        if (!door.config.codes[group]) {
-            this.conn.reply(
-                msg.message,
-                `${group} access is not enabled for this keypad.`,
-            );
-            return;
-        }
-        if (door.config.codes[group] !== match[1]) {
-            this.conn.reply(msg.message, "Invalid keypad code.");
+
+        // Try hardcoded group code first
+        if (
+            door.config.codes[hardcodedGroup] &&
+            door.config.codes[hardcodedGroup] === code
+        ) {
+            this.unlockDoor(door, hardcodedGroup, msg.sender);
             return;
         }
 
-        this.unlockDoor(door, group, msg.sender);
+        // Try custom groups
+        if (this.keypadAccessGroupManager) {
+            try {
+                const groupConfig =
+                    await this.keypadAccessGroupManager.getDoorGroups(
+                        door.location.key,
+                    );
+                const memberCustomGroups =
+                    await this.keypadAccessGroupManager.getMemberGroups(
+                        door.location.key,
+                        msg.sender.MemberNumber,
+                    );
+
+                for (const customGroup of memberCustomGroups) {
+                    if (groupConfig.groups[customGroup]?.code === code) {
+                        this.unlockDoor(door, hardcodedGroup, msg.sender);
+                        return;
+                    }
+                }
+            } catch (e) {
+                this.logger.error(
+                    "Failed to check custom groups for code",
+                    e as Error,
+                );
+            }
+        }
+
+        // If we get here, no code matched
+        if (!door.config.codes[hardcodedGroup]) {
+            this.conn.reply(
+                msg.message,
+                `${hardcodedGroup} access is not enabled for this keypad.`,
+            );
+        } else {
+            this.conn.reply(msg.message, "Invalid keypad code.");
+        }
     };
 
     private onAdminMessage = async (msg: API_Message): Promise<void> => {
