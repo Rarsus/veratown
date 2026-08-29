@@ -21,14 +21,16 @@ status: "Active Development"
 
 ## Executive Summary
 
-The Veratown+ system is architecturally sound with production-ready patterns. This roadmap identifies **3 major epics** and **12 feature areas** to improve maintainability, reduce code duplication, enhance player experience, and enable future feature expansion.
+The Veratown+ system is architecturally sound with production-ready patterns. This roadmap identifies **4 major epics** and **18+ feature areas** to improve maintainability, reduce code duplication, enhance player experience, and enable future feature expansion.
 
 **Key Statistics:**
 
 - Current: 11 Veratown systems + 2 external games (Casino, Dare)
 - Lines of code reduction potential: 20-30% via modularization
-- Test coverage expansion: +40% new tests
+- Dare.ts reduction target: 985 → 300-400 lines (70% reduction)
+- Test coverage expansion: +40% new tests (368 → 500+ tests)
 - Architectural debt elimination: 8 identified opportunities
+- New Veratown features: 5 major systems (Furniture, Tile Batching, Audit Trail, Location Events, Role System)
 - Integration opportunity: Casino → Veratown location (major usability improvement)
 
 ---
@@ -511,6 +513,70 @@ and adding new per-player fields doesn't scatter state across multiple maps.
 
 ---
 
+### Feature 1.2.7: Integration Phase - Update Dare.ts to Use All Managers
+
+**User Story:**
+
+```
+As a developer,
+I want Dare.ts to use all 6 extracted managers,
+so that the main game logic is simplified,
+and concerns are properly separated.
+```
+
+**Acceptance Criteria:**
+
+- [ ] New file: `bin/games/dare/dareIntegration.ts` (or update Dare.ts directly)
+- [ ] Dare.ts instantiates all 6 managers:
+    - `TurnOrderManager` for turn advancement
+    - `TurnTimerManager` for all timer types
+    - `DisconnectTracker` for disconnect/grace period
+    - `DareEffectApplier` for effect application
+    - `DareCommandHandlers` for command dispatch
+    - `GameParticipantManager` for player state
+- [ ] All 8 original player-state maps removed from Dare.ts
+- [ ] All timer fields removed, replaced with TurnTimerManager
+- [ ] Turn order logic calls TurnOrderManager
+- [ ] Command switch statement replaced with DareCommandHandlers
+- [ ] Effect application uses DareEffectApplier
+- [ ] Dare.ts reduced from ~985 lines to ~300-400 lines
+- [ ] No behavior change from player perspective
+- [ ] All existing tests still pass
+- [ ] Integration test: Full game flow with all managers
+
+**Implementation Steps:**
+
+1. Create new Dare instance that imports all managers
+2. Initialize managers in game constructor
+3. Migrate turn advancement to use TurnOrderManager
+4. Migrate timer management to use TurnTimerManager
+5. Migrate disconnect handling to use DisconnectTracker
+6. Migrate player state access to use GameParticipantManager
+7. Register all command handlers with DareCommandHandlers
+8. Migrate effect application to use DareEffectApplier
+9. Remove all old implementations and fields
+10. Update all method calls to use managers
+11. Run full test suite
+12. Verify no regressions
+
+**Estimated Effort:** 6-8 hours
+**Complexity:** High (touches entire file)
+**Risk:** High (core game integration)
+**Related Files:**
+
+- `bin/games/dare.ts` (main refactoring target)
+- All 6 manager modules
+
+**Quality Gates:**
+
+- ✅ All 368+ existing tests pass
+- ✅ Bundle compiles successfully
+- ✅ Zero breaking changes to API
+- ✅ Prettier formatting 100%
+- ✅ Game behavior identical before/after
+
+---
+
 ## EPIC 1.3: Veratown System Architecture
 
 ### Note
@@ -552,9 +618,214 @@ so that I can create restricted areas with different access codes.
 
 ---
 
+### Feature 1.3.2: Add Furniture Management System Enhancements
+
+**User Story:**
+
+```
+As a game designer,
+I want furniture to support custom interaction scripts,
+so that I can create dynamic furniture with context-sensitive behaviors.
+```
+
+**Acceptance Criteria:**
+
+- [ ] Extend FurnitureSystem with interaction hooks
+- [ ] Support pre/post interaction callbacks
+- [ ] Add occupancy-based furniture logic (e.g., bed with multiple occupants)
+- [ ] Add furniture state persistence (e.g., bed made/unmade)
+- [ ] Admin command: `/bot furniture add <name> <type> <interactions>`
+- [ ] Unit tests for interaction system (8+ tests)
+- [ ] Integration test: Multi-player furniture interaction
+
+**Implementation Steps:**
+
+1. Define interaction callback interface
+2. Extend FurnitureSystem with interaction hooks
+3. Implement pre-interaction validation
+4. Implement post-interaction side effects
+5. Add state persistence for furniture
+6. Create admin commands
+7. Add comprehensive tests
+8. Test with multiple players
+
+**Estimated Effort:** 4-5 hours
+**Complexity:** Medium
+**Risk:** Low
+**Related Files:**
+
+- `bin/games/veratown/furnitureSystem.ts`
+
 ---
 
-# EPIC 2: CASINO INTEGRATION INTO VERATOWN
+### Feature 1.3.3: Tile Trigger Batch Operations
+
+**User Story:**
+
+```
+As a developer,
+I want tile triggers to support batch operations,
+so that I can create map events affecting multiple players at once,
+and avoid N separate trigger calls.
+```
+
+**Acceptance Criteria:**
+
+- [ ] New method: `TileTriggerSystem.fireMultiple(tileId, memberIds[])`
+- [ ] Calls trigger handler for each member in single operation
+- [ ] Proper error handling: one failure doesn't block others
+- [ ] Logging: batch operation start/end with member count
+- [ ] Performance: batch < individual calls
+- [ ] Unit tests for batch operations (5+ tests)
+- [ ] Stress test: 50+ members on same tile
+
+**Implementation Steps:**
+
+1. Add batch operation method to TileTriggerSystem
+2. Implement efficient iteration
+3. Add error isolation (one failure != batch failure)
+4. Add logging
+5. Benchmark batch vs. individual
+6. Add tests
+7. Stress test
+
+**Estimated Effort:** 3 hours
+**Complexity:** Low-Medium
+**Risk:** Low
+**Related Files:**
+
+- `bin/games/veratown/tileTriggerSystem.ts`
+
+---
+
+### Feature 1.3.4: Character Appearance History & Audit Trail
+
+**User Story:**
+
+```
+As a game designer,
+I want to track clothing/appearance changes for compliance,
+so that I can audit what happened to a character,
+and investigate inappropriate modifications.
+```
+
+**Acceptance Criteria:**
+
+- [ ] New field in character profile: `appearanceHistory: ChangeLog[]`
+- [ ] Each change logged: timestamp, actor, items affected, before/after
+- [ ] Query: `/bot audit <character> [--since <date>]`
+- [ ] Database indexes for efficient queries
+- [ ] Retention: 30-day rollover (keep 30 days of history)
+- [ ] Admin only access
+- [ ] Unit tests for logging (5+ tests)
+- [ ] Integration test: Full audit flow
+
+**Implementation Steps:**
+
+1. Add appearanceHistory field to profile
+2. Create ChangeLog interface
+3. Update appearance mutations to log changes
+4. Implement query methods
+5. Add database indexes
+6. Create admin command for querying
+7. Add retention policy
+8. Add tests
+
+**Estimated Effort:** 5-6 hours
+**Complexity:** Medium
+**Risk:** Low
+**Related Files:**
+
+- `bin/games/veratown/veratownCharacterProfileStore.ts`
+- `bin/games/veratown/appearanceSync.ts`
+
+---
+
+### Feature 1.3.5: Location Event System
+
+**User Story:**
+
+```
+As a game designer,
+I want to create location-based events,
+so that I can trigger narrated events when players gather in locations,
+and create dynamic multi-player experiences.
+```
+
+**Acceptance Criteria:**
+
+- [ ] New file: `bin/games/veratown/locationEventSystem.ts`
+- [ ] Event types: daily, random, player-triggered
+- [ ] Occupancy-based: trigger when N players in location
+- [ ] Event payload: narration text, consequences, duration
+- [ ] Configuration: `location_events.json`
+- [ ] Admin reload: `/bot events reload`
+- [ ] Unit tests for event logic (8+ tests)
+- [ ] Integration test: Event triggers at correct occupancy
+
+**Implementation Steps:**
+
+1. Define LocationEvent interface
+2. Create LocationEventSystem class
+3. Implement event scheduling (daily, random)
+4. Implement occupancy monitoring
+5. Implement event execution and narration
+6. Create configuration loader
+7. Add admin commands
+8. Add tests
+
+**Estimated Effort:** 5-6 hours
+**Complexity:** Medium
+**Risk:** Low
+**Related Files:**
+
+- `bin/games/veratown/tileTriggerSystem.ts` (for occupancy tracking)
+
+---
+
+### Feature 1.3.6: Player Role System
+
+**User Story:**
+
+```
+As a game designer,
+I want to assign roles to players,
+so that I can create role-based content (e.g., "Guard" role can use security room),
+and enable player-driven roleplay.
+```
+
+**Acceptance Criteria:**
+
+- [ ] New field in character profile: `role: string | null`
+- [ ] Predefined roles: "Guard", "Nurse", "Prisoner", "Visitor", etc.
+- [ ] Role-specific access: locations/items restricted by role
+- [ ] Role-specific messages: narration changes based on role
+- [ ] Admin command: `/bot role set <character> <role>`
+- [ ] Admin command: `/bot role list` (show available roles)
+- [ ] Database schema for role permissions
+- [ ] Unit tests for role access (6+ tests)
+- [ ] Integration test: Role-based access control
+
+**Implementation Steps:**
+
+1. Add role field to character profile
+2. Define role configuration structure
+3. Create RoleAccessControl system
+4. Update tile/furniture access to check roles
+5. Update narration system to use roles
+6. Create admin commands
+7. Add role configuration file
+8. Add tests
+
+**Estimated Effort:** 5-6 hours
+**Complexity:** Medium
+**Risk:** Medium (widespread access checks)
+**Related Files:**
+
+- `bin/games/veratown/veratownCharacterProfileStore.ts`
+- `bin/games/veratown/tileTriggerSystem.ts`
+
+---
 
 ## Summary
 
@@ -1339,25 +1610,26 @@ and can serve more concurrent players.
 
 # Timeline & Prioritization
 
-## Phase 1: Foundation (Weeks 1-2)
+## Phase 1: Foundation (Weeks 1-2) ✅ COMPLETE
 
 **Priority:** CRITICAL - Unblock other phases
 
 - [x] EPIC 1.1: Casino System Modularization (Features 1.1.1-1.1.4)
-- [x] EPIC 1.2: Dare System Modularization (Features 1.2.1-1.2.6) ✅ COMPLETE
+- [x] EPIC 1.2.1-1.2.6: Dare System Modularization (6 managers)
 
-**Outcome:** 80% duplication reduction in casino/dare, improved testability
+**Outcome:** 80% duplication reduction in casino/dare, improved testability, 368 tests passing
 
 ---
 
-## Phase 2: Integration (Weeks 3-4)
+## Phase 2: Integration (Weeks 3-4) 🔄 IN PROGRESS
 
-**Priority:** HIGH - Core player experience improvement
+**Priority:** HIGH - Core architecture completion
 
+- [ ] EPIC 1.2.7: Integration Phase - Update Dare.ts to use all 6 managers
+- [ ] EPIC 1.3.2-1.3.6: Veratown Architecture Enhancements
 - [ ] EPIC 2: Casino Integration into Veratown (Features 2.1-2.4)
-- [ ] EPIC 1.2 Integration: Update Dare.ts to use all 6 new managers
 
-**Outcome:** Unified player experience, improved architecture compliance
+**Outcome:** Unified architecture, Dare.ts simplified, Veratown extended with new systems
 
 ---
 
@@ -1366,7 +1638,7 @@ and can serve more concurrent players.
 **Priority:** HIGH - Prevent regressions
 
 - [ ] EPIC 3: Test Coverage Expansion (Features 3.1-3.5)
-- [ ] EPIC 1.3: Minor Veratown enhancements
+- [ ] EPIC 1.3: Complete Veratown enhancements
 
 **Outcome:** 40% test coverage increase, 95%+ system reliability
 
@@ -1404,12 +1676,40 @@ and can serve more concurrent players.
 
 ## Estimated Total Effort
 
-- EPIC 1: 28-35 hours
-- EPIC 2: 12-15 hours
-- EPIC 3: 25-32 hours
-- EPIC 4: 17-21 hours
-- EPIC 5: 9-12 hours
-- **Total: 91-115 hours (~2-3 weeks at 50% allocation)**
+### By Epic
+
+- **EPIC 1: Modularization & Refactoring** (35-45 hours)
+    - 1.1 Casino Modularization: 12-14 hours ✅ COMPLETE
+    - 1.2 Dare Modularization: 15-20 hours ✅ COMPLETE (132 tests)
+    - 1.2.7 Integration: 6-8 hours ⏳ IN PROGRESS
+    - 1.3 Veratown Architecture: 25-31 hours 🔄 UPCOMING
+
+- **EPIC 2: Casino Integration into Veratown** (12-15 hours)
+    - Features 2.1-2.4: Location system, engine separation, chip economy, narrator bot
+
+- **EPIC 3: Test Coverage & Quality Assurance** (25-32 hours)
+    - Features 3.1-3.5: Helpers, integration tests, casino tests, dare tests, performance
+
+- **EPIC 4: Documentation & Onboarding** (17-21 hours)
+    - Features 4.1-4.5: Architecture docs, onboarding guide, comments, code standards
+
+- **EPIC 5: Performance & Optimization** (9-12 hours)
+    - Features 5.1-5.3: Database optimization, caching, profiling
+
+### Grand Total
+
+- **~122-156 hours (~3-4 weeks at 50% allocation)**
+- **Or ~2-3 weeks at 100% dedication (full team)**
+
+### Breakdown by Phase
+
+| Phase                  | Duration  | Hours | Features                |
+| ---------------------- | --------- | ----- | ----------------------- |
+| Phase 1: Foundation    | Weeks 1-2 | 40-45 | EPIC 1.1-1.2 (complete) |
+| Phase 2: Integration   | Weeks 3-4 | 35-45 | EPIC 1.2.7, 1.3, 2      |
+| Phase 3: Quality       | Weeks 5-6 | 25-32 | EPIC 3, 1.3 (finish)    |
+| Phase 4: Documentation | Weeks 7-8 | 17-21 | EPIC 4                  |
+| Phase 5: Optimization  | Weeks 9+  | 9-12  | EPIC 5                  |
 
 ---
 
@@ -1434,25 +1734,75 @@ and can serve more concurrent players.
 
 # Success Metrics
 
-| Metric                   | Current     | Target     | Timeline    |
-| ------------------------ | ----------- | ---------- | ----------- |
-| Lines of duplicated code | ~200-250    | <50        | Phase 1     |
-| Test coverage            | 37/46 tests | 100+ tests | Phase 3     |
-| Systems using helpers    | 11/11       | 11/11      | ✅ Complete |
-| Average DB query time    | Unknown     | <50ms      | Phase 5     |
-| Memory per-bot           | Unknown     | <100MB     | Phase 5     |
-| New dev onboarding time  | 8+ hours    | <3 hours   | Phase 4     |
-| Code comment coverage    | ~30%        | >80%       | Phase 4     |
+| Metric                   | Current     | Target            | Timeline    | Status                   |
+| ------------------------ | ----------- | ----------------- | ----------- | ------------------------ |
+| Lines of duplicated code | ~200-250    | <50               | Phase 1     | ✅ Reduced to ~50        |
+| Test coverage            | 37/46 tests | 500+ tests        | Phase 3     | 🔄 368 tests (100% pass) |
+| Dare.ts reduction        | ~985 lines  | 300-400 lines     | Phase 2     | ⏳ Integration pending   |
+| Systems using helpers    | 11/11       | 11/11             | ✅ Complete | ✅ Complete              |
+| Casino modularity        | 6 concerns  | 4 modules         | Phase 1     | ✅ Complete              |
+| Dare modularity          | 7 concerns  | 6 managers + core | Phase 2     | ⏳ Integration pending   |
+| Veratown features        | 11 systems  | 16 systems        | Phase 2     | 🔄 +5 planned            |
+| Average DB query time    | Unknown     | <50ms             | Phase 5     | 📋 To measure            |
+| Memory per-bot           | Unknown     | <100MB            | Phase 5     | 📋 To measure            |
+| New dev onboarding time  | 8+ hours    | <3 hours          | Phase 4     | 📋 Blocked on docs       |
+| Code comment coverage    | ~30%        | >80%              | Phase 4     | 📋 To implement          |
+
+---
+
+# Progress Tracking
+
+## Current Status (End of Phase 1)
+
+**Completed:**
+
+- ✅ EPIC 1.1: Casino System Modularization (4/4 features complete)
+    - ForfeitService, CasinoBioManager, BetValidator, GameTimer
+    - 41 new tests, 100% coverage
+- ✅ EPIC 1.2: Dare System Modularization (6/6 features complete)
+    - TurnOrderManager, TurnTimerManager, DisconnectTracker, DareEffectApplier, CommandHandlers, GameParticipant
+    - 132 new tests, 100% coverage
+    - Total: 368 tests passing (0 failures)
+
+**In Progress:**
+
+- 🔄 Feature 1.2.7: Dare.ts Integration (estimated 6-8 hours)
+- 🔄 EPIC 1.3: Veratown Architecture (5 new features)
+
+**Upcoming (Phase 2):**
+
+- EPIC 2: Casino Integration into Veratown (4 features, 12-15 hours)
+- Phase 3-5: Quality, Documentation, Performance
 
 ---
 
 # Next Steps
 
-1. **Week 1:** Review and approve roadmap
-2. **Week 2:** Begin Phase 1 (Casino modularization)
-3. **Weekly:** Track progress, adjust timeline as needed
-4. **Sprint reviews:** Demo features to team
-5. **Monthly:** Update roadmap based on learnings
+1. **Immediately (This Week):**
+    - [ ] Implement Feature 1.2.7: Integrate all 6 managers into Dare.ts
+    - [ ] Reduce Dare.ts from 985 to ~350 lines (target: 65% reduction)
+    - [ ] Verify no behavior changes, all tests pass
+    - [ ] Commit and push
+
+2. **Week 3-4 (Phase 2: Integration):**
+    - [ ] Implement EPIC 1.3 features (Architecture enhancements)
+    - [ ] Implement EPIC 2 features (Casino integration)
+    - [ ] End-to-end testing across all new systems
+
+3. **Week 5-6 (Phase 3: Quality):**
+    - [ ] Expand test coverage (EPIC 3)
+    - [ ] Complete remaining EPIC 1.3 features
+    - [ ] Performance benchmarking
+
+4. **Week 7-8 (Phase 4: Documentation):**
+    - [ ] Architecture Decision Records (ADRs)
+    - [ ] Onboarding guide
+    - [ ] Code comment standards
+
+5. **Week 9+ (Phase 5: Optimization):**
+    - [ ] Database query optimization
+    - [ ] Performance profiling
+    - [ ] Memory optimization
 
 ---
 
@@ -1476,15 +1826,32 @@ and can serve more concurrent players.
 
 # Document History
 
-| Date       | Author     | Version | Status                            |
-| ---------- | ---------- | ------- | --------------------------------- |
-| 2026-08-29 | Senior Dev | 2.0     | Active - Ready for Implementation |
-| 2026-08-29 | (previous) | 1.0     | Superseded                        |
+| Date       | Author     | Version | Status                    | Changes                                                                                |
+| ---------- | ---------- | ------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| 2026-08-29 | Senior Dev | 2.1     | Active - Phase 2 Planning | Added EPIC 1.2.7 Integration, expanded EPIC 1.3 with 5 new features, updated timelines |
+| 2026-08-29 | Senior Dev | 2.0     | Complete                  | Original comprehensive roadmap                                                         |
+| 2026-08-XX | (previous) | 1.0     | Superseded                | Initial draft                                                                          |
 
 ---
+
+**Version 2.1 Updates (Current Session):**
+
+- Added Feature 1.2.7: Dare.ts Integration Phase (6-8 hours)
+- Expanded EPIC 1.3 from 1 to 6 features:
+    - 1.3.2: Furniture Management System Enhancements
+    - 1.3.3: Tile Trigger Batch Operations
+    - 1.3.4: Character Appearance History & Audit Trail
+    - 1.3.5: Location Event System
+    - 1.3.6: Player Role System
+- Updated Phase 2 timeline to include integration and architecture work
+- Updated success metrics table with current progress
+- Added detailed progress tracking section
+- Revised estimated total effort: 91-115 hours → 122-156 hours
+- Added breakdown by phase and feature
 
 **For questions, refer to:**
 
 - Architecture: `docs/architecture/` (when created)
 - Implementation: Feature stories above
 - Existing patterns: `.instructions.md`
+- Phase 2 Planning: Features 1.2.7, 1.3.2-1.3.6, 2.1-2.4
