@@ -5,7 +5,7 @@
     "scripts": {
         "preinstall": "cd src && pnpm install",
         "types": "tsc",
-        "test:unit": "node --import tsx --test bin/botConnections.test.ts bin/games/veratown/shared/__tests__/helpers.test.ts bin/games/veratown/shared/__tests__/sprint1-systems.test.ts bin/games/veratown/shared/__tests__/sprint2-refactoring.test.ts bin/games/casino/__tests__/forfeitService.test.ts bin/games/casino/__tests__/bioManager.test.ts bin/games/casino/__tests__/betValidator.test.ts bin/games/casino/__tests__/gameTimer.test.ts",
+        "test:unit": "node --import tsx --test bin/botConnections.test.ts bin/games/veratown/shared/__tests__/helpers.test.ts bin/games/veratown/shared/__tests__/sprint1-systems.test.ts bin/games/veratown/shared/__tests__/sprint2-refactoring.test.ts bin/games/casino/__tests__/forfeitService.test.ts bin/games/casino/__tests__/bioManager.test.ts bin/games/casino/__tests__/betValidator.test.ts bin/games/casino/__tests__/gameTimer.test.ts bin/games/shared/__tests__/commandValidator.test.ts",
         "prettier": "prettier -c .",
         "compile:bc-bot": "cd src && npm run compile",
         "bundle": "npm run compile:bc-bot && esbuild bin/main.ts --bundle --platform=node --outfile=dist/bundle.js --sourcemap",
