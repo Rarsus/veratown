@@ -147,3 +147,5 @@ https://github.com/FriendsOfBC/ropeybot
         return `${position}. ${player.name} (${player.memberNumber}): ${player.score} chips won`;
     }
 }
+
+export { CasinoBioManager as BioManager };
