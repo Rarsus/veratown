@@ -35,6 +35,14 @@ import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
 import { createSystemLogger } from "./veratown/shared";
 
+// Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
+import { TurnOrderManager } from "./dare/turnOrderManager";
+import { TurnTimerManager } from "./dare/turnTimerManager";
+import { DisconnectTracker } from "./dare/disconnectTracker";
+import { GameParticipantManager } from "./dare/gameParticipant";
+import { DareCommandHandlers } from "./dare/commandHandlers";
+import { DareEffectApplier } from "./dare/dareEffectApplier";
+
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
 const PILLORY_REPEAT_LOCK_MS = 4 * 60 * 60 * 1000;
@@ -250,6 +258,14 @@ Game Overview
     private readonly logger = createSystemLogger("Dare");
     private commandValidator = new CommandValidator();
 
+    // Epic 1.2 Managers (Feature 1.2.7 Integration)
+    private turnOrderManager: TurnOrderManager;
+    private turnTimerManager: TurnTimerManager;
+    private disconnectTracker: DisconnectTracker;
+    private participantManager: GameParticipantManager;
+    private commandHandlers: DareCommandHandlers;
+    private effectApplier: DareEffectApplier;
+
     public constructor(
         private conn: API_Connector,
         private store: DareStore,
@@ -261,6 +277,15 @@ Game Overview
             commandParser ?? new CommandParser(conn, config?.region);
         this.region = config?.region;
         this.configuredRegion = config?.region;
+
+        // Initialize Epic 1.2 managers (Feature 1.2.7 Integration)
+        this.turnOrderManager = new TurnOrderManager();
+        this.turnTimerManager = new TurnTimerManager();
+        this.disconnectTracker = new DisconnectTracker();
+        this.participantManager = new GameParticipantManager();
+        this.commandHandlers = new DareCommandHandlers();
+        this.effectApplier = new DareEffectApplier();
+
         this.ready = this.loadState().catch((e) => {
             this.logger.error("Failed to load persisted state", { error: e });
         });
