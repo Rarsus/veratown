@@ -38,6 +38,8 @@ import {
 import { Cocktail, COCKTAILS } from "./casino/cocktails";
 import { Bet, Game } from "./casino/game";
 import { BlackjackGame } from "./casino/blackjack";
+import { ForfeitService } from "./casino/forfeitService";
+import { BioManager } from "./casino/bioManager";
 import {
     VeratownLocationStore,
     VeratownLocationDoc,
@@ -60,44 +62,11 @@ export const makeBio = (
     leaderBoard: string,
     exampleString: string,
     helpString: string,
-) => `🎰🎰🎰 Welcome to the Veratown Casino! 🎰🎰🎰
-
-All visitors will automatically ber awarded ${FREE_CHIPS} chips every day!
-You can bet with either chips or forefeits. If you win when betting with a forfeit, you gain the corresponding
-amount of chips in the forfeits table. If you lose, the forfeit is applied. You bet forfeits by
-using the keyword in the table instead of a chip amount.
-
-Examples:
-${exampleString}
-
-ℹ️ How To Play
-==============
-${helpString}
-🪢 Forfeit Table
-================
-Restraints are for 20 minutes, unless otherwise stated.
-
-${forfeitsString()}
-
-🛒 Shop
-=======
-Restraint removal: /bot remove <name> (eg. /bot remove gag):
-${restraintsRemoveString()}
-
-Other:
-${servicesString()}
-
-(All services are subject to limits of the people involved, obviously)
-
-🏆 Leaderboard
-==============
-${leaderBoard}
-
-🍀🍀🍀 Good luck! 🍀🍀🍀
-
-This bot is made with ropeybot, fixes and improvements welcome!
-https://github.com/FriendsOfBC/ropeybot
-`;
+) => {
+    // Delegate to BioManager for bio building
+    const bioManager = new BioManager();
+    return bioManager.buildBio(leaderBoard, exampleString, helpString);
+};
 
 export interface CasinoConfig {
     cocktail?: string;
@@ -125,6 +94,7 @@ export class Casino implements VeratownFeatureSystem {
     public multiplier = 1;
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
     private gameRegion?: MapRegion;
+    private forfeitService: ForfeitService;
 
     public constructor(
         private conn: API_Connector,
@@ -139,6 +109,7 @@ export class Casino implements VeratownFeatureSystem {
             config?.game === "blackjack"
                 ? new BlackjackGame(conn, this)
                 : new RouletteGame(conn, this);
+        this.forfeitService = new ForfeitService();
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
@@ -915,13 +886,18 @@ ${forfeitsString()}
         const char = this.conn.chatRoom.findMember(bet.memberNumber);
         if (!char) return;
 
-        const applyFn = FORFEITS[bet.stakeForfeit].applyItems;
-        const items = FORFEITS[bet.stakeForfeit].items(char);
-        const colourLayers = FORFEITS[bet.stakeForfeit].colourLayers;
+        // Use ForfeitService to apply the forfeit
+        this.forfeitService.applyForfeit(
+            char,
+            bet.stakeForfeit,
+            this.conn.Player.MemberNumber,
+        );
 
-        if (items.length === 1) {
-            const lockTime = FORFEITS[bet.stakeForfeit].lockTimeMs;
-            if (lockTime) {
+        // Track locked items for later reference
+        const lockTime = FORFEITS[bet.stakeForfeit].lockTimeMs;
+        if (lockTime) {
+            const items = FORFEITS[bet.stakeForfeit].items(char);
+            if (items.length === 1) {
                 this.lockedItems.set(
                     bet.memberNumber,
                     this.lockedItems.get(bet.memberNumber) ?? new Map(),
@@ -931,88 +907,11 @@ ${forfeitsString()}
                     ?.set(items[0].Group, Date.now() + lockTime);
             }
         }
-
-        if (applyFn) {
-            applyFn(char, this.conn.Player.MemberNumber);
-        } else if (items.length === 1) {
-            let characterHairColor =
-                char.Appearance.InventoryGet("HairFront").GetColor();
-            const added = char.Appearance.AddItem(items[0]);
-            try {
-                characterHairColor = characterHairColor[0] as BCColor;
-                let colors: BCColor[] = [];
-                if (colourLayers) {
-                    for (let i = 0; i <= Math.max(...colourLayers); i++) {
-                        if (colourLayers.includes(i)) {
-                            colors.push(characterHairColor);
-                        } else {
-                            colors.push("Default");
-                        }
-                    }
-                    added.SetColor(colors);
-                } else {
-                    added.SetColor(characterHairColor);
-                }
-            } catch (e) {
-                console.error(
-                    `Failed to set color for item ${items[0].Name} on character ${char.MemberNumber}`,
-                    e,
-                );
-                // Fallback to default color if setting color fails
-                added.SetColor(characterHairColor);
-            }
-
-            added.SetDifficulty(20);
-            added.SetCraft({
-                Name: `Pixie Casino ${FORFEITS[bet.stakeForfeit].name}`,
-                Description:
-                    "This item is property of Pixie Casino. Better luck next time!",
-                MemberName: this.conn.Player.toString(),
-                MemberNumber: this.conn.Player.MemberNumber,
-            });
-            if (FORFEITS[bet.stakeForfeit].lockTimeMs) {
-                console.log(
-                    `Locking item ${added.Name} for ${FORFEITS[bet.stakeForfeit].lockTimeMs}ms`,
-                );
-                added.lock(
-                    "TimerPasswordPadlock",
-                    this.conn.Player.MemberNumber,
-                    {
-                        Password: generatePassword(),
-                        Hint: "Better luck next time!",
-                        RemoveItem: true,
-                        RemoveTimer:
-                            Date.now() + FORFEITS[bet.stakeForfeit].lockTimeMs,
-                        ShowTimer: true,
-                        LockSet: true,
-                    },
-                );
-            } else {
-                console.log(
-                    `Not locking item ${added.Name} as no lock time is set`,
-                );
-            }
-        } else {
-            char.Appearance.slowlyApplyBundle(items);
-        }
     }
 
     public cheatPunishment(char: API_Character, player: Player): void {
-        if (player.cheatStrikes === 1) {
-            char.Tell("Whisper", "Cheating in the casino, hmm?");
-        } else if (player.cheatStrikes === 2) {
-            char.Tell("Whisper", `Still trying to cheat, ${char}?`);
-        } else {
-            const dunceHat = char.Appearance.AddItem(
-                AssetGet("Hat", "CollegeDunce"),
-            );
-            dunceHat.SetColor("#741010");
-            const sign = char.Appearance.AddItem(
-                AssetGet("ItemMisc", "WoodenSign"),
-            );
-            sign.setProperty("Text", "Cheater");
-            sign.setProperty("Text2", "");
-        }
+        // Use ForfeitService to apply cheat punishment
+        this.forfeitService.applyCheatPunishment(char, player.cheatStrikes);
     }
 
     private onCommandGame = async (

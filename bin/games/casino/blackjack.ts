@@ -3,6 +3,8 @@ import { Casino, getItemsBlockingForfeit } from "../casino";
 import { FORFEITS } from "./forfeits";
 import { Bet, Game } from "./game";
 import { Card, createDeck, getCardString, shuffleDeck } from "./pokerCards";
+import { BetValidator } from "./betValidator";
+import { GameTimer } from "./gameTimer";
 import {
     API_Character,
     API_Connector,
@@ -94,10 +96,11 @@ export class BlackjackGame implements Game {
     private willDealAt: number | undefined;
     private willStandAt: number | undefined;
     private players: BlackjackPlayer[] = [];
-    private resetTimeout: NodeJS.Timeout | undefined; // after finishing a game
-    private dealTimeout: NodeJS.Timeout | undefined; // after first bet until the deal
-    private autoStandTimeout: NodeJS.Timeout; // after the deal until all players stand
+    private resetTimer = new GameTimer(); // after finishing a game
+    private dealTimer = new GameTimer(); // after first bet until the deal
+    private autoStandTimer = new GameTimer(); // after the deal until all players stand
     private bettingOpen = true;
+    private betValidator = new BetValidator();
 
     public HELPMESSAGE = FULLBLACKJACKHELP;
     public EXAMPLES = BLACKJACKEXAMPLES;
@@ -224,19 +227,23 @@ export class BlackjackGame implements Game {
     public async closeBetting(): Promise<void> {
         // If a round just finished, wait for its post-round cooldown to
         // clear before deciding whether we need to force one final round.
-        await waitForCondition(() => this.resetTimeout === undefined);
+        await waitForCondition(() => !this.resetTimer.isActive());
 
         if (this.willDealAt === undefined) {
             // No round in progress: run one final round so there's a genuine
             // last round to bet on rather than closing immediately.
             this.willDealAt = Date.now() + TIME_UNTIL_DEAL_MS;
-            this.dealTimeout = setInterval(() => {
-                this.onDealTimeout();
-            }, 1000);
+            this.dealTimer.start(
+                1000,
+                () => {
+                    this.onDealTimeout();
+                },
+                true,
+            );
         }
 
         await waitForCondition(() => this.willDealAt === undefined);
-        await waitForCondition(() => this.resetTimeout === undefined);
+        await waitForCondition(() => !this.resetTimer.isActive());
 
         this.bettingOpen = false;
     }
@@ -246,7 +253,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ): BlackjackBet | undefined {
-        if (this.resetTimeout !== undefined) {
+        if (this.resetTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
                 "The next game hasn't started yet",
@@ -255,58 +262,65 @@ export class BlackjackGame implements Game {
             return;
         }
 
-        if (args.length !== 1) {
+        // Validate argument count (1 for Blackjack)
+        const argCountResult = this.betValidator.validateArgumentCount(args, 1);
+        if (!argCountResult.valid) {
             this.conn.SendMessage(
                 "Whisper",
-                "I couldn't understand that bet. Try, eg. /bot bet 10 or /bot bet boots",
+                argCountResult.message ||
+                    "I couldn't understand that bet. Try, eg. /bot bet 10 or /bot bet boots",
                 senderCharacter.MemberNumber,
             );
             return;
         }
 
-        if (
-            this.players.find(
-                (b) => b.memberNumber === senderCharacter.MemberNumber,
-            )
-        ) {
+        // Check for duplicate bets
+        const notBetResult = this.betValidator.validateNotAlreadyBet(
+            senderCharacter.MemberNumber,
+            this.players as unknown as Bet[],
+        );
+        if (!notBetResult.valid) {
             this.conn.SendMessage(
                 "Whisper",
-                "You already placed a bet. Use !cancel to cancel it.",
+                notBetResult.message ||
+                    "You already placed a bet. Use !cancel to cancel it.",
                 senderCharacter.MemberNumber,
             );
             return;
         }
 
-        const stake = args[0];
-        let stakeValue: number;
-        let stakeForfeit: string;
-        if (FORFEITS[stake] !== undefined) {
-            stakeValue = FORFEITS[stake].value;
-            stakeForfeit = stake;
-        } else {
-            if (!/^\d+$/.test(stake)) {
+        // Validate and parse stake
+        const stakeResult = this.betValidator.validateStake(args[0]);
+        if (!stakeResult.valid) {
+            this.conn.SendMessage(
+                "Whisper",
+                stakeResult.message || "Invalid stake.",
+                senderCharacter.MemberNumber,
+            );
+            return;
+        }
+
+        // If it's a forfeit, validate that it exists
+        if (stakeResult.stakeForfeit) {
+            const forfeitExistsResult = this.betValidator.validateForfeitExists(
+                stakeResult.stakeForfeit,
+            );
+            if (!forfeitExistsResult.valid) {
                 this.conn.SendMessage(
                     "Whisper",
-                    "Invalid stake.",
-                    senderCharacter.MemberNumber,
-                );
-                return;
-            }
-            stakeValue = parseInt(stake, 10);
-            if (isNaN(stakeValue) || stakeValue < 1) {
-                this.conn.SendMessage(
-                    "Whisper",
-                    "Invalid stake.",
+                    forfeitExistsResult.message ||
+                        "That forfeit doesn't exist.",
                     senderCharacter.MemberNumber,
                 );
                 return;
             }
         }
+
         return {
             memberNumber: senderCharacter.MemberNumber,
             memberName: senderCharacter.toString(),
-            stake: stakeValue,
-            stakeForfeit,
+            stake: stakeResult.stake!,
+            stakeForfeit: stakeResult.stakeForfeit || "",
             standing: false,
         };
     }
@@ -316,7 +330,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (this.autoStandTimeout === undefined) {
+        if (!this.autoStandTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
                 "You can't hit right now.",
@@ -610,8 +624,7 @@ export class BlackjackGame implements Game {
     };
 
     private async resolveGame(): Promise<void> {
-        clearTimeout(this.autoStandTimeout);
-        this.autoStandTimeout = undefined;
+        this.autoStandTimer.clear();
         while (this.calculateHandValue(this.dealerHand) < 17) {
             this.dealerHand.push(this.deck.pop());
         }
@@ -655,17 +668,13 @@ export class BlackjackGame implements Game {
         this.willDealAt = undefined;
         this.casino.multiplier = 1;
 
-        if (this.dealTimeout) {
-            clearInterval(this.dealTimeout);
-            this.dealTimeout = undefined;
-        }
-        this.resetTimeout = setTimeout(() => {
-            this.resetTimeout = undefined;
+        this.dealTimer.clear();
+        this.resetTimer.start(RESET_TIMEOUT_MS, () => {
             const sign = this.casino.getSign();
             sign.setProperty("Text", "Place bets!");
             sign.setProperty("Text2", " ");
             this.casino.setTextColor("#ffffff");
-        }, RESET_TIMEOUT_MS);
+        });
 
         this.conn.SendMessage("Chat", message);
     }
@@ -675,7 +684,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (this.autoStandTimeout === undefined) {
+        if (!this.autoStandTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
                 "You can't stand right now.",
@@ -775,7 +784,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (this.resetTimeout !== undefined) {
+        if (this.resetTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
                 "The next game hasn't started yet",
@@ -792,7 +801,7 @@ export class BlackjackGame implements Game {
             return;
         }
         if (
-            this.autoStandTimeout !== undefined ||
+            this.autoStandTimer.isActive() ||
             this.willDealAt - Date.now() < BET_CANCEL_THRESHOLD_MS
         ) {
             this.conn.SendMessage(
@@ -891,14 +900,17 @@ export class BlackjackGame implements Game {
         this.placeBet(bet);
 
         if (this.willDealAt === undefined) {
-            if (this.resetTimeout !== undefined) {
-                clearTimeout(this.resetTimeout);
-                this.resetTimeout = undefined;
+            if (this.resetTimer.isActive()) {
+                this.resetTimer.clear();
             }
             this.willDealAt = Date.now() + TIME_UNTIL_DEAL_MS;
-            this.dealTimeout = setInterval(() => {
-                this.onDealTimeout();
-            }, 1000);
+            this.dealTimer.start(
+                1000,
+                () => {
+                    this.onDealTimeout();
+                },
+                true,
+            );
         }
     };
 
@@ -912,7 +924,7 @@ export class BlackjackGame implements Game {
             sign.Extended.SetText("");
             sign.setProperty("Text2", "");
 
-            clearInterval(this.dealTimeout);
+            this.dealTimer.clear();
             this.initialDeal();
         } else {
             this.casino.setTextColor("#ffffff");
@@ -1048,9 +1060,13 @@ export class BlackjackGame implements Game {
     }
 
     private initialDeal(): void {
-        this.autoStandTimeout = setInterval(() => {
-            this.onStandTimeout();
-        }, 1000);
+        this.autoStandTimer.start(
+            1000,
+            () => {
+                this.onStandTimeout();
+            },
+            true,
+        );
         if (this.deck.length < this.players.length * 7 + 5) {
             this.conn.SendMessage(
                 "Chat",

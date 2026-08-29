@@ -24,6 +24,8 @@ import {
 import { FORFEITS } from "./forfeits";
 import { Bet, Game } from "./game";
 import { ROULETTE_WHEEL } from "./rouletteWheelBundle";
+import { BetValidator } from "./betValidator";
+import { GameTimer } from "./gameTimer";
 
 const ROULETTECOMMANDMESSAGE = `
 Available commands:
@@ -133,10 +135,11 @@ export class RouletteGame implements Game {
     private bets: RouletteBet[] = [];
 
     private willSpinAt: number | undefined;
-    private spinTimeout: NodeJS.Timeout | undefined;
-    private resetTimeout: NodeJS.Timeout | undefined;
+    private spinTimer = new GameTimer();
+    private resetTimer = new GameTimer();
     private lastCallAnnounced = false;
     private bettingOpen = true;
+    private betValidator = new BetValidator();
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -236,45 +239,57 @@ export class RouletteGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ): RouletteBet | undefined {
-        if (args.length !== 2) {
+        // Validate argument count (2 for Roulette: bet kind + stake)
+        const argCountResult = this.betValidator.validateArgumentCount(args, 2);
+        if (!argCountResult.valid) {
             this.conn.reply(
                 msg,
-                "I couldn't understand that bet. Try, eg. /bot bet red 10 or /bot bet 1-12 boots",
+                argCountResult.message ||
+                    "I couldn't understand that bet. Try, eg. /bot bet red 10 or /bot bet 1-12 boots",
             );
             return;
         }
 
-        if (
-            this.bets.find(
-                (b) => b.memberNumber === senderCharacter.MemberNumber,
-            )
-        ) {
+        // Check for duplicate bets
+        const notBetResult = this.betValidator.validateNotAlreadyBet(
+            senderCharacter.MemberNumber,
+            this.bets,
+        );
+        if (!notBetResult.valid) {
             this.conn.reply(
                 msg,
-                "You already placed a bet. Use !cancel to cancel it.",
+                notBetResult.message ||
+                    "You already placed a bet. Use !cancel to cancel it.",
             );
             return;
         }
 
         const betKind = args[0].toLowerCase();
 
-        const stake = args[1];
-        let stakeValue: number;
-        let stakeForfeit: string;
-        if (FORFEITS[stake] !== undefined) {
-            stakeValue = FORFEITS[stake].value;
-            stakeForfeit = stake;
-        } else {
-            if (!/^\d+$/.test(stake)) {
-                this.conn.reply(msg, "Invalid stake.");
-                return;
-            }
-            stakeValue = parseInt(stake, 10);
-            if (isNaN(stakeValue) || stakeValue < 1) {
-                this.conn.reply(msg, "Invalid stake.");
+        // Validate and parse stake
+        const stakeResult = this.betValidator.validateStake(args[1]);
+        if (!stakeResult.valid) {
+            this.conn.reply(msg, stakeResult.message || "Invalid stake.");
+            return;
+        }
+
+        // If it's a forfeit, validate that it exists
+        if (stakeResult.stakeForfeit) {
+            const forfeitExistsResult = this.betValidator.validateForfeitExists(
+                stakeResult.stakeForfeit,
+            );
+            if (!forfeitExistsResult.valid) {
+                this.conn.reply(
+                    msg,
+                    forfeitExistsResult.message ||
+                        "That forfeit doesn't exist.",
+                );
                 return;
             }
         }
+
+        const stakeValue = stakeResult.stake!;
+        const stakeForfeit = stakeResult.stakeForfeit || "";
 
         switch (betKind) {
             case "red":
@@ -349,7 +364,7 @@ export class RouletteGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (this.resetTimeout !== undefined) {
+        if (this.resetTimer.isActive()) {
             this.conn.reply(msg, "The next game hasn't started yet");
             return;
         }
@@ -454,16 +469,19 @@ export class RouletteGame implements Game {
         this.placeBet(bet);
 
         if (this.willSpinAt === undefined) {
-            if (this.resetTimeout !== undefined) {
-                clearTimeout(this.resetTimeout);
-                this.resetTimeout = undefined;
+            if (this.resetTimer.isActive()) {
+                this.resetTimer.clear();
             }
 
             this.lastCallAnnounced = false;
             this.willSpinAt = Date.now() + TIME_UNTIL_SPIN_MS;
-            this.spinTimeout = setInterval(() => {
-                this.onSpinTimeout();
-            }, 1000);
+            this.spinTimer.start(
+                1000,
+                () => {
+                    this.onSpinTimeout();
+                },
+                true,
+            );
         }
     };
 
@@ -582,7 +600,7 @@ export class RouletteGame implements Game {
             sign.Extended.SetText("");
             sign.setProperty("Text2", "");
 
-            clearInterval(this.spinTimeout);
+            this.spinTimer.clear();
             this.spinWheel().catch((e) => {
                 console.error("Failed to spin wheel.", e);
             });
@@ -635,12 +653,11 @@ export class RouletteGame implements Game {
 
         await wait(10000);
 
-        this.resetTimeout = setTimeout(() => {
+        this.resetTimer.start(12000, () => {
             sign.setProperty("Text", "Place bets!");
             sign.setProperty("Text2", " ");
             this.willSpinAt = undefined;
-            this.resetTimeout = undefined;
-        }, 12000);
+        });
 
         let message = `${this.getWinningNumberText(winningNumber, true)} wins.`;
 
@@ -692,20 +709,24 @@ export class RouletteGame implements Game {
     public async closeBetting(): Promise<void> {
         // If a round just finished, wait for its post-round cooldown to
         // clear before deciding whether we need to force one final round.
-        await waitForCondition(() => this.resetTimeout === undefined);
+        await waitForCondition(() => !this.resetTimer.isActive());
 
         if (this.willSpinAt === undefined) {
             // No round in progress: run one final round so there's a genuine
             // last round to bet on rather than closing immediately.
             this.lastCallAnnounced = false;
             this.willSpinAt = Date.now() + TIME_UNTIL_SPIN_MS;
-            this.spinTimeout = setInterval(() => {
-                this.onSpinTimeout();
-            }, 1000);
+            this.spinTimer.start(
+                1000,
+                () => {
+                    this.onSpinTimeout();
+                },
+                true,
+            );
         }
 
         await waitForCondition(() => this.willSpinAt === undefined);
-        await waitForCondition(() => this.resetTimeout === undefined);
+        await waitForCondition(() => !this.resetTimer.isActive());
 
         this.bettingOpen = false;
     }
