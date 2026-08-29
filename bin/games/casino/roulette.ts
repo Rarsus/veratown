@@ -289,7 +289,7 @@ export class RouletteGame implements Game {
         }
 
         const stakeValue = stakeResult.stake!;
-        const stakeForfeit = stakeResult.stakeForfeit || "";
+        const stakeForfeit = stakeResult.stakeForfeit || undefined;
 
         switch (betKind) {
             case "red":

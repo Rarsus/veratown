@@ -320,7 +320,7 @@ export class BlackjackGame implements Game {
             memberNumber: senderCharacter.MemberNumber,
             memberName: senderCharacter.toString(),
             stake: stakeResult.stake!,
-            stakeForfeit: stakeResult.stakeForfeit || "",
+            stakeForfeit: stakeResult.stakeForfeit || undefined,
             standing: false,
         };
     }
