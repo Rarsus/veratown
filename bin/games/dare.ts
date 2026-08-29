@@ -22,6 +22,7 @@ import {
     isBind,
 } from "bc-bot";
 import { wait } from "../hub/utils";
+import { GameTimer } from "./casino/gameTimer";
 import { DareStore, DareDoc } from "./dareStore";
 import { CasinoStore } from "./casino/casinostore";
 import {
@@ -77,8 +78,8 @@ interface GameRuntime {
     // When the current turn began - used both to schedule the reminder/
     // auto-pass timers and to recompute their remaining delay on reload.
     turnStartedAt: number;
-    turnReminderTimer?: ReturnType<typeof setTimeout>;
-    turnAutoPassTimer?: ReturnType<typeof setTimeout>;
+    turnReminderTimer: GameTimer;
+    turnAutoPassTimer: GameTimer;
 }
 
 export class Dare implements VeratownFeatureSystem {
@@ -214,10 +215,7 @@ Game Overview
     // Scheduled auto-apply timers (and their absolute deadlines, for
     // persistence) for bondage dares currently in their "!dare forfeit"
     // decision window, keyed by the drawer's member number.
-    private pendingBondageTimers = new Map<
-        number,
-        ReturnType<typeof setTimeout>
-    >();
+    private pendingBondageTimers = new Map<number, GameTimer>();
     private pendingBondageDeadlines = new Map<number, number>();
 
     // Members currently blocked from getting dressed - either their
@@ -231,7 +229,7 @@ Game Overview
     // re-enforcement only strips back down to that same partial cap
     // instead of always stripping every last stitch of clothing.
     private dressingBlocked = new Map<number, number | undefined>();
-    private dressingEnforceInterval: ReturnType<typeof setInterval> | undefined;
+    private dressingEnforceInterval = new GameTimer();
 
     // How many times each member has passed on a drawn dare this game -
     // the 2nd+ pass escalates the pillory into a long timed, signed one.
@@ -242,7 +240,7 @@ Game Overview
 
     // Members who've left the room and are on their 1-minute grace period
     // before being purged from the lobby/game they were in.
-    private disconnectTimers = new Map<number, ReturnType<typeof setTimeout>>();
+    private disconnectTimers = new Map<number, GameTimer>();
     private disconnectedAt = new Map<number, number>();
 
     private region?: MapRegion;
@@ -286,9 +284,10 @@ Game Overview
         // Dressing-block enforcement runs continuously, independent of any
         // game's lifecycle, so it also covers players still bound after a
         // structured game ends (see dressingBlocked's doc comment above).
-        this.dressingEnforceInterval = setInterval(
-            () => this.enforceDressingBlocks(),
+        this.dressingEnforceInterval.start(
             STRIP_ENFORCE_INTERVAL_MS,
+            () => this.enforceDressingBlocks(),
+            true, // isInterval
         );
     }
 
@@ -591,7 +590,7 @@ Game Overview
                     );
                     return;
                 }
-                clearTimeout(timer);
+                timer.clear();
                 this.pendingBondageTimers.delete(senderCharacter.MemberNumber);
                 this.pendingBondageDeadlines.delete(
                     senderCharacter.MemberNumber,
@@ -691,12 +690,13 @@ Game Overview
                         senderCharacter.MemberNumber,
                         Date.now() + BONDAGE_DECISION_MS,
                     );
-                    const timer = setTimeout(() => {
+                    const timer = new GameTimer();
+                    timer.start(BONDAGE_DECISION_MS, () => {
                         this.autoApplyPendingBondage(
                             senderCharacter.MemberNumber,
                             dare,
                         );
-                    }, BONDAGE_DECISION_MS);
+                    });
                     this.pendingBondageTimers.set(
                         senderCharacter.MemberNumber,
                         timer,
@@ -725,7 +725,7 @@ Game Overview
                     senderCharacter.MemberNumber,
                 );
                 if (bondageTimer) {
-                    clearTimeout(bondageTimer);
+                    bondageTimer.clear();
                     this.pendingBondageTimers.delete(
                         senderCharacter.MemberNumber,
                     );
@@ -936,7 +936,7 @@ Game Overview
 
         const bondageTimer = this.pendingBondageTimers.get(memberNumber);
         if (bondageTimer) {
-            clearTimeout(bondageTimer);
+            bondageTimer.clear();
             this.pendingBondageTimers.delete(memberNumber);
         }
         this.pendingBondageDeadlines.delete(memberNumber);
@@ -1119,10 +1119,8 @@ Game Overview
     // Clears a specific game's idle-turn reminder/auto-pass timers, if any
     // are pending.
     private clearGameTurnTimers = (game: GameRuntime): void => {
-        if (game.turnReminderTimer) clearTimeout(game.turnReminderTimer);
-        if (game.turnAutoPassTimer) clearTimeout(game.turnAutoPassTimer);
-        game.turnReminderTimer = undefined;
-        game.turnAutoPassTimer = undefined;
+        game.turnReminderTimer.clear();
+        game.turnAutoPassTimer.clear();
     };
 
     // Starts the reminder (30s) / auto-pass (60s) timers for a game's
@@ -1134,12 +1132,12 @@ Game Overview
         game.turnStartedAt = Date.now();
 
         const memberNumber = game.turnOrder[game.currentTurnIndex];
-        game.turnReminderTimer = setTimeout(() => {
+        game.turnReminderTimer.start(TURN_REMINDER_MS, () => {
             this.fireTurnReminder(gameId, memberNumber);
-        }, TURN_REMINDER_MS);
-        game.turnAutoPassTimer = setTimeout(() => {
+        });
+        game.turnAutoPassTimer.start(TURN_AUTO_PASS_MS, () => {
             this.fireTurnAutoPass(gameId, memberNumber);
-        }, TURN_AUTO_PASS_MS);
+        });
         this.persistState();
     };
 
@@ -1152,15 +1150,14 @@ Game Overview
 
         const reminderDelay = TURN_REMINDER_MS - elapsed;
         if (reminderDelay > 0) {
-            game.turnReminderTimer = setTimeout(() => {
+            game.turnReminderTimer.start(reminderDelay, () => {
                 this.fireTurnReminder(game.id, memberNumber);
-            }, reminderDelay);
+            });
         }
 
         const autoPassDelay = TURN_AUTO_PASS_MS - elapsed;
-        game.turnAutoPassTimer = setTimeout(
-            () => this.fireTurnAutoPass(game.id, memberNumber),
-            Math.max(0, autoPassDelay),
+        game.turnAutoPassTimer.start(Math.max(0, autoPassDelay), () =>
+            this.fireTurnAutoPass(game.id, memberNumber),
         );
     };
 
@@ -1209,9 +1206,9 @@ Game Overview
         if (!inLobby && !inGame) return;
 
         this.disconnectedAt.set(sourceMemberNumber, Date.now());
-        const timer = setTimeout(
-            () => this.purgeDisconnected(sourceMemberNumber),
-            DISCONNECT_GRACE_MS,
+        const timer = new GameTimer();
+        timer.start(DISCONNECT_GRACE_MS, () =>
+            this.purgeDisconnected(sourceMemberNumber),
         );
         this.disconnectTimers.set(sourceMemberNumber, timer);
 
@@ -1228,7 +1225,7 @@ Game Overview
         const timer = this.disconnectTimers.get(character.MemberNumber);
         if (!timer) return;
 
-        clearTimeout(timer);
+        timer.clear();
         this.disconnectTimers.delete(character.MemberNumber);
         this.disconnectedAt.delete(character.MemberNumber);
 
@@ -1414,7 +1411,7 @@ Game Overview
 
             const bondageTimer = this.pendingBondageTimers.get(memberNumber);
             if (bondageTimer) {
-                clearTimeout(bondageTimer);
+                bondageTimer.clear();
                 this.pendingBondageTimers.delete(memberNumber);
             }
             this.pendingBondageDeadlines.delete(memberNumber);
@@ -1641,9 +1638,9 @@ Game Overview
 
         for (const [memberNumber, entry] of state.pendingBondage ?? []) {
             const remaining = entry.deadlineAt - now;
-            const timer = setTimeout(
-                () => this.autoApplyPendingBondage(memberNumber, entry.dare),
-                Math.max(0, remaining),
+            const timer = new GameTimer();
+            timer.start(Math.max(0, remaining), () =>
+                this.autoApplyPendingBondage(memberNumber, entry.dare),
             );
             this.pendingBondageTimers.set(memberNumber, timer);
             this.pendingBondageDeadlines.set(memberNumber, entry.deadlineAt);
@@ -1652,9 +1649,9 @@ Game Overview
         for (const [memberNumber, disconnectedAt] of state.disconnected ?? []) {
             this.disconnectedAt.set(memberNumber, disconnectedAt);
             const remaining = DISCONNECT_GRACE_MS - (now - disconnectedAt);
-            const timer = setTimeout(
-                () => this.purgeDisconnected(memberNumber),
-                Math.max(0, remaining),
+            const timer = new GameTimer();
+            timer.start(Math.max(0, remaining), () =>
+                this.purgeDisconnected(memberNumber),
             );
             this.disconnectTimers.set(memberNumber, timer);
         }
