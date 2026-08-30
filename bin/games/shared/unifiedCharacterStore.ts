@@ -135,6 +135,7 @@ export class UnifiedCharacterStore {
                 gameIds: [],
                 participationHistory: [],
                 activeBondage: [],
+                suspendedGames: [], // Phase 3.3: Game suspension support
                 totalGamesPlayed: 0,
                 totalDaresCompleted: 0,
                 version: 0,
@@ -708,6 +709,280 @@ export class UnifiedCharacterStore {
         );
     }
 
+    // ===== PHASE 3.3: GAME SUSPENSION (Caged Players Auto-Removed)
+
+    /**
+     * Suspend all active dare games when player enters cage.
+     * Stores game state snapshot for potential restoration.
+     */
+    public async suspendAllGames(memberNumber: number): Promise<number> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        // Create suspension records for all active games
+        const suspensionRecords: SuspendedGame[] = [];
+        for (const gameId of profile.dare.gameIds) {
+            // Find participation record for this game
+            const participation = profile.dare.participationHistory.find(
+                (p) => p.gameId === gameId,
+            );
+
+            if (participation) {
+                suspensionRecords.push({
+                    gameId,
+                    suspendedAt: now,
+                    suspendReason: "cage_entry",
+                    playerSnapshot: participation,
+                });
+            }
+        }
+
+        if (suspensionRecords.length === 0) {
+            return 0; // No games to suspend
+        }
+
+        // Clear active games and store suspended games
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "dare.gameIds": [], // Remove from active games
+                    "dare.suspendedGames": suspensionRecords,
+                    "dare.updatedAt": now,
+                    "dare.version": profile.dare.version + 1,
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        // Emit event for each suspended game
+        for (const suspension of suspensionRecords) {
+            const event: GameEvent = {
+                timestamp: now,
+                type: "game_suspended",
+                source: "dare",
+                actor: memberNumber,
+                target: memberNumber,
+                data: {
+                    gameId: suspension.gameId,
+                    reason: "cage_entry",
+                    gamesRemaining: suspensionRecords.length,
+                },
+                processed: false,
+            };
+
+            await this.recordEvent(event);
+            await this.eventBus.publish(event);
+        }
+
+        return suspensionRecords.length;
+    }
+
+    /**
+     * Resume all suspended games when player exits cage.
+     */
+    public async resumeSuspendedGames(memberNumber: number): Promise<number> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        if (
+            !profile.dare.suspendedGames ||
+            profile.dare.suspendedGames.length === 0
+        ) {
+            return 0; // No suspended games
+        }
+
+        // Restore game IDs
+        const restoredGameIds = profile.dare.suspendedGames.map(
+            (s) => s.gameId,
+        );
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "dare.gameIds": restoredGameIds,
+                    "dare.suspendedGames": [],
+                    "dare.updatedAt": now,
+                    "dare.version": profile.dare.version + 1,
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        // Emit event for each resumed game
+        for (const suspension of profile.dare.suspendedGames) {
+            const event: GameEvent = {
+                timestamp: now,
+                type: "game_resumed",
+                source: "dare",
+                actor: memberNumber,
+                target: memberNumber,
+                data: {
+                    gameId: suspension.gameId,
+                    suspensionDuration: now - suspension.suspendedAt,
+                    gamesResumed: restoredGameIds.length,
+                },
+                processed: false,
+            };
+
+            await this.recordEvent(event);
+            await this.eventBus.publish(event);
+        }
+
+        return restoredGameIds.length;
+    }
+
+    // ===== PHASE 3.4: UNIFIED AUDIT TRAIL
+
+    /**
+     * Record an audit trail entry for comprehensive state change tracking.
+     * Emits audit_trail event with full context.
+     */
+    public async recordAuditEntry(
+        memberNumber: number,
+        operation: string,
+        context: Record<string, unknown>,
+        actor?: number,
+    ): Promise<void> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        // Create audit event with full context
+        const event: GameEvent = {
+            timestamp: now,
+            type: "audit_trail",
+            source: "admin",
+            actor: actor ?? memberNumber,
+            target: memberNumber,
+            data: {
+                operation,
+                ...context,
+                playerName: profile.characterName,
+                memberNumber,
+                timestamp: now,
+            },
+            processed: false,
+        };
+
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+    }
+
+    /**
+     * Get all audit entries for a player within a time range.
+     */
+    public async getAuditTrail(
+        memberNumber: number,
+        startTime?: number,
+        endTime?: number,
+    ): Promise<GameEvent[]> {
+        await this.init();
+
+        const query: Record<string, unknown> = {
+            target: memberNumber,
+            type: {
+                $in: [
+                    "audit_trail",
+                    "escape_payment",
+                    "chips_locked",
+                    "chips_unlocked",
+                ],
+            },
+        };
+
+        if (startTime) {
+            query.timestamp = { $gte: startTime };
+        }
+        if (endTime) {
+            if (!query.timestamp) {
+                query.timestamp = {};
+            }
+            (query.timestamp as Record<string, number>).$lte = endTime;
+        }
+
+        const events = await this.events
+            .find(query)
+            .sort({ timestamp: -1 })
+            .limit(1000)
+            .toArray();
+
+        return events.map((doc) => {
+            const { _id, ...rest } = doc;
+            return rest as GameEvent;
+        });
+    }
+
+    // ===== PHASE 3.5: EVENT DEDUPLICATION & ERROR RECOVERY
+
+    /**
+     * Check if an event with identical type, actor, target, and timestamp already exists.
+     * Used to prevent duplicate event processing (Phase 3.5).
+     */
+    public async isDuplicateEvent(event: GameEvent): Promise<boolean> {
+        await this.init();
+
+        // Check for duplicate within 1 second window (allows for clock skew)
+        const existing = await this.events.findOne({
+            type: event.type,
+            actor: event.actor,
+            target: event.target,
+            timestamp: {
+                $gte: event.timestamp - 1000,
+                $lte: event.timestamp + 1000,
+            },
+            data: event.data,
+        });
+
+        return !!existing;
+    }
+
+    /**
+     * Get event statistics for audit and recovery (Phase 3.5).
+     */
+    public async getEventStats(memberNumber: number): Promise<{
+        totalEvents: number;
+        eventsByType: Record<string, number>;
+        lastEventTime?: number;
+        firstEventTime?: number;
+    }> {
+        await this.init();
+
+        const events = await this.events
+            .find({ target: memberNumber })
+            .toArray();
+
+        const eventsByType: Record<string, number> = {};
+        let firstEventTime: number | undefined;
+        let lastEventTime: number | undefined;
+
+        for (const event of events) {
+            eventsByType[event.type] = (eventsByType[event.type] ?? 0) + 1;
+
+            if (!firstEventTime || event.timestamp < firstEventTime) {
+                firstEventTime = event.timestamp;
+            }
+            if (!lastEventTime || event.timestamp > lastEventTime) {
+                lastEventTime = event.timestamp;
+            }
+        }
+
+        return {
+            totalEvents: events.length,
+            eventsByType,
+            lastEventTime,
+            firstEventTime,
+        };
+    }
+
     // ===== VERATOWN SYSTEM INTERFACE
 
     /**
@@ -1006,7 +1281,7 @@ export class UnifiedCharacterStore {
      * Record an event in the event collection for recovery/replay.
      * Events are automatically published via EventBus.
      */
-    private async recordEvent(event: GameEvent): Promise<void> {
+    public async recordEvent(event: GameEvent): Promise<void> {
         await this.init();
         // Set _id if not already set
         if (!event._id) {

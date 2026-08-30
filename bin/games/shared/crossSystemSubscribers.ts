@@ -155,21 +155,46 @@ export class CrossSystemSubscribers {
     private setupCageSubscribers(): void {
         // Cage entry → Remove from dare games
         this.eventBus.subscribe("cage_entry", async (event: GameEvent) => {
-            if (!this.dare?.removeParticipant) return;
-
             try {
-                await this.dare.removeParticipant(event.target);
-            } catch (error) {
-                console.error(
-                    "CrossSystemSubscribers: Failed to remove from dare games:",
+                // Phase 3.3: Suspend all active games when player caged
+                const suspendedCount = await this.unifiedStore.suspendAllGames(
                     event.target,
-                    error,
                 );
+
+                if (suspendedCount > 0) {
+                    // Also try to remove from dare if available
+                    if (this.dare?.removeParticipant) {
+                        await this.dare.removeParticipant(event.target);
+                    }
+                }
+            } catch (error) {
+                const logger =
+                    require("../veratown/shared/systemLogger").createSystemLogger(
+                        "CrossSystemSubscribers",
+                    );
+                logger.error("Failed to suspend games on cage entry", error, {
+                    memberNumber: event.target,
+                    operation: "cage_entry",
+                });
             }
         });
 
-        // Cage exit → (Future) allow rejoin to dare games
-        // (This will be implemented in Phase 3)
+        // Phase 3.3: Cage exit → Resume suspended games
+        this.eventBus.subscribe("cage_exit", async (event: GameEvent) => {
+            try {
+                // Resume all suspended games when player uncaged
+                await this.unifiedStore.resumeSuspendedGames(event.target);
+            } catch (error) {
+                const logger =
+                    require("../veratown/shared/systemLogger").createSystemLogger(
+                        "CrossSystemSubscribers",
+                    );
+                logger.error("Failed to resume games on cage exit", error, {
+                    memberNumber: event.target,
+                    operation: "cage_exit",
+                });
+            }
+        });
     }
 
     /**

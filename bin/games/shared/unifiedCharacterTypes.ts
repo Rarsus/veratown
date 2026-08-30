@@ -52,10 +52,20 @@ export interface DareGameParticipation {
     bondageItems: DareBondageItem[];
 }
 
+// Phase 3.3: Game Suspension (when player is caged)
+export interface SuspendedGame {
+    gameId: number;
+    suspendedAt: number;
+    suspendReason: "cage_entry" | "manual";
+    playerSnapshot: DareGameParticipation;
+    gameStateSnapshot?: Record<string, unknown>; // Store relevant game state
+}
+
 export interface DareState {
     gameIds: number[]; // Currently active games
     participationHistory: DareGameParticipation[];
     activeBondage: DareBondageItem[];
+    suspendedGames: SuspendedGame[]; // Games suspended while caged (Phase 3.3)
     dressingBlocked?: number; // Until timestamp
     dressingBlockedUntil?: number;
     totalGamesPlayed: number;
@@ -186,6 +196,8 @@ export interface GameEvent {
         | "bondage_removed"
         | "cage_entry"
         | "cage_exit"
+        | "game_suspended" // Phase 3.3: Game suspended (player caged)
+        | "game_resumed" // Phase 3.3: Game resumed (player uncaged)
         | "kennel_entry"
         | "kennel_exit"
         | "game_joined"
@@ -195,7 +207,8 @@ export interface GameEvent {
         | "parole_violated"
         | "position_changed"
         | "character_frozen"
-        | "character_unfrozen";
+        | "character_unfrozen"
+        | "audit_trail"; // Phase 3.4: Generic audit trail event
     source: "casino" | "dare" | "veratown" | "admin";
     actor: number; // memberNumber of who caused this
     target: number; // memberNumber affected
