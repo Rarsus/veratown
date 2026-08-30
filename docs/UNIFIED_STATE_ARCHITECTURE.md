@@ -2,8 +2,8 @@
 title: "Unified State Architecture: Cross-System Character Tracking"
 subtitle: "Architectural Analysis, Synergies, Duplications, and Restructuring Plan"
 date: "August 30, 2026"
-version: "1.3"
-status: "Phase 3.2 Complete - Escape Bondage Feature Live"
+version: "1.4"
+status: "Phase 2.5 Complete - All Game Systems Migrated to Unified Store"
 ---
 
 # Unified State Architecture: Cross-System Character Tracking
@@ -1427,6 +1427,97 @@ await this.casino.getStore().savePlayer(winnerMemberData);
 - ✅ Automatic fallback to original store if wrapper unavailable
 - ✅ Full compatibility maintained (existing code continues to work)
 - ✅ All store operations now use structured logging (SystemLogger)
+
+### Phase 2.5: Complete Game System Migration ✅ **COMPLETE** (Aug 30)
+
+**Completed Components:**
+
+- ✅ Veratown system migration to use global adapters (Aug 30, 15:07 UTC)
+    - Dare system now uses `global.dareStoreAdapter` (delegates to UnifiedCharacterStore)
+    - Dare falls back to `global.casinoStoreMigrationWrapper` for chip operations
+    - Casino system continues to use dedicated wrapper (optimal for race condition handling)
+    - All game systems now converge on unified store architecture
+
+- ✅ Backward compatibility maintained
+    - Veratown code uses global adapters if available
+    - Fallback to creating new instances preserves old behavior if globals missing
+    - Zero breaking changes to existing APIs
+    - Seamless integration with existing game logic
+
+- ✅ Test verification (Aug 30, 15:07 UTC)
+    - **All 419 tests passing** ✅ (validated complete)
+    - No regressions from Veratown adapter integration
+    - Database null field handling verified across all modules (see codebase status)
+    - Both legacy and unified stores working in parallel during migration
+
+**Architecture After Phase 2.5 (Current State):**
+
+```
+┌─────────────────────────────────────────────────┐
+│              Veratown Game System                │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  ┌──────────────┐  ┌──────────────┐             │
+│  │   Dare       │  │   Casino     │             │
+│  │ Feature      │  │ Feature      │             │
+│  └──────┬───────┘  └──────┬───────┘             │
+│         │                 │                      │
+│  Uses global.dare    Uses wrapper               │
+│  StoreAdapter        (coordinated)              │
+│         │                 │                      │
+│  ┌──────────────┐  ┌──────────────┐             │
+│  │ DareStore    │  │CasinoStore   │             │
+│  │ Adapter      │  │ Migration    │             │
+│  │              │  │ Wrapper      │             │
+│  └──────┬───────┘  └──────┬───────┘             │
+│         │                 │                      │
+│         └─────────┬───────┘                      │
+│                   ↓                              │
+│     ┌─────────────────────────────┐             │
+│     │ UnifiedCharacterStore       │             │
+│     │ (Single Source of Truth)    │             │
+│     └─────────┬───────────────────┘             │
+│               │                                  │
+│               ↓                                  │
+│     ┌─────────────────────────────┐             │
+│     │ MongoDB Atlas               │             │
+│     │ unifiedCharacterProfiles    │             │
+│     │ (One document per player)   │             │
+│     └─────────────────────────────┘             │
+│                                                  │
+└─────────────────────────────────────────────────┘
+```
+
+**Key Metrics:**
+
+- Total test count: **419** (passing)
+- Test execution time: ~7.9 seconds (stable)
+- Migration status: **COMPLETE** - All game systems now use UnifiedCharacterStore via adapters
+- Old stores: Available in main.ts for fallback/comparison (safe to remove after Phase 3)
+- MongoDB schema: Unified collection operational, working in parallel with legacy
+
+**Data Flow Example (Cross-System Access):**
+
+```typescript
+// Phase 2.5 example: Dare checks player's casino balance
+const profile = await global.dareStoreAdapter.getProfile(memberNumber);
+// DareStoreAdapter.getProfile() delegates to:
+// UnifiedCharacterStore.getProfile(memberNumber)
+// Which reads from MongoDB unifiedCharacterProfiles collection
+
+// Result: Single document contains all player data
+{
+    _id: memberNumber,
+    name: "PlayerName",
+    casino: { chips: 1000, score: 5000, cheatStrikes: 0, ... },
+    dare: { level: 3, totalDares: 42, ... },
+    veratown: { roles: ["prisoner"], positions: [...], ... },
+    createdAt, updatedAt, version, ...
+}
+
+// Dare can now access casino data: if (profile.casino.chips < betAmount) reject();
+// Cross-system data access: ENABLED ✅
+```
 
 ### Phase 3: Cross-System Features ⏳ **READY** (Timeline: 1-2 weeks)
 

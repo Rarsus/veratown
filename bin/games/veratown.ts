@@ -224,16 +224,22 @@ export class Veratown {
                 (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
             this.locationStore = new VeratownLocationStore(db);
             this.characterProfileStore = new VeratownCharacterProfileStore(db);
-            this.dare = this.initFeature(
-                () =>
-                    new Dare(
-                        this.conn,
-                        new DareStore(db),
-                        this.commandParser,
-                        new CasinoStore(db),
-                        effectiveDareConfig,
-                    ),
-            );
+            this.dare = this.initFeature(() => {
+                // Phase 2.5: Use global adapters delegating to UnifiedCharacterStore
+                // Fallback to creating new instances if adapters not available (backward compat)
+                const dareStore = global.dareStoreAdapter || new DareStore(db);
+                const casinoStore =
+                    global.casinoStoreMigrationWrapper ||
+                    global.casinoStoreAdapter ||
+                    new CasinoStore(db);
+                return new Dare(
+                    this.conn,
+                    dareStore,
+                    this.commandParser,
+                    casinoStore,
+                    effectiveDareConfig,
+                );
+            });
             this.mapStore = new VeratownMapStore(db);
 
             // EPIC 1.3: Initialize Veratown Architecture Systems (Phase 2 Integration)
