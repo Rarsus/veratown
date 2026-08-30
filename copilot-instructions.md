@@ -1703,10 +1703,37 @@ Key files modified:
 
 ## Last Updated
 
-**Date:** 2026-08-30 (Phase 2.4 - Gradual Code Migration)  
-**Changes (Phase 2 - Adapters & Cross-System Coordination):**
+**Date:** 2026-08-30 (Phase 3.5 - Plugin Architecture & Entry Point Simplification COMPLETE)  
+**Changes (Phase 3.5.3-5):**
 
-**Phase 2.1:** Backward-Compatible Adapters
+**Phase 3.5.3: Game Plugin Refactoring**
+
+- ✅ bin/games/dare.ts implements GamePlugin interface with formal lifecycle
+- ✅ bin/games/casino.ts implements GamePlugin interface with formal lifecycle
+- ✅ Centralized command registration via GamePluginCommandRouter
+- ✅ Removed duplicate CommandParser initialization
+
+**Phase 3.5.4: Simplified Entry Point**
+
+- ✅ bin/main.ts refactored with Veratown as primary orchestrator
+- ✅ Removed dedicated dare case (now integrated as Veratown plugin)
+- ✅ Code reduced from ~450 to ~200 lines in game selection logic
+- ✅ Backward compatible with existing configs (legacy and new formats supported)
+
+**Phase 3.5.5: Documentation Updates**
+
+- ✅ Updated Phase 3 status to 100% COMPLETE
+- ✅ Added comprehensive Phase 3.5 implementation documentation
+- ✅ Synchronized .instructions.md and copilot-instructions.md
+
+**Overall Status: PHASE 3 COMPLETE (100%)**
+
+- ✅ 419/419 tests passing (100% pass rate)
+- ✅ Zero regressions across all changes
+- ✅ Code compiles without errors
+- ✅ Full backward compatibility maintained
+
+**Previous Phase 2.4 - Gradual Code Migration Information:**
 
 - ✅ CasinoStoreAdapter (191 lines)
 - ✅ DareStoreAdapter (210 lines)
