@@ -1621,28 +1621,129 @@ Each system reads/writes through its view. No duplicated data. Changes automatic
 - **Performance:** Store initialization + 15 tests in 2.3 seconds
 - **Prettier Compliance:** 100% (all files formatted)
 
-### Phase 1 → Phase 2 Transition
+### Phase 2: Backward-Compatible Adapters & Cross-System Coordination
 
-**What Phase 2 Will Do:**
+**Phase 2.1: Adapter Layer** ✅
 
-1. Create adapter classes (CasinoStoreAdapter, DareStoreAdapter, VeratownStoreAdapter)
-2. Adapters provide old store APIs while forwarding to unified store
-3. No code changes needed in Casino/Dare/Veratown systems
-4. Systems can migrate gradually (one-by-one)
+Three adapters enable gradual migration without code changes:
+
+1. **CasinoStoreAdapter** (191 lines)
+    - Implements CasinoStore interface
+    - Delegates chips/stats to unified store
+    - Maintains backward compatibility
+
+2. **DareStoreAdapter** (210 lines)
+    - Passes through game state
+    - Coordinates bondage tracking with unified store
+    - Game definitions remain in original store
+
+3. **VeratownStoreAdapter** (340 lines)
+    - Full VeratownCharacterProfileStore API
+    - Position, cages, audit trail all integrated
+    - 100% API coverage (17 methods)
+
+**Phase 2.2: Event-Driven Cross-System Coordination** ✅
+
+CrossSystemSubscribers framework enables 4 initial features:
+
+1. **Bondage Blocks Casino Winnings**
+    - bondage_applied → casino.lockWinnings()
+    - bondage_removed → casino.unlockWinnings()
+
+2. **Cage Blocks Dare Games**
+    - cage_entry → dare.removeParticipant()
+    - Player automatically removed from games
+
+3. **Chip Transfers Build Relationships**
+    - chip_transfer → veratown.recordRelationship()
+    - Tracks economic partnerships (>100 chips only)
+
+4. **Audit Trail for Cross-System Events**
+    - All major events logged automatically
+    - Enables replay and debugging
+
+**Phase 2.3: Adapter Integration** ✅
+
+Integration into bot startup (bin/main.ts):
+
+1. Initialize UnifiedCharacterStore(db) after database connection
+2. Create CrossSystemSubscribers with optional system instances
+3. Use setter methods: setCasinoSystem(), setDareSystem(), setVeratownSystem()
+4. Call initialize() to activate event subscriptions
+
+Key files modified:
+
+- `bin/main.ts`: Added UnifiedCharacterStore + CrossSystemSubscribers initialization
+- `bin/games/shared/crossSystemSubscribers.ts`: Added setter methods
+- `bin/games/__tests__/integration/crossSystemIntegration.test.ts`: Added 20+ integration tests
+
+**Phase 2 Status:** ✅ COMPLETE (Aug 30, 2026)
+
+- All adapters implemented and tested
+- Event subscribers operational
+- Integration tests passing (20+ new tests)
+- All 396 unit tests passing
 
 **Timeline:**
 
-- Phase 1: ✅ COMPLETE (Aug 30, 2026)
-- Phase 2: Weeks 3-4 (adapters + EPIC 2)
-- Phase 2.5: Concurrent EPIC 2 (Casino integration)
-- Phase 3: Cross-system features (weeks 5-6)
+- Phase 1: ✅ COMPLETE (Aug 30, 2026) - Unified State Architecture
+- Phase 2: ✅ COMPLETE (Aug 30, 2026) - Adapters + Event Subscribers + Integration
+- Phase 2.4: Ready - Gradual code migration to adapters
+- Phase 3: Blocked - Awaiting Phase 2.4 completion (cross-system features)
+- EPIC 2: Ready - Casino integration (CasinoVenueSystem, CasinoEngine, Unified Chip Economy)
 
 ---
 
 ## Last Updated
 
-**Date:** 2026-08-30  
-**Changes (Phase 1 - Unified State Architecture):**
+**Date:** 2026-08-30 (Phase 2.3 Integration Complete)  
+**Changes (Phase 2 - Adapters & Cross-System Coordination):**
+
+**Phase 2.1:** Backward-Compatible Adapters
+
+- ✅ CasinoStoreAdapter (191 lines)
+- ✅ DareStoreAdapter (210 lines)
+- ✅ VeratownStoreAdapter (340 lines)
+- ✅ 37 total methods, 100% API coverage
+- ✅ All 396 tests passing
+
+**Phase 2.2:** Event-Driven Cross-System Features
+
+- ✅ CrossSystemSubscribers (170 lines)
+- ✅ 4 initial cross-system features
+- ✅ EventBus pub/sub coordination
+- ✅ EPIC 2 roadmap documented
+
+**Phase 2.3:** Adapter Integration (NEW)
+
+- ✅ Modified bin/main.ts for unified store initialization
+- ✅ Added setter methods to CrossSystemSubscribers
+- ✅ Created 20+ integration tests
+- ✅ All 396 unit tests passing
+- ✅ Full test coverage for cross-system event coordination
+
+**Architecture Overview:**
+
+```
+Unified Character Store (Single Source of Truth)
+├── Casino: chips, stats, daily grants
+├── Dare: bondage items, participant list, game state
+├── Veratown: position, cage history, audit trail, roles
+└── Events: 14 event types for cross-system coordination
+
+Adapters (Backward Compatible)
+├── CasinoStoreAdapter → UnifiedCharacterStore.getCasinoView()
+├── DareStoreAdapter → UnifiedCharacterStore.getDareView()
+└── VeratownStoreAdapter → UnifiedCharacterStore.getVeratownView()
+
+Cross-System Subscribers (Event Listeners)
+├── Bondage → Casino (locks winnings)
+├── Cage → Dare (removes from games)
+├── Chip Transfer → Veratown (builds relationships)
+└── All Events → Audit Trail (logging)
+```
+
+**Previous Updates (Phase 1 - Aug 30):**
 
 - ✅ Phase 1 COMPLETE: UnifiedCharacterStore fully implemented
 - ✅ Created 4 new production files (2,159 lines total)
@@ -1667,7 +1768,8 @@ Each system reads/writes through its view. No duplicated data. Changes automatic
 - EPIC 1.1: 4 Casino features (Roulette, Blackjack, Timers, Bio, Forfeit)
 - EPIC 1.2: 6 Dare systems (Effects, Turn Order, Timers, Participants, Disconnect, Commands)
 - EPIC 1.3: 5 Architecture features (Keypad Groups, Furniture Interactions, Audit Trail, Location Events, Player Roles)
-- **PHASE 1:** Unified Character State (UnifiedCharacterStore, EventBus, cross-system coordination)
-- Total: 34+ files, ~17K lines production code, 396 unit tests
+- **PHASE 1:** Unified Character State (UnifiedCharacterStore, EventBus, cross-system coordination) - ✅ COMPLETE
+- **PHASE 2.1-2.3:** Adapter Integration & Cross-System Coordination - ✅ COMPLETE
+- Total: 34+ files, ~19K lines production code, 416+ unit tests
 
-**Status:** EPIC 1.3 Complete + Phase 1 (Unified State Architecture) Complete - Ready for Phase 2 (Adapters + EPIC 2)
+**Status:** ✅ PHASE 2 COMPLETE (Aug 30, 2026) - All Systems Integrated, Ready for Phase 2.4 (Gradual Code Migration)

@@ -234,6 +234,30 @@ export class CrossSystemSubscribers {
     }
 
     /**
+     * Set casino system for event subscriptions.
+     * Call this after casino system is initialized.
+     */
+    public setCasinoSystem(system: ExternalCasinoSystem | undefined): void {
+        this.casino = system;
+    }
+
+    /**
+     * Set dare system for event subscriptions.
+     * Call this after dare system is initialized.
+     */
+    public setDareSystem(system: ExternalDareSystem | undefined): void {
+        this.dare = system;
+    }
+
+    /**
+     * Set veratown system for event subscriptions.
+     * Call this after veratown system is initialized.
+     */
+    public setVeratownSystem(system: ExternalVeratownSystem | undefined): void {
+        this.veratown = system;
+    }
+
+    /**
      * Get event bus for manual subscription (testing, custom logic).
      */
     public getEventBus(): EventBus {

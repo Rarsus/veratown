@@ -30,11 +30,24 @@ import {
     connectDatabase,
     createBotConnections,
 } from "./botConnections";
+import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
+import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
     test: "https://bondage-club-server-test.herokuapp.com/",
 };
+
+/**
+ * Global unified store and cross-system subscribers (Phase 2.3)
+ * These are initialized during bot startup and made available to all systems.
+ */
+declare global {
+    var unifiedCharacterStore: UnifiedCharacterStore | undefined;
+    var crossSystemSubscribers: CrossSystemSubscribers | undefined;
+}
+
+// Initialize globals
 
 /**
  * Helper function to parse boolean environment variables
@@ -282,18 +295,59 @@ async function startConfiguredGame({
                 );
                 process.exit(1);
             }
+
+            // Phase 2.3: Initialize unified store for cross-system coordination
+            const unifiedStore = new UnifiedCharacterStore(db);
+            global.unifiedCharacterStore = unifiedStore;
+            console.log("✅ UnifiedCharacterStore initialized");
+
             main.accountUpdate({ Nickname: "Dare Bot" });
+            const casinoStore = new CasinoStore(db);
+            const dareStore = new DareStore(db);
+
+            // Phase 2.3: Create adapters (optional - for future gradual migration)
+            // const casinoAdapter = new CasinoStoreAdapter(unifiedStore);
+            // const dareAdapter = new DareStoreAdapter(unifiedStore);
+
+            // Phase 2.3: Initialize cross-system subscribers (but don't activate yet)
+            // They will be activated in veratown case when all systems are ready
+            const subscribers = new CrossSystemSubscribers(unifiedStore);
+            global.crossSystemSubscribers = subscribers;
+            console.log(
+                "✅ CrossSystemSubscribers initialized (systems pending)",
+            );
+
             new Dare(
                 main,
-                new DareStore(db),
+                dareStore,
                 undefined,
-                new CasinoStore(db),
+                casinoStore,
                 config.dare,
             ).registerTriggers();
             main.setBotDescription(Dare.description);
             return;
         case "veratown": {
             console.log("Starting game: Veratown");
+
+            // Phase 2.3: Initialize unified store if not already done (dare game case)
+            if (!global.unifiedCharacterStore && db) {
+                const unifiedStore = new UnifiedCharacterStore(db);
+                global.unifiedCharacterStore = unifiedStore;
+                console.log("✅ UnifiedCharacterStore initialized");
+            }
+
+            // Phase 2.3: Initialize cross-system subscribers if not already done
+            if (
+                !global.crossSystemSubscribers &&
+                global.unifiedCharacterStore
+            ) {
+                const subscribers = new CrossSystemSubscribers(
+                    global.unifiedCharacterStore,
+                );
+                global.crossSystemSubscribers = subscribers;
+                console.log("✅ CrossSystemSubscribers initialized");
+            }
+
             const game = new Veratown(
                 connections,
                 db,
@@ -301,6 +355,13 @@ async function startConfiguredGame({
                 config.casino,
             );
             await game.init();
+
+            // Phase 2.3: Activate event subscriptions after systems are ready
+            if (global.crossSystemSubscribers) {
+                await global.crossSystemSubscribers.initialize();
+                console.log("✅ Cross-system event subscriptions activated");
+            }
+
             main.setBotDescription(Veratown.description);
             return;
         }
