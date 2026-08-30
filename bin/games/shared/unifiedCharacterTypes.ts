@@ -227,6 +227,10 @@ export interface CasinoView {
     lossStreak: number;
     cheatStrikes: number;
     lastDailyClaimAt?: number;
+    // Phase 3: Chip locking
+    lockedChips?: number;
+    chipLockReason?: string;
+    chipLockUntil?: number;
 }
 
 // ===== DARE VIEW (What Dare system sees)
@@ -237,6 +241,8 @@ export interface DareView {
     activeBondage: DareBondageItem[];
     dressingBlockedUntil?: number;
     totalGamesPlayed: number;
+    // Phase 3: Game suspension
+    suspendedGames?: number[];
 }
 
 // ===== VERATOWN VIEW (What Veratown system sees)

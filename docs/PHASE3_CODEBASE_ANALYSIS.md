@@ -95,6 +95,7 @@ export interface GameParticipant {
     - Both apply BC items + lock with `TimerPasswordPadlock`
 
 3. **Unified Store Recording:**
+
     ```typescript
     // UnifiedCharacterStore.ts:321-370
     public async applyBondage(

@@ -195,6 +195,10 @@ export class UnifiedCharacterStore {
             lossStreak: profile.casino.lossStreak,
             cheatStrikes: profile.casino.cheatStrikes,
             lastDailyClaimAt: profile.casino.lastDailyClaimAt,
+            // Phase 3: Chip locking
+            lockedChips: profile.casino.lockedChips,
+            chipLockReason: profile.casino.chipLockReason,
+            chipLockUntil: profile.casino.chipLockUntil,
         };
     }
 
@@ -325,7 +329,8 @@ export class UnifiedCharacterStore {
 
         // Move chips from available to locked
         const newAvailableChips = profile.casino.chips - actualLockAmount;
-        const newLockedChips = profile.casino.lockedChips + actualLockAmount;
+        const newLockedChips =
+            (profile.casino.lockedChips ?? 0) + actualLockAmount;
 
         await this.profiles.updateOne(
             { _id: memberNumber },
@@ -383,11 +388,14 @@ export class UnifiedCharacterStore {
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
 
+        // Handle undefined lockedChips
+        const currentLockedChips = profile.casino.lockedChips ?? 0;
+
         // If amountToUnlock is 0, unlock all locked chips
         const actualUnlockAmount =
             amountToUnlock === 0
-                ? profile.casino.lockedChips
-                : Math.min(amountToUnlock, profile.casino.lockedChips);
+                ? currentLockedChips
+                : Math.min(amountToUnlock, currentLockedChips);
 
         if (actualUnlockAmount <= 0) {
             return; // Nothing to unlock
@@ -395,7 +403,7 @@ export class UnifiedCharacterStore {
 
         // Move chips from locked back to available
         const newAvailableChips = profile.casino.chips + actualUnlockAmount;
-        const newLockedChips = profile.casino.lockedChips - actualUnlockAmount;
+        const newLockedChips = currentLockedChips - actualUnlockAmount;
 
         await this.profiles.updateOne(
             { _id: memberNumber },
@@ -451,6 +459,8 @@ export class UnifiedCharacterStore {
             activeBondage: profile.dare.activeBondage,
             dressingBlockedUntil: profile.dare.dressingBlockedUntil,
             totalGamesPlayed: profile.dare.totalGamesPlayed,
+            // Phase 3: Game suspension
+            suspendedGames: profile.dare.suspendedGames,
         };
     }
 
@@ -724,19 +734,17 @@ export class UnifiedCharacterStore {
         // Create suspension records for all active games
         const suspensionRecords: SuspendedGame[] = [];
         for (const gameId of profile.dare.gameIds) {
-            // Find participation record for this game
+            // Find participation record for this game (if it exists)
             const participation = profile.dare.participationHistory.find(
                 (p) => p.gameId === gameId,
             );
 
-            if (participation) {
-                suspensionRecords.push({
-                    gameId,
-                    suspendedAt: now,
-                    suspendReason: "cage_entry",
-                    playerSnapshot: participation,
-                });
-            }
+            suspensionRecords.push({
+                gameId,
+                suspendedAt: now,
+                suspendReason: "cage_entry",
+                playerSnapshot: participation || { gameId, joinedAt: now }, // Use minimal snapshot if no history
+            });
         }
 
         if (suspensionRecords.length === 0) {
