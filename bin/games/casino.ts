@@ -113,7 +113,20 @@ export class Casino implements GamePlugin {
         commandParser?: CommandParser,
     ) {
         this.store = new CasinoStore(db);
-        this.commandParser = commandParser;
+
+        // If no CommandParser provided, create one for this casino instance
+        // Bound to the connector passed in (typically conn3 for casino)
+        if (!commandParser) {
+            const regions = config?.region ? [config.region] : [];
+            this.commandParser = new CommandParser(
+                this.conn,
+                undefined,
+                regions,
+            );
+        } else {
+            this.commandParser = commandParser;
+        }
+
         this.game =
             config?.game === "blackjack"
                 ? new BlackjackGame(conn, this)
