@@ -36,6 +36,8 @@ import { CasinoStoreAdapter } from "./games/shared/casinoStoreAdapter";
 import { DareStoreAdapter } from "./games/shared/dareStoreAdapter";
 import { VeratownStoreAdapter } from "./games/shared/veratownStoreAdapter";
 import { CasinoStoreMigrationWrapper } from "./games/shared/casinoMigrationWrapper";
+import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
+import { CasinoEngine } from "./games/casino/casinoEngine";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -54,6 +56,8 @@ declare global {
     var dareStoreAdapter: DareStoreAdapter | undefined;
     var veratownStoreAdapter: VeratownStoreAdapter | undefined;
     var casinoStoreMigrationWrapper: CasinoStoreMigrationWrapper | undefined;
+    var casinoVenueSystem: CasinoVenueSystem | undefined; // EPIC 2
+    var casinoEngine: CasinoEngine | undefined; // EPIC 2
 }
 
 // Initialize globals
@@ -339,6 +343,24 @@ async function startConfiguredGame({
             global.casinoStoreMigrationWrapper = casinoMigrationWrapper;
             console.log(
                 "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b)",
+            );
+
+            // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
+            const venueSystem = new CasinoVenueSystem();
+            global.casinoVenueSystem = venueSystem;
+            console.log(
+                "✅ CasinoVenueSystem initialized (location bonuses, EPIC 2)",
+            );
+
+            // EPIC 2: Initialize CasinoEngine for core game logic
+            const casinoEngine = new CasinoEngine(
+                casinoAdapter,
+                unifiedStore,
+                venueSystem,
+            );
+            global.casinoEngine = casinoEngine;
+            console.log(
+                "✅ CasinoEngine initialized (game logic extraction, EPIC 2)",
             );
 
             // Phase 2.3: Initialize cross-system subscribers (but don't activate yet)

@@ -20,12 +20,18 @@ import { CasinoStoreAdapter } from "./casinoStoreAdapter";
 import { AdapterValidator } from "./adapterValidation";
 
 export interface MigrationMetrics {
+    // Read metrics
     totalReads: number;
     adapterWins: number;
     adapterMisses: number;
-    discrepancies: number;
+    readDiscrepancies: number;
     adapterLatencyMs: number;
     originalLatencyMs: number;
+    // Write metrics (Phase 2.4c)
+    totalWrites: number;
+    writeWins: number;
+    writeMisses: number;
+    writeDiscrepancies: number;
 }
 
 /**
@@ -74,9 +80,13 @@ export class CasinoStoreMigrationWrapper {
             totalReads: 0,
             adapterWins: 0,
             adapterMisses: 0,
-            discrepancies: 0,
+            readDiscrepancies: 0,
             adapterLatencyMs: 0,
             originalLatencyMs: 0,
+            totalWrites: 0,
+            writeWins: 0,
+            writeMisses: 0,
+            writeDiscrepancies: 0,
         };
     }
 
@@ -111,7 +121,7 @@ export class CasinoStoreMigrationWrapper {
                 if (
                     this.hasPlayerDiscrepancies(adapterPlayer, originalPlayer)
                 ) {
-                    this.metrics.discrepancies++;
+                    this.metrics.readDiscrepancies++;
                     console.warn(
                         `[Migration] Player ${memberNumber} discrepancy detected`,
                         {
@@ -176,7 +186,7 @@ export class CasinoStoreMigrationWrapper {
                         originalPlayers,
                     )
                 ) {
-                    this.metrics.discrepancies++;
+                    this.metrics.readDiscrepancies++;
                     console.warn(
                         `[Migration] Leaderboard discrepancy detected in top ${limit || 50} players`,
                         {
@@ -209,35 +219,114 @@ export class CasinoStoreMigrationWrapper {
     }
 
     /**
-     * Pass-through to original store (not migrated yet)
-     * Writes stay on original store during Phase 2.4b
+     * Wrapper for savePlayer with validation (Phase 2.4c)
+     * Writes to both stores and validates results
      */
     public async savePlayer(player: Player): Promise<void> {
-        return this.originalStore.savePlayer(player);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            // Adapter disabled, use original store only
+            return this.originalStore.savePlayer(player);
+        }
+
+        try {
+            // Write to both stores in parallel
+            await Promise.all([
+                this.adapter.savePlayer(player),
+                this.originalStore.savePlayer(player),
+            ]);
+
+            if (this.enableValidation) {
+                // Validate by reading back
+                const savedAdapter = await this.adapter.getPlayer(
+                    player.memberNumber,
+                );
+                const savedOriginal = await this.originalStore.getPlayer(
+                    player.memberNumber,
+                );
+
+                if (!this.hasPlayerDiscrepancies(savedAdapter, savedOriginal)) {
+                    this.metrics.writeWins++;
+                } else {
+                    this.metrics.writeDiscrepancies++;
+                    console.warn(
+                        `[Migration] Write discrepancy detected for player ${player.memberNumber}`,
+                    );
+                }
+            } else {
+                this.metrics.writeWins++;
+            }
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] Write failed for player ${player.memberNumber}`,
+                error,
+            );
+            throw error; // Re-throw to prevent silent failures
+        }
     }
 
     /**
-     * Pass-through to original store
+     * Wrapper for setPlayerName with validation (Phase 2.4c)
      */
     public async setPlayerName(
         memberNumber: number,
         name: string,
     ): Promise<void> {
-        return this.originalStore.setPlayerName(memberNumber, name);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            return this.originalStore.setPlayerName(memberNumber, name);
+        }
+
+        try {
+            await Promise.all([
+                this.adapter.setPlayerName(memberNumber, name),
+                this.originalStore.setPlayerName(memberNumber, name),
+            ]);
+            this.metrics.writeWins++;
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] setPlayerName failed for player ${memberNumber}`,
+                error,
+            );
+            throw error;
+        }
     }
 
     /**
-     * Pass-through to original store
+     * Wrapper for addCredits with validation (Phase 2.4c)
      */
     public async addCredits(
         memberNumber: number,
         amount: number,
     ): Promise<void> {
-        return this.originalStore.addCredits(memberNumber, amount);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            return this.originalStore.addCredits(memberNumber, amount);
+        }
+
+        try {
+            await Promise.all([
+                this.adapter.addCredits(memberNumber, amount),
+                this.originalStore.addCredits(memberNumber, amount),
+            ]);
+            this.metrics.writeWins++;
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] addCredits failed for player ${memberNumber}`,
+                error,
+            );
+            throw error;
+        }
     }
 
     /**
-     * Pass-through to original store
+     * Wrapper for addPurchase with validation (Phase 2.4c)
      */
     public async addPurchase(purchase: {
         memberNumber: number;
@@ -246,16 +335,58 @@ export class CasinoStoreMigrationWrapper {
         service: string;
         redeemed: boolean;
     }): Promise<void> {
-        return this.originalStore.addPurchase(purchase);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            return this.originalStore.addPurchase(purchase);
+        }
+
+        try {
+            await Promise.all([
+                this.adapter.addPurchase(purchase),
+                this.originalStore.addPurchase(purchase),
+            ]);
+            this.metrics.writeWins++;
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] addPurchase failed for player ${purchase.memberNumber}`,
+                error,
+            );
+            throw error;
+        }
     }
 
     /**
-     * Pass-through to original store
+     * Wrapper for claimDailyFreeChips with validation (Phase 2.4c)
      */
     public async claimDailyFreeChips(
         memberNumber: number,
     ): Promise<{ granted: boolean; amount: number; nextClaimTime: number }> {
-        return this.originalStore.claimDailyFreeChips(memberNumber);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            return this.originalStore.claimDailyFreeChips(memberNumber);
+        }
+
+        try {
+            // Get result from adapter first
+            const adapterResult =
+                await this.adapter.claimDailyFreeChips(memberNumber);
+
+            // Also update original store
+            await this.originalStore.claimDailyFreeChips(memberNumber);
+
+            this.metrics.writeWins++;
+            return adapterResult;
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] claimDailyFreeChips failed for player ${memberNumber}`,
+                error,
+            );
+            throw error;
+        }
     }
 
     /**
@@ -266,7 +397,7 @@ export class CasinoStoreMigrationWrapper {
     }
 
     /**
-     * Pass-through to original store
+     * Wrapper for transferCredits with validation (Phase 2.4c)
      */
     public async transferCredits(
         from: number,
@@ -277,11 +408,37 @@ export class CasinoStoreMigrationWrapper {
         newBalanceFrom: number;
         newBalanceTo: number;
     }> {
-        return this.originalStore.transferCredits(from, to, amount);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            return this.originalStore.transferCredits(from, to, amount);
+        }
+
+        try {
+            // Get result from adapter first
+            const adapterResult = await this.adapter.transferCredits(
+                from,
+                to,
+                amount,
+            );
+
+            // Also update original store
+            await this.originalStore.transferCredits(from, to, amount);
+
+            this.metrics.writeWins++;
+            return adapterResult;
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] transferCredits failed from ${from} to ${to}`,
+                error,
+            );
+            throw error;
+        }
     }
 
     /**
-     * Pass-through to original store
+     * Wrapper for saveOutfit with validation (Phase 2.4c)
      */
     public async saveOutfit(outfit: {
         memberNumber: number;
@@ -289,7 +446,26 @@ export class CasinoStoreMigrationWrapper {
         addedByName: string;
         items: any[];
     }): Promise<void> {
-        return this.originalStore.saveOutfit(outfit);
+        this.metrics.totalWrites++;
+
+        if (!this.useAdapter) {
+            return this.originalStore.saveOutfit(outfit);
+        }
+
+        try {
+            await Promise.all([
+                this.adapter.saveOutfit(outfit),
+                this.originalStore.saveOutfit(outfit),
+            ]);
+            this.metrics.writeWins++;
+        } catch (error) {
+            this.metrics.writeMisses++;
+            console.error(
+                `[Migration] saveOutfit failed for player ${outfit.memberNumber}`,
+                error,
+            );
+            throw error;
+        }
     }
 
     /**
@@ -360,21 +536,27 @@ export class CasinoStoreMigrationWrapper {
                   )
                 : 0;
 
-        console.log("\n=== CASINO MIGRATION PROGRESS (Phase 2.4b) ===");
-        console.log(`Total reads: ${this.metrics.totalReads}`);
-        console.log(`Adapter wins: ${this.metrics.adapterWins}`);
-        console.log(`Adapter misses: ${this.metrics.adapterMisses}`);
-        console.log(`Discrepancies found: ${this.metrics.discrepancies}`);
+        console.log("\n=== CASINO MIGRATION PROGRESS (Phase 2.4c) ===");
+        console.log("READ OPERATIONS:");
+        console.log(`  Total reads: ${this.metrics.totalReads}`);
+        console.log(`  Adapter wins: ${this.metrics.adapterWins}`);
+        console.log(`  Adapter misses: ${this.metrics.adapterMisses}`);
         console.log(
-            `Average adapter latency: ${avgAdapterMs}ms (expected 0-5ms faster)`,
+            `  Average adapter latency: ${avgAdapterMs}ms (expected 0-5ms faster)`,
         );
         console.log(
-            `Average original latency: ${avgOriginalMs}ms (baseline for comparison)`,
+            `  Average original latency: ${avgOriginalMs}ms (baseline for comparison)`,
         );
+        console.log("WRITE OPERATIONS:");
+        console.log(`  Total writes: ${this.metrics.totalWrites}`);
+        console.log(`  Write wins: ${this.metrics.writeWins}`);
+        console.log(`  Write misses: ${this.metrics.writeMisses}`);
 
-        if (this.metrics.discrepancies > 0) {
+        const totalDiscrepancies =
+            this.metrics.readDiscrepancies + this.metrics.writeDiscrepancies;
+        if (totalDiscrepancies > 0) {
             console.warn(
-                `⚠️  WARNING: Found ${this.metrics.discrepancies} data discrepancies. Review logs.`,
+                `⚠️  WARNING: Found ${totalDiscrepancies} total discrepancies (reads: ${this.metrics.readDiscrepancies}, writes: ${this.metrics.writeDiscrepancies}). Review logs.`,
             );
         } else {
             console.log("✅ No discrepancies found. Migration on track.");
