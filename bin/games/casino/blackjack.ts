@@ -659,12 +659,12 @@ export class BlackjackGame implements Game {
                 totalWinnings += winnings;
             }
             if (totalWinnings > 0) {
-                const winnerMemberData = await this.casino.store.getPlayer(
-                    player.memberNumber,
-                );
+                const winnerMemberData = await this.casino
+                    .getStore()
+                    .getPlayer(player.memberNumber);
                 winnerMemberData.credits += totalWinnings;
                 winnerMemberData.score += totalWinnings;
-                await this.casino.store.savePlayer(winnerMemberData);
+                await this.casino.getStore().savePlayer(winnerMemberData);
                 message += `${player.memberName} wins ${totalWinnings} chips! \n`;
             } else if (player.bets[0].stakeForfeit && totalWinnings !== -100) {
                 this.casino.applyForfeit(player.bets[0]);

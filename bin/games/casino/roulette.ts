@@ -672,12 +672,12 @@ export class RouletteGame implements Game {
         for (const bet of this.getBets()) {
             let winnings = this.getWinnings(winningNumber, bet);
             if (winnings > 0) {
-                const winnerMemberData = await this.casino.store.getPlayer(
-                    bet.memberNumber,
-                );
+                const winnerMemberData = await this.casino
+                    .getStore()
+                    .getPlayer(bet.memberNumber);
                 winnerMemberData.credits += winnings;
                 winnerMemberData.score += winnings;
-                await this.casino.store.savePlayer(winnerMemberData);
+                await this.casino.getStore().savePlayer(winnerMemberData);
 
                 message += `\n${bet.memberName} wins ${winnings} chips!`;
             } else if (bet.stakeForfeit) {

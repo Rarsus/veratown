@@ -96,6 +96,14 @@ export class Casino implements VeratownFeatureSystem {
     private gameRegion?: MapRegion;
     private forfeitService: ForfeitService;
 
+    /**
+     * Get the active store (migration wrapper if available, original store otherwise)
+     * Phase 2.4d: Wrapper provides coordinated read/write operations
+     */
+    public getStore() {
+        return global.casinoStoreMigrationWrapper || this.store;
+    }
+
     public constructor(
         private conn: API_Connector,
         db: Db,
@@ -110,6 +118,12 @@ export class Casino implements VeratownFeatureSystem {
                 ? new BlackjackGame(conn, this)
                 : new RouletteGame(conn, this);
         this.forfeitService = new ForfeitService();
+
+        // Phase 2.4d: Use migration wrapper if available (gradual adoption)
+        // Fall back to original store if wrapper not yet initialized
+        if (global.casinoStoreMigrationWrapper) {
+            this.store = global.casinoStoreMigrationWrapper as any;
+        }
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
@@ -223,13 +237,13 @@ export class Casino implements VeratownFeatureSystem {
     private onCharacterEntered = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        await this.store.setPlayerName(
+        await this.getStore().setPlayerName(
             character.MemberNumber,
             character.toString(),
         );
 
         const cooldownMs = 20 * 60 * 60 * 1000;
-        const granted = await this.store.claimDailyFreeChips(
+        const granted = await this.getStore().claimDailyFreeChips(
             character.MemberNumber,
             FREE_CHIPS,
             cooldownMs,
@@ -241,7 +255,9 @@ export class Casino implements VeratownFeatureSystem {
                 `Welcome to the Casino, ${character}! Here are your ${FREE_CHIPS} free chips for today. See my bio for how to play. Good luck!`,
             );
         } else {
-            const player = await this.store.getPlayer(character.MemberNumber);
+            const player = await this.getStore().getPlayer(
+                character.MemberNumber,
+            );
             const nextFreeCreditsAt = player.lastFreeCredits + cooldownMs;
             character.Tell(
                 "Whisper",
@@ -310,7 +326,7 @@ export class Casino implements VeratownFeatureSystem {
 
                 try {
                     const outfit = importBundle(code);
-                    this.store.saveOutfit({
+                    this.getStore().saveOutfit({
                         name,
                         addedBy: beep.MemberNumber,
                         addedByName: beep.MemberName,
@@ -428,10 +444,10 @@ ${forfeitsString()}
                 this.conn.reply(msg, "I can't find that person.");
                 return;
             }
-            const player = await this.store.getPlayer(target.MemberNumber);
+            const player = await this.getStore().getPlayer(target.MemberNumber);
             this.conn.reply(msg, `${target} has ${player.credits} chips.`);
         } else {
-            const player = await this.store.getPlayer(sender.MemberNumber);
+            const player = await this.getStore().getPlayer(sender.MemberNumber);
             this.conn.reply(
                 msg,
                 `${sender}, you have ${player.credits} chips.`,
@@ -440,8 +456,8 @@ ${forfeitsString()}
     };
 
     public async setBio(): Promise<void> {
-        const topPlayers = await this.store.getTopPlayers(50);
-        const unredeemed = await this.store.getUnredeemedPurchases();
+        const topPlayers = await this.getStore().getTopPlayers(50);
+        const unredeemed = await this.getStore().getUnredeemedPurchases();
 
         this.conn.setBotDescription(
             makeBio(
@@ -499,7 +515,7 @@ ${forfeitsString()}
             return;
         }
 
-        const player = await this.store.getPlayer(sender.MemberNumber);
+        const player = await this.getStore().getPlayer(sender.MemberNumber);
         if (player.credits < restraint.value * 4) {
             this.conn.reply(msg, "You don't have enough chips.");
             return;
@@ -527,7 +543,7 @@ ${forfeitsString()}
         }
 
         player.credits -= restraint.value * 4;
-        await this.store.savePlayer(player);
+        await this.getStore().savePlayer(player);
 
         sender.Appearance.RemoveItem(restraint.items(sender)[0].Group);
 
@@ -589,14 +605,14 @@ ${forfeitsString()}
             }
         }
 
-        const player = await this.store.getPlayer(sender.MemberNumber);
+        const player = await this.getStore().getPlayer(sender.MemberNumber);
         if (player.credits < service.value) {
             this.conn.reply(msg, "You don't have enough chips.");
             return;
         }
 
         player.credits -= service.value;
-        await this.store.savePlayer(player);
+        await this.getStore().savePlayer(player);
 
         if (serviceName === "player") {
             target.Appearance.RemoveItem("ItemDevices");
@@ -641,7 +657,7 @@ ${forfeitsString()}
                 `Please enjoy your cocktail, ${sender}.`,
             );
         } else {
-            await this.store.addPurchase({
+            await this.getStore().addPurchase({
                 memberNumber: sender.MemberNumber,
                 memberName: sender.toString(),
                 time: Date.now(),
@@ -666,7 +682,7 @@ ${forfeitsString()}
             return;
         }
 
-        const purchases = await this.store.getUnredeemedPurchases();
+        const purchases = await this.getStore().getUnredeemedPurchases();
         if (purchases.length === 0) {
             this.conn.reply(msg, "No vouchers outstanding");
             return;
@@ -714,7 +730,7 @@ ${forfeitsString()}
             return;
         }
 
-        const transferred = await this.store.transferCredits(
+        const transferred = await this.getStore().transferCredits(
             sender.MemberNumber,
             target.MemberNumber,
             amount,
@@ -760,7 +776,7 @@ ${forfeitsString()}
             return;
         }
 
-        await this.store.addCredits(target.MemberNumber, amount);
+        await this.getStore().addCredits(target.MemberNumber, amount);
 
         this.conn.reply(msg, `Granted ${amount} chips to ${target}.`);
     };
