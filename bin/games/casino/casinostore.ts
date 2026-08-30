@@ -137,10 +137,7 @@ export class CasinoStore {
         // filter is just the unique memberNumber field. Doing this
         // separately (rather than combining it with the conditional update
         // below) avoids a duplicate-key error: if the conditional filter
-        // below doesn't match an *existing* document (eg. because they're
-        // still on cooldown), upsert:true would otherwise try to insert a
-        // new document with the same memberNumber and collide with the
-        // unique index.
+        // Ensure document exists with proper defaults if missing
         await this.players.updateOne(
             { memberNumber },
             {
@@ -156,6 +153,16 @@ export class CasinoStore {
             { upsert: true },
         );
 
+        // Fix null credits from legacy data - set to 0 if currently null
+        // This must happen before increment to prevent MongoDB error
+        await this.players.updateOne(
+            { memberNumber, credits: null },
+            {
+                $set: { credits: 0 },
+            },
+        );
+
+        // Now safely increment credits, knowing it's properly initialized
         const cutoff = Date.now() - cooldownMs;
         const result = await this.players.updateOne(
             {
@@ -185,10 +192,35 @@ export class CasinoStore {
         amount: number,
     ): Promise<void> {
         await this.init();
+
+        // Ensure document exists with proper defaults if missing
+        await this.players.updateOne(
+            { memberNumber },
+            {
+                $setOnInsert: {
+                    memberNumber,
+                    credits: 0,
+                    score: 0,
+                    lastFreeCredits: 0,
+                    name: "",
+                    cheatStrikes: 0,
+                },
+            },
+            { upsert: true },
+        );
+
+        // Fix null credits from legacy data - set to 0 if currently null
+        await this.players.updateOne(
+            { memberNumber, credits: null },
+            {
+                $set: { credits: 0 },
+            },
+        );
+
+        // Now safely increment credits
         await this.players.updateOne(
             { memberNumber },
             { $inc: { credits: amount } },
-            { upsert: true },
         );
     }
 
@@ -210,6 +242,31 @@ export class CasinoStore {
     ): Promise<boolean> {
         await this.init();
 
+        // First ensure source player exists and has valid credits
+        await this.players.updateOne(
+            { memberNumber: fromMemberNumber },
+            {
+                $setOnInsert: {
+                    memberNumber: fromMemberNumber,
+                    credits: 0,
+                    score: 0,
+                    lastFreeCredits: 0,
+                    name: "",
+                    cheatStrikes: 0,
+                },
+            },
+            { upsert: true },
+        );
+
+        // Fix null credits from legacy data
+        await this.players.updateOne(
+            { memberNumber: fromMemberNumber, credits: null },
+            {
+                $set: { credits: 0 },
+            },
+        );
+
+        // Now attempt the debit
         const debited = await this.players.updateOne(
             { memberNumber: fromMemberNumber, credits: { $gte: amount } },
             { $inc: { credits: -amount } },
