@@ -1,4 +1,8 @@
-import { API_Character, BC_Server_ChatRoomMessage } from "bc-bot";
+import {
+    API_Character,
+    BC_Server_ChatRoomMessage,
+    CommandParser,
+} from "bc-bot";
 import { CasinoStore } from "./casinostore";
 import { RouletteBet } from "./roulette";
 
@@ -7,6 +11,13 @@ export interface Game {
     HELPCOMMANDMESSAGE: string;
     COMMANDSMESSAGE: string;
     EXAMPLES: string;
+
+    /**
+     * Register game-specific commands with the CommandParser.
+     * Called after game instantiation to separate command registration
+     * from constructor logic (follows plugin architecture principles).
+     */
+    registerCommands(commandParser: CommandParser): void;
 
     parseBetCommand(
         senderCharacter: API_Character,

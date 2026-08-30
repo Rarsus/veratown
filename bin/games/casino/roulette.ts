@@ -150,15 +150,14 @@ export class RouletteGame implements Game {
 
     private casino: Casino;
 
-    public constructor(
-        private conn: API_Connector,
-        casino: Casino,
-    ) {
-        this.casino = casino;
-
-        this.casino.commandParser.register("cancel", this.onCommandCancel);
-        this.casino.commandParser.register("bet", this.onCommandBet);
-        this.casino.commandParser.register("sign", (sender, msg, args) => {
+    /**
+     * Register Roulette-specific commands with the CommandParser.
+     * Called by Casino after instantiation (follows plugin architecture principles).
+     */
+    public registerCommands(commandParser: CommandParser): void {
+        commandParser.register("cancel", this.onCommandCancel);
+        commandParser.register("bet", this.onCommandBet);
+        commandParser.register("sign", (sender, msg, args) => {
             const sign = this.casino.getSign();
 
             sign.setProperty("OverridePriority", { Text: 63 });
@@ -166,9 +165,16 @@ export class RouletteGame implements Game {
             sign.setProperty("Text2", " ");
             this.casino.setTextColor("#ffffff");
         });
-        this.casino.commandParser.register("wheel", (sender, msg, args) => {
+        commandParser.register("wheel", (sender, msg, args) => {
             this.getWheel();
         });
+    }
+
+    public constructor(
+        private conn: API_Connector,
+        casino: Casino,
+    ) {
+        this.casino = casino;
 
         // hack because otherwise an account update goes through after this item update and clears the text out
         setTimeout(() => {

@@ -131,6 +131,10 @@ export class Casino implements GamePlugin {
             config?.game === "blackjack"
                 ? new BlackjackGame(conn, this)
                 : new RouletteGame(conn, this);
+
+        // Register game-specific commands (separate from constructor to follow plugin architecture)
+        this.game.registerCommands(this.commandParser!);
+
         this.forfeitService = new ForfeitService();
 
         // Phase 2.4d: Use migration wrapper if available (gradual adoption)

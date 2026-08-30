@@ -109,18 +109,18 @@ export class BlackjackGame implements Game {
     public HELPCOMMANDMESSAGE = BLACKJACKHELPCOMMAND;
     public COMMANDSMESSAGE = BLACKJACKCOMMANDS;
 
-    constructor(
-        private conn: API_Connector,
-        casino: Casino,
-    ) {
-        this.casino = casino;
-        this.casino.commandParser.register("cancel", this.onCommandCancel);
-        this.casino.commandParser.register("bet", this.onCommandBet);
-        this.casino.commandParser.register("hit", this.onCommandHit);
-        this.casino.commandParser.register("stand", this.onCommandStand);
-        this.casino.commandParser.register("double", this.onCommandDouble);
-        this.casino.commandParser.register("split", this.onCommandSplit);
-        this.casino.commandParser.register("sign", (sender, msg, args) => {
+    /**
+     * Register Blackjack-specific commands with the CommandParser.
+     * Called by Casino after instantiation (follows plugin architecture principles).
+     */
+    public registerCommands(commandParser: CommandParser): void {
+        commandParser.register("cancel", this.onCommandCancel);
+        commandParser.register("bet", this.onCommandBet);
+        commandParser.register("hit", this.onCommandHit);
+        commandParser.register("stand", this.onCommandStand);
+        commandParser.register("double", this.onCommandDouble);
+        commandParser.register("split", this.onCommandSplit);
+        commandParser.register("sign", (sender, msg, args) => {
             const sign = this.casino.getSign();
 
             sign.setProperty("OverridePriority", { Text: 63 });
@@ -128,6 +128,13 @@ export class BlackjackGame implements Game {
             sign.setProperty("Text2", " ");
             this.casino.setTextColor("#ffffff");
         });
+    }
+
+    constructor(
+        private conn: API_Connector,
+        casino: Casino,
+    ) {
+        this.casino = casino;
 
         setTimeout(() => {
             this.getPole();
