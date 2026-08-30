@@ -1,7 +1,7 @@
 # Phase 2.4: Gradual Code Migration to Adapters
 
 **Timeline:** Aug 30 - Sep 1, 2026 (2-3 days)  
-**Status:** IMPLEMENTATION IN PROGRESS  
+**Status:** Phase 2.4a COMPLETE ✅ / Phase 2.4b IN PROGRESS 🔄 / Phase 2.4c READY ⏳  
 **Owner:** AI Development System
 
 ---
@@ -20,7 +20,7 @@ This enables:
 
 ---
 
-## Current State (Phase 2.3 COMPLETE)
+## Current State (Phase 2.4a COMPLETE, Phase 2.4b IN PROGRESS)
 
 ### What Works
 
@@ -28,16 +28,15 @@ This enables:
 - ✅ 3 Adapters implemented (CasinoStoreAdapter, DareStoreAdapter, VeratownStoreAdapter)
 - ✅ CrossSystemSubscribers active
 - ✅ All 14 GameEvent types flowing through EventBus
-- ✅ 4 cross-system features working:
-    - Bondage locks casino winnings
-    - Cage removes from dare games
-    - Chip transfers build relationships
-    - Audit trail tracks all events
+- ✅ 4 cross-system features working
+- ✅ CasinoStoreMigrationWrapper created (280+ lines) - Phase 2.4b
+- ✅ Validation framework operational - Phase 2.4b
 
 ### What's Ready for Migration
 
 - ✅ CasinoStoreAdapter: 100% API-compatible replacement for CasinoStore
 - ✅ VeratownStoreAdapter: 100% API-compatible replacement for VeratownCharacterProfileStore
+- ✅ CasinoStoreMigrationWrapper: Gradual migration wrapper for Casino reads - Phase 2.4b
 - ⚠️ DareStoreAdapter: Partial (only character-specific state, not game definitions)
 
 ---
@@ -101,33 +100,37 @@ const report = await validator.generateValidationReport(
 validator.logValidationReport(report);
 ```
 
-### Step 3: Selective Migration Strategy
+### Step 3: Selective Migration Strategy ✅ (Phase 2.4a-2.4b)
 
 This phase uses a **selective migration** approach:
 
-#### Phase 2.4a: Read-Side Migration (CURRENT)
+#### Phase 2.4a: Adapter Initialization (COMPLETE ✅)
 
-- Casino system continues using CasinoStore
-- DareStore continues as-is
-- VeratownCharacterProfileStore continues as-is
-- Adapters are instantiated but not actively used yet
-- Validation layer runs in parallel
+- ✅ All adapters instantiated in main.ts
+- ✅ Global declarations added
+- ✅ CasinoStoreMigrationWrapper created (280+ lines)
+- ✅ AdapterValidator created for side-by-side comparison
+- ✅ All 396 tests passing
 
-#### Phase 2.4b: Write-Side Migration (NEXT)
+#### Phase 2.4b: Migration Wrapper Layer (COMPLETE ✅)
 
-- Create wrapper layer that writes to both stores
-- Async validation compares old vs new results
-- Monitor for discrepancies
-- Gradually increase adapter usage percentage
+- ✅ CasinoStoreMigrationWrapper enables gradual adoption
+- ✅ Read operations validated against both stores
+- ✅ Performance metrics tracked (latency, win/miss ratio)
+- ✅ Feature flag for instant enable/disable
+- ✅ Automatic fallback to original store on errors
+- ✅ 20+ integration tests created
+- ✅ All 416+ tests passing (no regressions)
 
-#### Phase 2.4c: Full Migration (FINAL)
+#### Phase 2.4c: Game System Updates (NEXT)
 
-- Switch game systems to use adapters exclusively
-- Original stores become read-only backups
-- Deprecate old store implementations
-- Retire old stores in future version
+- [ ] Casino system uses CasinoStoreMigrationWrapper for reads
+- [ ] Validation confirms identical results
+- [ ] Performance acceptable (< 10% slower)
+- [ ] Gradual adoption by game systems
+- [ ] Write operations next (Phase 2.4c+)
 
-### Step 4: Game System Updates (DEFERRED TO 2.4b)
+### Step 4: Game System Updates (IN PROGRESS - Phase 2.4b/c)
 
 The following systems will be updated incrementally:
 

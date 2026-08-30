@@ -35,6 +35,7 @@ import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 import { CasinoStoreAdapter } from "./games/shared/casinoStoreAdapter";
 import { DareStoreAdapter } from "./games/shared/dareStoreAdapter";
 import { VeratownStoreAdapter } from "./games/shared/veratownStoreAdapter";
+import { CasinoStoreMigrationWrapper } from "./games/shared/casinoMigrationWrapper";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -52,6 +53,7 @@ declare global {
     var casinoStoreAdapter: CasinoStoreAdapter | undefined;
     var dareStoreAdapter: DareStoreAdapter | undefined;
     var veratownStoreAdapter: VeratownStoreAdapter | undefined;
+    var casinoStoreMigrationWrapper: CasinoStoreMigrationWrapper | undefined;
 }
 
 // Initialize globals
@@ -327,6 +329,17 @@ async function startConfiguredGame({
             const casinoStore = new CasinoStore(db);
             const dareStore = new DareStore(db);
             console.log("✅ Original stores initialized (for validation)");
+
+            // Phase 2.4b: Create migration wrapper for gradual Casino migration
+            const casinoMigrationWrapper = new CasinoStoreMigrationWrapper(
+                casinoStore,
+                casinoAdapter,
+                true, // enableValidation: compare old vs new on each read
+            );
+            global.casinoStoreMigrationWrapper = casinoMigrationWrapper;
+            console.log(
+                "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b)",
+            );
 
             // Phase 2.3: Initialize cross-system subscribers (but don't activate yet)
             // They will be activated in veratown case when all systems are ready
