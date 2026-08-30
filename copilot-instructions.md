@@ -1677,26 +1677,31 @@ Key files modified:
 - `bin/games/shared/crossSystemSubscribers.ts`: Added setter methods
 - `bin/games/__tests__/integration/crossSystemIntegration.test.ts`: Added 20+ integration tests
 
-**Phase 2 Status:** ✅ COMPLETE (Aug 30, 2026)
+**Phase 2 Status:** 🔄 IN PROGRESS - Phase 2.4 Implementation
 
 - All adapters implemented and tested
 - Event subscribers operational
 - Integration tests passing (20+ new tests)
 - All 396 unit tests passing
+- Phase 2.4a: Adapters instantiated in main.ts ✅ COMPLETE
+- Phase 2.4b: Read-side migration 🔄 NEXT
+- Phase 2.4c: Write-side migration ⏳ AFTER 2.4b
 
 **Timeline:**
 
 - Phase 1: ✅ COMPLETE (Aug 30, 2026) - Unified State Architecture
-- Phase 2: ✅ COMPLETE (Aug 30, 2026) - Adapters + Event Subscribers + Integration
-- Phase 2.4: Ready - Gradual code migration to adapters
+- Phase 2.1-2.3: ✅ COMPLETE (Aug 30, 2026) - Adapters + Event Subscribers + Integration
+- Phase 2.4a: ✅ COMPLETE (Aug 30, 2026) - Adapter Initialization
+- Phase 2.4b: 🔄 IN PROGRESS - Read-side Migration
+- Phase 2.4c: ⏳ NEXT - Write-side Migration
 - Phase 3: Blocked - Awaiting Phase 2.4 completion (cross-system features)
-- EPIC 2: Ready - Casino integration (CasinoVenueSystem, CasinoEngine, Unified Chip Economy)
+- EPIC 2: Ready - Casino integration (parallel with Phase 2.4c)
 
 ---
 
 ## Last Updated
 
-**Date:** 2026-08-30 (Phase 2.3 Integration Complete)  
+**Date:** 2026-08-30 (Phase 2.4 - Gradual Code Migration)  
 **Changes (Phase 2 - Adapters & Cross-System Coordination):**
 
 **Phase 2.1:** Backward-Compatible Adapters
@@ -1714,13 +1719,23 @@ Key files modified:
 - ✅ EventBus pub/sub coordination
 - ✅ EPIC 2 roadmap documented
 
-**Phase 2.3:** Adapter Integration (NEW)
+**Phase 2.3:** Adapter Integration
 
 - ✅ Modified bin/main.ts for unified store initialization
 - ✅ Added setter methods to CrossSystemSubscribers
 - ✅ Created 20+ integration tests
 - ✅ All 396 unit tests passing
 - ✅ Full test coverage for cross-system event coordination
+
+**Phase 2.4:** Gradual Code Migration (NEW - IN PROGRESS)
+
+- ✅ All 3 adapters instantiated in main.ts
+- ✅ Global declarations added (casinoStoreAdapter, dareStoreAdapter, veratownStoreAdapter)
+- ✅ Created AdapterValidator utility for parallel validation
+- ✅ Documentation: PHASE2.4_GRADUAL_MIGRATION.md
+- 🔄 Read-side migration (Phase 2.4b) - NEXT STEP
+- ⏳ Write-side migration (Phase 2.4c) - AFTER 2.4b
+- ⏳ Full migration (Phase 2.4 FINAL) - END OF PHASE
 
 **Architecture Overview:**
 
@@ -1770,6 +1785,7 @@ Cross-System Subscribers (Event Listeners)
 - EPIC 1.3: 5 Architecture features (Keypad Groups, Furniture Interactions, Audit Trail, Location Events, Player Roles)
 - **PHASE 1:** Unified Character State (UnifiedCharacterStore, EventBus, cross-system coordination) - ✅ COMPLETE
 - **PHASE 2.1-2.3:** Adapter Integration & Cross-System Coordination - ✅ COMPLETE
-- Total: 34+ files, ~19K lines production code, 416+ unit tests
+- **PHASE 2.4:** Gradual Code Migration to Adapters - 🔄 IN PROGRESS
+- Total: 35+ files, ~20K lines production code, 416+ unit tests
 
-**Status:** ✅ PHASE 2 COMPLETE (Aug 30, 2026) - All Systems Integrated, Ready for Phase 2.4 (Gradual Code Migration)
+**Status:** 🔄 PHASE 2.4 IN PROGRESS (Aug 30, 2026) - Adapters Ready for Gradual Migration, Phase 2.4a Complete

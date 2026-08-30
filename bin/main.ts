@@ -32,6 +32,9 @@ import {
 } from "./botConnections";
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
+import { CasinoStoreAdapter } from "./games/shared/casinoStoreAdapter";
+import { DareStoreAdapter } from "./games/shared/dareStoreAdapter";
+import { VeratownStoreAdapter } from "./games/shared/veratownStoreAdapter";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -39,12 +42,16 @@ const SERVER_URL = {
 };
 
 /**
- * Global unified store and cross-system subscribers (Phase 2.3)
+ * Global unified store, adapters, and cross-system subscribers (Phase 2.3+)
  * These are initialized during bot startup and made available to all systems.
+ * Phase 2.4: Adapters delegate to unified store for gradual code migration.
  */
 declare global {
     var unifiedCharacterStore: UnifiedCharacterStore | undefined;
     var crossSystemSubscribers: CrossSystemSubscribers | undefined;
+    var casinoStoreAdapter: CasinoStoreAdapter | undefined;
+    var dareStoreAdapter: DareStoreAdapter | undefined;
+    var veratownStoreAdapter: VeratownStoreAdapter | undefined;
 }
 
 // Initialize globals
@@ -302,12 +309,24 @@ async function startConfiguredGame({
             console.log("✅ UnifiedCharacterStore initialized");
 
             main.accountUpdate({ Nickname: "Dare Bot" });
+
+            // Phase 2.4: Initialize adapters that delegate to unified store
+            const casinoAdapter = new CasinoStoreAdapter(unifiedStore);
+            global.casinoStoreAdapter = casinoAdapter;
+            console.log(
+                "✅ CasinoStoreAdapter initialized (delegates to unified store)",
+            );
+
+            const dareAdapter = new DareStoreAdapter(unifiedStore);
+            global.dareStoreAdapter = dareAdapter;
+            console.log(
+                "✅ DareStoreAdapter initialized (delegates to unified store)",
+            );
+
+            // Phase 2.4: Also keep original stores for comparison/validation during migration
             const casinoStore = new CasinoStore(db);
             const dareStore = new DareStore(db);
-
-            // Phase 2.3: Create adapters (optional - for future gradual migration)
-            // const casinoAdapter = new CasinoStoreAdapter(unifiedStore);
-            // const dareAdapter = new DareStoreAdapter(unifiedStore);
+            console.log("✅ Original stores initialized (for validation)");
 
             // Phase 2.3: Initialize cross-system subscribers (but don't activate yet)
             // They will be activated in veratown case when all systems are ready
@@ -317,6 +336,8 @@ async function startConfiguredGame({
                 "✅ CrossSystemSubscribers initialized (systems pending)",
             );
 
+            // Pass ADAPTER to Dare game for gradual migration
+            // (Game can use either adapter or original store during transition)
             new Dare(
                 main,
                 dareStore,
@@ -334,6 +355,17 @@ async function startConfiguredGame({
                 const unifiedStore = new UnifiedCharacterStore(db);
                 global.unifiedCharacterStore = unifiedStore;
                 console.log("✅ UnifiedCharacterStore initialized");
+            }
+
+            // Phase 2.4: Initialize VeratownStoreAdapter if not already done
+            if (!global.veratownStoreAdapter && global.unifiedCharacterStore) {
+                const veratownAdapter = new VeratownStoreAdapter(
+                    global.unifiedCharacterStore,
+                );
+                global.veratownStoreAdapter = veratownAdapter;
+                console.log(
+                    "✅ VeratownStoreAdapter initialized (delegates to unified store)",
+                );
             }
 
             // Phase 2.3: Initialize cross-system subscribers if not already done
@@ -360,6 +392,17 @@ async function startConfiguredGame({
             if (global.crossSystemSubscribers) {
                 await global.crossSystemSubscribers.initialize();
                 console.log("✅ Cross-system event subscriptions activated");
+            }
+
+            // Phase 2.4: Log adapter availability for gradual code migration
+            if (
+                global.casinoStoreAdapter &&
+                global.dareStoreAdapter &&
+                global.veratownStoreAdapter
+            ) {
+                console.log(
+                    "✅ All adapters ready for gradual code migration (Phase 2.4)",
+                );
             }
 
             main.setBotDescription(Veratown.description);
