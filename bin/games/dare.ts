@@ -34,6 +34,7 @@ import {
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
 import { createSystemLogger } from "./veratown/shared";
+import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 
 // Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
 import { TurnOrderManager } from "./dare/turnOrderManager";
@@ -80,9 +81,10 @@ export interface DareConfig {
     region?: MapRegion;
 }
 
-export class Dare implements VeratownFeatureSystem {
+export class Dare implements GamePlugin {
     public readonly key = "dare";
-    public readonly label = "Dares";
+    public readonly label = "Dare Game";
+    public readonly critical = false;
     // Toggled via "/bot feature enable|disable dare". When disabled, !dare
     // and !pick simply reply that the feature is off instead of acting.
     public enabled = true;
@@ -180,7 +182,7 @@ Game Overview
         "\n" +
         Dare.description_rules;
 
-    private commandParser: CommandParser;
+    private commandParser?: CommandParser;
 
     // Resolves once persisted state (lobby, games, per-member bookkeeping)
     // has been loaded from the database - awaited at the top of every
@@ -256,8 +258,7 @@ Game Overview
         private casinoStore?: CasinoStore,
         config?: DareConfig,
     ) {
-        this.commandParser =
-            commandParser ?? new CommandParser(conn, config?.region);
+        this.commandParser = commandParser;
         this.region = config?.region;
         this.configuredRegion = config?.region;
 
@@ -275,14 +276,66 @@ Game Overview
         });
     }
 
-    // Registers commands/listeners - called once during Veratown startup
-    // (see VeratownFeatureSystem). Split out from the constructor so a
-    // freshly-constructed Dare doesn't wire itself up until the caller is
-    // ready, matching the other room feature systems.
-    public registerTriggers(): void {
-        this.commandParser.register("pick", guardHandler("dare", this.onPick));
-        this.commandParser.register("dare", guardHandler("dare", this.onDare));
+    /**
+     * Initialize the Dare plugin. Called once during bot startup.
+     * Loads persisted game state from the database.
+     */
+    public async init(): Promise<void> {
+        // State loading happens in ready promise
+        await this.ready;
+    }
 
+    /**
+     * Register Dare commands via the GamePluginCommandRouter.
+     * Called during Veratown plugin initialization.
+     */
+    public registerCommands(router: GamePluginCommandRouter): void {
+        router.registerGroup("dare", {
+            join: this.onDare,
+            leave: this.onDare,
+            start: this.onDare,
+            turn: this.onDare,
+            draw: this.onDare,
+            pass: this.onDare,
+            forfeit: this.onDare,
+            players: this.onDare,
+            remove: this.onDare,
+            stop: this.onDare,
+            add: this.onDare,
+            list: this.onDare,
+            reset: this.onDare,
+            validate: this.onDare,
+            balancerewards: this.onDare,
+            help: this.onDare,
+        });
+        router.registerCommand("pick", this.onPick);
+    }
+
+    /**
+     * Get current Dare game status.
+     * Used for diagnostics and monitoring.
+     */
+    public getStatus(): string {
+        const gameCount = this.gameManager.getActiveGameCount();
+        const lobbySize = this.lobby.size;
+        return `Dare: ${this.enabled ? "enabled" : "disabled"} | Lobby: ${lobbySize} | Active games: ${gameCount}`;
+    }
+
+    /**
+     * Cleanup when the plugin is being stopped.
+     * Optionally saves state and stops timers.
+     */
+    public async cleanup?(): Promise<void> {
+        this.turnTimerManager.stopStripEnforcementInterval?.();
+        // Additional cleanup as needed
+    }
+
+    /**
+     * Registers event listeners and triggers for the Dare plugin.
+     * Called once during Veratown startup after registerCommands().
+     * Note: Command registration happens in registerCommands() via GamePluginCommandRouter.
+     */
+    public registerTriggers(): void {
         this.conn.on(
             "CharacterLeft",
             guardHandler("dare", this.onCharacterLeft),

@@ -271,143 +271,88 @@ async function startConfiguredGame({
 
     switch (config.game) {
         case undefined:
-            return;
-        case "kidnappers": {
-            console.log("Starting game: Kidnappers");
-            const game = new KidnappersGameRoom(main, config);
-            main.accountUpdate({ Nickname: "Kidnappers Bot" });
-            main.setBotDescription(KidnappersGameRoom.description);
-            main.startBot(game);
-            return;
-        }
-        case "roleplay": {
-            console.log("Starting game: Roleplay challenge");
-            const game = new RoleplaychallengeGameRoom(main, config);
-            main.setBotDescription(RoleplaychallengeGameRoom.description);
-            main.startBot(game);
-            return;
-        }
-        case "maidspartynight": {
-            console.log("Starting game: Maid's Party Night");
-            if (!connections.secondary) {
-                console.log("Need user2 and password2 for Maid's Party Night");
-                process.exit(1);
-            }
-            const game = new MaidsPartyNightSinglePlayerAdventure(
-                main,
-                connections.secondary,
-            );
-            main.startBot(game);
-            return;
-        }
-        case "dare":
-            console.log("Starting game: dare");
+        case "veratown": {
+            console.log("Starting game: Veratown (primary entry point)");
+
             if (!db) {
                 console.log(
-                    "mongo_uri/mongo_db must be configured to run the dare game; exiting.",
+                    "mongo_uri/mongo_db must be configured to run Veratown; exiting.",
                 );
                 process.exit(1);
             }
 
             // Phase 2.3: Initialize unified store for cross-system coordination
-            const unifiedStore = new UnifiedCharacterStore(db);
-            global.unifiedCharacterStore = unifiedStore;
-            console.log("✅ UnifiedCharacterStore initialized");
-
-            main.accountUpdate({ Nickname: "Dare Bot" });
-
-            // Phase 2.4: Initialize adapters that delegate to unified store
-            const casinoAdapter = new CasinoStoreAdapter(unifiedStore);
-            global.casinoStoreAdapter = casinoAdapter;
-            console.log(
-                "✅ CasinoStoreAdapter initialized (delegates to unified store)",
-            );
-
-            const dareAdapter = new DareStoreAdapter(unifiedStore);
-            global.dareStoreAdapter = dareAdapter;
-            console.log(
-                "✅ DareStoreAdapter initialized (delegates to unified store)",
-            );
-
-            // Phase 2.4: Also keep original stores for comparison/validation during migration
-            const casinoStore = new CasinoStore(db);
-            const dareStore = new DareStore(db);
-            console.log("✅ Original stores initialized (for validation)");
-
-            // Phase 2.4b: Create migration wrapper for gradual Casino migration
-            const casinoMigrationWrapper = new CasinoStoreMigrationWrapper(
-                casinoStore,
-                casinoAdapter,
-                true, // enableValidation: compare old vs new on each read
-            );
-            global.casinoStoreMigrationWrapper = casinoMigrationWrapper;
-            console.log(
-                "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b)",
-            );
-
-            // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
-            const venueSystem = new CasinoVenueSystem();
-            global.casinoVenueSystem = venueSystem;
-            console.log(
-                "✅ CasinoVenueSystem initialized (location bonuses, EPIC 2)",
-            );
-
-            // EPIC 2: Initialize CasinoEngine for core game logic
-            const casinoEngine = new CasinoEngine(
-                casinoAdapter,
-                unifiedStore,
-                venueSystem,
-            );
-            global.casinoEngine = casinoEngine;
-            console.log(
-                "✅ CasinoEngine initialized (game logic extraction, EPIC 2)",
-            );
-
-            // Phase 2.3: Initialize cross-system subscribers (but don't activate yet)
-            // They will be activated in veratown case when all systems are ready
-            const subscribers = new CrossSystemSubscribers(unifiedStore);
-            global.crossSystemSubscribers = subscribers;
-            console.log(
-                "✅ CrossSystemSubscribers initialized (systems pending)",
-            );
-
-            // Pass ADAPTER to Dare game for gradual migration
-            // (Game can use either adapter or original store during transition)
-            new Dare(
-                main,
-                dareStore,
-                undefined,
-                casinoStore,
-                config.dare,
-            ).registerTriggers();
-            main.setBotDescription(Dare.description);
-            return;
-        case "veratown": {
-            console.log("Starting game: Veratown");
-
-            // Phase 2.3: Initialize unified store if not already done (dare game case)
-            if (!global.unifiedCharacterStore && db) {
+            if (!global.unifiedCharacterStore) {
                 const unifiedStore = new UnifiedCharacterStore(db);
                 global.unifiedCharacterStore = unifiedStore;
                 console.log("✅ UnifiedCharacterStore initialized");
             }
 
-            // Phase 2.4: Initialize VeratownStoreAdapter if not already done
-            if (!global.veratownStoreAdapter && global.unifiedCharacterStore) {
-                const veratownAdapter = new VeratownStoreAdapter(
+            main.accountUpdate({ Nickname: "Veratown Bot" });
+
+            // Phase 2.4: Initialize adapters that delegate to unified store
+            if (!global.casinoStoreAdapter) {
+                const casinoAdapter = new CasinoStoreAdapter(
                     global.unifiedCharacterStore,
                 );
-                global.veratownStoreAdapter = veratownAdapter;
+                global.casinoStoreAdapter = casinoAdapter;
                 console.log(
-                    "✅ VeratownStoreAdapter initialized (delegates to unified store)",
+                    "✅ CasinoStoreAdapter initialized (delegates to unified store)",
                 );
             }
 
-            // Phase 2.3: Initialize cross-system subscribers if not already done
-            if (
-                !global.crossSystemSubscribers &&
-                global.unifiedCharacterStore
-            ) {
+            if (!global.dareStoreAdapter) {
+                const dareAdapter = new DareStoreAdapter(
+                    global.unifiedCharacterStore,
+                );
+                global.dareStoreAdapter = dareAdapter;
+                console.log(
+                    "✅ DareStoreAdapter initialized (delegates to unified store)",
+                );
+            }
+
+            // Phase 2.4: Also keep original stores for comparison/validation during migration
+            if (!global.casinoStoreMigrationWrapper) {
+                const casinoStore = new CasinoStore(db);
+                const dareStore = new DareStore(db);
+                console.log("✅ Original stores initialized (for validation)");
+
+                // Phase 2.4b: Create migration wrapper for gradual Casino migration
+                const casinoMigrationWrapper = new CasinoStoreMigrationWrapper(
+                    casinoStore,
+                    global.casinoStoreAdapter!,
+                    true, // enableValidation: compare old vs new on each read
+                );
+                global.casinoStoreMigrationWrapper = casinoMigrationWrapper;
+                console.log(
+                    "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b)",
+                );
+            }
+
+            // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
+            if (!global.casinoVenueSystem) {
+                const venueSystem = new CasinoVenueSystem();
+                global.casinoVenueSystem = venueSystem;
+                console.log(
+                    "✅ CasinoVenueSystem initialized (location bonuses, EPIC 2)",
+                );
+            }
+
+            // EPIC 2: Initialize CasinoEngine for core game logic
+            if (!global.casinoEngine && global.casinoVenueSystem) {
+                const casinoEngine = new CasinoEngine(
+                    global.casinoStoreAdapter!,
+                    global.unifiedCharacterStore,
+                    global.casinoVenueSystem,
+                );
+                global.casinoEngine = casinoEngine;
+                console.log(
+                    "✅ CasinoEngine initialized (game logic extraction, EPIC 2)",
+                );
+            }
+
+            // Phase 2.3: Initialize cross-system subscribers
+            if (!global.crossSystemSubscribers) {
                 const subscribers = new CrossSystemSubscribers(
                     global.unifiedCharacterStore,
                 );
@@ -415,6 +360,7 @@ async function startConfiguredGame({
                 console.log("✅ CrossSystemSubscribers initialized");
             }
 
+            // Initialize and start Veratown with integrated plugins
             const game = new Veratown(
                 connections,
                 db,
@@ -441,6 +387,34 @@ async function startConfiguredGame({
             }
 
             main.setBotDescription(Veratown.description);
+            return;
+        }
+        case "kidnappers": {
+            console.log("Starting game: Kidnappers (legacy)");
+            const game = new KidnappersGameRoom(main, config);
+            main.accountUpdate({ Nickname: "Kidnappers Bot" });
+            main.setBotDescription(KidnappersGameRoom.description);
+            main.startBot(game);
+            return;
+        }
+        case "roleplay": {
+            console.log("Starting game: Roleplay challenge (legacy)");
+            const game = new RoleplaychallengeGameRoom(main, config);
+            main.setBotDescription(RoleplaychallengeGameRoom.description);
+            main.startBot(game);
+            return;
+        }
+        case "maidspartynight": {
+            console.log("Starting game: Maid's Party Night (legacy)");
+            if (!connections.secondary) {
+                console.log("Need user2 and password2 for Maid's Party Night");
+                process.exit(1);
+            }
+            const game = new MaidsPartyNightSinglePlayerAdventure(
+                main,
+                connections.secondary,
+            );
+            main.startBot(game);
             return;
         }
         default:

@@ -46,6 +46,7 @@ import {
 } from "./veratown/veratownLocationStore";
 import { loadRegionFromDatabase } from "./shared/locationUtils";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
+import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 
 const FREE_CHIPS = 20;
 
@@ -82,13 +83,14 @@ export interface CasinoConfig {
     fallbackLocations?: VeratownLocationDoc[];
 }
 
-export class Casino implements VeratownFeatureSystem {
+export class Casino implements GamePlugin {
     public readonly key = "casino";
     public readonly label = "Casino";
+    public readonly critical = false;
     public enabled = true;
 
     private game: Game;
-    public commandParser: CommandParser;
+    private commandParser?: CommandParser;
     public store: CasinoStore;
     private cocktailOfTheDay: Cocktail | undefined;
     public multiplier = 1;
@@ -111,8 +113,7 @@ export class Casino implements VeratownFeatureSystem {
         commandParser?: CommandParser,
     ) {
         this.store = new CasinoStore(db);
-        this.commandParser =
-            commandParser ?? new CommandParser(conn, config?.region);
+        this.commandParser = commandParser;
         this.game =
             config?.game === "blackjack"
                 ? new BlackjackGame(conn, this)
@@ -138,12 +139,60 @@ export class Casino implements VeratownFeatureSystem {
         this.gameConfig = config;
     }
 
+    /**
+     * Initialize the Casino plugin. Called once during bot startup.
+     */
+    public async init(): Promise<void> {
+        // Casino doesn't need special async initialization
+        // Stores are initialized in constructor
+    }
+
+    /**
+     * Register Casino commands via the GamePluginCommandRouter.
+     * Called during Veratown plugin initialization.
+     */
+    public registerCommands(router: GamePluginCommandRouter): void {
+        router.registerGroup("casino", {
+            help: this.onCommandHelp,
+            forfeits: this.onCommandForfeits,
+            commands: this.onCommandCommands,
+            chips: this.onCommandChips,
+            addfriend: this.onCommandAddFriend,
+            remove: this.onCommandRemove,
+            buy: this.onCommandBuy,
+            vouchers: this.onCommandVouchers,
+            give: this.onCommandGive,
+            grant: this.onCommandGrant,
+            close: this.onCommandClose,
+            open: this.onCommandOpen,
+            bonus: this.onCommandBonusRound,
+            game: this.onCommandGame,
+            escape: this.onCommandEscape,
+        });
+    }
+
+    /**
+     * Get current Casino status.
+     * Used for diagnostics and monitoring.
+     */
+    public getStatus(): string {
+        return `Casino: ${this.enabled ? "enabled" : "disabled"} | Multiplier: ${this.multiplier}x`;
+    }
+
+    /**
+     * Cleanup when the plugin is being stopped.
+     */
+    public async cleanup?(): Promise<void> {
+        // Additional cleanup as needed
+    }
+
     // Store config for registerTriggers method
     private gameConfig?: CasinoConfig;
 
     /**
-     * Registers casino triggers, commands, and event listeners.
-     * Called once during Veratown startup (see VeratownFeatureSystem).
+     * Registers casino event listeners and triggers.
+     * Called once during Veratown startup after registerCommands().
+     * Note: Command registration happens in registerCommands() via GamePluginCommandRouter.
      */
     public registerTriggers(): void {
         if (this.gameConfig?.region) {
@@ -167,67 +216,6 @@ export class Casino implements VeratownFeatureSystem {
                 this.gameConfig.fallbackLocations,
             );
         }
-
-        this.commandParser.register(
-            "help",
-            guardHandler("casino:help", this.onCommandHelp),
-        );
-        this.commandParser.register(
-            "forfeits",
-            guardHandler("casino:forfeits", this.onCommandForfeits),
-        );
-        this.commandParser.register(
-            "commands",
-            guardHandler("casino:commands", this.onCommandCommands),
-        );
-        this.commandParser.register(
-            "chips",
-            guardHandler("casino:chips", this.onCommandChips),
-        );
-        this.commandParser.register(
-            "addfriend",
-            guardHandler("casino:addfriend", this.onCommandAddFriend),
-        );
-        this.commandParser.register(
-            "remove",
-            guardHandler("casino:remove", this.onCommandRemove),
-        );
-        this.commandParser.register(
-            "buy",
-            guardHandler("casino:buy", this.onCommandBuy),
-        );
-        this.commandParser.register(
-            "vouchers",
-            guardHandler("casino:vouchers", this.onCommandVouchers),
-        );
-        this.commandParser.register(
-            "give",
-            guardHandler("casino:give", this.onCommandGive),
-        );
-        this.commandParser.register(
-            "grant",
-            guardHandler("casino:grant", this.onCommandGrant),
-        );
-        this.commandParser.register(
-            "close",
-            guardHandler("casino:close", this.onCommandClose),
-        );
-        this.commandParser.register(
-            "open",
-            guardHandler("casino:open", this.onCommandOpen),
-        );
-        this.commandParser.register(
-            "bonus",
-            guardHandler("casino:bonus", this.onCommandBonusRound),
-        );
-        this.commandParser.register(
-            "game",
-            guardHandler("casino:game", this.onCommandGame),
-        );
-        this.commandParser.register(
-            "escape",
-            guardHandler("casino:escape", this.onCommandEscape),
-        );
 
         this.conn.on(
             "CharacterEntered",
