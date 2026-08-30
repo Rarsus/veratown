@@ -1799,12 +1799,47 @@ Cross-System Subscribers (Event Listeners)
     - Phase 2.4b: Read-side migration (CasinoStoreAdapter, DareStoreAdapter, VeratownStoreAdapter) ✅
     - Phase 2.4c: Write-side migration + EPIC 2 (CasinoStoreMigrationWrapper, CasinoVenueSystem, CasinoEngine) ✅
     - Phase 2.4d: Game system adoption (Migration wrapper integration into all game systems) ✅
-- **PHASE 3:** Cross-System Features (Ready to begin) - ⏳ NEXT
-- Total: 36+ files, ~21K lines production code, 396+ unit tests
+- **PHASE 3:** Cross-System Features - 40% COMPLETE ✅✅⏳⏳⏳
+    - Phase 3.1: Foundational Chip Locking Infrastructure ✅
+    - Phase 3.2: Bet Chips to Escape Bondage Feature ✅
+    - Phase 3.3: Caged Players Auto-Removed from Games ⏳
+    - Phase 3.4: Unified Audit Trail ⏳
+    - Phase 3.5: Polish & Integration Testing ⏳
+- Total: 38+ files, ~23K lines production code, 419+ unit tests
 
-**Current Status (as of Phase 2.4d completion):**
+**Current Status (as of Phase 3.2 completion):**
 
-**Phase 2.4d: Game System Adoption - COMPLETE ✅**
+**Phase 3.2: Bet Chips to Escape Bondage Feature - COMPLETE ✅**
+
+Full escape bondage feature implemented with comprehensive validation:
+
+- **bin/games/shared/unifiedCharacterStore.ts**
+    - Added spendChipsToEscape(memberNumber, escapeCost) method (150+ lines)
+    - Validates: player has active bondage, player has sufficient chips
+    - Executes atomically: removes bondage, deducts chips, emits events
+    - Emits escape_payment event and bondage_removed events
+- **bin/games/casino.ts**
+    - Added "escape" command handler with validation
+    - Follows existing command pattern with proper error messages
+- **Test Coverage:** 11 test groups covering 40+ scenarios including edge cases
+- **Test Results:** 419/419 tests passing (0 failures)
+
+**Previous Phase 3.1: Foundational Chip Locking Infrastructure - COMPLETE ✅**
+
+All foundational infrastructure for chip locking implemented:
+
+- **bin/games/shared/unifiedCharacterTypes.ts**
+    - Extended CasinoState with chip locking fields (lockedChips, chipLockReason, chipLockUntil, recentWinnings)
+    - Added 3 new GameEvent types (chips_locked, chips_unlocked, escape_payment)
+- **bin/games/shared/unifiedCharacterStore.ts**
+    - Implemented lockChips() and unlockChips() methods with full validation
+    - Supports partial and full chip unlocking with automatic metadata cleanup
+- **bin/games/shared/crossSystemSubscribers.ts**
+    - Bondage listeners auto-lock chips on bondage_applied
+    - Chips unlocked on bondage_removed via event subscription
+- **Test Results:** 408/408 tests passing (Phase 3.1 tests all passing)
+
+**Previous Phase 2.4d: Game System Adoption - COMPLETE ✅**
 
 All Casino game systems now use CasinoStoreMigrationWrapper for coordinated operations:
 

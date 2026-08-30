@@ -125,6 +125,9 @@ export class UnifiedCharacterStore {
                 cheatStrikes: 0,
                 totalWins: 0,
                 totalLosses: 0,
+                // Phase 3: Chip locking
+                lockedChips: 0,
+                recentWinnings: 0,
                 version: 0,
                 updatedAt: now,
             },
@@ -291,6 +294,147 @@ export class UnifiedCharacterStore {
         );
     }
 
+    /**
+     * Lock chips due to bondage, parole, or cage restriction.
+     * Moves chips from available to locked state.
+     * Emits chips_locked event.
+     *
+     * @param memberNumber Target character
+     * @param amountToLock Amount of chips to lock
+     * @param reason Why chips are locked ("bondage" | "parole" | "cage")
+     * @param lockUntil Optional timestamp when lock expires
+     */
+    public async lockChips(
+        memberNumber: number,
+        amountToLock: number,
+        reason: "bondage" | "parole" | "cage",
+        lockUntil?: number,
+    ): Promise<void> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        // Don't lock more chips than available
+        const actualLockAmount = Math.min(amountToLock, profile.casino.chips);
+
+        if (actualLockAmount <= 0) {
+            return; // Nothing to lock
+        }
+
+        // Move chips from available to locked
+        const newAvailableChips = profile.casino.chips - actualLockAmount;
+        const newLockedChips = profile.casino.lockedChips + actualLockAmount;
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "casino.chips": newAvailableChips,
+                    "casino.lockedChips": newLockedChips,
+                    "casino.chipLockReason": reason,
+                    "casino.chipLockUntil": lockUntil,
+                    "casino.updatedAt": now,
+                    "casino.version": profile.casino.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "casino",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        // Emit event
+        const event: GameEvent = {
+            timestamp: now,
+            type: "chips_locked",
+            source: "casino",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                amountLocked: actualLockAmount,
+                remainingChips: newAvailableChips,
+                totalLockedChips: newLockedChips,
+                reason,
+                lockUntil,
+            },
+            processed: false,
+        };
+
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+    }
+
+    /**
+     * Unlock chips after bondage, parole, or cage restriction is removed.
+     * Moves chips from locked back to available state.
+     * Emits chips_unlocked event.
+     *
+     * @param memberNumber Target character
+     * @param amountToUnlock Amount of chips to unlock (or 0 to unlock all)
+     */
+    public async unlockChips(
+        memberNumber: number,
+        amountToUnlock: number = 0,
+    ): Promise<void> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        // If amountToUnlock is 0, unlock all locked chips
+        const actualUnlockAmount =
+            amountToUnlock === 0
+                ? profile.casino.lockedChips
+                : Math.min(amountToUnlock, profile.casino.lockedChips);
+
+        if (actualUnlockAmount <= 0) {
+            return; // Nothing to unlock
+        }
+
+        // Move chips from locked back to available
+        const newAvailableChips = profile.casino.chips + actualUnlockAmount;
+        const newLockedChips = profile.casino.lockedChips - actualUnlockAmount;
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "casino.chips": newAvailableChips,
+                    "casino.lockedChips": newLockedChips,
+                    ...(newLockedChips === 0 && {
+                        "casino.chipLockReason": undefined,
+                        "casino.chipLockUntil": undefined,
+                    }),
+                    "casino.updatedAt": now,
+                    "casino.version": profile.casino.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "casino",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        // Emit event
+        const event: GameEvent = {
+            timestamp: now,
+            type: "chips_unlocked",
+            source: "casino",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                amountUnlocked: actualUnlockAmount,
+                availableChips: newAvailableChips,
+                remainingLockedChips: newLockedChips,
+            },
+            processed: false,
+        };
+
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+    }
+
     // ===== DARE SYSTEM INTERFACE
 
     /**
@@ -423,6 +567,110 @@ export class UnifiedCharacterStore {
 
         await this.recordEvent(event);
         await this.eventBus.publish(event);
+    }
+
+    /**
+     * Spend chips to escape active bondage (Phase 3.2).
+     * Validates player has active bondage and sufficient chips.
+     * Removes all active bondage items and deducts chips atomically.
+     * Emits escape_payment event.
+     */
+    public async spendChipsToEscape(
+        memberNumber: number,
+        escapeCost: number,
+    ): Promise<{ success: boolean; message: string; bondageRemoved: number }> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        // Validation 1: Check for active bondage
+        if (
+            !profile.dare.activeBondage ||
+            profile.dare.activeBondage.length === 0
+        ) {
+            return {
+                success: false,
+                message: "You don't have any active bondage to escape from.",
+                bondageRemoved: 0,
+            };
+        }
+
+        // Validation 2: Check for sufficient chips
+        if (profile.casino.chips < escapeCost) {
+            return {
+                success: false,
+                message: `Insufficient chips. You need ${escapeCost} chips but have ${profile.casino.chips}.`,
+                bondageRemoved: 0,
+            };
+        }
+
+        // Count bondage items to remove
+        const bondageCount = profile.dare.activeBondage.length;
+
+        // Execute atomically: Remove bondage items and deduct chips
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "dare.activeBondage": [], // Remove all bondage
+                    "casino.chips": profile.casino.chips - escapeCost,
+                    "dare.updatedAt": now,
+                    "dare.version": profile.dare.version + 1,
+                    "casino.updatedAt": now,
+                    "casino.version": profile.casino.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "casino",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        // Emit escape_payment event
+        const escapeEvent: GameEvent = {
+            timestamp: now,
+            type: "escape_payment",
+            source: "casino",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                chipsCost: escapeCost,
+                bondageItemsRemoved: bondageCount,
+                previousChips: profile.casino.chips,
+                remainingChips: profile.casino.chips - escapeCost,
+            },
+            processed: false,
+        };
+
+        await this.recordEvent(escapeEvent);
+        await this.eventBus.publish(escapeEvent);
+
+        // Emit bondage_removed event for each removed item (triggers chip unlocking)
+        for (const bondage of profile.dare.activeBondage) {
+            const bondageEvent: GameEvent = {
+                timestamp: now,
+                type: "bondage_removed",
+                source: "casino", // Source is casino (escape payment)
+                actor: memberNumber,
+                target: memberNumber,
+                data: {
+                    forfeitKey: bondage.forfeitKey,
+                    wasLockedUntil: bondage.lockedUntil,
+                    reason: "escape_payment", // Track reason
+                },
+                processed: false,
+            };
+
+            await this.recordEvent(bondageEvent);
+            await this.eventBus.publish(bondageEvent);
+        }
+
+        return {
+            success: true,
+            message: `Successfully escaped ${bondageCount} bondage item(s) for ${escapeCost} chips!`,
+            bondageRemoved: bondageCount,
+        };
     }
 
     /**

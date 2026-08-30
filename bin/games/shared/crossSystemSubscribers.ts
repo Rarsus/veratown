@@ -78,40 +78,65 @@ export class CrossSystemSubscribers {
      * Feature: Bondage affects Casino winnings
      *
      * When Dare applies bondage:
-     * - Casino should lock winnings (prevent withdrawal)
-     * - Casino shows "bonded" indicator on winnings
+     * - Casino should lock winnings (prevent withdrawal/spending)
+     * - Player must spend chips to escape or wait for bondage to expire
      *
      * When bondage is removed:
      * - Casino should unlock winnings
-     * - Player can withdraw normally
+     * - Player can spend chips normally again
      */
     private setupBondageSubscribers(): void {
-        // Bondage applied → Lock casino winnings
+        // Bondage applied → Lock casino chips
         this.eventBus.subscribe("bondage_applied", async (event: GameEvent) => {
-            if (!this.casino?.lockWinnings) return;
-
             try {
-                await this.casino.lockWinnings(event.target);
-            } catch (error) {
-                console.error(
-                    "CrossSystemSubscribers: Failed to lock winnings for",
+                const profile = await this.unifiedStore.getProfile(
                     event.target,
-                    error,
                 );
+
+                // Lock recent winnings or a default amount
+                // Use recentWinnings if tracked, otherwise lock 50% of current chips
+                const amountToLock =
+                    profile.casino.recentWinnings > 0
+                        ? profile.casino.recentWinnings
+                        : Math.ceil(profile.casino.chips * 0.5);
+
+                if (amountToLock > 0) {
+                    await this.unifiedStore.lockChips(
+                        event.target,
+                        amountToLock,
+                        "bondage",
+                        event.data.lockedUntil as number | undefined,
+                    );
+                }
+            } catch (error) {
+                const logger =
+                    require("../veratown/shared/systemLogger").createSystemLogger(
+                        "CrossSystemSubscribers",
+                    );
+                logger.error("Failed to lock chips on bondage", error, {
+                    memberNumber: event.target,
+                    operation: "bondage_applied",
+                });
             }
         });
 
-        // Bondage removed → Unlock casino winnings
+        // Bondage removed → Unlock casino chips
         this.eventBus.subscribe("bondage_removed", async (event: GameEvent) => {
-            if (!this.casino?.unlockWinnings) return;
-
             try {
-                await this.casino.unlockWinnings(event.target);
+                // Unlock all chips
+                await this.unifiedStore.unlockChips(event.target, 0);
             } catch (error) {
-                console.error(
-                    "CrossSystemSubscribers: Failed to unlock winnings for",
-                    event.target,
+                const logger =
+                    require("../veratown/shared/systemLogger").createSystemLogger(
+                        "CrossSystemSubscribers",
+                    );
+                logger.error(
+                    "Failed to unlock chips on bondage removal",
                     error,
+                    {
+                        memberNumber: event.target,
+                        operation: "bondage_removed",
+                    },
                 );
             }
         });

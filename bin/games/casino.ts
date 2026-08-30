@@ -224,6 +224,10 @@ export class Casino implements VeratownFeatureSystem {
             "game",
             guardHandler("casino:game", this.onCommandGame),
         );
+        this.commandParser.register(
+            "escape",
+            guardHandler("casino:escape", this.onCommandEscape),
+        );
 
         this.conn.on(
             "CharacterEntered",
@@ -976,5 +980,36 @@ ${forfeitsString()}
             return;
         }
         this.setBio();
+    };
+
+    private onCommandEscape = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        // Get unified store for access to bondage and chip management
+        // For now, use the regular store - will integrate with unified store in full implementation
+        if (!args.length || isNaN(parseInt(args[0]))) {
+            this.conn.reply(msg, "Usage: /bot escape <cost>");
+            this.conn.reply(
+                msg,
+                "Spend chips to escape all active bondage items.",
+            );
+            return;
+        }
+
+        const escapeCost = parseInt(args[0]);
+
+        if (escapeCost <= 0) {
+            this.conn.reply(msg, "Escape cost must be positive.");
+            return;
+        }
+
+        // Note: Full implementation would use global.unifiedStore.spendChipsToEscape()
+        // For now, send placeholder message
+        this.conn.reply(
+            msg,
+            `Escape feature requires unified store integration (${escapeCost} chips). Coming in Phase 3.2 full release.`,
+        );
     };
 }

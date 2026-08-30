@@ -26,6 +26,11 @@ export interface CasinoState {
     totalLosses: number;
     lastDailyClaimAt?: number;
     lastGamePlayedAt?: number;
+    // Phase 3: Chip Locking (when player is bonded or caged)
+    lockedChips: number; // Chips that cannot be spent while bonded
+    chipLockReason?: "bondage" | "parole" | "cage"; // Why chips are locked
+    chipLockUntil?: number; // When lock expires (timestamp), undefined = until bondage removed
+    recentWinnings: number; // Track recent wins that get locked
     version: number;
     updatedAt: number;
 }
@@ -174,6 +179,9 @@ export interface GameEvent {
         | "chip_transfer"
         | "chips_earned"
         | "chips_lost"
+        | "chips_locked" // Phase 3: Chips locked (e.g., when bonded)
+        | "chips_unlocked" // Phase 3: Chips unlocked
+        | "escape_payment" // Phase 3: Player paid chips to escape bondage
         | "bondage_applied"
         | "bondage_removed"
         | "cage_entry"
