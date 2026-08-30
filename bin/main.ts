@@ -321,11 +321,11 @@ async function startConfiguredGame({
                 const casinoMigrationWrapper = new CasinoStoreMigrationWrapper(
                     casinoStore,
                     global.casinoStoreAdapter!,
-                    true, // enableValidation: compare old vs new on each read
+                    false, // enableValidation: disabled (migration complete)
                 );
                 global.casinoStoreMigrationWrapper = casinoMigrationWrapper;
                 console.log(
-                    "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b)",
+                    "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b - validation disabled)",
                 );
             }
 
