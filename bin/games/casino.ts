@@ -117,11 +117,12 @@ export class Casino implements GamePlugin {
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
         if (!commandParser) {
-            const regions = config?.region ? [config.region] : [];
+            // Create CommandParser scoped to the casino region
+            // region parameter: only handle commands from senders IN this region
             this.commandParser = new CommandParser(
                 this.conn,
+                config?.region,
                 undefined,
-                regions,
             );
         } else {
             this.commandParser = commandParser;

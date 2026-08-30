@@ -5,6 +5,7 @@ This guide explains how to migrate player data from the legacy `players` collect
 ## Overview
 
 **What's being migrated:**
+
 - Player name, member number
 - Casino chips (credits)
 - Score and ranking data
@@ -23,6 +24,7 @@ This guide explains how to migrate player data from the legacy `players` collect
 ## Option 1: Node.js Migration Script (Recommended)
 
 ### Prerequisites
+
 - Node.js 18+
 - MongoDB connection string
 - Access to the database
@@ -31,7 +33,8 @@ This guide explains how to migrate player data from the legacy `players` collect
 
 ```bash
 # Using environment variable
-MONGO_URI=mongodb://user:pass@host:27017/dbname node scripts/migrate-casino-data.js
+MONGO_URI=
+mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot node scripts/migrate-casino-data.js
 
 # Using default local MongoDB
 node scripts/migrate-casino-data.js
@@ -41,15 +44,17 @@ MONGO_URI=mongodb://localhost:27017/your_db_name node scripts/migrate-casino-dat
 ```
 
 ### What the script does:
+
 ✅ Connects to MongoDB  
 ✅ Reads all players from `players` collection  
 ✅ Transforms to `unifiedCharacterProfiles` format  
 ✅ Creates new profiles or updates existing ones  
 ✅ Shows migration progress (every 100 records)  
 ✅ Displays top 5 migrated players  
-✅ Provides detailed statistics  
+✅ Provides detailed statistics
 
 ### Example output:
+
 ```
 🔄 Connected to MongoDB: mongodb://localhost:27017/ropeybot
 📊 Database: ropeybot
@@ -89,6 +94,7 @@ MONGO_URI=mongodb://localhost:27017/your_db_name node scripts/migrate-casino-dat
 ## Option 2: MongoDB Aggregation Pipeline (Manual)
 
 ### For MongoDB Compass UI
+
 1. Open MongoDB Compass
 2. Connect to your database
 3. Navigate to `ropeybot` database
@@ -97,6 +103,7 @@ MONGO_URI=mongodb://localhost:27017/your_db_name node scripts/migrate-casino-dat
 6. Run it
 
 ### For mongosh CLI
+
 ```bash
 # Connect to MongoDB
 mongosh --host localhost --port 27017 --authenticationDatabase admin
@@ -111,42 +118,47 @@ mongosh --host localhost --port 27017 --authenticationDatabase admin
 If you want to run specific steps manually:
 
 ### 1. Check source data
+
 ```javascript
-db.players.countDocuments()
-db.players.findOne()
+db.players.countDocuments();
+db.players.findOne();
 ```
 
 ### 2. Transform and migrate
+
 ```javascript
-db.players.aggregate([
-    {
-        $project: {
-            _id: "$memberNumber",
-            name: "$name",
-            createdAt: new Date(),
-            casino: {
-                chips: { $ifNull: ["$credits", 0] },
-                score: { $ifNull: ["$score", 0] },
-                cheatStrikes: { $ifNull: ["$cheatStrikes", 0] },
-                lastDailyClaimAt: { $ifNull: ["$lastFreeCredits", 0] },
-                // ... other fields
+db.players
+    .aggregate([
+        {
+            $project: {
+                _id: "$memberNumber",
+                name: "$name",
+                createdAt: new Date(),
+                casino: {
+                    chips: { $ifNull: ["$credits", 0] },
+                    score: { $ifNull: ["$score", 0] },
+                    cheatStrikes: { $ifNull: ["$cheatStrikes", 0] },
+                    lastDailyClaimAt: { $ifNull: ["$lastFreeCredits", 0] },
+                    // ... other fields
+                },
+                // ... other systems
             },
-            // ... other systems
-        }
-    }
-]).forEach(doc => {
-    db.unifiedCharacterProfiles.updateOne(
-        { _id: doc._id },
-        { $set: doc },
-        { upsert: true }
-    );
-});
+        },
+    ])
+    .forEach((doc) => {
+        db.unifiedCharacterProfiles.updateOne(
+            { _id: doc._id },
+            { $set: doc },
+            { upsert: true },
+        );
+    });
 ```
 
 ### 3. Verify results
+
 ```javascript
-db.unifiedCharacterProfiles.countDocuments()
-db.unifiedCharacterProfiles.find({}).sort({ "casino.score": -1 }).limit(5)
+db.unifiedCharacterProfiles.countDocuments();
+db.unifiedCharacterProfiles.find({}).sort({ "casino.score": -1 }).limit(5);
 ```
 
 ---
@@ -154,6 +166,7 @@ db.unifiedCharacterProfiles.find({}).sort({ "casino.score": -1 }).limit(5)
 ## Post-Migration Validation
 
 ### Check data integrity
+
 ```javascript
 // Verify all players were migrated
 const legacyCount = db.players.countDocuments();
@@ -162,7 +175,8 @@ print(`Legacy: ${legacyCount}, Unified: ${unifiedCount}`);
 
 // Check top 10 are consistent
 const legacyTop = db.players.find().sort({ score: -1 }).limit(10).toArray();
-const unifiedTop = db.unifiedCharacterProfiles.find()
+const unifiedTop = db.unifiedCharacterProfiles
+    .find()
     .sort({ "casino.score": -1 })
     .limit(10)
     .toArray();
@@ -170,7 +184,9 @@ const unifiedTop = db.unifiedCharacterProfiles.find()
 // Verify scores match
 for (let i = 0; i < legacyTop.length; i++) {
     if (legacyTop[i].score !== unifiedTop[i].casino.score) {
-        print(`⚠️  Mismatch at rank ${i + 1}: ${legacyTop[i].score} vs ${unifiedTop[i].casino.score}`);
+        print(
+            `⚠️  Mismatch at rank ${i + 1}: ${legacyTop[i].score} vs ${unifiedTop[i].casino.score}`,
+        );
     }
 }
 print("✅ Validation complete");
@@ -181,10 +197,13 @@ print("✅ Validation complete");
 ## Troubleshooting
 
 ### Issue: "Connection refused"
+
 ```
 Error: connect ECONNREFUSED 127.0.0.1:27017
 ```
+
 **Solution:** Check MongoDB is running
+
 ```bash
 # Start MongoDB (Docker)
 docker-compose up -d
@@ -194,22 +213,29 @@ mongod
 ```
 
 ### Issue: "Authentication failed"
+
 ```
 Error: SCRAM-SHA-1 authentication failed
 ```
+
 **Solution:** Verify credentials in MONGO_URI
+
 ```bash
 MONGO_URI=mongodb://correctuser:correctpass@host:27017/dbname node scripts/migrate-casino-data.js
 ```
 
 ### Issue: "Database does not exist"
+
 **Solution:** Script will create collections if they don't exist. If database doesn't exist, create it first:
+
 ```javascript
-db.adminCommand({ createDatabase: "ropeybot" })
+db.adminCommand({ createDatabase: "ropeybot" });
 ```
 
 ### Issue: Some players failed to migrate
+
 Check logs for member numbers that failed, then manually verify those documents:
+
 ```javascript
 db.players.findOne({ memberNumber: <failed_id> })
 db.unifiedCharacterProfiles.findOne({ _id: <failed_id> })
@@ -223,7 +249,7 @@ If migration fails or needs to be redone:
 
 ```javascript
 // Delete all migrated unified profiles
-db.unifiedCharacterProfiles.deleteMany({})
+db.unifiedCharacterProfiles.deleteMany({});
 
 // Then re-run migration script
 ```
@@ -237,6 +263,7 @@ db.unifiedCharacterProfiles.deleteMany({})
 - **100,000 players:** ~2-5 minutes
 
 For large migrations, consider:
+
 - Running during off-peak hours
 - Using batch size optimization
 - Monitoring MongoDB logs
@@ -248,9 +275,9 @@ For large migrations, consider:
 1. **Leaderboard queries** now hit `unifiedCharacterProfiles` instead of legacy `players`
 2. **CasinoStoreMigrationWrapper** validates consistency between old and new data
 3. **Validation can be disabled** once migration is verified stable:
-   ```typescript
-   global.casinoStoreMigrationWrapper?.setAdapterEnabled(true);
-   ```
+    ```typescript
+    global.casinoStoreMigrationWrapper?.setAdapterEnabled(true);
+    ```
 
 ---
 
@@ -260,13 +287,14 @@ For large migrations, consider:
 ✅ Top 50 leaderboard matches legacy leaderboard  
 ✅ Chip balances are accurate  
 ✅ No "Leaderboard discrepancy" errors in logs  
-✅ "did not stabilize" connection warnings resolved  
+✅ "did not stabilize" connection warnings resolved
 
 ---
 
 ## Support
 
 If migration issues occur:
+
 1. Check the troubleshooting section above
 2. Verify connection string and database access
 3. Review MongoDB logs for errors

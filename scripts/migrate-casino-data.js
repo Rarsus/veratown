@@ -2,17 +2,18 @@
 /**
  * Direct MongoDB Migration Script
  * Migrates player data from legacy `players` collection to `unifiedCharacterProfiles`
- * 
+ *
  * Usage:
  *   MONGO_URI=mongodb://user:pass@host:port/dbname node scripts/migrate-casino-data.js
- *   
+ *
  * Or with local MongoDB:
  *   MONGO_URI=mongodb://localhost:27017/ropeybot node scripts/migrate-casino-data.js
  */
 
 const { MongoClient } = require("mongodb");
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/ropeybot";
+const MONGO_URI =
+    "mongodb+srv://olavceulemans_db_user:s3VtU80UmK8UwLYX@veratown.qk1s2r5.mongodb.net/ropeybot";
 const DB_NAME = new URL(MONGO_URI).pathname.slice(1) || "ropeybot";
 
 async function migrateData() {
@@ -43,7 +44,9 @@ async function migrateData() {
         }
 
         // Read all legacy players
-        console.log(`\n⏳ Reading ${totalPlayers} players from legacy collection...`);
+        console.log(
+            `\n⏳ Reading ${totalPlayers} players from legacy collection...`,
+        );
         const players = await playersCollection
             .find({})
             .sort({ score: -1 })
@@ -151,7 +154,9 @@ async function migrateData() {
         // Verify migration
         const finalUnifiedCount = await unifiedCollection.countDocuments();
         console.log(`\n📊 Final state:`);
-        console.log(`   - Profiles in unified collection: ${finalUnifiedCount}`);
+        console.log(
+            `   - Profiles in unified collection: ${finalUnifiedCount}`,
+        );
 
         if (created + updated > 0) {
             // Show top 5 migrated players
