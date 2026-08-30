@@ -17,6 +17,7 @@
  */
 
 import { MapRegion } from "bc-bot";
+import { createSystemLogger } from "../veratown/shared/systemLogger";
 
 export interface VenueBonus {
     region: MapRegion;
@@ -29,6 +30,7 @@ export interface VenueBonus {
  * CasinoVenueSystem manages regional chip economy multipliers
  */
 export class CasinoVenueSystem {
+    private readonly logger = createSystemLogger("CasinoVenueSystem");
     private venues: Map<MapRegion, VenueBonus> = new Map();
 
     /**
@@ -90,9 +92,11 @@ export class CasinoVenueSystem {
      */
     public registerVenue(venue: VenueBonus): void {
         this.venues.set(venue.region, venue);
-        console.log(
-            `[CasinoVenue] Registered venue: ${venue.region} (${venue.chipMultiplier}x)`,
-        );
+        this.logger.info("Venue registered", {
+            region: venue.region,
+            multiplier: venue.chipMultiplier,
+            description: venue.description,
+        });
     }
 
     /**
@@ -105,9 +109,11 @@ export class CasinoVenueSystem {
 
         const venue = this.venues.get(region);
         if (!venue) {
-            console.warn(
-                `[CasinoVenue] Unknown region ${region}, using default multiplier`,
-            );
+            this.logger.warn("Venue not found", {
+                region,
+                usingDefault: "1.0x",
+                operation: "getVenueMultiplier",
+            });
             return 1.0;
         }
 
@@ -201,20 +207,16 @@ export class CasinoVenueSystem {
      * Log all venue multipliers (for debugging)
      */
     public logVenues(): void {
-        console.log("\n=== CASINO VENUES (EPIC 2) ===");
         const venues = this.getVenuesByMultiplier();
-        for (const venue of venues) {
-            const status =
-                venue.chipMultiplier === 0
-                    ? "❌ No Gambling"
-                    : venue.chipMultiplier > 1
-                      ? "⬆️  Bonus"
-                      : venue.chipMultiplier < 1
-                        ? "⬇️  Penalty"
-                        : "➡️  Standard";
-            console.log(
-                `${status} ${venue.region}: ${venue.chipMultiplier}x - ${venue.description}`,
-            );
-        }
+        const venueDetails = venues.map((v) => ({
+            region: v.region,
+            multiplier: v.chipMultiplier,
+            description: v.description,
+        }));
+        this.logger.info("All venues", {
+            operation: "logVenues",
+            count: venues.length,
+            venues: venueDetails,
+        });
     }
 }

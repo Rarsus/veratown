@@ -20,6 +20,7 @@
 import { CasinoStoreAdapter } from "./casinoStoreAdapter";
 import { UnifiedCharacterStore, GameEvent } from "./unifiedCharacterStore";
 import { CasinoVenueSystem } from "./casinoVenueSystem";
+import { createSystemLogger } from "../veratown/shared/systemLogger";
 import { MapRegion } from "bc-bot";
 
 export interface BetContext {
@@ -47,6 +48,8 @@ export interface GameOutcome {
  * CasinoEngine provides core game logic for all casino games
  */
 export class CasinoEngine {
+    private readonly logger = createSystemLogger("CasinoEngine");
+
     constructor(
         private store: CasinoStoreAdapter,
         private unifiedStore: UnifiedCharacterStore,
@@ -321,10 +324,11 @@ export class CasinoEngine {
      * Log casino engine metrics (for debugging)
      */
     public logMetrics(): void {
-        console.log("\n=== CASINO ENGINE (EPIC 2) ===");
-        console.log("House Edges:");
-        console.log(`  Roulette: ${this.getHouseEdge("roulette") * 100}%`);
-        console.log(`  Blackjack: ${this.getHouseEdge("blackjack") * 100}%`);
-        console.log(`  Baccarat: ${this.getHouseEdge("baccarat") * 100}%`);
+        this.logger.info("Engine metrics", {
+            operation: "logMetrics",
+            rouletteEdge: `${this.getHouseEdge("roulette") * 100}%`,
+            blackjackEdge: `${this.getHouseEdge("blackjack") * 100}%`,
+            baccaratEdge: `${this.getHouseEdge("baccarat") * 100}%`,
+        });
     }
 }

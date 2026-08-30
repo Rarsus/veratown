@@ -18,6 +18,7 @@
 import { CasinoStore, Player } from "../casino/casinostore";
 import { CasinoStoreAdapter } from "./casinoStoreAdapter";
 import { AdapterValidator } from "./adapterValidation";
+import { createSystemLogger } from "../veratown/shared/systemLogger";
 
 export interface MigrationMetrics {
     // Read metrics
@@ -41,6 +42,7 @@ export interface MigrationMetrics {
  * Write operations are currently pass-through to original store (for future migration).
  */
 export class CasinoStoreMigrationWrapper {
+    private readonly logger = createSystemLogger("CasinoStoreMigrationWrapper");
     private metrics: MigrationMetrics = {
         totalReads: 0,
         adapterWins: 0,
@@ -122,19 +124,12 @@ export class CasinoStoreMigrationWrapper {
                     this.hasPlayerDiscrepancies(adapterPlayer, originalPlayer)
                 ) {
                     this.metrics.readDiscrepancies++;
-                    console.warn(
-                        `[Migration] Player ${memberNumber} discrepancy detected`,
-                        {
-                            adapter: {
-                                credits: adapterPlayer.credits,
-                                score: adapterPlayer.score,
-                            },
-                            original: {
-                                credits: originalPlayer.credits,
-                                score: originalPlayer.score,
-                            },
-                        },
-                    );
+                    this.logger.warn("Player data mismatch", {
+                        memberNumber,
+                        operation: "getPlayer",
+                        adapterCredits: adapterPlayer.credits,
+                        originalCredits: originalPlayer.credits,
+                    });
                 } else {
                     this.metrics.adapterWins++;
                 }
@@ -146,10 +141,11 @@ export class CasinoStoreMigrationWrapper {
         } catch (error) {
             // Adapter failed, fall back to original store
             this.metrics.adapterMisses++;
-            console.warn(
-                `[Migration] Adapter read failed for player ${memberNumber}, falling back to original store`,
-                error,
-            );
+            this.logger.warn("Adapter getPlayer failed", {
+                memberNumber,
+                operation: "getPlayer",
+                fallback: "original",
+            });
             return this.originalStore.getPlayer(memberNumber);
         }
     }
@@ -210,10 +206,11 @@ export class CasinoStoreMigrationWrapper {
             return adapterPlayers;
         } catch (error) {
             this.metrics.adapterMisses++;
-            console.warn(
-                `[Migration] Adapter leaderboard read failed, falling back to original store`,
-                error,
-            );
+            this.logger.warn("Adapter getTopPlayers failed", {
+                operation: "getTopPlayers",
+                limit,
+                fallback: "original",
+            });
             return this.originalStore.getTopPlayers(limit);
         }
     }
@@ -250,19 +247,20 @@ export class CasinoStoreMigrationWrapper {
                     this.metrics.writeWins++;
                 } else {
                     this.metrics.writeDiscrepancies++;
-                    console.warn(
-                        `[Migration] Write discrepancy detected for player ${player.memberNumber}`,
-                    );
+                    this.logger.warn("Write operation discrepancy", {
+                        memberNumber: player.memberNumber,
+                        operation: "savePlayer",
+                    });
                 }
             } else {
                 this.metrics.writeWins++;
             }
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] Write failed for player ${player.memberNumber}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                memberNumber: player.memberNumber,
+                operation: "savePlayer",
+            });
             throw error; // Re-throw to prevent silent failures
         }
     }
@@ -288,10 +286,10 @@ export class CasinoStoreMigrationWrapper {
             this.metrics.writeWins++;
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] setPlayerName failed for player ${memberNumber}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                memberNumber,
+                operation: "setPlayerName",
+            });
             throw error;
         }
     }
@@ -317,10 +315,11 @@ export class CasinoStoreMigrationWrapper {
             this.metrics.writeWins++;
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] addCredits failed for player ${memberNumber}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                memberNumber,
+                operation: "addCredits",
+                amount,
+            });
             throw error;
         }
     }
@@ -349,10 +348,10 @@ export class CasinoStoreMigrationWrapper {
             this.metrics.writeWins++;
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] addPurchase failed for player ${purchase.memberNumber}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                memberNumber: purchase.memberNumber,
+                operation: "addPurchase",
+            });
             throw error;
         }
     }
@@ -381,10 +380,10 @@ export class CasinoStoreMigrationWrapper {
             return adapterResult;
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] claimDailyFreeChips failed for player ${memberNumber}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                memberNumber,
+                operation: "claimDailyFreeChips",
+            });
             throw error;
         }
     }
@@ -429,10 +428,12 @@ export class CasinoStoreMigrationWrapper {
             return adapterResult;
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] transferCredits failed from ${from} to ${to}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                operation: "transferCredits",
+                fromMember: from,
+                toMember: to,
+                amount,
+            });
             throw error;
         }
     }
@@ -460,10 +461,10 @@ export class CasinoStoreMigrationWrapper {
             this.metrics.writeWins++;
         } catch (error) {
             this.metrics.writeMisses++;
-            console.error(
-                `[Migration] saveOutfit failed for player ${outfit.memberNumber}`,
-                error,
-            );
+            this.logger.error("Write operation failed", error, {
+                memberNumber: outfit.memberNumber,
+                operation: "saveOutfit",
+            });
             throw error;
         }
     }
@@ -536,30 +537,37 @@ export class CasinoStoreMigrationWrapper {
                   )
                 : 0;
 
-        console.log("\n=== CASINO MIGRATION PROGRESS (Phase 2.4c) ===");
-        console.log("READ OPERATIONS:");
-        console.log(`  Total reads: ${this.metrics.totalReads}`);
-        console.log(`  Adapter wins: ${this.metrics.adapterWins}`);
-        console.log(`  Adapter misses: ${this.metrics.adapterMisses}`);
-        console.log(
-            `  Average adapter latency: ${avgAdapterMs}ms (expected 0-5ms faster)`,
-        );
-        console.log(
-            `  Average original latency: ${avgOriginalMs}ms (baseline for comparison)`,
-        );
-        console.log("WRITE OPERATIONS:");
-        console.log(`  Total writes: ${this.metrics.totalWrites}`);
-        console.log(`  Write wins: ${this.metrics.writeWins}`);
-        console.log(`  Write misses: ${this.metrics.writeMisses}`);
-
         const totalDiscrepancies =
             this.metrics.readDiscrepancies + this.metrics.writeDiscrepancies;
+
+        this.logger.info("Migration progress - read operations", {
+            operation: "logProgress",
+            totalReads: this.metrics.totalReads,
+            adapterWins: this.metrics.adapterWins,
+            adapterMisses: this.metrics.adapterMisses,
+            avgAdapterLatencyMs: avgAdapterMs,
+            avgOriginalLatencyMs: avgOriginalMs,
+        });
+
+        this.logger.info("Migration progress - write operations", {
+            operation: "logProgress",
+            totalWrites: this.metrics.totalWrites,
+            writeWins: this.metrics.writeWins,
+            writeMisses: this.metrics.writeMisses,
+        });
+
         if (totalDiscrepancies > 0) {
-            console.warn(
-                `⚠️  WARNING: Found ${totalDiscrepancies} total discrepancies (reads: ${this.metrics.readDiscrepancies}, writes: ${this.metrics.writeDiscrepancies}). Review logs.`,
-            );
+            this.logger.warn("Migration discrepancies detected", {
+                operation: "logProgress",
+                totalDiscrepancies,
+                readDiscrepancies: this.metrics.readDiscrepancies,
+                writeDiscrepancies: this.metrics.writeDiscrepancies,
+            });
         } else {
-            console.log("✅ No discrepancies found. Migration on track.");
+            this.logger.info("No discrepancies found", {
+                operation: "logProgress",
+                status: "on_track",
+            });
         }
     }
 }

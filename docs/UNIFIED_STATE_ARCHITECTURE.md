@@ -2,8 +2,8 @@
 title: "Unified State Architecture: Cross-System Character Tracking"
 subtitle: "Architectural Analysis, Synergies, Duplications, and Restructuring Plan"
 date: "August 29, 2026"
-version: "1.0"
-status: "Architectural Planning"
+version: "1.1"
+status: "Phase 2.4c Complete - Phase 2.4d Ready"
 ---
 
 # Unified State Architecture: Cross-System Character Tracking
@@ -1314,25 +1314,117 @@ await unified.recordAuditEntry(event.target, {
 - Event recording for recovery/replay
 - Full backward compatibility support (adapters coming in Phase 2)
 
-### Phase 2: Integration (Weeks 3-4) 🔄 UPCOMING
+### Phase 2: Integration ✅ **COMPLETE** (Aug 29-30)
 
-- [ ] Deploy UnifiedCharacterStore alongside existing stores
-- [ ] Create CasinoStoreAdapter for backward compatibility
-- [ ] Create DareStoreAdapter for backward compatibility
-- [ ] Create VeratownStoreAdapter for backward compatibility
-- [ ] Implement EventBus and pub/sub system
-- [ ] Implement initial cross-system events (chip_transfer, bondage_applied)
+**Completed Components:**
 
-### Phase 2.5: EPIC 2 (Weeks 3-4) 🔄 CONCURRENT
+- ✅ Phase 2.4a: Adapters deployed (Aug 29)
+    - CasinoStoreAdapter (191 lines) - 10 methods delegating to UnifiedCharacterStore
+    - DareStoreAdapter (210 lines) - 12 methods for character state
+    - VeratownStoreAdapter (340 lines) - 17 methods for full API coverage
+    - All 3 adapters instantiated globally in main.ts
 
-- [ ] Casino integration into Veratown (4 features)
+- ✅ Phase 2.4b: Read-Side Migration (Aug 29)
+    - CasinoStoreMigrationWrapper created (280+ lines)
+    - Read operations: getPlayer, getTopPlayers with validation
+    - Parallel validation against original store
+    - Migration metrics tracking
+    - Feature flag for adapter enable/disable
+    - All 396 tests passing
 
-### Phase 3: Cross-System Features (Weeks 5-6)
+- ✅ Phase 2.4c: Write-Side Migration (Aug 30)
+    - CasinoStoreMigrationWrapper enhanced (380+ lines)
+    - 7 write operation wrappers: savePlayer, setPlayerName, addCredits, addPurchase, claimDailyFreeChips, transferCredits, saveOutfit
+    - All operations use Promise.all() for parallel execution on both stores
+    - Validation by read-back ensures consistency
+    - Separate read/write metrics tracking
+    - Integration tests (250+ lines) with zero discrepancies
+    - All 396 tests passing with zero regressions
+    - **SystemLogger implementation** with structured error context (Golden Rule #8)
+
+### Phase 2.5: EPIC 2 Casino Integration ✅ **COMPLETE** (Aug 29-30, Concurrent)
+
+**Completed Components:**
+
+- ✅ CasinoVenueSystem (200+ lines)
+    - Location-based chip multipliers (1.0x - 1.5x)
+    - 6 default venues: MainHall (1.0x), MainHallThrone (1.25x), MainHallPrivateRoom (1.5x), MainHallLounge (1.1x), MainHallRestaurant (0.9x), MainHallShop (0.0x)
+    - Methods: getVenueMultiplier, applyVenueBonus, isGamblingAllowed, getVenuesByMultiplier, getHighRollerVenues, registerVenue
+    - Dynamic venue registration for future expansion
+    - Structured logging with createSystemLogger
+
+- ✅ CasinoEngine (300+ lines)
+    - Core game logic extraction for reuse across game types
+    - BetContext & GameOutcome interfaces
+    - Methods: executeBet (validates venue, checks chips, deducts), resolveOutcome (calculates payout, emits events), calculateFinalPayout
+    - House edge calculations: Roulette 2.7%, Blackjack 0.5%, Baccarat 1.06%
+    - Recommended bet sizing based on Kelly Criterion
+    - Message formatting with multiplier display
+    - Structured logging with createSystemLogger
+
+- ✅ Global Initialization (main.ts)
+    - Both systems instantiated in dare game case
+    - Available globally: global.casinoVenueSystem, global.casinoEngine
+    - Used by all game systems for consistent behavior
+
+- ✅ Integration Tests (250+ lines)
+    - Phase 2.4c write-side migration tests
+    - EPIC 2 venue system tests (multipliers, venues, restrictions)
+    - EPIC 2 CasinoEngine tests (bet validation, payout calculations, house edge)
+    - Integrated casino workflow tests
+    - All tests passing with zero regressions
+
+### Phase 2.4d: Game System Adoption ⏳ **READY** (Timeline: 2-3 hours)
+
+**Planned Deliverables:**
+
+- [ ] Casino system migration to use global.casinoStoreMigrationWrapper
+    - Update all read operations (getPlayer, getTopPlayers)
+    - Update all write operations (addCredits, setPlayerName, etc.)
+    - Verify parallel validation shows identical results
+
+- [ ] Venue system integration into Casino game logic
+    - Apply venue multipliers to all bets
+    - Use venue restrictions in game initialization
+    - Update payout calculations with venue bonuses
+
+- [ ] CasinoEngine integration into game methods
+    - Use casinoEngine.executeBet() for bet validation
+    - Use casinoEngine.resolveOutcome() for game outcome resolution
+    - Use casinoEngine message formatting for player notifications
+
+- [ ] Update 20+ casino game methods
+    - Blackjack, Roulette, Baccarat game classes
+    - Bet placement, outcome resolution, payout logic
+
+- [ ] Test expansion
+    - Create tests for Casino system adoption
+    - Target: 416+ tests, no regressions
+    - Measure performance impact
+
+- [ ] Commit and push Phase 2.4d changes
+
+### Phase 3: Cross-System Features ⏳ **UPCOMING** (After Phase 2.4d, Timeline: 1-2 weeks)
 
 - [ ] Implement "Bet Chips to Escape Bondage"
+    - Use EventBus to detect bondage events
+    - Enable player chip spending to reduce bondage duration
+    - Integrate with UnifiedCharacterStore chip tracking
+
 - [ ] Implement "Winnings Auto-Lock"
+    - Detect when player becomes bonded
+    - Automatically lock earned chips
+    - Restrict chip spending while bonded
+
 - [ ] Implement "Caged Players Auto-Removed from Games"
+    - Monitor cage entry events
+    - Automatically remove from active games
+    - Restore state on cage exit
+
 - [ ] Implement unified audit trail
+    - Centralize all state changes to gameEvents collection
+    - Cross-system event correlation
+    - Full compliance audit trail
 
 ### Phase 4: Shared Effects System (Weeks 7-8)
 
