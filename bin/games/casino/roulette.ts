@@ -401,16 +401,19 @@ export class RouletteGame implements Game {
             return;
         }
 
-        const player = await this.casino.store.getPlayer(sender.MemberNumber);
+        const casinoView = await this.casino
+            .getUnifiedStore()
+            .getCasinoView(sender.MemberNumber);
 
         if (bet.stakeForfeit === undefined) {
-            if (player.credits - bet.stake < 0) {
+            if ((casinoView?.chips || 0) - bet.stake < 0) {
                 this.conn.reply(msg, `You don't have enough chips.`);
                 return;
             }
 
-            player.credits -= bet.stake;
-            await this.casino.store.savePlayer(player);
+            await this.casino
+                .getUnifiedStore()
+                .updateChips(sender.MemberNumber, -bet.stake, "roulette_bet", 0);
         } else {
             const blockers = getItemsBlockingForfeit(
                 sender,
@@ -465,10 +468,16 @@ export class RouletteGame implements Game {
                 console.log(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );
-                ++player.cheatStrikes;
-                await this.casino.store.savePlayer(player);
-
-                this.casino.cheatPunishment(sender, player);
+                
+                // Fetch current casino view to get cheat strikes
+                const casinoView = await this.casino
+                    .getUnifiedStore()
+                    .getCasinoView(sender.MemberNumber);
+                
+                // Increment cheat strikes via the casino punishment system
+                this.casino.cheatPunishment(sender, {
+                    cheatStrikes: (casinoView?.cheatStrikes || 0) + 1,
+                } as any);
 
                 return;
             }
@@ -509,13 +518,19 @@ export class RouletteGame implements Game {
             return;
         }
         if (this.getBetsForPlayer(sender.MemberNumber)[0].stakeForfeit) {
-            const player = await this.casino.store.getPlayer(
-                sender.MemberNumber,
+            // Refund forfeit bets using UnifiedCharacterStore
+            const refundAmount = this.getBetsForPlayer(sender.MemberNumber).reduce(
+                (sum, b) => sum + b.stake,
+                0,
             );
-            this.getBetsForPlayer(sender.MemberNumber).forEach((b) => {
-                player.credits += b.stake;
-            });
-            await this.casino.store.savePlayer(player);
+            await this.casino
+                .getUnifiedStore()
+                .updateChips(
+                    sender.MemberNumber,
+                    refundAmount,
+                    "roulette_bet_cancel",
+                    0,
+                );
         }
 
         this.clearBetsForPlayer(sender.MemberNumber);

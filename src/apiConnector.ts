@@ -328,7 +328,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     };
 
     private onSocketConnectError = (err: Error) => {
-        console.log(`Socket connect error: ${err.message}`);
+        console.error(`Socket connect error: ${err.message}`);
     };
 
     private onSocketReconnect = () => {
