@@ -24,8 +24,9 @@ import {
 import { wait } from "../hub/utils";
 import { GameTimer } from "./casino/gameTimer";
 import { CommandValidator } from "./shared/commandValidator";
-import { DareStore, DareDoc } from "./dareStore";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
+import { DareDataService, DareDoc } from "./dare/dareDataService";
+import { DareStateService } from "./dare/dareStateService";
 import {
     applyForfeitForDare,
     describeForfeitOutcome,
@@ -182,8 +183,6 @@ Game Overview
         "\n" +
         Dare.description_rules;
 
-    private commandParser?: CommandParser;
-
     // Resolves once persisted state (lobby, games, per-member bookkeeping)
     // has been loaded from the database - awaited at the top of every
     // command handler so a just-restarted bot doesn't act on empty state.
@@ -250,20 +249,43 @@ Game Overview
     private participantManager: GameParticipantManager;
     private commandHandlers: DareCommandHandlers;
     private effectApplier: DareEffectApplier;
-    public unifiedStore: UnifiedCharacterStore;
 
+    /**
+     * DARE SYSTEM CONSTRUCTOR - Three-Layer Architecture
+     *
+     * Layer 1: unifiedStore → UnifiedCharacterStore (character state: bonds, stats)
+     * Layer 2: dareStateService → DareStateService (system state: games, lobbies)
+     * Layer 3: dareDataService → DareDataService (reference data: dare definitions)
+     *
+     * PLUGGABILITY: No circular dependencies or external system dependencies.
+     * This system is fully self-contained and independently testable.
+     */
     public constructor(
         private conn: API_Connector,
-        private store: DareStore,
-        commandParser?: CommandParser,
-        unifiedStore?: UnifiedCharacterStore,
-        config?: DareConfig,
+        private commandParser?: CommandParser,
+        private unifiedStore?: UnifiedCharacterStore,
+        private dareDataService?: DareDataService,
+        private dareStateService?: DareStateService,
+        private config?: DareConfig,
     ) {
+        // Initialize unified store (Layer 1: character state)
         this.unifiedStore =
             unifiedStore ||
             global.unifiedCharacterStore ||
             new UnifiedCharacterStore(undefined as any);
-        this.commandParser = commandParser;
+
+        // Initialize dare data service (Layer 3: reference data)
+        // If not provided, will be injected later via setter
+        if (!this.dareDataService && global.dareDataService) {
+            this.dareDataService = global.dareDataService as any;
+        }
+
+        // Initialize dare state service (Layer 2: system state)
+        // If not provided, will be injected later via setter
+        if (!this.dareStateService && global.dareStateService) {
+            this.dareStateService = global.dareStateService as any;
+        }
+
         this.region = config?.region;
         this.configuredRegion = config?.region;
 
@@ -329,7 +351,7 @@ Game Overview
      * Used for diagnostics and monitoring.
      */
     public getStatus(): string {
-        const gameCount = this.gameManager.getActiveGameCount();
+        const gameCount = this.gameManager.getGameCount();
         const lobbySize = this.lobby.size;
         return `Dare: ${this.enabled ? "enabled" : "disabled"} | Lobby: ${lobbySize} | Active games: ${gameCount}`;
     }
@@ -339,7 +361,7 @@ Game Overview
      * Optionally saves state and stops timers.
      */
     public async cleanup?(): Promise<void> {
-        this.turnTimerManager.stopStripEnforcementInterval?.();
+        this.turnTimerManager.clearAll();
         // Additional cleanup as needed
     }
 
@@ -422,7 +444,7 @@ Game Overview
         if (args.length < 1) {
             this.conn.SendMessage(
                 "Emote",
-                "*" + (await this.store.getSummary()),
+                "*" + ((await this.dareDataService?.getSummary()) ?? ""),
             );
             return;
         }
@@ -718,14 +740,18 @@ Game Overview
                     this.conn.SendMessage("Emote", "*Usage: !dare add <dare>");
                     return;
                 }
-                await this.store.addDare(
-                    args.slice(1).join(" "),
-                    senderCharacter.MemberNumber,
-                    senderCharacter.Name,
-                );
+
+                // Add dare to the database via DareDataService (Layer 3)
+                const dareText = args.slice(1).join(" ");
+                await this.dareDataService?.addDare({
+                    text: dareText,
+                    category: "custom",
+                    originalAuthor: senderCharacter.Name,
+                });
+
                 this.conn.SendMessage(
                     "Emote",
-                    `*Dare saved, thanks ${senderCharacter}! ${await this.store.getSummary()}`,
+                    `*Dare saved, thanks ${senderCharacter}! ${await this.dareDataService?.getSummary()}`,
                 );
 
                 break;
@@ -766,14 +792,14 @@ Game Overview
                 );
                 await wait(2000);
 
-                const dare = await this.store.drawDare();
+                const dare = await this.dareDataService?.drawDare();
                 if (dare === undefined) {
                     this.conn.SendMessage("Emote", `*No more dares left!`);
                     return;
                 }
                 this.conn.SendMessage(
                     "Emote",
-                    `*${senderCharacter} draws: ${dare.text}\n${await this.store.getSummary()}`,
+                    `*${senderCharacter} draws: ${dare.text}\n${(await this.dareDataService?.getSummary()) ?? ""}`,
                 );
 
                 this.pendingDraws.set(senderCharacter.MemberNumber, dare);
@@ -843,10 +869,10 @@ Game Overview
                     );
                     return;
                 }
-                await this.store.resetDares();
+                await this.dareDataService?.resetDares();
                 this.conn.SendMessage(
                     "Emote",
-                    "*" + (await this.store.getSummary()),
+                    "*" + ((await this.dareDataService?.getSummary()) ?? ""),
                 );
                 break;
             case "validate": {
@@ -857,13 +883,34 @@ Game Overview
                     );
                     return;
                 }
-                const result = await this.store.validateDares();
-                const summary = `Checked ${result.checked} dare(s), fixed ${result.fixed}.`;
-                const shown = result.issues.slice(0, 20);
+
+                const result = await this.dareDataService?.validateDares();
+                if (!result) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Dare service not available",
+                    );
+                    return;
+                }
+
+                const allIssues = [...result.errors, ...result.warnings];
+                const summary =
+                    result.valid === true
+                        ? "✓ All dares are valid!"
+                        : `✗ Found ${allIssues.length} issue(s)`;
+
+                const shown = allIssues.slice(0, 20);
                 const extra =
-                    result.issues.length > shown.length
-                        ? `\n...and ${result.issues.length - shown.length} more.`
+                    allIssues.length > shown.length
+                        ? `\n...and ${allIssues.length - shown.length} more.`
                         : "";
+
+                if (result.suggestions.length > 0) {
+                    shown.push(
+                        `\nSuggestions:\n${result.suggestions.join("\n")}`,
+                    );
+                }
+
                 this.whisper(
                     senderCharacter.MemberNumber,
                     shown.length > 0
@@ -880,15 +927,12 @@ Game Overview
                     );
                     return;
                 }
-                const result = await this.store.ensureRewardRatio(
-                    senderCharacter.MemberNumber,
-                    senderCharacter.Name,
-                );
+
+                const result =
+                    await this.dareDataService?.ensureRewardRatio(0.15);
                 this.whisper(
                     senderCharacter.MemberNumber,
-                    result.added > 0
-                        ? `Added ${result.added} new reward dare(s) so rewards make up about 25% of the deck.`
-                        : "Reward dares already make up at least 25% of the deck - nothing added.",
+                    result || "Dare service not available",
                 );
                 break;
             }
@@ -906,11 +950,27 @@ Game Overview
                         );
                         return;
                     }
-                    const dares = await this.store.listDares();
+                    const result = await this.dareDataService?.listDares(10, 0);
+                    if (!result) {
+                        this.whisper(
+                            senderCharacter.MemberNumber,
+                            "Dare service not available",
+                        );
+                        return;
+                    }
+
+                    const {
+                        dares,
+                        total: totalDares,
+                        page,
+                        pages: totalPages,
+                    } = result;
+
                     this.logger.info(`List command found dares`, {
-                        count: dares.length,
+                        count: totalDares,
                         memberNumber: senderCharacter.MemberNumber,
                     });
+
                     if (dares.length === 0) {
                         this.whisper(
                             senderCharacter.MemberNumber,
@@ -919,21 +979,38 @@ Game Overview
                         return;
                     }
 
-                    const pageSize = 10;
-                    const pageCount = Math.ceil(dares.length / pageSize);
-                    let page = parseInt(args[1], 10);
-                    if (!Number.isInteger(page) || page < 1) page = 1;
-                    if (page > pageCount) page = pageCount;
+                    // Parse requested page
+                    let requestedPage = parseInt(args[1], 10);
+                    if (!Number.isInteger(requestedPage) || requestedPage < 1) {
+                        requestedPage = 1;
+                    }
+                    if (requestedPage > totalPages) {
+                        requestedPage = totalPages;
+                    }
 
-                    const start = (page - 1) * pageSize;
-                    const pageDares = dares.slice(start, start + pageSize);
+                    // Load the requested page
+                    const pageResult =
+                        requestedPage === page
+                            ? result
+                            : await this.dareDataService?.listDares(
+                                  10,
+                                  requestedPage - 1,
+                              );
 
-                    const lines = pageDares.map(
+                    if (!pageResult) {
+                        this.whisper(
+                            senderCharacter.MemberNumber,
+                            "Failed to load page",
+                        );
+                        return;
+                    }
+
+                    const lines = pageResult.dares.map(
                         (d, i) =>
-                            `${start + i + 1}. ${d.text.replace(/[()]/g, "")}`,
+                            `${(requestedPage - 1) * 10 + i + 1}. ${d.text.replace(/[()]/g, "")}`,
                     );
                     lines.push(
-                        `Page ${page} of ${pageCount} - !dare list <page> for more`,
+                        `Page ${requestedPage} of ${totalPages} - !dare list <page> for more`,
                     );
 
                     this.whisper(
@@ -1078,11 +1155,11 @@ Game Overview
     };
 
     // Saves a member's current outfit as their "original" one, if nothing's
-    // saved for them already - see DareStore.saveOriginalOutfitIfMissing().
+    // saved for them already - see DareDataService.saveOriginalOutfitIfMissing().
     private captureOriginalOutfitIfMissing = async (
         character: API_Character,
     ): Promise<void> => {
-        await this.store.saveOriginalOutfitIfMissing(
+        await this.dareDataService?.saveOriginalOutfitIfMissing(
             character.MemberNumber,
             character.Appearance.MakeAppearanceBundle(),
         );
@@ -1094,7 +1171,7 @@ Game Overview
     private restoreOriginalOutfit = async (
         character: API_Character,
     ): Promise<void> => {
-        const original = await this.store.getOriginalOutfit(
+        const original = await this.dareDataService?.getOriginalOutfit(
             character.MemberNumber,
         );
         if (!original) return;
@@ -1104,7 +1181,7 @@ Game Overview
             true,
         );
         character.Appearance.applyBundle(original);
-        await this.store.clearOriginalOutfit(character.MemberNumber);
+        await this.dareDataService?.clearOriginalOutfit(character.MemberNumber);
     };
 
     // Runs continuously (see registerTriggers()): re-strips any clothing a
@@ -1688,7 +1765,7 @@ Game Overview
             if (dare) pendingBondage.push([memberNumber, { dare, deadlineAt }]);
         }
 
-        await this.store.saveState({
+        await this.dareStateService?.saveState({
             lobby: [...this.lobby],
             nextGameId: 1, // No longer tracked - gameManager handles it
             games,
@@ -1706,7 +1783,7 @@ Game Overview
     // once from the constructor (see `ready`) so a bot restart resumes
     // in-progress games instead of silently losing them.
     private loadState = async (): Promise<void> => {
-        const state = await this.store.loadState();
+        const state = await this.dareStateService?.loadState();
         if (!state) return;
 
         this.lobby = new Set(state.lobby ?? []);

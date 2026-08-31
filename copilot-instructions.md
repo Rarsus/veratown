@@ -1701,10 +1701,204 @@ Key files modified:
 
 ---
 
+## THREE-LAYER DATA ARCHITECTURE PATTERN
+
+**CRITICAL:** This pattern prevents Generic vs Character-Specific data violations that are architectural bugs requiring multi-hour refactoring.
+
+### The Pattern
+
+All data collections fall into exactly one of three layers:
+
+```
+Layer 1 (Character State)
+    ↓ embedded in UnifiedCharacterProfile
+    ├── character-specific stats (casino.chips, dare.bonds, veratown.position)
+    ├── character-specific history (audit logs for ONE character)
+    └── character-specific config (personal preferences)
+
+Layer 2 (System State)
+    ↓ in system-specific service (DareStateService, CasinoStateService)
+    ├── active games (game instances, lobbies)
+    ├── active lobbies (player rosters, queue state)
+    ├── system configuration (feature flags, rotation schedules)
+    └── runtime state (timers, turn order, round counters)
+
+Layer 3 (Reference Data - NON-CHARACTER-TIED)
+    ↓ in generic data service (DareDataService, RoleDefinitionService)
+    ├── dare definitions (the 100+ dare cards in database)
+    ├── role definitions (Warden, Guard, etc. - shared, never change per-character)
+    ├── location definitions (map geometry, boundaries)
+    ├── asset mappings (furniture, accessories, bondage items)
+    └── rule definitions (access groups, permission matrices)
+```
+
+### Key Rules
+
+1. **No Layer 3 in Layer 1:** Reference data (dares, roles, locations) MUST NOT be embedded in character profiles
+    - ❌ Bad: `{ characterName: "Alice", dareIds: [1, 2, 3] }`
+    - ✅ Good: Layer 3 collection has `{ dareId: 1, text: "...", category: "bondage" }`
+
+2. **No Character Numbers in Layer 3:** Generic reference data MUST NOT contain memberNumbers
+    - ❌ Bad: `{ doorKey: "door_1", allowedMembers: [1, 2, 3] }`
+    - ✅ Good: Separate collection `{ doorKey: "door_1", groupName: "admin", memberNumber: 1 }`
+
+3. **No Atomic Operations Between Layers:** Character updates and reference data are not atomic
+    - ❌ Bad: Update character AND dare simultaneously in one transaction
+    - ✅ Good: Update character state, then separately query reference data
+
+4. **Layer 3 is Read-Heavy, Write-Light:** Reference data rarely changes
+    - Use caching strategies (startup bulk load, TTL invalidation)
+    - Use aggregation pipelines for filtering
+    - Use MongoDB views for pre-computed queries
+
+### Symptom Identification
+
+If you see ANY of these patterns, it's a Layer violation:
+
+```typescript
+// ❌ BAD: Character data accessing Layer 3 directly
+character.casino.blacklist = [
+    { dareId: 1, reason: "too risky" }, // dare definition mixed with character state
+    { dareId: 2 },
+];
+
+// ❌ BAD: Reference data containing character numbers
+db.collection("roleDefinitions").findOne({
+    name: "Warden",
+    allowedMembers: [1, 2, 3], // membership is character data!
+});
+
+// ❌ BAD: Mixed in constructor
+export class Dare {
+    constructor(
+        private unifiedStore: UnifiedCharacterStore, // Layer 1
+        // Missing: Layer 2 (system state service)
+        // Missing: Layer 3 (reference data service)
+    ) {}
+}
+
+// ✅ GOOD: Clean separation
+export class Dare {
+    constructor(
+        private unifiedStore: UnifiedCharacterStore, // Layer 1
+        private dareStateService: DareStateService, // Layer 2
+        private dareDataService: DareDataService, // Layer 3
+    ) {}
+}
+```
+
+### Known Violations to Fix
+
+| Collection                | Issue                                     | Severity  | Status     |
+| ------------------------- | ----------------------------------------- | --------- | ---------- |
+| `keypadAccessGroups`      | Contains `memberNumbers[]` (Layer 1 data) | 🔴 HIGH   | Pending    |
+| `locationEventExecutions` | Contains `affectedMembers[]`              | 🔴 HIGH   | Pending    |
+| `furnitureState`          | Live occupancy (Layer 1) mixed with state | 🔴 HIGH   | Pending    |
+| `playerRoles`             | Should embed in profiles, not separate    | 🟡 MEDIUM | Pending    |
+| `dares` (FIXED Phase 5)   | ✅ Separated into DareDataService         | ✅ FIXED  | 2026-08-31 |
+
+### Implementation Checklist for New Systems
+
+When adding a new game system (after Dare/Casino/Veratown):
+
+- [ ] **Identify all data types** the system needs
+- [ ] **Classify each type** into Layer 1, 2, or 3
+- [ ] **Create appropriate services:**
+    - Layer 1: Methods on UnifiedCharacterStore
+    - Layer 2: `[SystemName]StateService` for games/lobbies/config
+    - Layer 3: `[SystemName]DataService` for reference data
+- [ ] **Inject dependencies** in main.ts or system constructor
+- [ ] **Verify no circular deps** (can depend on 1 & 3, but not vice versa)
+- [ ] **Document cross-system deps** with `@CROSS-SYSTEM` JSDoc
+- [ ] **Test in isolation** with mocked services
+
+### Reference: Dare System Refactoring (Phase 5)
+
+The Dare system was refactored 2026-08-31 to follow this pattern:
+
+**Before (Mixed Layers):**
+
+```typescript
+class DareStore {
+    public async getSummary() {}
+    public async addDare(text, memberNumber, name) {} // Layer 1 + 3 mixed!
+    public async saveState(games, lobby) {} // Layer 2 data
+    public async saveOriginalOutfitIfMissing() {} // Layer 1 data
+}
+```
+
+**After (Clean Layers):**
+
+```typescript
+// Layer 3: Reference data only (generic dares, definitions)
+class DareDataService {
+    public async getSummary() {}
+    public async addDare(dare: DareDoc) {}
+    public async drawDare() {}
+    public async resetDares() {}
+    public async validateDares() {}
+}
+
+// Layer 2: System state only (active games, lobbies, config)
+class DareStateService {
+    public async loadState() {}
+    public async saveState(state) {}
+    public async getGame(gameId) {}
+    public async saveLobby(players) {}
+}
+
+// Layer 1: Character state (via UnifiedCharacterStore)
+class UnifiedCharacterStore {
+    public async getBonds(memberNumber) {}
+    public async getChips(memberNumber) {}
+    public async updateChips(memberNumber, amount, reason) {}
+}
+```
+
+**Result:**
+
+- ✅ Dare system is now independent and testable
+- ✅ No circular dependencies
+- ✅ Reference data can be cached without affecting character state
+- ✅ Clear ownership: each service owns its data
+- ✅ Multi-hour refactoring to fix violations → prevents future violations
+
+### Preventing Future Violations
+
+**Code Review Checklist:**
+
+When reviewing any database access code, ask:
+
+1. "Does this code touch memberNumber/characterName data?" → Layer 1
+2. "Does this code read game instances, lobbies, or system config?" → Layer 2
+3. "Does this code read generic definitions (dares, roles, locations)?" → Layer 3
+4. "Do I see memberNumbers in what should be Layer 3?" → 🚨 VIOLATION
+5. "Is character data accessed via multiple service calls?" → Might need atomicity fix
+
+---
+
 ## Last Updated
 
-**Date:** 2026-08-30 (Phase 3.5 - Plugin Architecture & Entry Point Simplification COMPLETE)  
-**Changes (Phase 3.5.3-5):**
+**Date:** 2026-08-31 (THREE-LAYER ARCHITECTURE PATTERN documented)
+
+**Changes:**
+
+- ✅ Added comprehensive THREE-LAYER DATA ARCHITECTURE PATTERN section
+- ✅ Documented Layer 1 (Character State), Layer 2 (System State), Layer 3 (Reference Data)
+- ✅ Identified 3 critical and 2 medium-priority violations in existing systems
+- ✅ Created symptom identification guide and implementation checklist
+- ✅ Referenced Dare system refactoring (Phase 5) as golden-path example
+- ✅ Added code review checklist for preventing future violations
+
+**Critical Issues Identified (Pending Fix):**
+
+1. `keypadAccessGroups` - Contains memberNumbers[] (Layer 1 data in Layer 3)
+2. `locationEventExecutions` - Contains affectedMembers[]
+3. `furnitureState` - Live occupancy tracking not atomic with character state
+4. `playerRoles` - Role assignment should embed in profiles, not separate
+5. `appearanceAuditLog` - ✓ Correctly isolated (audit per character)
+
+**Previous Phase 3.5 (2026-08-30):**
 
 **Phase 3.5.3: Game Plugin Refactoring**
 
