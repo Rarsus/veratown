@@ -14,12 +14,12 @@
 
 import { API_Connector, CommandParser } from "bc-bot";
 import { Db } from "mongodb";
-import { createSystemLogger } from "../shared";
+import { createSystemLogger } from "./shared/systemLogger";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
-import { KeypadDoorSystemRefactored } from "./keypadDoorSystemRefactored";
+import { KeypadDoorSystem } from "./keypadDoorSystemRefactored";
 import { KeypadLocationIntegration } from "./migrations/keypadLocationIntegration";
 import { KeypadCollectionSetup } from "./migrations/keypadCollectionSetup";
 import { KeypadBackwardCompatibility } from "./migrations/keypadBackwardCompatibility";
