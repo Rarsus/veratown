@@ -381,14 +381,22 @@ export class KeypadDataMigrator {
     }
 
     /**
-     * Phase 5: Migrate character access
+     * Phase 5: Migrate character access with validation
+     *
+     * CRITICAL: Validates that referenced characters exist in database
+     * - Scans legacy location.data.whitelistMemberNumbers
+     * - For EACH memberNumber: Queries unifiedCharacterProfiles
+     * - If exists: Adds to character.veratown.keypadAccess[]
+     * - If NOT exists: Skips with warning, logs error
+     *
+     * This ensures no orphaned access records for deleted/non-existent characters
      */
     private async phase5_migrateCharacterAccess(dryRun: boolean) {
         const startTime = Date.now();
         const phaseResult: KeypadMigrationPhaseResult = {
             phase: 5,
             status: "pending",
-            message: "Migrating character keypad access",
+            message: "Migrating character keypad access with validation",
             itemsProcessed: 0,
             itemsCreated: 0,
             errors: [],
@@ -396,10 +404,102 @@ export class KeypadDataMigrator {
         };
 
         try {
-            // Placeholder for character access migration
-            // This would scan locations and migrate membership to character profiles
+            const locations = await this.locationStore.getAllLocations();
+            const legacyLocations =
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                    locations,
+                );
+
+            // Collect all unique character references
+            const allCharacterRefs = new Set<number>();
+            const locationAccessMap = new Map<
+                string,
+                { groupName: string; members: number[] }[]
+            >();
+
+            for (const location of legacyLocations) {
+                const doorKey = `auto_location_${location.key}`;
+                const accessGroups: {
+                    groupName: string;
+                    members: number[];
+                }[] = [];
+                const data = location.data as Record<string, unknown>;
+
+                // Extract whitelist members (for "auto_whitelist" group)
+                const whitelist =
+                    (data.whitelistMemberNumbers as number[]) || [];
+                if (whitelist.length > 0) {
+                    accessGroups.push({
+                        groupName: "auto_whitelist",
+                        members: whitelist,
+                    });
+                    whitelist.forEach((m) => allCharacterRefs.add(m));
+                }
+
+                // Extract regular members (for "auto_members" group)
+                const members = (data.memberNumbers as number[]) || [];
+                if (members.length > 0) {
+                    accessGroups.push({
+                        groupName: "auto_members",
+                        members,
+                    });
+                    members.forEach((m) => allCharacterRefs.add(m));
+                }
+
+                if (accessGroups.length > 0) {
+                    locationAccessMap.set(doorKey, accessGroups);
+                }
+            }
+
+            phaseResult.itemsProcessed = allCharacterRefs.size;
+
+            // Validate each character exists before granting access
+            for (const [doorKey, groups] of locationAccessMap) {
+                for (const group of groups) {
+                    for (const memberNumber of group.members) {
+                        try {
+                            // CRITICAL: Verify character exists in database
+                            const profile =
+                                await this.characterStore.getProfile(
+                                    memberNumber,
+                                );
+
+                            if (!profile) {
+                                phaseResult.errors.push(
+                                    `Character ${memberNumber} not found for door ${doorKey}, skipping access grant`,
+                                );
+                                continue;
+                            }
+
+                            // Character exists - grant access
+                            if (!dryRun) {
+                                await this.characterStore.addKeypadAccess(
+                                    memberNumber,
+                                    {
+                                        doorKey,
+                                        groupName: group.groupName,
+                                        grantedAt: Date.now(),
+                                        expiresAt: undefined,
+                                        grantedBy: 0, // System migration
+                                        grantedReason: `Auto-migrated from legacy location ${doorKey}`,
+                                    },
+                                );
+                            }
+
+                            phaseResult.itemsCreated++;
+                        } catch (error) {
+                            phaseResult.errors.push(
+                                `Failed to grant access for character ${memberNumber} to door ${doorKey}: ${error instanceof Error ? error.message : String(error)}`,
+                            );
+                        }
+                    }
+                }
+            }
+
             phaseResult.status = "success";
-            phaseResult.message = "Character access migrated";
+            phaseResult.message =
+                `Character access migrated: ${phaseResult.itemsCreated} grants created, ` +
+                `${phaseResult.errors.length} skipped (characters not found)`;
         } catch (error) {
             phaseResult.status = "error";
             phaseResult.errors.push(
@@ -412,7 +512,14 @@ export class KeypadDataMigrator {
     }
 
     /**
-     * Phase 6: Build optional membership index
+     * Phase 6: Build membership index
+     *
+     * Scans all character profiles and indexes all keypadAccess records
+     * into the keypadGroupMemberships collection for fast "who has access?" queries
+     *
+     * Example: Admin wants to know "Who has access to door X?"
+     * Old way: Scan all character profiles (slow)
+     * New way: Query keypadGroupMemberships with doorKey={X} (fast)
      */
     private async phase6_buildIndexes(dryRun: boolean) {
         const startTime = Date.now();
@@ -427,9 +534,73 @@ export class KeypadDataMigrator {
         };
 
         try {
-            // Placeholder for index building
+            const membershipsCollection = this.db.collection(
+                "keypadGroupMemberships",
+            );
+
+            // Get all character profiles with keypad access
+            const profilesCollection = this.db.collection(
+                "unifiedCharacterProfiles",
+            );
+            const profiles = await profilesCollection
+                .find({ "veratown.keypadAccess": { $exists: true, $ne: [] } })
+                .toArray();
+
+            phaseResult.itemsProcessed = profiles.length;
+
+            for (const profile of profiles) {
+                const memberNumber = profile._id;
+                const keypadAccess =
+                    (profile.veratown?.keypadAccess as any[]) || [];
+
+                for (const access of keypadAccess) {
+                    try {
+                        const membershipRecord = {
+                            _id: `${access.doorKey}#${access.groupName}#${memberNumber}`,
+                            doorKey: access.doorKey,
+                            groupName: access.groupName,
+                            memberNumber,
+                            grantedAt: access.grantedAt || Date.now(),
+                            grantedBy: access.grantedBy || 0,
+                            grantedReason: access.grantedReason,
+                            expiresAt: access.expiresAt,
+                            syncedFromProfile: true, // Mark as synced from Phase 5
+                        };
+
+                        if (!dryRun) {
+                            // Upsert to avoid duplicates if re-running
+                            await membershipsCollection.updateOne(
+                                { _id: membershipRecord._id },
+                                { $set: membershipRecord },
+                                { upsert: true },
+                            );
+                        }
+
+                        phaseResult.itemsCreated++;
+                    } catch (error) {
+                        phaseResult.errors.push(
+                            `Failed to index membership for ${memberNumber}: ${error instanceof Error ? error.message : String(error)}`,
+                        );
+                    }
+                }
+            }
+
+            // Create indexes for efficient queries
+            if (!dryRun) {
+                await membershipsCollection.createIndex({
+                    doorKey: 1,
+                    groupName: 1,
+                });
+                await membershipsCollection.createIndex({
+                    memberNumber: 1,
+                });
+                await membershipsCollection.createIndex({
+                    grantedAt: -1,
+                });
+            }
+
             phaseResult.status = "success";
-            phaseResult.message = "Membership index built";
+            phaseResult.message = `Built membership index: ${phaseResult.itemsCreated} records indexed`;
         } catch (error) {
             phaseResult.status = "error";
             phaseResult.errors.push(
