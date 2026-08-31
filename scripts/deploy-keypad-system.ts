@@ -17,6 +17,9 @@
 import { MongoClient, Db } from "mongodb";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
+import { KeypadDataMigrator } from "../bin/games/veratown/migrations/keypadDataMigrator";
+import { VeratownLocationStore } from "../bin/games/veratown/veratownLocationStore";
+import { UnifiedCharacterStore } from "../bin/games/shared/unifiedCharacterStore";
 
 interface ConfigFile {
     mongo_uri?: string;
@@ -202,32 +205,60 @@ class KeypadDeploymentScript {
             await this.createBackup();
         }
 
-        console.log("Phase 1: Creating collections...");
-        await this.sleep(500);
-        console.log("  ✓ Collections created with schema validators\n");
+        try {
+            // Initialize stores
+            const locationStore = new VeratownLocationStore(this.db!);
+            const characterStore = new UnifiedCharacterStore(this.db!);
+            await locationStore.init();
+            await characterStore.init();
 
-        console.log("Phase 2: Scanning and validating...");
-        await this.sleep(500);
-        console.log("  ✓ Data validated\n");
+            // Run actual migration
+            const migrator = new KeypadDataMigrator(
+                this.db!,
+                locationStore,
+                characterStore,
+            );
 
-        console.log("Phase 3: Migrating door definitions...");
-        await this.sleep(1000);
-        console.log("  ✓ Door definitions migrated\n");
+            const result = await migrator.migrate({
+                dryRun: this.config.dryRun,
+                startPhase: 1,
+                stopPhase: 6,
+            });
 
-        console.log("Phase 4: Creating group definitions...");
-        await this.sleep(500);
-        console.log("  ✓ Group definitions created\n");
+            // Display results
+            console.log("📊 Migration Results");
+            console.log("====================\n");
 
-        console.log("Phase 5: Migrating character access...");
-        await this.sleep(1000);
-        console.log("  ✓ Character access migrated\n");
+            for (const phase of result.phases) {
+                const status = phase.status === "success" ? "✓" : "✗";
+                console.log(`Phase ${phase.phase}: ${status} ${phase.message}`);
+                console.log(
+                    `  Items processed: ${phase.itemsProcessed}, Created: ${phase.itemsCreated}, Errors: ${phase.errors.length}`,
+                );
 
-        console.log("Phase 6: Building indexes...");
-        await this.sleep(500);
-        console.log("  ✓ Membership index built\n");
+                if (phase.errors.length > 0) {
+                    phase.errors.forEach((err) => console.log(`    ✗ ${err}`));
+                }
 
-        console.log("✅ Deployment complete!\n");
-        this.printDeploymentSummary();
+                console.log(`  Duration: ${phase.duration}ms\n`);
+            }
+
+            if (result.success) {
+                console.log("✅ Deployment successful!\n");
+                this.printDeploymentSummary(result);
+            } else {
+                console.log(
+                    "❌ Deployment failed with errors. Check above for details.\n",
+                );
+                process.exit(1);
+            }
+        } catch (error) {
+            console.error(
+                "❌ Deployment error:",
+                error instanceof Error ? error.message : String(error),
+            );
+            process.exit(1);
+        }
     }
 
     private async runPhased(): Promise<void> {
@@ -329,16 +360,42 @@ class KeypadDeploymentScript {
         console.log(`  ✓ Backup created: ${filename}\n`);
     }
 
-    private printDeploymentSummary(): void {
+    private printDeploymentSummary(result?: any): void {
         console.log("📊 Deployment Summary");
         console.log("====================");
-        console.log("✓ 3 collections created");
-        console.log("✓ Door definitions migrated");
-        console.log("✓ Group definitions created");
-        console.log("✓ Character access records migrated");
-        console.log("✓ Membership index built\n");
 
-        console.log("🔄 Next steps:");
+        if (result) {
+            const totalCreated = result.phases.reduce(
+                (sum: number, p: any) => sum + p.itemsCreated,
+                0,
+            );
+            const totalProcessed = result.phases.reduce(
+                (sum: number, p: any) => sum + p.itemsProcessed,
+                0,
+            );
+            const totalErrors = result.totalErrors;
+
+            console.log(`✓ Total items processed: ${totalProcessed}`);
+            console.log(`✓ Total items created: ${totalCreated}`);
+            console.log(`✓ Errors: ${totalErrors}`);
+            console.log(
+                `✓ Total time: ${(result.duration / 1000).toFixed(2)}s\n`,
+            );
+
+            for (const phase of result.phases) {
+                console.log(
+                    `  Phase ${phase.phase}: ${phase.itemsCreated} created, ${phase.errors.length} errors`,
+                );
+            }
+        } else {
+            console.log("✓ 3 collections created");
+            console.log("✓ Door definitions migrated");
+            console.log("✓ Group definitions created");
+            console.log("✓ Character access records migrated");
+            console.log("✓ Membership index built");
+        }
+
+        console.log("\n🔄 Next steps:");
         console.log("1. Verify data integrity");
         console.log("2. Test door interactions");
         console.log("3. Deploy to staging");
