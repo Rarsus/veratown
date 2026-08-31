@@ -69,11 +69,11 @@ export class KeypadCollectionSetup {
                                     "Unique identifier for door (e.g., 'prison_cell_1_door')",
                             },
                             doorX: {
-                                bsonType: "int",
+                                bsonType: ["int", "double", "long"],
                                 description: "X coordinate on map",
                             },
                             doorY: {
-                                bsonType: "int",
+                                bsonType: ["int", "double", "long"],
                                 description: "Y coordinate on map",
                             },
                             lockedTile: {
@@ -85,7 +85,7 @@ export class KeypadCollectionSetup {
                                 description: "Tile name when unlocked",
                             },
                             unlockDurationMs: {
-                                bsonType: "int",
+                                bsonType: ["int", "double", "long"],
                                 description:
                                     "Duration in milliseconds door stays unlocked",
                             },
@@ -127,11 +127,11 @@ export class KeypadCollectionSetup {
                                 description: "Optional description",
                             },
                             createdAt: {
-                                bsonType: "long",
+                                bsonType: ["long", "double", "int"],
                                 description: "Timestamp of creation",
                             },
                             updatedAt: {
-                                bsonType: "long",
+                                bsonType: ["long", "double", "int"],
                                 description: "Timestamp of last update",
                             },
                         },
@@ -214,7 +214,7 @@ export class KeypadCollectionSetup {
                                 items: { bsonType: "string" },
                             },
                             createdAt: {
-                                bsonType: "long",
+                                bsonType: ["long", "double", "int"],
                                 description: "Timestamp of creation",
                             },
                             createdBy: {
@@ -223,7 +223,7 @@ export class KeypadCollectionSetup {
                                     "memberNumber who created (if custom)",
                             },
                             updatedAt: {
-                                bsonType: "long",
+                                bsonType: ["long", "double", "int"],
                                 description: "Timestamp of last update",
                             },
                         },
@@ -290,11 +290,11 @@ export class KeypadCollectionSetup {
                                 description: "Character member number",
                             },
                             grantedAt: {
-                                bsonType: "long",
+                                bsonType: ["long", "double", "int"],
                                 description: "When access was granted",
                             },
                             grantedBy: {
-                                bsonType: "int",
+                                bsonType: ["int", "long"],
                                 description: "Admin who granted access",
                             },
                             grantedReason: {
@@ -302,7 +302,7 @@ export class KeypadCollectionSetup {
                                 description: "Why access was granted",
                             },
                             expiresAt: {
-                                bsonType: ["long", "null"],
+                                bsonType: ["long", "double", "int", "null"],
                                 description: "Optional expiration time",
                             },
                             syncedFromProfile: {
@@ -325,11 +325,10 @@ export class KeypadCollectionSetup {
                 { doorKey: 1, memberNumber: 1 },
                 { unique: true },
             );
-            await collection.createIndex({ expiresAt: 1 });
             // TTL index for auto-cleanup of expired memberships
             await collection.createIndex(
                 { expiresAt: 1 },
-                { expireAfterSeconds: 0, sparse: true },
+                { expireAfterSeconds: 0, sparse: true, name: "expiresAt_ttl" },
             );
         } catch (error) {
             if (
