@@ -25,7 +25,7 @@ import { wait } from "../hub/utils";
 import { GameTimer } from "./casino/gameTimer";
 import { CommandValidator } from "./shared/commandValidator";
 import { DareStore, DareDoc } from "./dareStore";
-import { CasinoStore } from "./casino/casinostore";
+import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import {
     applyForfeitForDare,
     describeForfeitOutcome,
@@ -250,14 +250,19 @@ Game Overview
     private participantManager: GameParticipantManager;
     private commandHandlers: DareCommandHandlers;
     private effectApplier: DareEffectApplier;
+    public unifiedStore: UnifiedCharacterStore;
 
     public constructor(
         private conn: API_Connector,
         private store: DareStore,
         commandParser?: CommandParser,
-        private casinoStore?: CasinoStore,
+        unifiedStore?: UnifiedCharacterStore,
         config?: DareConfig,
     ) {
+        this.unifiedStore =
+            unifiedStore ||
+            global.unifiedCharacterStore ||
+            new UnifiedCharacterStore(undefined as any);
         this.commandParser = commandParser;
         this.region = config?.region;
         this.configuredRegion = config?.region;
@@ -274,6 +279,14 @@ Game Overview
         this.ready = this.loadState().catch((e) => {
             this.logger.error("Failed to load persisted state", { error: e });
         });
+    }
+
+    /**
+     * Phase 5: Direct UnifiedCharacterStore access (no adapters)
+     * Returns the unified store for direct access to character state
+     */
+    public getUnifiedStore(): UnifiedCharacterStore {
+        return this.unifiedStore;
     }
 
     /**
@@ -1823,19 +1836,16 @@ Game Overview
             case "reward":
                 // Reward dares always benefit the drawer, regardless of the
                 // dare's "target" field.
-                if (this.casinoStore && dare.chips) {
-                    await this.casinoStore.addCredits(
+                if (dare.chips) {
+                    await this.unifiedStore.updateChips(
                         drawer.MemberNumber,
                         dare.chips,
+                        "dare_reward",
+                        0,
                     );
                     this.conn.SendMessage(
                         "Emote",
                         `*${drawer} wins ${dare.chips} casino chips!`,
-                    );
-                } else if (dare.chips) {
-                    this.logger.warn(
-                        "CasinoStore not configured; skipping chip reward",
-                        { chips: dare.chips },
                     );
                 }
                 break;

@@ -27,6 +27,7 @@ import { DareStore } from "./dareStore";
 import { Casino } from "./casino";
 import { CasinoConfig } from "./casino";
 import { CasinoStore } from "./casino/casinostore";
+import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
 import { ShowerSystem } from "./veratown/showerSystem";
@@ -225,18 +226,17 @@ export class Veratown {
             this.locationStore = new VeratownLocationStore(db);
             this.characterProfileStore = new VeratownCharacterProfileStore(db);
             this.dare = this.initFeature(() => {
-                // Phase 2.5: Use global adapters delegating to UnifiedCharacterStore
-                // Fallback to creating new instances if adapters not available (backward compat)
-                const dareStore = global.dareStoreAdapter || new DareStore(db);
-                const casinoStore =
-                    global.casinoStoreMigrationWrapper ||
-                    global.casinoStoreAdapter ||
-                    new CasinoStore(db);
+                // Phase 5: Direct UnifiedCharacterStore access (no adapters)
+                // Use global unified store or create new instance
+                const dareStore = new DareStore(db);
+                const unifiedStore =
+                    global.unifiedCharacterStore ||
+                    new UnifiedCharacterStore(db);
                 return new Dare(
                     this.conn,
                     dareStore,
                     this.commandParser,
-                    casinoStore,
+                    unifiedStore,
                     effectiveDareConfig,
                 );
             });
