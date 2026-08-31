@@ -351,6 +351,14 @@ export class KeypadDataMigrator {
 
     /**
      * Phase 4: Create group definitions
+     *
+     * For each migrated door, creates auto_* group definitions:
+     * - auto_admin: Access via admin codes
+     * - auto_whitelist: Access via whitelisted members
+     * - auto_members: Access via regular members list
+     * - auto_code: Access via generic code
+     *
+     * Groups are created in keypadGroupDefinitions (Layer 3)
      */
     private async phase4_createGroups(dryRun: boolean) {
         const startTime = Date.now();
@@ -365,10 +373,140 @@ export class KeypadDataMigrator {
         };
 
         try {
-            // Placeholder for group creation logic
-            // This would iterate through migrated doors and create auto_* groups
+            const locations = await this.locationStore.getAllLocations();
+            const legacyLocations =
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                    locations,
+                );
+            const definitionService = new KeypadDefinitionService(this.db);
+            await definitionService.init();
+
+            const groupsCollection = this.db.collection(
+                "keypadGroupDefinitions",
+            );
+
+            for (const location of legacyLocations) {
+                const doorKey = `auto_location_${location.key}`;
+                const data = location.data as Record<string, unknown>;
+                phaseResult.itemsProcessed++;
+
+                try {
+                    // Create auto_whitelist group
+                    const whitelist =
+                        (data.whitelistMemberNumbers as number[]) || [];
+                    if (whitelist.length > 0 && !dryRun) {
+                        await groupsCollection.updateOne(
+                            {
+                                _id: `${doorKey}#auto_whitelist`,
+                            },
+                            {
+                                $set: {
+                                    _id: `${doorKey}#auto_whitelist`,
+                                    doorKey,
+                                    groupName: "auto_whitelist",
+                                    code: "",
+                                    type: "membership",
+                                    permissions: ["enter"],
+                                    createdAt: Date.now(),
+                                    syncedFromLegacy: true,
+                                },
+                            },
+                            { upsert: true },
+                        );
+                        phaseResult.itemsCreated++;
+                    } else if (whitelist.length > 0) {
+                        phaseResult.itemsCreated++;
+                    }
+
+                    // Create auto_members group
+                    const members = (data.memberNumbers as number[]) || [];
+                    if (members.length > 0 && !dryRun) {
+                        await groupsCollection.updateOne(
+                            {
+                                _id: `${doorKey}#auto_members`,
+                            },
+                            {
+                                $set: {
+                                    _id: `${doorKey}#auto_members`,
+                                    doorKey,
+                                    groupName: "auto_members",
+                                    code: "",
+                                    type: "membership",
+                                    permissions: ["enter"],
+                                    createdAt: Date.now(),
+                                    syncedFromLegacy: true,
+                                },
+                            },
+                            { upsert: true },
+                        );
+                        phaseResult.itemsCreated++;
+                    } else if (members.length > 0) {
+                        phaseResult.itemsCreated++;
+                    }
+
+                    // Create auto_admin group (from admin codes)
+                    const adminCodes =
+                        (data.adminCodes as string[]) ||
+                        (data.codes as string[]) ||
+                        [];
+                    if (adminCodes.length > 0 && !dryRun) {
+                        await groupsCollection.updateOne(
+                            {
+                                _id: `${doorKey}#auto_admin`,
+                            },
+                            {
+                                $set: {
+                                    _id: `${doorKey}#auto_admin`,
+                                    doorKey,
+                                    groupName: "auto_admin",
+                                    code: adminCodes[0] || "",
+                                    type: "code",
+                                    permissions: ["enter", "admin"],
+                                    createdAt: Date.now(),
+                                    syncedFromLegacy: true,
+                                },
+                            },
+                            { upsert: true },
+                        );
+                        phaseResult.itemsCreated++;
+                    } else if (adminCodes.length > 0) {
+                        phaseResult.itemsCreated++;
+                    }
+
+                    // Create auto_code group (generic code access)
+                    const codes = (data.codes as string[]) || [];
+                    if (codes.length > 0 && !dryRun) {
+                        await groupsCollection.updateOne(
+                            {
+                                _id: `${doorKey}#auto_code`,
+                            },
+                            {
+                                $set: {
+                                    _id: `${doorKey}#auto_code`,
+                                    doorKey,
+                                    groupName: "auto_code",
+                                    code: codes[0] || "",
+                                    type: "code",
+                                    permissions: ["enter"],
+                                    createdAt: Date.now(),
+                                    syncedFromLegacy: true,
+                                },
+                            },
+                            { upsert: true },
+                        );
+                        phaseResult.itemsCreated++;
+                    } else if (codes.length > 0) {
+                        phaseResult.itemsCreated++;
+                    }
+                } catch (error) {
+                    phaseResult.errors.push(
+                        `Failed to create groups for door ${doorKey}: ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+            }
+
             phaseResult.status = "success";
-            phaseResult.message = "Group definitions created";
+            phaseResult.message = `Created ${phaseResult.itemsCreated} group definitions`;
         } catch (error) {
             phaseResult.status = "error";
             phaseResult.errors.push(
