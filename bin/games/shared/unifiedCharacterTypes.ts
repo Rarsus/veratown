@@ -12,8 +12,11 @@
  * limitations under the License.
  */
 
-import { BC_AppearanceItem, ChatRoomMapPos } from "bc-bot";
+import { BC_AppearanceItem } from "bc-bot";
 import { ObjectId } from "mongodb";
+
+// ===== SHARED TYPES
+export type ChatRoomMapPos = { X: number; Y: number };
 
 // ===== CASINO STATE
 export interface CasinoState {
@@ -96,6 +99,15 @@ export interface CurrentRestraint {
     lockedUntil?: number;
 }
 
+export interface KeypadAccessRecord {
+    doorKey: string; // "prison_cell_1_door", unique identifier for a door
+    groupName: string; // "admin", "whitelist", "maintenance", etc.
+    grantedAt: number; // Timestamp when access was granted
+    grantedBy: number; // memberNumber of admin who granted access
+    grantedReason?: string; // "Role assignment", "Custom grant", etc.
+    expiresAt?: number; // Optional expiration timestamp
+}
+
 export interface RoleplayFlags {
     isEscaped?: boolean;
     isRestrained?: boolean;
@@ -141,6 +153,8 @@ export interface VeratownState {
     roleplayFlags: RoleplayFlags;
     auditLog: AuditLogEntry[];
     roles: string[];
+    // Keypad access records (Layer 1: Character-specific)
+    keypadAccess: KeypadAccessRecord[];
     version: number;
     updatedAt: number;
 }

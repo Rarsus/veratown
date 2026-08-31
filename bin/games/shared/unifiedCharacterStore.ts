@@ -24,6 +24,7 @@ import {
     VeratownState,
     CrossSystemState,
     RoleplayFlags,
+    KeypadAccessRecord,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 
@@ -154,6 +155,7 @@ export class UnifiedCharacterStore {
                 },
                 auditLog: [],
                 roles: [],
+                keypadAccess: [],
                 version: 0,
                 updatedAt: now,
             },
@@ -1356,5 +1358,118 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+    }
+
+    // ===== KEYPAD ACCESS MANAGEMENT (Layer 1) =====
+
+    /**
+     * Add keypad access record to character profile
+     * @param memberNumber Character to grant access to
+     * @param access KeypadAccessRecord with doorKey, groupName, etc.
+     */
+    public async addKeypadAccess(
+        memberNumber: number,
+        access: KeypadAccessRecord,
+    ): Promise<void> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $push: {
+                    "veratown.keypadAccess": {
+                        ...access,
+                        grantedAt: access.grantedAt || now,
+                    },
+                },
+                $set: {
+                    "veratown.updatedAt": now,
+                    "veratown.version": profile.veratown.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+    }
+
+    /**
+     * Remove keypad access from character profile
+     * @param memberNumber Character to revoke access from
+     * @param doorKey Door to revoke access to
+     * @param groupName Specific group to revoke (optional, revokes all if undefined)
+     */
+    public async removeKeypadAccess(
+        memberNumber: number,
+        doorKey: string,
+        groupName?: string,
+    ): Promise<void> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+
+        // Build filter for removal
+        const filter: Record<string, unknown> = {
+            doorKey,
+        };
+        if (groupName) {
+            filter.groupName = groupName;
+        }
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $pull: {
+                    "veratown.keypadAccess": filter as any,
+                },
+                $set: {
+                    "veratown.updatedAt": now,
+                    "veratown.version": profile.veratown.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+    }
+
+    /**
+     * Get all keypad access records for a character
+     */
+    public async getKeypadAccess(
+        memberNumber: number,
+    ): Promise<KeypadAccessRecord[]> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        return profile?.veratown?.keypadAccess ?? [];
+    }
+
+    /**
+     * Check if character has access to a door/group combination
+     */
+    public async hasKeypadAccess(
+        memberNumber: number,
+        doorKey: string,
+        groupName?: string,
+    ): Promise<boolean> {
+        const access = await this.getKeypadAccess(memberNumber);
+
+        return access.some((a) => {
+            if (a.doorKey !== doorKey) return false;
+            if (groupName && a.groupName !== groupName) return false;
+
+            // Check expiration
+            if (a.expiresAt) {
+                return a.expiresAt > Date.now();
+            }
+
+            return true;
+        });
     }
 }
