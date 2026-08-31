@@ -35,7 +35,7 @@ import { BedSystem } from "./veratown/bedSystem";
 import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
-import { KeypadDoorSystem } from "./veratown/keypadDoorSystem";
+import { KeypadDoorSystem } from "./veratown/keypadDoorSystemRefactored";
 import { CatDogSystem } from "./veratown/catDogSystem";
 import { FurnitureBondageSystem } from "./veratown/furnitureBondageSystem";
 import { VeratownFeatureSystem } from "./veratown/featureSystem";
@@ -49,6 +49,11 @@ import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
 import { KeypadAccessGroupManager } from "./veratown/keypadAccessGroupManager";
 import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSystem";
+import { KeypadDefinitionService } from "./veratown/services/keypadDefinitionService";
+import { KeypadAccessService } from "./veratown/services/keypadAccessService";
+import { KeypadCommandDispatcher } from "./veratown/handlers/keypadCommandDispatcher";
+import { KeypadLocationIntegration } from "./veratown/migrations/keypadLocationIntegration";
+import { KeypadCollectionSetup } from "./veratown/migrations/keypadCollectionSetup";
 import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
@@ -197,6 +202,13 @@ export class Veratown {
     // with config fallback. Only set when mongo_uri/mongo_db are configured.
     private locationStore?: VeratownLocationStore;
 
+    // Keypad system services (only set when mongo_uri/mongo_db are configured)
+    private keypadDefinitionService?: KeypadDefinitionService;
+    private keypadAccessService?: KeypadAccessService;
+    private keypadLocationIntegration?: KeypadLocationIntegration;
+    private keypadCommandDispatcher?: KeypadCommandDispatcher;
+    private db?: Db;
+
     public constructor(
         connections: VeratownConnections,
         db?: Db,
@@ -211,6 +223,7 @@ export class Veratown {
             GAME_LOCATION,
         ]);
         this.regionManager = new RegionManager();
+        this.db = db;
 
         if (db) {
             const effectiveDareConfig: DareConfig | undefined =
@@ -243,6 +256,9 @@ export class Veratown {
             this.appearanceAuditTrail = new AppearanceAuditTrail(db);
             this.locationEventSystem = new LocationEventSystem(db);
             this.playerRoleSystem = new PlayerRoleSystem(db);
+
+            // Keypad services will be initialized in the init() method
+            // (requires async initialization for collection setup)
         } else {
             console.log(
                 "mongo_uri/mongo_db must be configured to enable the dare/pick commands and persistent map storage in Veratown; skipping.",
@@ -268,16 +284,30 @@ export class Veratown {
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn),
         );
-        this.keypadDoorSystem = this.initFeature(
-            () =>
-                new KeypadDoorSystem(
-                    this.conn,
-                    this.commandParser,
-                    this.locationStore,
-                    () => this.reloadLocations(),
-                    this.keypadAccessGroupManager,
-                ),
-        );
+        this.keypadDoorSystem = this.initFeature(() => {
+            // Initialize refactored keypad system with new command suite
+            // Services are set up in db initialization phase
+            if (
+                !this.keypadDefinitionService ||
+                !this.keypadAccessService ||
+                !this.keypadLocationIntegration ||
+                !this.keypadCommandDispatcher
+            ) {
+                throw new Error(
+                    "Keypad services not initialized - database required",
+                );
+            }
+
+            return new KeypadDoorSystem(
+                this.conn,
+                this.locationStore!,
+                this.keypadDefinitionService,
+                this.keypadAccessService,
+                this.keypadCommandDispatcher,
+                this.keypadLocationIntegration,
+                this.commandParser,
+            );
+        });
         this.catDogSystem = this.initFeature(
             () =>
                 new CatDogSystem(
@@ -406,6 +436,43 @@ export class Veratown {
     }
 
     public async init(): Promise<void> {
+        // Initialize keypad system services if database is available
+        if (this.db && this.locationStore) {
+            try {
+                await KeypadCollectionSetup.initializeCollections(this.db);
+
+                const unifiedStore =
+                    global.unifiedCharacterStore ||
+                    new UnifiedCharacterStore(this.db);
+
+                this.keypadDefinitionService = new KeypadDefinitionService(
+                    this.db,
+                );
+                await this.keypadDefinitionService.init();
+
+                this.keypadAccessService = new KeypadAccessService(
+                    this.db,
+                    this.keypadDefinitionService,
+                    unifiedStore,
+                );
+                await this.keypadAccessService.init();
+
+                this.keypadLocationIntegration =
+                    new KeypadLocationIntegration(this.keypadDefinitionService);
+
+                this.keypadCommandDispatcher = new KeypadCommandDispatcher(
+                    this.keypadDefinitionService,
+                    this.keypadAccessService,
+                    unifiedStore,
+                );
+            } catch (err) {
+                console.error(
+                    "[Veratown] Failed to initialize keypad system:",
+                    err,
+                );
+            }
+        }
+
         await Promise.all(this.pendingFeatureRegistrations);
         await this.reloadLocations();
 

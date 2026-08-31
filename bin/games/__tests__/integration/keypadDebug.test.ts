@@ -57,9 +57,17 @@ describe("Debug: Character Profile Update Validation", () => {
         console.log("\n=== BEFORE GRANT ===");
         console.log(JSON.stringify(profileBefore, null, 2));
         console.log("\n=== veratown.keypadAccess structure ===");
-        console.log(JSON.stringify(profileBefore.veratown.keypadAccess, null, 2));
-        console.log("Type of veratown.keypadAccess:", typeof profileBefore.veratown.keypadAccess);
-        console.log("Is array?", Array.isArray(profileBefore.veratown.keypadAccess));
+        console.log(
+            JSON.stringify(profileBefore.veratown.keypadAccess, null, 2),
+        );
+        console.log(
+            "Type of veratown.keypadAccess:",
+            typeof profileBefore.veratown.keypadAccess,
+        );
+        console.log(
+            "Is array?",
+            Array.isArray(profileBefore.veratown.keypadAccess),
+        );
 
         try {
             console.log("\n=== ATTEMPTING GRANT (USING FIXED grantAccess) ===");
@@ -81,21 +89,29 @@ describe("Debug: Character Profile Update Validation", () => {
             console.log("Error message:", err.message);
             console.log("Full error object:", JSON.stringify(err, null, 2));
             console.log("Error details:", JSON.stringify(err.errInfo, null, 2));
-            
+
             // Check collection validator
             console.log("\n=== COLLECTION INFO ===");
             try {
-                const collList = await db.listCollections({ name: "unifiedCharacterProfiles" }).toArray();
-                console.log("Collection info:", JSON.stringify(collList, null, 2));
+                const collList = await db
+                    .listCollections({ name: "unifiedCharacterProfiles" })
+                    .toArray();
+                console.log(
+                    "Collection info:",
+                    JSON.stringify(collList, null, 2),
+                );
             } catch (e) {
-                console.log("Could not get collection info:", (e as any).message);
+                console.log(
+                    "Could not get collection info:",
+                    (e as any).message,
+                );
             }
-            
+
             // Try the update directly
             console.log("\n=== TRYING DIRECT UPDATE ===");
             const profile = await characterStore.getProfile(100001);
             const now = Date.now();
-            
+
             const updateDoc = {
                 $push: {
                     "veratown.keypadAccess": {
@@ -115,14 +131,13 @@ describe("Debug: Character Profile Update Validation", () => {
                     version: (profile.version || 0) + 1,
                 },
             };
-            
+
             console.log("Update document:", JSON.stringify(updateDoc, null, 2));
-            
+
             try {
-                const result = await db.collection("unifiedCharacterProfiles").updateOne(
-                    { _id: 100001 },
-                    updateDoc,
-                );
+                const result = await db
+                    .collection("unifiedCharacterProfiles")
+                    .updateOne({ _id: 100001 }, updateDoc);
                 console.log("Direct update succeeded:", result.modifiedCount);
             } catch (directErr: any) {
                 console.log("Direct update also failed:");

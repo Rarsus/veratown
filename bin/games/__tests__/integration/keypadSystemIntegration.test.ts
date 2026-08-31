@@ -117,9 +117,7 @@ describe("Keypad System Integration Tests", () => {
         ];
 
         for (const location of locations) {
-            await db
-                .collection("veratownLocations")
-                .insertOne(location as any);
+            await db.collection("veratownLocations").insertOne(location as any);
         }
     }
 
@@ -230,9 +228,7 @@ describe("Keypad System Integration Tests", () => {
                 } as any);
             }
 
-            const groups = await collection
-                .find({ doorKey })
-                .toArray();
+            const groups = await collection.find({ doorKey }).toArray();
             assert.equal(groups.length, 4, "Should have created 4 groups");
         });
     });
@@ -242,9 +238,7 @@ describe("Keypad System Integration Tests", () => {
     describe("Phase 3: Character Access Management", () => {
         it("should grant access to character with validation", async () => {
             // Character must exist
-            const canGrantAccess = await characterStore.getProfile(
-                100002,
-            );
+            const canGrantAccess = await characterStore.getProfile(100002);
             assert.ok(canGrantAccess, "Character should exist");
 
             // Grant access
@@ -264,10 +258,13 @@ describe("Keypad System Integration Tests", () => {
         it("should not grant access to non-existent character", async () => {
             // getProfile() is a "get or create" operation
             // Character 999999 doesn't exist initially, but getProfile will create it
-            const profile =
-                await characterStore.getProfile(999999);
+            const profile = await characterStore.getProfile(999999);
             assert.ok(profile, "Character should be created by getProfile");
-            assert.equal(profile._id, 999999, "Should have correct member number");
+            assert.equal(
+                profile._id,
+                999999,
+                "Should have correct member number",
+            );
             assert.deepEqual(
                 profile.veratown.keypadAccess,
                 [],
@@ -319,7 +316,11 @@ describe("Keypad System Integration Tests", () => {
                 "prison_cell_1_door",
                 false,
             );
-            assert.equal(canAccess, false, "Unauthorized character should be denied");
+            assert.equal(
+                canAccess,
+                false,
+                "Unauthorized character should be denied",
+            );
         });
 
         it("should grant access to admins regardless", async () => {
@@ -356,7 +357,7 @@ describe("Keypad System Integration Tests", () => {
             // Use a new member number to avoid conflicts with previous tests
             const newMemberNumber = 999998;
             const compositeId = `prison_cell_1_door:auto_whitelist:${newMemberNumber}`;
-            
+
             const indexEntry = {
                 _id: compositeId,
                 doorKey: "prison_cell_1_door",
@@ -392,9 +393,10 @@ describe("Keypad System Integration Tests", () => {
                 syncedFromProfile: true,
             } as any);
 
-            const members = await accessService.getMembersWithAccessToDoor(
-                "prison_cell_1_door",
-            );
+            const members =
+                await accessService.getMembersWithAccessToDoor(
+                    "prison_cell_1_door",
+                );
             assert.ok(members.length > 0, "Should have members");
             assert.ok(
                 members.some((m) => m.memberNumber === 100003),
@@ -482,7 +484,11 @@ describe("Keypad System Integration Tests", () => {
                 "prison_cell_1_door",
                 false,
             );
-            assert.equal(canAccess, false, "Should deny access after revocation");
+            assert.equal(
+                canAccess,
+                false,
+                "Should deny access after revocation",
+            );
         });
     });
 
@@ -520,9 +526,7 @@ describe("Keypad System Integration Tests", () => {
 
             let access = await accessService.getCharacterAccess(testMember);
             assert.ok(
-                access.some(
-                    (a) => a.doorKey === doorKey,
-                ),
+                access.some((a) => a.doorKey === doorKey),
                 "Should have access to door",
             );
             console.log("✓ Access granted");
@@ -540,9 +544,7 @@ describe("Keypad System Integration Tests", () => {
             await accessService.revokeAccess(testMember, doorKey);
             access = await accessService.getCharacterAccess(testMember);
             assert.ok(
-                !access.some(
-                    (a) => a.doorKey === doorKey,
-                ),
+                !access.some((a) => a.doorKey === doorKey),
                 "Access should be revoked",
             );
             console.log("✓ Access revoked");

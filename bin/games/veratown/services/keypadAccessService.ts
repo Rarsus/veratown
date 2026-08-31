@@ -136,8 +136,7 @@ export class KeypadAccessService {
     async getCharacterAccess(
         memberNumber: number,
     ): Promise<KeypadAccessRecord[]> {
-        const profile =
-            await this.unifiedStore.getProfile(memberNumber);
+        const profile = await this.unifiedStore.getProfile(memberNumber);
         return profile?.veratown?.keypadAccess ?? [];
     }
 
