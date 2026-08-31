@@ -1,0 +1,197 @@
+{
+  "timestamp": "2026-08-31T10:22:29.755Z",
+  "locations": 7,
+  "characters": 0,
+  "data": {
+    "locations": [
+      {
+        "_id": "6a84556982986263373de272",
+        "key": "lara_keypad",
+        "name": "Lara keypad",
+        "type": "keypad_door",
+        "x": 36,
+        "y": 28,
+        "enabled": true,
+        "data": {
+          "doorX": 35,
+          "doorY": 27,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 10000,
+          "codes": {
+            "admin": "knock",
+            "whitelist": "open",
+            "guest": "invitedbylara"
+          },
+          "whitelistMemberNumbers": [
+            160001,
+            251163
+          ],
+          "autoOpenTileX": 35,
+          "autoOpenTileY": 26
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1787570795802
+      },
+      {
+        "_id": "6a84c2da82986263373de276",
+        "key": "room1_keypad",
+        "name": "Room 1 keypad",
+        "type": "keypad_door",
+        "x": 24,
+        "y": 28,
+        "enabled": true,
+        "data": {
+          "doorX": 23,
+          "doorY": 27,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 10000,
+          "codes": {
+            "admin": "knock",
+            "whitelist": "123456",
+            "guest": "letmein!"
+          },
+          "whitelistMemberNumbers": [
+            251163
+          ]
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1787559879889
+      },
+      {
+        "_id": "6a85980e13b02624de4b7022",
+        "key": "room1_keypad_b",
+        "name": "Room 1 keypad_b",
+        "type": "keypad_door",
+        "x": 24,
+        "y": 26,
+        "enabled": true,
+        "data": {
+          "doorX": 23,
+          "doorY": 27,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 5000,
+          "codes": {
+            "admin": "250927",
+            "whitelist": "123456",
+            "guest": "asdo;jhiojhwllkjd"
+          },
+          "whitelistMemberNumbers": [
+            251163
+          ]
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1785916554692
+      },
+      {
+        "_id": "6a86112cc3c29c91fc3dbf6c",
+        "key": "room2_keypad_a",
+        "name": "Room 2 keypad_a",
+        "type": "keypad_door",
+        "x": 28,
+        "y": 28,
+        "enabled": true,
+        "data": {
+          "doorX": 29,
+          "doorY": 27,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 5000,
+          "codes": {
+            "admin": "knock",
+            "whitelist": "open",
+            "guest": "asdo;jhiojhwllkjd"
+          },
+          "whitelistMemberNumbers": [
+            251163
+          ],
+          "autoOpenTileX": 29,
+          "autoOpenTileY": 26
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1788011741299
+      },
+      {
+        "_id": "6a86bda8db7c42c020ce2c09",
+        "key": "admin_room_keypad_a",
+        "name": "Admin Room keypad_a",
+        "type": "keypad_door",
+        "x": 20,
+        "y": 36,
+        "enabled": true,
+        "data": {
+          "doorX": 21,
+          "doorY": 37,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 5000,
+          "codes": {
+            "admin": "knock",
+            "whitelist": "blue",
+            "guest": "asdo;jhiojhwllkjd"
+          },
+          "whitelistMemberNumbers": [
+            250927,
+            251024
+          ]
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1788094714792
+      },
+      {
+        "_id": "6a86bddbdb7c42c020ce2c0a",
+        "key": "admin_room_keypad_b",
+        "name": "Admin Room keypad_b",
+        "type": "keypad_door",
+        "x": 20,
+        "y": 38,
+        "enabled": true,
+        "data": {
+          "doorX": 21,
+          "doorY": 37,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 5000,
+          "codes": {
+            "admin": "250927",
+            "whitelist": "blue",
+            "guest": "asdo;jhiojhwllkjd"
+          },
+          "whitelistMemberNumbers": [
+            250927,
+            251024
+          ]
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1788095907133
+      },
+      {
+        "_id": "6a8c0d333d37d2d5b9fa4652",
+        "key": "keypad_punishment",
+        "name": "Entrance Punishement Room",
+        "type": "keypad_door",
+        "x": 16,
+        "y": 12,
+        "enabled": true,
+        "data": {
+          "doorX": 17,
+          "doorY": 13,
+          "lockedTile": "WoodLocked",
+          "unlockedTile": "WoodOpen",
+          "unlockDurationMs": 5000,
+          "codes": {
+            "admin": "knock",
+            "whitelist": "open",
+            "guest": "open"
+          },
+          "whitelistMemberNumbers": []
+        },
+        "createdAt": 1785916554692,
+        "updatedAt": 1787559925679
+      }
+    ],
+    "characters": []
+  }
+}

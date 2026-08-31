@@ -209,8 +209,6 @@ class KeypadDeploymentScript {
             // Initialize stores
             const locationStore = new VeratownLocationStore(this.db!);
             const characterStore = new UnifiedCharacterStore(this.db!);
-            await locationStore.init();
-            await characterStore.init();
 
             // Run actual migration
             const migrator = new KeypadDataMigrator(

@@ -16,7 +16,7 @@ import { Collection, Db } from "mongodb";
 import {
     KeypadDoorDefinitionDoc,
     KeypadGroupDefinitionDoc,
-} from "./keypadTypes";
+} from "../keypadTypes";
 
 /**
  * KeypadDefinitionService (Layer 3)

@@ -6,9 +6,24 @@
  *   const handler = createFeatureGuard("SystemName", async () => { ... });
  *   await waitWithLog(100, "door closing", "SystemName");
  *   if (isOwnerLocked(item)) { ... }
+ *
+ * NOTE: This module contains browser environment (BC API) functions.
+ * It's exported from shared but won't be used in Node.js server scripts.
  */
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
+
+// Browser API types (used only in browser environment, 'any' for Node.js compilation)
+type API_Character = any;
+type API_Item = any;
+type API_Asset = any;
+
+// BC function stub (won't be called in Node.js, but needs to exist for TypeScript)
+function AssetGet(_group: string, _asset: string, _name?: string): any {
+    throw new Error(
+        "AssetGet is a BC browser API and cannot be called in Node.js",
+    );
+}
 
 /**
  * Wrap a handler with consistent error handling

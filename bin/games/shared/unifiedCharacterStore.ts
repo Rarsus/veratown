@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { Collection, Db } from "mongodb";
+import { Collection, Db, ObjectId } from "mongodb";
 import {
     UnifiedCharacterProfile,
     GameEvent,
@@ -25,6 +25,7 @@ import {
     CrossSystemState,
     RoleplayFlags,
     KeypadAccessRecord,
+    SuspendedGame,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 
@@ -745,7 +746,13 @@ export class UnifiedCharacterStore {
                 gameId,
                 suspendedAt: now,
                 suspendReason: "cage_entry",
-                playerSnapshot: participation || { gameId, joinedAt: now }, // Use minimal snapshot if no history
+                playerSnapshot: participation || {
+                    gameId,
+                    joinedAt: now,
+                    strippedCount: 0,
+                    passCounts: 0,
+                    bondageItems: [],
+                }, // Use complete default snapshot if no history
             });
         }
 
@@ -847,88 +854,6 @@ export class UnifiedCharacterStore {
         }
 
         return restoredGameIds.length;
-    }
-
-    // ===== PHASE 3.4: UNIFIED AUDIT TRAIL
-
-    /**
-     * Record an audit trail entry for comprehensive state change tracking.
-     * Emits audit_trail event with full context.
-     */
-    public async recordAuditEntry(
-        memberNumber: number,
-        operation: string,
-        context: Record<string, unknown>,
-        actor?: number,
-    ): Promise<void> {
-        await this.init();
-
-        const profile = await this.getProfile(memberNumber);
-        const now = Date.now();
-
-        // Create audit event with full context
-        const event: GameEvent = {
-            timestamp: now,
-            type: "audit_trail",
-            source: "admin",
-            actor: actor ?? memberNumber,
-            target: memberNumber,
-            data: {
-                operation,
-                ...context,
-                playerName: profile.characterName,
-                memberNumber,
-                timestamp: now,
-            },
-            processed: false,
-        };
-
-        await this.recordEvent(event);
-        await this.eventBus.publish(event);
-    }
-
-    /**
-     * Get all audit entries for a player within a time range.
-     */
-    public async getAuditTrail(
-        memberNumber: number,
-        startTime?: number,
-        endTime?: number,
-    ): Promise<GameEvent[]> {
-        await this.init();
-
-        const query: Record<string, unknown> = {
-            target: memberNumber,
-            type: {
-                $in: [
-                    "audit_trail",
-                    "escape_payment",
-                    "chips_locked",
-                    "chips_unlocked",
-                ],
-            },
-        };
-
-        if (startTime) {
-            query.timestamp = { $gte: startTime };
-        }
-        if (endTime) {
-            if (!query.timestamp) {
-                query.timestamp = {};
-            }
-            (query.timestamp as Record<string, number>).$lte = endTime;
-        }
-
-        const events = await this.events
-            .find(query)
-            .sort({ timestamp: -1 })
-            .limit(1000)
-            .toArray();
-
-        return events.map((doc) => {
-            const { _id, ...rest } = doc;
-            return rest as GameEvent;
-        });
     }
 
     // ===== PHASE 3.5: EVENT DEDUPLICATION & ERROR RECOVERY
@@ -1333,7 +1258,7 @@ export class UnifiedCharacterStore {
     ): Promise<void> {
         await this.init();
         await this.events.updateOne(
-            { _id: eventId },
+            { _id: new ObjectId(eventId) },
             {
                 $addToSet: { processedBy: systemName },
             },

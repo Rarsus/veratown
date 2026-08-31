@@ -7,9 +7,24 @@
  * Usage:
  *   await syncAppearanceMutation(character, () => character.Appearance.AddItem(...));
  *   const item = getAppearanceItem(character, "ItemDevices");
+ *
+ * NOTE: This module is for browser environment (BC API). It's exported from shared
+ * but won't be used in Node.js server scripts like deployment. TypeScript compilation
+ * works by using 'any' for browser-only types.
  */
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
+
+// Browser API types (used only in browser environment, 'any' for Node.js compilation)
+type API_Character = any;
+type API_Item = any;
+
+// BC function stub (won't be called in Node.js, but needs to exist for TypeScript)
+function AssetGet(_group: string, _asset: string, _name?: string): any {
+    throw new Error(
+        "AssetGet is a BC browser API and cannot be called in Node.js",
+    );
+}
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 

@@ -57,7 +57,7 @@ export class PosturePreserver {
      */
     public restore(character: API_Character): void {
         if (this.savedPose.length > 0) {
-            character.SetActivePose([...this.savedPose]);
+            character.SetActivePose([...this.savedPose] as any);
         }
     }
 

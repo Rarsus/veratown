@@ -14,7 +14,7 @@
 
 import { Collection, Db } from "mongodb";
 import { KeypadAccessRecord } from "../shared/unifiedCharacterTypes";
-import { KeypadAccessLevel, KeypadGroupMembershipDoc } from "./keypadTypes";
+import { KeypadAccessLevel, KeypadGroupMembershipDoc } from "../keypadTypes";
 import { KeypadDefinitionService } from "./keypadDefinitionService";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 

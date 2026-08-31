@@ -110,13 +110,14 @@ export class KeypadDataMigrator {
             success: false,
             startTime: Date.now(),
             endTime: 0,
+            duration: 0,
             phases: [],
             totalErrors: 0,
             rollbackSteps: [],
         };
 
         try {
-            this.logger.log(
+            this.logger.info(
                 `Starting keypad migration (phases ${startPhase}-${stopPhase}, dryRun=${options.dryRun})`,
             );
 
@@ -168,7 +169,7 @@ export class KeypadDataMigrator {
                 0,
             );
 
-            this.logger.log(
+            this.logger.info(
                 `Migration complete. Phases: ${result.phases.length}, Errors: ${result.totalErrors}`,
             );
         } catch (error) {
@@ -249,7 +250,7 @@ export class KeypadDataMigrator {
         try {
             const locations = await this.locationStore.getAllLocations();
             const legacyLocations =
-                KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
                     locations,
                 );
 
@@ -307,7 +308,7 @@ export class KeypadDataMigrator {
         try {
             const locations = await this.locationStore.getAllLocations();
             const legacyLocations =
-                KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
                     locations,
                 );
             const definitionService = new KeypadDefinitionService(this.db);

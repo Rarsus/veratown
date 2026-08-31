@@ -256,7 +256,7 @@ export interface DareView {
     dressingBlockedUntil?: number;
     totalGamesPlayed: number;
     // Phase 3: Game suspension
-    suspendedGames?: number[];
+    suspendedGames?: SuspendedGame[];
 }
 
 // ===== VERATOWN VIEW (What Veratown system sees)
