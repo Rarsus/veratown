@@ -398,17 +398,18 @@ export class KeypadDataMigrator {
                         await groupsCollection.updateOne(
                             {
                                 _id: `${doorKey}#auto_whitelist`,
-                            },
+                            } as any,
                             {
                                 $set: {
                                     _id: `${doorKey}#auto_whitelist`,
                                     doorKey,
                                     groupName: "auto_whitelist",
                                     code: "",
-                                    type: "membership",
+                                    groupType: "builtin",
                                     permissions: ["enter"],
                                     createdAt: Date.now(),
-                                    syncedFromLegacy: true,
+                                    updatedAt: Date.now(),
+                                    createdBy: null,
                                 },
                             },
                             { upsert: true },
@@ -424,17 +425,18 @@ export class KeypadDataMigrator {
                         await groupsCollection.updateOne(
                             {
                                 _id: `${doorKey}#auto_members`,
-                            },
+                            } as any,
                             {
                                 $set: {
                                     _id: `${doorKey}#auto_members`,
                                     doorKey,
                                     groupName: "auto_members",
                                     code: "",
-                                    type: "membership",
+                                    groupType: "builtin",
                                     permissions: ["enter"],
                                     createdAt: Date.now(),
-                                    syncedFromLegacy: true,
+                                    updatedAt: Date.now(),
+                                    createdBy: null,
                                 },
                             },
                             { upsert: true },
@@ -453,17 +455,18 @@ export class KeypadDataMigrator {
                         await groupsCollection.updateOne(
                             {
                                 _id: `${doorKey}#auto_admin`,
-                            },
+                            } as any,
                             {
                                 $set: {
                                     _id: `${doorKey}#auto_admin`,
                                     doorKey,
                                     groupName: "auto_admin",
                                     code: adminCodes[0] || "",
-                                    type: "code",
+                                    groupType: "builtin",
                                     permissions: ["enter", "admin"],
                                     createdAt: Date.now(),
-                                    syncedFromLegacy: true,
+                                    updatedAt: Date.now(),
+                                    createdBy: null,
                                 },
                             },
                             { upsert: true },
@@ -479,17 +482,18 @@ export class KeypadDataMigrator {
                         await groupsCollection.updateOne(
                             {
                                 _id: `${doorKey}#auto_code`,
-                            },
+                            } as any,
                             {
                                 $set: {
                                     _id: `${doorKey}#auto_code`,
                                     doorKey,
                                     groupName: "auto_code",
                                     code: codes[0] || "",
-                                    type: "code",
+                                    groupType: "builtin",
                                     permissions: ["enter"],
                                     createdAt: Date.now(),
-                                    syncedFromLegacy: true,
+                                    updatedAt: Date.now(),
+                                    createdBy: null,
                                 },
                             },
                             { upsert: true },
@@ -708,7 +712,7 @@ export class KeypadDataMigrator {
                         if (!dryRun) {
                             // Upsert to avoid duplicates if re-running
                             await membershipsCollection.updateOne(
-                                { _id: membershipRecord._id },
+                                { _id: membershipRecord._id } as any,
                                 { $set: membershipRecord },
                                 { upsert: true },
                             );

@@ -201,6 +201,7 @@ export class KeypadCollectionSetup {
                                 description: "Access code for this group",
                             },
                             groupType: {
+                                bsonType: "string",
                                 enum: ["builtin", "custom"],
                                 description: "Whether builtin or admin-created",
                             },
