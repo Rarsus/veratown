@@ -413,7 +413,12 @@ export class RouletteGame implements Game {
 
             await this.casino
                 .getUnifiedStore()
-                .updateChips(sender.MemberNumber, -bet.stake, "roulette_bet", 0);
+                .updateChips(
+                    sender.MemberNumber,
+                    -bet.stake,
+                    "roulette_bet",
+                    0,
+                );
         } else {
             const blockers = getItemsBlockingForfeit(
                 sender,
@@ -468,12 +473,12 @@ export class RouletteGame implements Game {
                 console.log(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );
-                
+
                 // Fetch current casino view to get cheat strikes
                 const casinoView = await this.casino
                     .getUnifiedStore()
                     .getCasinoView(sender.MemberNumber);
-                
+
                 // Increment cheat strikes via the casino punishment system
                 this.casino.cheatPunishment(sender, {
                     cheatStrikes: (casinoView?.cheatStrikes || 0) + 1,
@@ -519,10 +524,9 @@ export class RouletteGame implements Game {
         }
         if (this.getBetsForPlayer(sender.MemberNumber)[0].stakeForfeit) {
             // Refund forfeit bets using UnifiedCharacterStore
-            const refundAmount = this.getBetsForPlayer(sender.MemberNumber).reduce(
-                (sum, b) => sum + b.stake,
-                0,
-            );
+            const refundAmount = this.getBetsForPlayer(
+                sender.MemberNumber,
+            ).reduce((sum, b) => sum + b.stake, 0);
             await this.casino
                 .getUnifiedStore()
                 .updateChips(
