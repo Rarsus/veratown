@@ -304,18 +304,8 @@ export class Veratown {
                     this.conn,
                     this.locationStore,
                     this.characterProfileStore,
-                    this.cageSystem
-                        ? {
-                              freeCharacterIfCaged: (c) =>
-                                  this.cageSystem!.freeCharacterIfCaged(c),
-                          }
-                        : undefined,
-                    this.kennelSystem
-                        ? {
-                              freeCharacterIfKenneled: (c) =>
-                                  this.kennelSystem!.freeCharacterIfKenneled(c),
-                          }
-                        : undefined,
+                    global.unifiedCharacterStore ||
+                        new UnifiedCharacterStore(db),
                 ),
         );
 

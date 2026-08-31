@@ -21,6 +21,7 @@ import {
     VeratownCharacterProfileStore,
     RemovedBondageItem,
 } from "./veratownCharacterProfileStore";
+import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import {
     RELEASE_NUDITY_CHECK_INTERVAL_MS,
     RELEASE_NUDITY_TIMEOUT_MS,
@@ -137,6 +138,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         private conn: API_Connector,
         private locationStore?: VeratownLocationStore,
         private characterProfileStore?: VeratownCharacterProfileStore,
+        private unifiedStore?: UnifiedCharacterStore,
     ) {}
 
     private readonly actualClothingGroups = new Set<string>([
@@ -511,7 +513,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             "*The floor beneath you trembles... you fall through a chute!*",
         );
 
-        if (this.characterProfileStore) {
+        // Phase 5: Use UnifiedCharacterStore for position tracking (if available)
+        if (this.unifiedStore) {
+            await this.executeWithRetry(
+                () =>
+                    this.unifiedStore!.updatePosition(character.MemberNumber, {
+                        X: location.x,
+                        Y: location.y,
+                    }),
+                2,
+                "update_position_after_teleport",
+            );
+        } else if (this.characterProfileStore) {
+            // Fallback to characterProfileStore if unified store not available
             await this.executeWithRetry(
                 () =>
                     this.characterProfileStore!.updatePosition(
