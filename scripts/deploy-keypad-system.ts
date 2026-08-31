@@ -15,7 +15,7 @@
  */
 
 import { MongoClient, Db } from "mongodb";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 
 interface ConfigFile {
@@ -290,6 +290,15 @@ class KeypadDeploymentScript {
 
     private async createBackup(): Promise<void> {
         console.log("💾 Creating backup...");
+
+        // Create backup directory if it doesn't exist
+        try {
+            mkdirSync(this.config.backupPath, { recursive: true });
+        } catch (err) {
+            console.warn(
+                `Warning: Could not create backup directory: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
 
         // Backup location documents
         const locations = await this.db!.collection("veratownLocations")
