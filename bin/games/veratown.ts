@@ -457,8 +457,9 @@ export class Veratown {
                 );
                 await this.keypadAccessService.init();
 
-                this.keypadLocationIntegration =
-                    new KeypadLocationIntegration(this.keypadDefinitionService);
+                this.keypadLocationIntegration = new KeypadLocationIntegration(
+                    this.keypadDefinitionService,
+                );
 
                 this.keypadCommandDispatcher = new KeypadCommandDispatcher(
                     this.keypadDefinitionService,
