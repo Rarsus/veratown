@@ -26,7 +26,6 @@ import {
     importBundle,
 } from "bc-bot";
 import { RouletteGame } from "./casino/roulette";
-import { CasinoStore, Player } from "./casino/casinostore";
 import { generatePassword, remainingTimeString } from "../utils";
 import {
     FORFEITS,
@@ -92,7 +91,6 @@ export class Casino implements GamePlugin {
 
     private game: Game;
     private commandParser?: CommandParser;
-    public store: CasinoStore;
     public unifiedStore: UnifiedCharacterStore;
     private cocktailOfTheDay: Cocktail | undefined;
     public multiplier = 1;
@@ -114,7 +112,6 @@ export class Casino implements GamePlugin {
         config?: CasinoConfig,
         commandParser?: CommandParser,
     ) {
-        this.store = new CasinoStore(db);
         this.unifiedStore =
             global.unifiedCharacterStore || new UnifiedCharacterStore(db);
 
@@ -153,6 +150,169 @@ export class Casino implements GamePlugin {
 
         // Store config for later use in registerTriggers
         this.gameConfig = config;
+    }
+
+    /**
+     * Get the unified store (Phase 5+: direct unified access)
+     * Returns a wrapper object with the methods Casino needs
+     */
+    private getStore() {
+        return {
+            getTopPlayers: this.getTopPlayers.bind(this),
+            getUnredeemedPurchases: this.getUnredeemedPurchases.bind(this),
+            setPlayerName: this.setPlayerName.bind(this),
+            getPlayer: this.getPlayer.bind(this),
+            savePlayer: this.savePlayer.bind(this),
+            addCredits: this.addCredits.bind(this),
+            saveOutfit: this.saveOutfit.bind(this),
+            addPurchase: this.addPurchase.bind(this),
+            claimDailyFreeChips: this.claimDailyFreeChips.bind(this),
+            transferCredits: this.transferCredits.bind(this),
+        };
+    }
+
+    /**
+     * Wrapper methods for Casino operations using UnifiedCharacterStore
+     */
+    private async getTopPlayers(limit: number = 50): Promise<any[]> {
+        const profiles = await this.unifiedStore.getLeaderboard(limit);
+        return profiles.map((p) => ({
+            name: p.characterName,
+            memberNumber: p.memberNumber,
+            score: p.casino?.score || 0,
+            credits: p.casino?.chips || 0,
+        }));
+    }
+
+    private async getUnredeemedPurchases(): Promise<any[]> {
+        // Query game events for unredeemed purchases
+        const events = await this.unifiedStore.getUnprocessedEvents();
+        return events
+            .filter((e) => e.type === "casino_purchase" && !e.data?.redeemed)
+            .map((e) => ({
+                memberNumber: e.memberNumber,
+                purchaseId: e.data?.purchaseId,
+                items: e.data?.items || [],
+            }));
+    }
+
+    private async setPlayerName(
+        memberNumber: number,
+        name: string,
+    ): Promise<void> {
+        await this.unifiedStore.updateCharacterName(memberNumber, name);
+    }
+
+    private async getPlayer(memberNumber: number): Promise<any> {
+        const profile = await this.unifiedStore.getProfile(memberNumber);
+        return {
+            memberNumber: profile.memberNumber,
+            name: profile.characterName,
+            credits: profile.casino?.chips || 0,
+            score: profile.casino?.score || 0,
+            games: profile.casino?.games || [],
+        };
+    }
+
+    private async savePlayer(player: any): Promise<void> {
+        // Update chip balance if changed
+        if (player.credits !== undefined) {
+            const current = await this.unifiedStore.getCasinoView(
+                player.memberNumber,
+            );
+            const delta = player.credits - (current?.chips || 0);
+            if (delta !== 0) {
+                await this.unifiedStore.updateChips(
+                    player.memberNumber,
+                    delta,
+                    "save_player_update",
+                    0,
+                );
+            }
+        }
+        // Update casino stats if provided
+        if (player.score !== undefined) {
+            await this.unifiedStore.updateCasinoStats(player.memberNumber, {
+                score: player.score,
+                gamesWon: player.gamesWon || 0,
+                gamesLost: player.gamesLost || 0,
+            });
+        }
+    }
+
+    private async addCredits(
+        memberNumber: number,
+        amount: number,
+    ): Promise<void> {
+        await this.unifiedStore.updateChips(
+            memberNumber,
+            amount,
+            "casino_credit",
+            0,
+        );
+    }
+
+    private async saveOutfit(_outfit: any): Promise<void> {
+        // Outfits are managed by appearance system, not casino store
+        // This is a no-op in the unified architecture
+    }
+
+    private async addPurchase(purchase: any): Promise<void> {
+        // Record purchase as an event
+        await this.unifiedStore.recordEvent({
+            memberNumber: purchase.memberNumber,
+            type: "casino_purchase",
+            timestamp: Date.now(),
+            data: purchase,
+        } as any);
+    }
+
+    private async claimDailyFreeChips(memberNumber: number): Promise<boolean> {
+        const profile = await this.unifiedStore.getProfile(memberNumber);
+        const lastClaimTime = profile.casino?.lastFreeChipsClaimTime || 0;
+        const now = Date.now();
+        const dayInMs = 24 * 60 * 60 * 1000;
+
+        if (now - lastClaimTime < dayInMs) {
+            return false;
+        }
+
+        // Award free chips
+        await this.unifiedStore.updateChips(
+            memberNumber,
+            FREE_CHIPS,
+            "daily_free_chips",
+            0,
+        );
+        return true;
+    }
+
+    private async transferCredits(
+        fromMemberNumber: number,
+        toMemberNumber: number,
+        amount: number,
+    ): Promise<boolean> {
+        const fromProfile =
+            await this.unifiedStore.getCasinoView(fromMemberNumber);
+        if (!fromProfile || fromProfile.chips < amount) {
+            return false;
+        }
+
+        // Deduct from sender
+        await this.unifiedStore.updateChips(
+            fromMemberNumber,
+            -amount,
+            "transfer_out",
+            0,
+        );
+        // Add to receiver
+        await this.unifiedStore.updateChips(
+            toMemberNumber,
+            amount,
+            "transfer_in",
+            0,
+        );
+        return true;
     }
 
     /**

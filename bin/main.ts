@@ -15,14 +15,12 @@
 import { KidnappersGameRoom } from "./hub/logic/kidnappersGameRoom";
 import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom";
 import { Dare } from "./games/dare";
-import { DareStore } from "./games/dareStore";
 import { readFile } from "fs/promises";
 import type { API_Connector } from "bc-bot";
 import { ConfigFile } from "./config";
 import { Db } from "mongodb";
 import { Veratown } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
-import { CasinoStore } from "./games/casino/casinostore";
 import { existsSync } from "fs";
 import {
     BotConnections,
@@ -32,10 +30,6 @@ import {
 } from "./botConnections";
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
-import { CasinoStoreAdapter } from "./games/shared/casinoStoreAdapter";
-import { DareStoreAdapter } from "./games/shared/dareStoreAdapter";
-import { VeratownStoreAdapter } from "./games/shared/veratownStoreAdapter";
-import { CasinoStoreMigrationWrapper } from "./games/shared/casinoMigrationWrapper";
 import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
 
@@ -45,17 +39,13 @@ const SERVER_URL = {
 };
 
 /**
- * Global unified store, adapters, and cross-system subscribers (Phase 2.3+)
+ * Global unified store and cross-system subscribers (Phase 5+)
  * These are initialized during bot startup and made available to all systems.
- * Phase 2.4: Adapters delegate to unified store for gradual code migration.
+ * Phase 5: All adapters removed - systems use UnifiedCharacterStore directly.
  */
 declare global {
     var unifiedCharacterStore: UnifiedCharacterStore | undefined;
     var crossSystemSubscribers: CrossSystemSubscribers | undefined;
-    var casinoStoreAdapter: CasinoStoreAdapter | undefined;
-    var dareStoreAdapter: DareStoreAdapter | undefined;
-    var veratownStoreAdapter: VeratownStoreAdapter | undefined;
-    var casinoStoreMigrationWrapper: CasinoStoreMigrationWrapper | undefined;
     var casinoVenueSystem: CasinoVenueSystem | undefined; // EPIC 2
     var casinoEngine: CasinoEngine | undefined; // EPIC 2
 }
@@ -290,44 +280,8 @@ async function startConfiguredGame({
 
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
-            // Phase 2.4: Initialize adapters that delegate to unified store
-            if (!global.casinoStoreAdapter) {
-                const casinoAdapter = new CasinoStoreAdapter(
-                    global.unifiedCharacterStore,
-                );
-                global.casinoStoreAdapter = casinoAdapter;
-                console.log(
-                    "✅ CasinoStoreAdapter initialized (delegates to unified store)",
-                );
-            }
-
-            if (!global.dareStoreAdapter) {
-                const dareAdapter = new DareStoreAdapter(
-                    global.unifiedCharacterStore,
-                );
-                global.dareStoreAdapter = dareAdapter;
-                console.log(
-                    "✅ DareStoreAdapter initialized (delegates to unified store)",
-                );
-            }
-
-            // Phase 2.4: Also keep original stores for comparison/validation during migration
-            if (!global.casinoStoreMigrationWrapper) {
-                const casinoStore = new CasinoStore(db);
-                const dareStore = new DareStore(db);
-                console.log("✅ Original stores initialized (for validation)");
-
-                // Phase 2.4b: Create migration wrapper for gradual Casino migration
-                const casinoMigrationWrapper = new CasinoStoreMigrationWrapper(
-                    casinoStore,
-                    global.casinoStoreAdapter!,
-                    false, // enableValidation: disabled (migration complete)
-                );
-                global.casinoStoreMigrationWrapper = casinoMigrationWrapper;
-                console.log(
-                    "✅ CasinoStoreMigrationWrapper initialized (Phase 2.4b - validation disabled)",
-                );
-            }
+            // Phase 5+: All systems use UnifiedCharacterStore directly
+            // Adapters removed - no legacy store initialization needed
 
             // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
             if (!global.casinoVenueSystem) {
@@ -341,7 +295,6 @@ async function startConfiguredGame({
             // EPIC 2: Initialize CasinoEngine for core game logic
             if (!global.casinoEngine && global.casinoVenueSystem) {
                 const casinoEngine = new CasinoEngine(
-                    global.casinoStoreAdapter!,
                     global.unifiedCharacterStore,
                     global.casinoVenueSystem,
                 );
@@ -351,7 +304,7 @@ async function startConfiguredGame({
                 );
             }
 
-            // Phase 2.3: Initialize cross-system subscribers
+            // Phase 5: Initialize cross-system subscribers
             if (!global.crossSystemSubscribers) {
                 const subscribers = new CrossSystemSubscribers(
                     global.unifiedCharacterStore,
@@ -369,22 +322,16 @@ async function startConfiguredGame({
             );
             await game.init();
 
-            // Phase 2.3: Activate event subscriptions after systems are ready
+            // Phase 5: Activate event subscriptions after systems are ready
             if (global.crossSystemSubscribers) {
                 await global.crossSystemSubscribers.initialize();
                 console.log("✅ Cross-system event subscriptions activated");
             }
 
-            // Phase 2.4: Log adapter availability for gradual code migration
-            if (
-                global.casinoStoreAdapter &&
-                global.dareStoreAdapter &&
-                global.veratownStoreAdapter
-            ) {
-                console.log(
-                    "✅ All adapters ready for gradual code migration (Phase 2.4)",
-                );
-            }
+            console.log(
+                "✅ Phase 5 adapter cleanup complete - 100% unified architecture",
+            );
+            console.log("   All systems use UnifiedCharacterStore directly");
 
             main.setBotDescription(Veratown.description);
             return;
