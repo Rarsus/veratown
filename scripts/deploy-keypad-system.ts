@@ -15,8 +15,14 @@
  */
 
 import { MongoClient, Db } from "mongodb";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
+
+interface ConfigFile {
+    mongo_uri?: string;
+    mongo_db?: string;
+    mongo_tls?: boolean;
+}
 
 /**
  * Keypad System Deployment Script
@@ -45,6 +51,7 @@ interface DeploymentConfig {
     mongoUri: string;
     database: string;
     backupPath: string;
+    mongoTls: boolean;
 }
 
 class KeypadDeploymentScript {
@@ -56,15 +63,52 @@ class KeypadDeploymentScript {
         this.config = this.parseArgs();
     }
 
+    private loadConfigFile(): ConfigFile {
+        const configPath = resolve("./config.json");
+        if (!existsSync(configPath)) {
+            console.log(
+                "[Config] No config.json found, using environment variables",
+            );
+            return {};
+        }
+
+        try {
+            const content = readFileSync(configPath, "utf-8");
+            const config = JSON.parse(content);
+            console.log("[Config] Loaded from config.json");
+            return config as ConfigFile;
+        } catch (err) {
+            console.warn(
+                "[Config] Failed to read config.json, using environment variables",
+            );
+            return {};
+        }
+    }
+
     private parseArgs(): DeploymentConfig {
         const args = process.argv.slice(2);
+        const fileConfig = this.loadConfigFile();
+
+        // Priority: env vars > config.json > defaults
+        const mongoUri =
+            process.env.MONGODB_URI ||
+            fileConfig.mongo_uri ||
+            "mongodb://localhost:27017";
+        const database =
+            process.env.MONGODB_DB || fileConfig.mongo_db || "ropeybot";
+        const mongoTls =
+            process.env.MONGODB_TLS !== undefined
+                ? process.env.MONGODB_TLS === "true"
+                : (fileConfig.mongo_tls ?? true);
+
         const config: DeploymentConfig = {
             dryRun: args.includes("--dry-run"),
             preview: args.includes("--preview"),
             fullDeploy: args.includes("--full"),
             rollback: args.includes("--rollback"),
-            mongoUri: process.env.MONGODB_URI || "mongodb://localhost:27017",
-            database: process.env.MONGODB_DB || "ropeybot",
+            mongoUri,
+            database,
+            mongoTls,
             backupPath: process.env.BACKUP_PATH || "./backups/keypad",
         };
 
@@ -115,7 +159,10 @@ class KeypadDeploymentScript {
 
     private async connect(): Promise<void> {
         console.log(`📦 Connecting to MongoDB: ${this.config.mongoUri}`);
-        this.client = new MongoClient(this.config.mongoUri);
+        this.client = new MongoClient(this.config.mongoUri, {
+            ssl: this.config.mongoTls,
+            tls: this.config.mongoTls,
+        });
         await this.client.connect();
         this.db = this.client.db(this.config.database);
         console.log(`✓ Connected to database: ${this.config.database}\n`);

@@ -29,12 +29,21 @@
  */
 
 import { MongoClient, Db } from "mongodb";
+import { existsSync, readFileSync } from "fs";
+import { resolve } from "path";
+
+interface ConfigFile {
+    mongo_uri?: string;
+    mongo_db?: string;
+    mongo_tls?: boolean;
+}
 
 interface RollbackConfig {
     level: 1 | 2 | 3;
     mongoUri: string;
     database: string;
     confirmDelete: boolean;
+    mongoTls: boolean;
 }
 
 class KeypadRollbackScript {
@@ -46,8 +55,31 @@ class KeypadRollbackScript {
         this.config = this.parseArgs();
     }
 
+    private loadConfigFile(): ConfigFile {
+        const configPath = resolve("./config.json");
+        if (!existsSync(configPath)) {
+            console.log(
+                "[Config] No config.json found, using environment variables",
+            );
+            return {};
+        }
+
+        try {
+            const content = readFileSync(configPath, "utf-8");
+            const config = JSON.parse(content);
+            console.log("[Config] Loaded from config.json");
+            return config as ConfigFile;
+        } catch (err) {
+            console.warn(
+                "[Config] Failed to read config.json, using environment variables",
+            );
+            return {};
+        }
+    }
+
     private parseArgs(): RollbackConfig {
         const args = process.argv.slice(2);
+        const fileConfig = this.loadConfigFile();
 
         let level: 1 | 2 | 3 = 1;
         const levelArg = args.find((arg) => arg.startsWith("--level"));
@@ -55,10 +87,23 @@ class KeypadRollbackScript {
             level = parseInt(levelArg.split("=")[1]) as 1 | 2 | 3;
         }
 
+        // Priority: env vars > config.json > defaults
+        const mongoUri =
+            process.env.MONGODB_URI ||
+            fileConfig.mongo_uri ||
+            "mongodb://localhost:27017";
+        const database =
+            process.env.MONGODB_DB || fileConfig.mongo_db || "ropeybot";
+        const mongoTls =
+            process.env.MONGODB_TLS !== undefined
+                ? process.env.MONGODB_TLS === "true"
+                : (fileConfig.mongo_tls ?? true);
+
         return {
             level,
-            mongoUri: process.env.MONGODB_URI || "mongodb://localhost:27017",
-            database: process.env.MONGODB_DB || "ropeybot",
+            mongoUri,
+            database,
+            mongoTls,
             confirmDelete: args.includes("--confirm"),
         };
     }
@@ -136,7 +181,10 @@ class KeypadRollbackScript {
 
     private async connect(): Promise<void> {
         console.log(`📦 Connecting to MongoDB: ${this.config.mongoUri}`);
-        this.client = new MongoClient(this.config.mongoUri);
+        this.client = new MongoClient(this.config.mongoUri, {
+            ssl: this.config.mongoTls,
+            tls: this.config.mongoTls,
+        });
         await this.client.connect();
         this.db = this.client.db(this.config.database);
         console.log(`✓ Connected to database: ${this.config.database}\n`);
