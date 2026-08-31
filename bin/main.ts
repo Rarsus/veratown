@@ -32,6 +32,8 @@ import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
+import { KeypadSystemInitializer } from "./games/veratown/keypadSystemInitializer";
+import { VeratownLocationStore } from "./games/veratown/veratownLocationStore";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -48,6 +50,7 @@ declare global {
     var crossSystemSubscribers: CrossSystemSubscribers | undefined;
     var casinoVenueSystem: CasinoVenueSystem | undefined; // EPIC 2
     var casinoEngine: CasinoEngine | undefined; // EPIC 2
+    var keypadSystem: KeypadSystemInitializer | undefined; // Veratown keypads
 }
 
 // Initialize globals
@@ -278,6 +281,29 @@ async function startConfiguredGame({
                 console.log("✅ UnifiedCharacterStore initialized");
             }
 
+            // Initialize Veratown Keypad System (location-based door access)
+            if (!global.keypadSystem) {
+                const locationStore = new VeratownLocationStore(db);
+                const keypadSystem = new KeypadSystemInitializer(
+                    db,
+                    main,
+                    locationStore,
+                    global.unifiedCharacterStore,
+                );
+                global.keypadSystem = keypadSystem;
+                const initResult = await keypadSystem.initialize();
+                if (initResult.success) {
+                    console.log(
+                        "✅ KeypadSystem initialized (door access control)",
+                    );
+                } else {
+                    console.warn(
+                        "⚠️ KeypadSystem initialization had issues:",
+                        initResult.errors,
+                    );
+                }
+            }
+
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
             // Phase 5+: All systems use UnifiedCharacterStore directly
@@ -313,7 +339,7 @@ async function startConfiguredGame({
                 console.log("✅ CrossSystemSubscribers initialized");
             }
 
-            // Initialize and start Veratown with integrated plugins
+            // Initialize and start Veratown with integrated plugins (including keypads)
             const game = new Veratown(
                 connections,
                 db,
@@ -321,6 +347,11 @@ async function startConfiguredGame({
                 config.casino,
             );
             await game.init();
+
+            // Activate keypad system after game is ready
+            if (global.keypadSystem && game) {
+                console.log("✅ Keypad system ready for door interactions");
+            }
 
             // Phase 5: Activate event subscriptions after systems are ready
             if (global.crossSystemSubscribers) {
