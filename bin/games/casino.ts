@@ -46,6 +46,7 @@ import {
 } from "./veratown/veratownLocationStore";
 import { loadRegionFromDatabase } from "./shared/locationUtils";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
+import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 
 const FREE_CHIPS = 20;
@@ -92,6 +93,7 @@ export class Casino implements GamePlugin {
     private game: Game;
     private commandParser?: CommandParser;
     public store: CasinoStore;
+    public unifiedStore: UnifiedCharacterStore;
     private cocktailOfTheDay: Cocktail | undefined;
     public multiplier = 1;
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
@@ -99,11 +101,11 @@ export class Casino implements GamePlugin {
     private forfeitService: ForfeitService;
 
     /**
-     * Get the active store (migration wrapper if available, original store otherwise)
-     * Phase 2.4d: Wrapper provides coordinated read/write operations
+     * Phase 5: Direct UnifiedCharacterStore access (no adapters)
+     * Returns the unified store for direct access to character state
      */
-    public getStore() {
-        return global.casinoStoreMigrationWrapper || this.store;
+    public getUnifiedStore(): UnifiedCharacterStore {
+        return this.unifiedStore;
     }
 
     public constructor(
@@ -113,6 +115,8 @@ export class Casino implements GamePlugin {
         commandParser?: CommandParser,
     ) {
         this.store = new CasinoStore(db);
+        this.unifiedStore =
+            global.unifiedCharacterStore || new UnifiedCharacterStore(db);
 
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
@@ -137,12 +141,6 @@ export class Casino implements GamePlugin {
         this.game.registerCommands(this.commandParser!);
 
         this.forfeitService = new ForfeitService();
-
-        // Phase 2.4d: Use migration wrapper if available (gradual adoption)
-        // Fall back to original store if wrapper not yet initialized
-        if (global.casinoStoreMigrationWrapper) {
-            this.store = global.casinoStoreMigrationWrapper as any;
-        }
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];

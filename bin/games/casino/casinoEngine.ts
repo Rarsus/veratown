@@ -17,7 +17,6 @@
  * - Emits gameEvents through EventBus
  */
 
-import { CasinoStoreAdapter } from "./casinoStoreAdapter";
 import { UnifiedCharacterStore, GameEvent } from "./unifiedCharacterStore";
 import { CasinoVenueSystem } from "./casinoVenueSystem";
 import { createSystemLogger } from "../veratown/shared/systemLogger";
@@ -46,12 +45,12 @@ export interface GameOutcome {
 
 /**
  * CasinoEngine provides core game logic for all casino games
+ * Phase 5: Direct UnifiedCharacterStore access (no adapters)
  */
 export class CasinoEngine {
     private readonly logger = createSystemLogger("CasinoEngine");
 
     constructor(
-        private store: CasinoStoreAdapter,
         private unifiedStore: UnifiedCharacterStore,
         private venueSystem: CasinoVenueSystem,
     ) {}
@@ -64,9 +63,11 @@ export class CasinoEngine {
         message: string;
         deductedChips: number;
     }> {
-        // Get player
-        const player = await this.store.getPlayer(context.memberNumber);
-        if (!player) {
+        // Get player casino view
+        const casinoView = await this.unifiedStore.getCasinoView(
+            context.memberNumber,
+        );
+        if (!casinoView) {
             return {
                 success: false,
                 message: `Player ${context.memberNumber} not found`,
@@ -98,25 +99,21 @@ export class CasinoEngine {
             context.region,
         );
 
-        if (player.credits < effectiveBet) {
+        if (casinoView.chips < effectiveBet) {
             return {
                 success: false,
-                message: `Insufficient chips. Need ${effectiveBet}, have ${player.credits}`,
+                message: `Insufficient chips. Need ${effectiveBet}, have ${casinoView.chips}`,
                 deductedChips: 0,
             };
         }
 
-        // Deduct chips from player
-        await this.store.addCredits(context.memberNumber, -effectiveBet);
-
-        // Emit chips_spent event
-        await this.unifiedStore.getEventBus().publish({
-            type: "chips_spent",
-            targetMemberNumber: context.memberNumber,
-            amount: effectiveBet,
-            reason: `${context.gameType}_bet`,
-            timestamp: Date.now(),
-        } as any);
+        // Deduct chips from player using unified store
+        await this.unifiedStore.updateChips(
+            context.memberNumber,
+            -effectiveBet,
+            `${context.gameType}_bet`,
+            0, // actor memberNumber (0 = system)
+        );
 
         return {
             success: true,
@@ -149,17 +146,13 @@ export class CasinoEngine {
             undefined, // Region would need to be passed from context
         );
 
-        // Add payout to player
-        await this.store.addCredits(outcome.memberId, effectivePayout);
-
-        // Emit chips_earned event
-        await this.unifiedStore.getEventBus().publish({
-            type: "chips_earned",
-            targetMemberNumber: outcome.memberId,
-            amount: effectivePayout,
-            reason: `${outcome.gameType}_win`,
-            timestamp: Date.now(),
-        } as any);
+        // Add payout to player using unified store
+        await this.unifiedStore.updateChips(
+            outcome.memberId,
+            effectivePayout,
+            `${outcome.gameType}_win`,
+            0, // actor memberNumber (0 = system)
+        );
 
         // Log win with audit trail
         await this.unifiedStore.recordAuditEntry(
@@ -264,8 +257,8 @@ export class CasinoEngine {
         netResult: number;
         winRate: number;
     }> {
-        const player = await this.store.getPlayer(memberNumber);
-        if (!player) {
+        const casinoView = await this.unifiedStore.getCasinoView(memberNumber);
+        if (!casinoView) {
             return {
                 gamesPlayed: 0,
                 gamesWon: 0,
@@ -277,7 +270,7 @@ export class CasinoEngine {
         }
 
         return {
-            gamesPlayed: player.games?.length || 0,
+            gamesPlayed: 0, // Would require detailed game history from unified store
             gamesWon: 0, // Would require detailed game history
             totalBet: 0, // Would require detailed game history
             totalWon: 0, // Would require detailed game history
