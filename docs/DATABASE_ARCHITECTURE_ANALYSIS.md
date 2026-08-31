@@ -28,18 +28,18 @@ These are embedded in or directly tied to individual character documents in `uni
 
 These are independent, read-heavy collections accessed by all systems:
 
-| Collection                | Purpose                                 | Access Pattern                         | Current Implementation         |
-| ------------------------- | --------------------------------------- | -------------------------------------- | ------------------------------ |
-| `dares`                   | Dare definitions/deck (100+ dare cards) | `.find()` to get all, random selection | Via removed DareStore          |
-| `veratownMap`             | Location geometry, boundaries           | Bulk load on startup                   | Via VeratownMapStore           |
-| `veratownLocations`       | Specific location definitions           | `.find()` for location data            | Via VeratownLocationStore      |
-| `playerRoles`             | Role definitions (Warden, Guard, etc.)  | `.find()` for all roles                | Via PlayerRoleSystem           |
-| `roleDefinitions`         | Role metadata/permissions               | `.find()` for definitions              | Via PlayerRoleSystem           |
-| `locationEvents`          | Location-based event audit trail        | `.find()` filtered by location         | Via LocationEventSystem        |
-| `locationEventExecutions` | Execution records for location events   | `.find()` for execution tracking       | Via LocationEventSystem        |
-| `keypadAccessGroups`      | Door access group definitions           | `.find()` for access rules             | Via KeypadAccessGroupManager   |
-| `furnitureState`          | Furniture interaction state             | `.find()` per furniture item           | Via FurnitureInteractionSystem |
-| `appearanceAuditLog`      | Audit trail of appearance changes       | `.find()` filtered by character        | Via AppearanceAuditTrail       |
+| Collection                | Purpose                                 | Access Pattern                         | Current Implementation         | Architecture Issue                                         |
+| ------------------------- | --------------------------------------- | -------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `dares`                   | Dare definitions/deck (100+ dare cards) | `.find()` to get all, random selection | Via removed DareStore          | ✅ FIXED (Phase 5) - See PLUGGABLE_ARCHITECTURE_PATTERN.md |
+| `veratownMap`             | Location geometry, boundaries           | Bulk load on startup                   | Via VeratownMapStore           | Generic data, should be cached                             |
+| `veratownLocations`       | Specific location definitions           | `.find()` for location data            | Via VeratownLocationStore      | Generic data, should be cached                             |
+| `playerRoles`             | Role definitions (Warden, Guard, etc.)  | `.find()` for all roles                | Via PlayerRoleSystem           | ⚠️ Assignments should embed in UnifiedCharacterProfile     |
+| `roleDefinitions`         | Role metadata/permissions               | `.find()` for definitions              | Via PlayerRoleSystem           | Generic data, separate from assignments                    |
+| `locationEvents`          | Location-based event definitions        | `.find()` filtered by location         | Via LocationEventSystem        | Generic event definitions only (Layer 3)                   |
+| `locationEventExecutions` | Execution records for location events   | `.find()` for execution tracking       | Via LocationEventSystem        | 🔴 CRITICAL - See COMPLEX_COLLECTION_ARCHITECTURE.md       |
+| `keypadAccessGroups`      | Door access group definitions + members | `.find()` for access rules             | Via KeypadAccessGroupManager   | 🔴 CRITICAL - See COMPLEX_COLLECTION_ARCHITECTURE.md       |
+| `furnitureState`          | Furniture interaction state + occupancy | `.find()` per furniture item           | Via FurnitureInteractionSystem | 🔴 CRITICAL - Occupancy should be in character profiles    |
+| `appearanceAuditLog`      | Audit trail of appearance changes       | `.find()` filtered by character        | Via AppearanceAuditTrail       | ✅ OK - Correctly isolated per character                   |
 
 **Access pattern:** These are typically:
 
@@ -406,3 +406,111 @@ export class GenericDataService {
 3. Introduce GenericDataService for non-character collections
 4. Add caching layer for read-heavy generic data
 5. Benchmark before/after performance
+
+---
+
+## Complex Collections: Handling Many-to-Many Relationships
+
+Three collections require special attention because they involve **linking multiple entities across architectural layers**. These present the highest violation risk and require careful design:
+
+### Collections Requiring Refactoring
+
+#### 1. keypadAccessGroups (🔴 CRITICAL)
+
+**Current Problem:** Door definitions contain character membership arrays
+
+```typescript
+// ❌ BAD: Character data in Layer 3
+{
+    doorKey: "vault_1",
+    groups: {
+        admin: { memberNumbers: [1,2,3] }  // ← Should be Layer 1!
+    }
+}
+```
+
+**Solution:** See [COMPLEX_COLLECTION_ARCHITECTURE.md](COMPLEX_COLLECTION_ARCHITECTURE.md#solution-1-keypadaccessgroups---three-collection-approach-recommended)
+
+- **Layer 3:** `keypadAccessDefinitions` (door + group + permissions only)
+- **Layer 1:** Character profile `veratown.keypadAccess[]` (who has what access)
+- **Layer 1 (Optional):** `keypadGroupMemberships` (indexed for admin queries)
+
+#### 2. locationEventExecutions (🔴 CRITICAL)
+
+**Current Problem:** Event outcomes stored with affected character lists
+
+```typescript
+// ❌ BAD: Character outcomes in Layer 3
+{
+    eventId: "event_escape_attempt",
+    affectedMembers: [1,2,3],      // ← Should be Layer 1!
+    outcomes: { 1: "punished", 2: "released" }
+}
+```
+
+**Solution:** See [COMPLEX_COLLECTION_ARCHITECTURE.md](COMPLEX_COLLECTION_ARCHITECTURE.md#solution-2-locationeventexecutions---audit-trail-approach-recommended)
+
+- **Layer 3:** `locationEventDefinitions` (event types + possible outcomes only)
+- **Layer 1:** Character profile `veratown.eventHistory[]` (what events affected this character)
+- **Layer 1 (Optional):** `locationEventAuditLog` (indexed for admin queries)
+
+#### 3. furnitureState (🔴 CRITICAL)
+
+**Current Problem:** Live occupancy mixed with equipment definitions
+
+```typescript
+// ❌ BAD: Character occupancy in Layer 3
+{
+    furnitureId: "bed_1",
+    occupants: [1,2,3],            // ← Should be Layer 1!
+    equipment: ["restraint_1"]
+}
+```
+
+**Solution:**
+
+- **Layer 3:** `furnitureDefinitions` (capacity, equipment, type)
+- **Layer 1:** Character profile `veratown.currentFurniture` (who's in it)
+- **Layer 2:** `furnitureState` (sparse counters only, if needed)
+
+### Key Pattern: "Generic Definitions vs. Character State"
+
+All three violations follow the same pattern:
+
+| Layer               | ✅ Correct                                 | ❌ Incorrect                           |
+| ------------------- | ------------------------------------------ | -------------------------------------- |
+| Layer 3 (Generic)   | "This door allows these groups"            | "This door has these members"          |
+| Layer 3 (Generic)   | "This event can have these outcomes"       | "This event affected these characters" |
+| Layer 3 (Generic)   | "This furniture has this capacity"         | "This furniture has these occupants"   |
+| Layer 1 (Character) | "Character 1 has admin access to door 5"   | ❌ Belongs in Layer 3                  |
+| Layer 1 (Character) | "Character 2 was captured in escape event" | ❌ Belongs in Layer 3                  |
+| Layer 1 (Character) | "Character 3 is in bed_1"                  | ❌ Belongs in Layer 3                  |
+
+### Query Pattern: Separate Paths for Different Questions
+
+For each collection, there are two fundamental queries:
+
+| Question                             | Data Location                                | Query Path          |
+| ------------------------------------ | -------------------------------------------- | ------------------- |
+| **keypadAccessGroups**               |                                              |                     |
+| "What access does character 1 have?" | Layer 1 character profile                    | Fast, single lookup |
+| "Who has admin access to vault_1?"   | Layer 1 membership collection (indexed)      | Fast, indexed query |
+| **locationEventExecutions**          |                                              |                     |
+| "What events affected character 1?"  | Layer 1 character profile                    | Fast, single lookup |
+| "What happened at location 5 today?" | Layer 1 audit log (indexed)                  | Fast, indexed query |
+| **furnitureState**                   |                                              |                     |
+| "What furniture is character 1 in?"  | Layer 1 character profile                    | Fast, single lookup |
+| "How many characters are in bed_1?"  | Layer 2/3 furniture state (fast aggregation) | Fast, indexed query |
+
+### For Complete Details
+
+**See:** [COMPLEX_COLLECTION_ARCHITECTURE.md](COMPLEX_COLLECTION_ARCHITECTURE.md)
+
+This document provides:
+
+- Detailed before/after comparisons
+- Collection schemas for each layer
+- Query patterns with code examples
+- Pros/cons for each approach
+- Implementation roadmap
+- Sync strategies for audit trails

@@ -18,71 +18,86 @@ Following the successful refactoring of the Dare system to clean three-layer arc
 
 ### 1. keypadAccessGroups Collection
 
-**File:** Likely `bin/games/veratown/keypadAccessGroupManager.ts`  
-**Issue:** Door access definitions contain `memberNumbers[]` (character data in reference data)
+**File:** `bin/games/veratown/keypadAccessGroupManager.ts` + `bin/games/veratown/keypadDoorSystem.ts`  
+**Issue:** Door access configuration split between locations collection and keypadAccessGroups, with memberNumbers[] in Layer 3
 
 **Current Pattern:**
 
 ```typescript
-// keypadAccessGroups collection
+// locations[doorKey].data contains:
+{
+    doorX: 20, doorY: 10,
+    codes: { admin: "code1", whitelist: "code2", guest: "code3" },
+    whitelistMemberNumbers: [1, 2, 3]  // ❌ Character data in Layer 3
+}
+
+// keypadAccessGroups[doorKey] contains:
 {
     doorKey: "door_1",
     groups: {
-        admin: {
-            memberNumbers: [1, 2, 3],  // ❌ LAYER 1 DATA IN LAYER 3!
-            permissions: ["unlock", "lock"]
-        }
+        admin: { memberNumbers: [1, 2, 3], ... },  // ❌ Character data in Layer 3
+        custom: { memberNumbers: [...], ... }
     }
 }
 ```
 
 **Problem:**
 
-- Layer 3 (reference data) should never contain character numbers
-- Character membership changes shouldn't require modifying door definitions
-- Impossible to query "which characters have admin access" efficiently
-- Mixed responsibilities: door definition + membership management
+- Door configuration scattered across two collections
+- No support for multiple keypads per door
+- Character membership data stored in generic collections (Layer 3)
+- Non-atomic membership updates
+- Impossible to efficiently query character's door access
+- Whitelist changes require modifying location document
 
-**Solution (Two Collections):**
+**Solution (Three-Layer Unified Architecture):**
 
-```typescript
-// Collection 1: keypadAccessGroups (LAYER 3 - Reference Data)
-{
-    _id: "group_1",
-    doorKey: "door_1",
-    groupName: "admin",
-    permissions: ["unlock", "lock"]
-    // NO memberNumbers
-}
+See [KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md) for complete design:
 
-// Collection 2: keypadGroupMemberships (LAYER 1 - Character Data)
-{
-    _id: "membership_1",
-    doorKey: "door_1",
-    groupName: "admin",
-    memberNumber: 1,
-    grantedBy: 100,
-    grantedAt: 1693478400000
-}
-```
+**Layer 3:**
 
-**Implementation Steps:**
+- `keypadDoorDefinitions` - unified door config (tiles, coordinates, unlock duration, etc.)
+- `keypadGroupDefinitions` - unified group definitions (admin, whitelist, guest, custom) with codes and permissions
 
-1. Create new `KeypadAccessService` (Layer 3) - manages access definitions
-2. Add membership management to `UnifiedCharacterStore` (Layer 1)
-3. Update `KeypadAccessGroupManager` to use both services
-4. Migrate existing `keypadAccessGroups` data (add membership documents)
-5. Update queries: `findMembersWithAccess()` now joins two collections
-6. Test in isolation with mocked services
+**Layer 1:**
 
-**Estimated Effort:** 2-3 hours  
+- Character profile `veratown.keypadAccess[]` - atomic storage of character's door access
+- Optional `keypadGroupMemberships` - indexed for admin UI queries
+
+**Key Features (All Preserved):**
+
+- ✅ Multiple keypads per door support
+- ✅ Admin codes
+- ✅ Whitelist member direct access
+- ✅ Custom groups with individual codes
+- ✅ Admin override (lock/unlock commands)
+- ✅ Door enabling/disabling
+- ✅ Auto-open tiles
+- ✅ Inside region protection
+- ✅ Expiration support (new)
+
+**Implementation Reference:**
+
+- [Complete Schema Design](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md#mongodb-collections-schema)
+- [Service Architecture](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md#service-architecture)
+- [Query Patterns](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md#query-patterns--logic-flow)
+- [Migration Strategy](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md#data-migration-strategy) (6 phases)
+- [Testing Strategy](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md#testing-strategy)
+- [Implementation Checklist](KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md#implementation-checklist) (5-day plan)
+
+**Estimated Effort:** 2-3 hours (if blueprint followed exactly)  
+**Files to Create:**
+
+- `bin/games/veratown/services/keypadDefinitionService.ts` (Layer 3)
+- `bin/games/veratown/services/keypadAccessService.ts` (Layer 2)
+
 **Files to Modify:**
 
-- `bin/games/veratown/keypadAccessGroupManager.ts`
-- `bin/games/unifiedCharacterStore.ts` (add methods)
-- Database migration script
+- `bin/games/veratown/keypadDoorSystem.ts` (use new services)
+- `bin/games/unifiedCharacterStore.ts` (add keypadAccess methods)
+- Migration scripts (6 phases)
 
-**Status:** ⏳ PENDING
+**Status:** 🟡 DESIGNED - Ready for implementation
 
 ---
 
