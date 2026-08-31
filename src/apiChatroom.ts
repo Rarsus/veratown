@@ -397,7 +397,7 @@ export class API_Chatroom extends EventEmitter<ChatRoomEvents> {
         try {
             this.map.onCharacterMove(char, prevPos);
         } catch (e) {
-            console.log("Error handling character move", e);
+            console.error("Error handling character move", e);
         }
     }
 

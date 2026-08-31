@@ -113,14 +113,14 @@ export class CommandParser {
                     if (promiseRet && promiseRet.catch) {
                         // I am not sure if a check for promiseRet makes sense but if the return of the command is no promise it would error otherwise
                         promiseRet.catch((e) => {
-                            console.log(
+                            console.error(
                                 "Command handler threw async exception",
                                 e,
                             );
                         });
                     }
                 } catch (e) {
-                    console.log("Command handler threw exception", e);
+                    console.error("Command handler threw exception", e);
                 }
                 return;
             }
