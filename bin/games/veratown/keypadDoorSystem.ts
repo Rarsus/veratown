@@ -583,15 +583,50 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         // Help is available to everyone
         if (action === "help") {
             if (isAdmin) {
-                this.replyDoor(
-                    msg.message,
-                    "Admin commands: !door change-code <admin|whitelist|guest> <code>; !door add-user <member>; !door remove-user <member>; !door list; !door list-whitelist; !door lock; !door unlock [sec]; !door enable; !door disable; !door group-list; !door group-create <name>; !door group-delete <name>; !door group-add <group> <member>; !door group-remove <group> <member>; !door group-code <group> <code>",
-                );
+                const adminHelp = [
+                    "=== KEYPAD DOOR MANAGEMENT ===",
+                    "",
+                    "CODE MANAGEMENT:",
+                    "  !door change-code <admin|whitelist|guest> <code> - Change access code",
+                    "  !door code <group> <code> - Set code for specific group",
+                    "",
+                    "WHITELIST MANAGEMENT:",
+                    "  !door add-user <member> - Add member to whitelist",
+                    "  !door remove-user <member> - Remove member from whitelist",
+                    "  !door list-whitelist - Show all whitelisted members",
+                    "",
+                    "DOOR CONTROL:",
+                    "  !door lock - Lock door immediately",
+                    "  !door unlock [sec] - Manually unlock for duration",
+                    "  !door enable - Re-enable a disabled keypad",
+                    "  !door disable - Disable keypad without deleting",
+                    "",
+                    "GROUP MANAGEMENT:",
+                    "  !door group-list - Show all access groups",
+                    "  !door group-create <name> - Create custom group",
+                    "  !door group-delete <name> - Delete custom group",
+                    "  !door group-add <group> <member> - Add member to group",
+                    "  !door group-remove <group> <member> - Remove member from group",
+                    "  !door group-code <group> <code> - Set group code",
+                    "",
+                    "STATUS:",
+                    "  !door list - Show door configuration and groups",
+                ].join("\n");
+                this.replyDoor(msg.message, adminHelp);
             } else if (isWhitelisted) {
-                this.replyDoor(
-                    msg.message,
-                    "Whitelist commands: !door change-code <whitelist|guest> <code>; !door add-user <member>; !door remove-user <member>; !door list; !door list-whitelist",
-                );
+                const whitelistHelp = [
+                    "=== WHITELIST MEMBER COMMANDS ===",
+                    "",
+                    "CODE MANAGEMENT:",
+                    "  !door change-code <whitelist|guest> <code> - Change whitelist or guest code",
+                    "",
+                    "WHITELIST MANAGEMENT:",
+                    "  !door add-user <member> - Add member to whitelist",
+                    "  !door remove-user <member> - Remove member from whitelist",
+                    "  !door list - Show configuration",
+                    "  !door list-whitelist - Show all whitelisted members",
+                ].join("\n");
+                this.replyDoor(msg.message, whitelistHelp);
             } else {
                 this.replyDoor(
                     msg.message,

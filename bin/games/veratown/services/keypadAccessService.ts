@@ -86,10 +86,13 @@ export class KeypadAccessService {
         await this.unifiedStore.addKeypadAccess(memberNumber, access);
 
         // Add to membership index (for admin UI queries)
+        // Use composite ID format: doorKey:groupName:memberNumber
+        const compositeId = `${doorKey}:${groupName}:${memberNumber}`;
         await this.memberships.updateOne(
-            { doorKey, groupName, memberNumber },
+            { _id: compositeId },
             {
                 $set: {
+                    _id: compositeId,
                     doorKey,
                     groupName,
                     memberNumber,
@@ -97,7 +100,6 @@ export class KeypadAccessService {
                     grantedBy,
                     grantedReason: reason,
                     syncedFromProfile: true,
-                    updatedAt: Date.now(),
                 },
             },
             { upsert: true },
@@ -135,7 +137,7 @@ export class KeypadAccessService {
         memberNumber: number,
     ): Promise<KeypadAccessRecord[]> {
         const profile =
-            await this.unifiedStore.getCharacterProfile(memberNumber);
+            await this.unifiedStore.getProfile(memberNumber);
         return profile?.veratown?.keypadAccess ?? [];
     }
 

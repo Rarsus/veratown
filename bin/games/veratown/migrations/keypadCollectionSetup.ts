@@ -323,7 +323,7 @@ export class KeypadCollectionSetup {
             await collection.createIndex({ doorKey: 1, groupName: 1 });
             await collection.createIndex({ memberNumber: 1 });
             await collection.createIndex(
-                { doorKey: 1, memberNumber: 1 },
+                { doorKey: 1, groupName: 1, memberNumber: 1 },
                 { unique: true },
             );
             // TTL index for auto-cleanup of expired memberships
