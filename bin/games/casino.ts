@@ -106,14 +106,6 @@ export class Casino implements GamePlugin {
         return this.unifiedStore;
     }
 
-    /**
-     * Get the legacy store adapter for backward compatibility
-     * Games should use this to access player and credit management methods
-     */
-    public get store() {
-        return this.getStore();
-    }
-
     public constructor(
         private conn: API_Connector,
         db: Db,
