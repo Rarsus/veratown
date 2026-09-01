@@ -12,12 +12,7 @@
  * limitations under the License.
  */
 
-import {
-    API_Character,
-    API_Connector,
-    API_Message,
-    CommandParser,
-} from "bc-bot";
+import { API_Character, API_Connector, CommandParser } from "bc-bot";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import {
     VeratownLocationDoc,
@@ -113,14 +108,36 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Called after system creation to ensure proper initialization order
      */
     registerTriggers(): void {
-        // Register message handler for admin commands and code entry
-        this.conn.on("Message", guardHandler(this.key, this.onMessage));
+        // CommandParser handles Chat (!cmd) and Hidden (/bot cmd) message types
+        this.commandParser?.register("code", (sender, _msg, args) => {
+            const code = args.join(" ").trim();
+            if (!code) {
+                this.sendNotification(sender, "Usage: !code <code>");
+                return;
+            }
+            void this.onCodeMessage(sender, code);
+        });
 
-        // Register code command with CommandParser so BC knows it's valid
-        this.commandParser?.register(
-            "code",
-            guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser),
-        );
+        this.commandParser?.register("door", (sender, _msg, args) => {
+            const argsStr = args.join(" ").trim();
+            if (!argsStr) {
+                const coordKey = `${sender.MapPos.X},${sender.MapPos.Y}`;
+                const door = this.keypadLocationToDoor.get(coordKey);
+                if (door) {
+                    this.sendNotification(
+                        sender,
+                        "[Keypad] Use !code <code> to unlock this door",
+                    );
+                } else {
+                    this.sendNotification(
+                        sender,
+                        "You are not standing on a keypad door.",
+                    );
+                }
+                return;
+            }
+            void this.onAdminMessage(sender, argsStr);
+        });
     }
 
     /**
@@ -515,13 +532,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     };
 
     /**
-     * Handle /code command via CommandParser
-     */
-    private onCodeCommandParser = async (): Promise<void> => {
-        // CommandParser handles this, we just need to be registered
-    };
-
-    /**
      * Unlock a door temporarily
      */
     private unlockDoor(door: KeypadDoorDefinitionDoc): void {
@@ -572,86 +582,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         character.Tell("Whisper", message);
     }
-
-    /**
-     * Main message handler
-     */
-    private onMessage = async (msg: API_Message): Promise<void> => {
-        // Log ALL messages before filtering so we can see what type is arriving
-        this.logger.log(
-            `[onMessage] Received type="${msg.message.Type}" content="${msg.message.Content}" from ${msg.sender.Name}`,
-        );
-
-        if (msg.message.Type !== "Whisper") return;
-
-        // BC wraps whisper content in parentheses: "(message)" → "message"
-        const rawContent = msg.message.Content;
-        const unwrapped =
-            rawContent.startsWith("(") && rawContent.endsWith(")")
-                ? rawContent.slice(1, -1)
-                : rawContent;
-        const content = unwrapped.toLowerCase().trim();
-        const character = msg.sender;
-
-        // Handle !door command (with or without arguments)
-        if (content === "!door" || content.startsWith("!door ")) {
-            // If just "!door" with no args, check if they're on a keypad tile
-            if (content === "!door") {
-                const coordKey = `${character.MapPos.X},${character.MapPos.Y}`;
-                const door = this.keypadLocationToDoor.get(coordKey);
-                if (door) {
-                    this.sendNotification(
-                        character,
-                        `[Keypad] Use command: !code <code> to unlock this door`,
-                    );
-                } else {
-                    this.sendNotification(
-                        character,
-                        "You are not standing on a keypad door. Available keypads: " +
-                            (Array.from(this.keypadLocationToDoor.keys()).join(
-                                ", ",
-                            ) || "none configured"),
-                    );
-                }
-                return;
-            }
-
-            // Handle admin commands with arguments: !door <action> [args...]
-            const args = content.slice("!door ".length);
-            this.logger.log(
-                `[onMessage] Routing admin door command: "${args}"`,
-            );
-            const handled = await this.onAdminMessage(character, args);
-            if (handled) {
-                this.logger.log(
-                    `[onMessage] Admin door command from ${character.Name} succeeded: ${args}`,
-                );
-            } else {
-                this.logger.warn(
-                    `[onMessage] Admin door command from ${character.Name} failed or not admin: ${args}`,
-                );
-            }
-            return;
-        }
-
-        // Handle code entry
-        if (content === "!code" || content.startsWith("!code ")) {
-            // If just "!code" with no args, show usage
-            if (content === "!code") {
-                this.sendNotification(character, "Usage: !code <code>");
-                return;
-            }
-
-            const code = content.slice("!code ".length).trim();
-            const handled = await this.onCodeMessage(character, code);
-            if (handled) {
-                this.logger.log(
-                    `Code entry from ${character.Name} at (${character.MapPos.X}, ${character.MapPos.Y})`,
-                );
-            }
-            return;
-        }
-    };
 
     /**
      * Cleanup on system shutdown
