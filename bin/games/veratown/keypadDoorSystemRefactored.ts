@@ -220,8 +220,44 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                                 `[reloadLocations] Auto-created door definition: '${doorKey}'`,
                             );
 
-                            // Store the door in memory (and in doors map via reloadDoors)
+                            // Store the door in memory
                             this.doors.set(doorKey, legacyDoor);
+
+                            // Persist legacy code to keypadGroupDefinitions so verifyCode() can find it
+                            const legacyCode =
+                                KeypadBackwardCompatibility.getLegacyCode(
+                                    location,
+                                );
+                            if (legacyCode) {
+                                try {
+                                    const existing =
+                                        await this.definitionService.getGroupDefinition(
+                                            doorKey,
+                                            "auto_code",
+                                        );
+                                    if (!existing) {
+                                        await this.definitionService.createGroup(
+                                            {
+                                                _id: `${doorKey}:auto_code`,
+                                                doorKey,
+                                                groupName: "auto_code",
+                                                groupType: "custom",
+                                                code: legacyCode,
+                                                description: `Auto-migrated code from location: ${location.key}`,
+                                                createdAt: Date.now(),
+                                                updatedAt: Date.now(),
+                                            },
+                                        );
+                                        this.logger.log(
+                                            `[reloadLocations] Persisted legacy code for '${doorKey}'`,
+                                        );
+                                    }
+                                } catch (e) {
+                                    this.logger.warn(
+                                        `[reloadLocations] Failed to persist legacy code for '${doorKey}': ${e instanceof Error ? e.message : String(e)}`,
+                                    );
+                                }
+                            }
                         }
                     }
                 }

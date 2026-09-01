@@ -166,8 +166,7 @@ export abstract class KeypadCommandHandler {
     ): Promise<
         { success: true; profile: any } | { success: false; message: string }
     > {
-        const profile =
-            await this.unifiedStore.getCharacterProfile(memberNumber);
+        const profile = await this.unifiedStore.getProfile(memberNumber);
         if (!profile) {
             return {
                 success: false,
