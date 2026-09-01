@@ -134,63 +134,52 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                     door.doorY,
                     this.keypadTrigger,
                 );
-                if (door.autoOpenX && door.autoOpenY) {
+                if (door.autoOpenTile) {
                     this.conn.chatRoom.map.removeTileTrigger(
-                        door.autoOpenX,
-                        door.autoOpenY,
+                        door.autoOpenTile.X,
+                        door.autoOpenTile.Y,
                         this.autoOpenTrigger,
                     );
                 }
             }
 
-            // Reload door definitions
+            // Reload door definitions from database
             await this.reloadDoors();
 
-            // Register tile triggers for all keypad locations
-            // Match locations to doors by coordinates
-            const keypadLocations = locations.filter(
-                (loc) => loc.type === "keypad_door" && loc.enabled,
-            );
-
+            // Register tile triggers for all loaded door definitions
+            // Doors already have their coordinates (doorX, doorY) defined
             let triggersRegistered = 0;
-            for (const location of keypadLocations) {
-                if (!location.x || !location.y) continue;
-
-                // Find door at this location by matching coordinates
-                let matchingDoor: KeypadDoorDefinitionDoc | undefined;
-                for (const door of this.doors.values()) {
-                    if (
-                        door.doorX === location.x &&
-                        door.doorY === location.y
-                    ) {
-                        matchingDoor = door;
-                        break;
-                    }
+            for (const door of this.doors.values()) {
+                // Register keypad tile trigger
+                try {
+                    this.conn.chatRoom.map.addTileTrigger(
+                        { X: door.doorX, Y: door.doorY },
+                        this.keypadTrigger,
+                    );
+                    triggersRegistered++;
+                } catch (e) {
+                    this.logger.warn(
+                        `Failed to register trigger for door ${door.doorKey} at (${door.doorX}, ${door.doorY}): ${e instanceof Error ? e.message : String(e)}`,
+                    );
                 }
 
-                if (!matchingDoor) continue;
-
-                // Register keypad tile trigger
-                this.conn.chatRoom.map.addTileTrigger(
-                    { X: matchingDoor.doorX, Y: matchingDoor.doorY },
-                    this.keypadTrigger,
-                );
-                triggersRegistered++;
-
                 // Register auto-open trigger if configured
-                if (matchingDoor.autoOpenX && matchingDoor.autoOpenY) {
-                    this.conn.chatRoom.map.addTileTrigger(
-                        {
-                            X: matchingDoor.autoOpenX,
-                            Y: matchingDoor.autoOpenY,
-                        },
-                        this.autoOpenTrigger,
-                    );
+                if (door.autoOpenTile) {
+                    try {
+                        this.conn.chatRoom.map.addTileTrigger(
+                            { X: door.autoOpenTile.X, Y: door.autoOpenTile.Y },
+                            this.autoOpenTrigger,
+                        );
+                    } catch (e) {
+                        this.logger.warn(
+                            `Failed to register auto-open trigger for door ${door.doorKey}: ${e instanceof Error ? e.message : String(e)}`,
+                        );
+                    }
                 }
             }
 
             this.logger.log(
-                `Registered ${triggersRegistered} keypad tile triggers`,
+                `Registered ${triggersRegistered} keypad tile triggers for ${this.doors.size} door definitions`,
             );
         } catch (error) {
             this.logger.error(
@@ -316,14 +305,23 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> => {
         if (location.type !== "keypad_door") return;
 
-        const doorKey = (location.data as any)?.doorKey;
-        if (!doorKey) return;
+        // Find door at current location by matching coordinates
+        let door: KeypadDoorDefinitionDoc | undefined;
+        for (const d of this.doors.values()) {
+            if (
+                d.autoOpenTile &&
+                d.autoOpenTile.X === character.MapPos.X &&
+                d.autoOpenTile.Y === character.MapPos.Y
+            ) {
+                door = d;
+                break;
+            }
+        }
 
-        const door = this.doors.get(doorKey);
         if (!door || !door.autoOpenTile) return;
 
         // Prevent spam
-        const timerId = `auto_open_${doorKey}`;
+        const timerId = `auto_open_${door.doorKey}`;
         if (this.autoOpenTimers.has(timerId)) {
             return;
         }
