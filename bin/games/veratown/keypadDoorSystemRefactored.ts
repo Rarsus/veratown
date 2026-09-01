@@ -111,6 +111,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     /**
+     * Register event handlers and triggers with Veratown
+     * Required by VeratownFeatureSystem interface
+     */
+    registerTriggers(): void {
+        // Already registered in constructor, but this method is required by the interface
+        // The message handler and location watcher are already set up
+    }
+
+    /**
      * Reload all door definitions from service
      * Called on startup and when locations change
      */
