@@ -225,27 +225,13 @@ export class KeypadAccessService {
         code: string,
         isAdmin: boolean,
     ): Promise<boolean> {
-        if (isAdmin) return true;
-
-        // Verify the code is valid for this door
+        // Entering the correct code grants access regardless of group membership
+        // Group membership is for persistent no-code-needed access (canAccessDoor)
         const groupName = await this.definitionService.verifyCode(
             doorKey,
             code,
         );
-        if (!groupName) {
-            return false;
-        }
-
-        // Check if character has access to this group
-        const access = await this.getCharacterAccess(memberNumber);
-        const now = Date.now();
-
-        return access.some(
-            (a) =>
-                a.doorKey === doorKey &&
-                a.groupName === groupName &&
-                (!a.expiresAt || a.expiresAt > now),
-        );
+        return groupName !== null;
     }
 
     // ===== ADMIN QUERIES =====

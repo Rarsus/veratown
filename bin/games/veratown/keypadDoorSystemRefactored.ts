@@ -311,9 +311,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         locations: VeratownLocationDoc[],
     ): Promise<void> => {
         try {
-            // Update location integration (handles backward compat and auto-migration)
-            // Then reload doors
-            await this.reloadDoors();
+            // Re-register all tile triggers with updated locations
+            await this.reloadLocations(locations);
 
             // Validate orphaned keypads
             const errors =
@@ -534,19 +533,17 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             door.unlockedTile,
         );
 
-        // Start unlock timer
-        this.doorUnlockTimers.set(timerId, () => {}, door.unlockDurationMs);
-
-        // Re-lock when timer expires
-        setTimeout(() => {
-            if (this.doorUnlockTimers.has(timerId)) {
-                this.doorUnlockTimers.clear(timerId);
+        // Re-lock door when timer expires
+        this.doorUnlockTimers.set(
+            timerId,
+            () => {
                 this.conn.chatRoom?.map.setObject(
                     { X: door.doorX, Y: door.doorY },
                     door.lockedTile,
                 );
-            }
-        }, door.unlockDurationMs);
+            },
+            door.unlockDurationMs,
+        );
     }
 
     /**
@@ -573,18 +570,22 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
 
-        this.conn.SendMessage("Whisper", message, character.MemberNumber);
+        character.Tell("Whisper", message);
     }
 
     /**
      * Main message handler
      */
     private onMessage = async (msg: API_Message): Promise<void> => {
-        // Handle whisper messages and potentially room emotes/commands
-        if (msg.message.Type !== "Whisper" && msg.message.Type !== "Emote")
-            return;
+        if (msg.message.Type !== "Whisper") return;
 
-        const content = msg.message.Content.toLowerCase();
+        // BC wraps whisper content in parentheses: "(message)" → "message"
+        const rawContent = msg.message.Content;
+        const unwrapped =
+            rawContent.startsWith("(") && rawContent.endsWith(")")
+                ? rawContent.slice(1, -1)
+                : rawContent;
+        const content = unwrapped.toLowerCase().trim();
         const character = msg.sender;
 
         this.logger.log(
