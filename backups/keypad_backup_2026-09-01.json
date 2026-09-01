@@ -1,0 +1,810 @@
+{
+    "timestamp": "2026-09-01T10:56:03.567Z",
+    "doors": [
+        {
+            "_id": "test_flexible",
+            "doorKey": "test_flexible",
+            "doorX": 35,
+            "doorY": 27,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 10000,
+            "enabled": true,
+            "createdAt": 1788173710387,
+            "updatedAt": 1788173710387
+        },
+        {
+            "_id": "auto_location_lara_keypad",
+            "doorKey": "auto_location_lara_keypad",
+            "doorX": 35,
+            "doorY": 27,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 10000,
+            "insideRegion": null,
+            "autoOpenTile": {
+                "X": 35,
+                "Y": 26
+            },
+            "enabled": true,
+            "description": "Auto-migrated from location: lara_keypad",
+            "createdAt": 1788173749481,
+            "updatedAt": 1788173749481
+        },
+        {
+            "_id": "auto_location_room1_keypad",
+            "doorKey": "auto_location_room1_keypad",
+            "doorX": 23,
+            "doorY": 27,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 10000,
+            "insideRegion": null,
+            "autoOpenTile": null,
+            "enabled": true,
+            "description": "Auto-migrated from location: room1_keypad",
+            "createdAt": 1788173749500,
+            "updatedAt": 1788173749500
+        },
+        {
+            "_id": "auto_location_room1_keypad_b",
+            "doorKey": "auto_location_room1_keypad_b",
+            "doorX": 23,
+            "doorY": 27,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 5000,
+            "insideRegion": null,
+            "autoOpenTile": null,
+            "enabled": true,
+            "description": "Auto-migrated from location: room1_keypad_b",
+            "createdAt": 1788173749568,
+            "updatedAt": 1788173749568
+        },
+        {
+            "_id": "auto_location_room2_keypad_a",
+            "doorKey": "auto_location_room2_keypad_a",
+            "doorX": 29,
+            "doorY": 27,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 5000,
+            "insideRegion": null,
+            "autoOpenTile": {
+                "X": 29,
+                "Y": 26
+            },
+            "enabled": true,
+            "description": "Auto-migrated from location: room2_keypad_a",
+            "createdAt": 1788173749586,
+            "updatedAt": 1788173749586
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_a",
+            "doorKey": "auto_location_admin_room_keypad_a",
+            "doorX": 21,
+            "doorY": 37,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 5000,
+            "insideRegion": null,
+            "autoOpenTile": null,
+            "enabled": true,
+            "description": "Auto-migrated from location: admin_room_keypad_a",
+            "createdAt": 1788173749614,
+            "updatedAt": 1788173749614
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_b",
+            "doorKey": "auto_location_admin_room_keypad_b",
+            "doorX": 21,
+            "doorY": 37,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 5000,
+            "insideRegion": null,
+            "autoOpenTile": null,
+            "enabled": true,
+            "description": "Auto-migrated from location: admin_room_keypad_b",
+            "createdAt": 1788173749671,
+            "updatedAt": 1788173749671
+        },
+        {
+            "_id": "auto_location_keypad_punishment",
+            "doorKey": "auto_location_keypad_punishment",
+            "doorX": 17,
+            "doorY": 13,
+            "lockedTile": "WoodLocked",
+            "unlockedTile": "WoodOpen",
+            "unlockDurationMs": 5000,
+            "insideRegion": null,
+            "autoOpenTile": null,
+            "enabled": true,
+            "description": "Auto-migrated from location: keypad_punishment",
+            "createdAt": 1788173749695,
+            "updatedAt": 1788173749695
+        }
+    ],
+    "groups": [
+        {
+            "_id": "auto_location_lara_keypad#auto_whitelist",
+            "code": "",
+            "createdAt": 1788175957351,
+            "createdBy": null,
+            "doorKey": "auto_location_lara_keypad",
+            "groupName": "auto_whitelist",
+            "groupType": "builtin",
+            "permissions": ["enter"],
+            "updatedAt": 1788175957351
+        },
+        {
+            "_id": "auto_location_room1_keypad#auto_whitelist",
+            "code": "",
+            "createdAt": 1788175957386,
+            "createdBy": null,
+            "doorKey": "auto_location_room1_keypad",
+            "groupName": "auto_whitelist",
+            "groupType": "builtin",
+            "permissions": ["enter"],
+            "updatedAt": 1788175957386
+        },
+        {
+            "_id": "auto_location_room1_keypad_b#auto_whitelist",
+            "code": "",
+            "createdAt": 1788175957457,
+            "createdBy": null,
+            "doorKey": "auto_location_room1_keypad_b",
+            "groupName": "auto_whitelist",
+            "groupType": "builtin",
+            "permissions": ["enter"],
+            "updatedAt": 1788175957457
+        },
+        {
+            "_id": "auto_location_room2_keypad_a#auto_whitelist",
+            "code": "",
+            "createdAt": 1788175957478,
+            "createdBy": null,
+            "doorKey": "auto_location_room2_keypad_a",
+            "groupName": "auto_whitelist",
+            "groupType": "builtin",
+            "permissions": ["enter"],
+            "updatedAt": 1788175957478
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_a#auto_whitelist",
+            "code": "",
+            "createdAt": 1788175957498,
+            "createdBy": null,
+            "doorKey": "auto_location_admin_room_keypad_a",
+            "groupName": "auto_whitelist",
+            "groupType": "builtin",
+            "permissions": ["enter"],
+            "updatedAt": 1788175957498
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_b#auto_whitelist",
+            "code": "",
+            "createdAt": 1788175957564,
+            "createdBy": null,
+            "doorKey": "auto_location_admin_room_keypad_b",
+            "groupName": "auto_whitelist",
+            "groupType": "builtin",
+            "permissions": ["enter"],
+            "updatedAt": 1788175957564
+        }
+    ],
+    "memberships": [
+        {
+            "_id": "auto_location_admin_room_keypad_a#auto_whitelist#251024",
+            "doorKey": "auto_location_admin_room_keypad_a",
+            "expiresAt": null,
+            "grantedAt": 1788175959077,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a",
+            "groupName": "auto_whitelist",
+            "memberNumber": 251024,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_b#auto_whitelist#251024",
+            "doorKey": "auto_location_admin_room_keypad_b",
+            "expiresAt": null,
+            "grantedAt": 1788175959522,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b",
+            "groupName": "auto_whitelist",
+            "memberNumber": 251024,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_a#auto_whitelist#250927",
+            "doorKey": "auto_location_admin_room_keypad_a",
+            "expiresAt": null,
+            "grantedAt": 1788175958968,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a",
+            "groupName": "auto_whitelist",
+            "memberNumber": 250927,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_admin_room_keypad_b#auto_whitelist#250927",
+            "doorKey": "auto_location_admin_room_keypad_b",
+            "expiresAt": null,
+            "grantedAt": 1788175959183,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b",
+            "groupName": "auto_whitelist",
+            "memberNumber": 250927,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_lara_keypad#auto_whitelist#251163",
+            "doorKey": "auto_location_lara_keypad",
+            "expiresAt": null,
+            "grantedAt": 1788175958132,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_lara_keypad",
+            "groupName": "auto_whitelist",
+            "memberNumber": 251163,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_room1_keypad#auto_whitelist#251163",
+            "doorKey": "auto_location_room1_keypad",
+            "expiresAt": null,
+            "grantedAt": 1788175958240,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_room1_keypad",
+            "groupName": "auto_whitelist",
+            "memberNumber": 251163,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_room1_keypad_b#auto_whitelist#251163",
+            "doorKey": "auto_location_room1_keypad_b",
+            "expiresAt": null,
+            "grantedAt": 1788175958342,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_room1_keypad_b",
+            "groupName": "auto_whitelist",
+            "memberNumber": 251163,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_room2_keypad_a#auto_whitelist#251163",
+            "doorKey": "auto_location_room2_keypad_a",
+            "expiresAt": null,
+            "grantedAt": 1788175958443,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_room2_keypad_a",
+            "groupName": "auto_whitelist",
+            "memberNumber": 251163,
+            "syncedFromProfile": true
+        },
+        {
+            "_id": "auto_location_lara_keypad#auto_whitelist#160001",
+            "doorKey": "auto_location_lara_keypad",
+            "expiresAt": null,
+            "grantedAt": 1788175958040,
+            "grantedBy": 0,
+            "grantedReason": "Auto-migrated from legacy location auto_location_lara_keypad",
+            "groupName": "auto_whitelist",
+            "memberNumber": 160001,
+            "syncedFromProfile": true
+        }
+    ],
+    "locations": [
+        {
+            "_id": "6a84556982986263373de272",
+            "key": "lara_keypad",
+            "name": "Lara keypad",
+            "type": "keypad_door",
+            "x": 36,
+            "y": 28,
+            "enabled": true,
+            "data": {
+                "doorX": 35,
+                "doorY": 27,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 10000,
+                "codes": {
+                    "admin": "knock",
+                    "whitelist": "open",
+                    "guest": "invitedbylara"
+                },
+                "whitelistMemberNumbers": [160001, 251163],
+                "autoOpenTileX": 35,
+                "autoOpenTileY": 26
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1787570795802
+        },
+        {
+            "_id": "6a84c2da82986263373de276",
+            "key": "room1_keypad",
+            "name": "Room 1 keypad",
+            "type": "keypad_door",
+            "x": 24,
+            "y": 28,
+            "enabled": true,
+            "data": {
+                "doorX": 23,
+                "doorY": 27,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 10000,
+                "codes": {
+                    "admin": "knock",
+                    "whitelist": "123456",
+                    "guest": "letmein!"
+                },
+                "whitelistMemberNumbers": [251163]
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1787559879889
+        },
+        {
+            "_id": "6a85980e13b02624de4b7022",
+            "key": "room1_keypad_b",
+            "name": "Room 1 keypad_b",
+            "type": "keypad_door",
+            "x": 24,
+            "y": 26,
+            "enabled": true,
+            "data": {
+                "doorX": 23,
+                "doorY": 27,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 5000,
+                "codes": {
+                    "admin": "250927",
+                    "whitelist": "123456",
+                    "guest": "asdo;jhiojhwllkjd"
+                },
+                "whitelistMemberNumbers": [251163]
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1785916554692
+        },
+        {
+            "_id": "6a86112cc3c29c91fc3dbf6c",
+            "key": "room2_keypad_a",
+            "name": "Room 2 keypad_a",
+            "type": "keypad_door",
+            "x": 28,
+            "y": 28,
+            "enabled": true,
+            "data": {
+                "doorX": 29,
+                "doorY": 27,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 5000,
+                "codes": {
+                    "admin": "knock",
+                    "whitelist": "open",
+                    "guest": "asdo;jhiojhwllkjd"
+                },
+                "whitelistMemberNumbers": [251163],
+                "autoOpenTileX": 29,
+                "autoOpenTileY": 26
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1788011741299
+        },
+        {
+            "_id": "6a86bda8db7c42c020ce2c09",
+            "key": "admin_room_keypad_a",
+            "name": "Admin Room keypad_a",
+            "type": "keypad_door",
+            "x": 20,
+            "y": 36,
+            "enabled": true,
+            "data": {
+                "doorX": 21,
+                "doorY": 37,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 5000,
+                "codes": {
+                    "admin": "knock",
+                    "whitelist": "blue",
+                    "guest": "asdo;jhiojhwllkjd"
+                },
+                "whitelistMemberNumbers": [250927, 251024]
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1788094714792
+        },
+        {
+            "_id": "6a86bddbdb7c42c020ce2c0a",
+            "key": "admin_room_keypad_b",
+            "name": "Admin Room keypad_b",
+            "type": "keypad_door",
+            "x": 20,
+            "y": 38,
+            "enabled": true,
+            "data": {
+                "doorX": 21,
+                "doorY": 37,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 5000,
+                "codes": {
+                    "admin": "250927",
+                    "whitelist": "blue",
+                    "guest": "asdo;jhiojhwllkjd"
+                },
+                "whitelistMemberNumbers": [250927, 251024]
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1788095907133
+        },
+        {
+            "_id": "6a8c0d333d37d2d5b9fa4652",
+            "key": "keypad_punishment",
+            "name": "Entrance Punishement Room",
+            "type": "keypad_door",
+            "x": 16,
+            "y": 12,
+            "enabled": true,
+            "data": {
+                "doorX": 17,
+                "doorY": 13,
+                "lockedTile": "WoodLocked",
+                "unlockedTile": "WoodOpen",
+                "unlockDurationMs": 5000,
+                "codes": {
+                    "admin": "knock",
+                    "whitelist": "open",
+                    "guest": "open"
+                },
+                "whitelistMemberNumbers": []
+            },
+            "createdAt": 1785916554692,
+            "updatedAt": 1787559925679
+        }
+    ],
+    "profiles": [
+        {
+            "_id": 251024,
+            "casino": {
+                "chips": null,
+                "score": 0,
+                "winStreak": 0,
+                "lossStreak": 0,
+                "cheatStrikes": 0,
+                "totalWins": 0,
+                "totalLosses": 0,
+                "lockedChips": 0,
+                "recentWinnings": 0,
+                "version": 23,
+                "updatedAt": 1788166811127,
+                "lastDailyClaimAt": 1788160176293
+            },
+            "createdAt": 1788099294448,
+            "crossSystem": {
+                "recentEvents": [],
+                "features": {},
+                "relationships": {},
+                "updatedAt": 1788099294448
+            },
+            "dare": {
+                "gameIds": [],
+                "participationHistory": [],
+                "activeBondage": [],
+                "suspendedGames": [],
+                "totalGamesPlayed": 0,
+                "totalDaresCompleted": 0,
+                "version": 0,
+                "updatedAt": 1788099294448
+            },
+            "lastAccessedAt": 1788175959583,
+            "name": "Emcha",
+            "updatedAt": 1788175959583,
+            "veratown": {
+                "lastPositionAt": 1788099294448,
+                "lastAppearanceAt": 1788099294448,
+                "cageIncarcerations": [],
+                "totalTimeInCages": 0,
+                "kennelSessions": [],
+                "totalTimeInKennels": 0,
+                "currentRestraints": [],
+                "roleplayFlags": {
+                    "lastFlagChange": 1788099294448
+                },
+                "auditLog": [],
+                "roles": [],
+                "version": 4,
+                "updatedAt": 1788175959583,
+                "keypadAccess": [
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_a",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175736398,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                    },
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_b",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175736628,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                    },
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_a",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175959077,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                    },
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_b",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175959522,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                    }
+                ]
+            },
+            "version": 27,
+            "lastAccessedBy": "veratown"
+        },
+        {
+            "_id": 250927,
+            "name": "Miss Vera",
+            "createdAt": 1788100413575,
+            "updatedAt": 1788175959198,
+            "casino": {
+                "chips": 14811,
+                "score": 9798,
+                "winStreak": 0,
+                "lossStreak": 0,
+                "cheatStrikes": 0,
+                "totalWins": 0,
+                "totalLosses": 0,
+                "lockedChips": 0,
+                "recentWinnings": 0,
+                "lastDailyClaimAt": 1787828145483,
+                "lastTipTimestamp": 0,
+                "totalWinnings": 0
+            },
+            "dare": {
+                "level": 1,
+                "totalDares": 0,
+                "totalEvaded": 0,
+                "inPillory": false,
+                "pilloryEndTime": 0,
+                "forfeitBalance": 0
+            },
+            "veratown": {
+                "roles": [],
+                "positions": [],
+                "appearance": {},
+                "keypadAccess": [
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_a",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175736075,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                    },
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_b",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175736449,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                    },
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_a",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175958968,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                    },
+                    {
+                        "doorKey": "auto_location_admin_room_keypad_b",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175959183,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                    }
+                ],
+                "updatedAt": 1788175959198,
+                "version": null
+            },
+            "lastAccessedAt": 1788175959198,
+            "lastAccessedBy": "veratown",
+            "version": null
+        },
+        {
+            "_id": 251163,
+            "name": "Lara",
+            "createdAt": 1788100413876,
+            "updatedAt": 1788175958550,
+            "casino": {
+                "chips": 630,
+                "score": 580,
+                "winStreak": 0,
+                "lossStreak": 0,
+                "cheatStrikes": 0,
+                "totalWins": 0,
+                "totalLosses": 0,
+                "lockedChips": 0,
+                "recentWinnings": 0,
+                "lastDailyClaimAt": 1787995244357,
+                "lastTipTimestamp": 0,
+                "totalWinnings": 0
+            },
+            "dare": {
+                "level": 1,
+                "totalDares": 0,
+                "totalEvaded": 0,
+                "inPillory": false,
+                "pilloryEndTime": 0,
+                "forfeitBalance": 0
+            },
+            "veratown": {
+                "roles": [],
+                "positions": [],
+                "appearance": {},
+                "keypadAccess": [
+                    {
+                        "doorKey": "auto_location_lara_keypad",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175735176,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_lara_keypad"
+                    },
+                    {
+                        "doorKey": "auto_location_room1_keypad",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175735582,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_room1_keypad"
+                    },
+                    {
+                        "doorKey": "auto_location_room1_keypad_b",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175735633,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_room1_keypad_b"
+                    },
+                    {
+                        "doorKey": "auto_location_room2_keypad_a",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175735838,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_room2_keypad_a"
+                    },
+                    {
+                        "doorKey": "auto_location_lara_keypad",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175958132,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_lara_keypad"
+                    },
+                    {
+                        "doorKey": "auto_location_room1_keypad",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175958240,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_room1_keypad"
+                    },
+                    {
+                        "doorKey": "auto_location_room1_keypad_b",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175958342,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_room1_keypad_b"
+                    },
+                    {
+                        "doorKey": "auto_location_room2_keypad_a",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175958443,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_room2_keypad_a"
+                    }
+                ],
+                "updatedAt": 1788175958550,
+                "version": null
+            },
+            "lastAccessedAt": 1788175958550,
+            "lastAccessedBy": "veratown",
+            "version": null
+        },
+        {
+            "_id": 160001,
+            "casino": {
+                "chips": 0,
+                "score": 0,
+                "winStreak": 0,
+                "lossStreak": 0,
+                "cheatStrikes": 0,
+                "totalWins": 0,
+                "totalLosses": 0,
+                "lockedChips": 0,
+                "recentWinnings": 0,
+                "version": 0,
+                "updatedAt": 1788175734942
+            },
+            "createdAt": 1788175734942,
+            "crossSystem": {
+                "recentEvents": [],
+                "features": {},
+                "relationships": {},
+                "updatedAt": 1788175734942
+            },
+            "dare": {
+                "gameIds": [],
+                "participationHistory": [],
+                "activeBondage": [],
+                "suspendedGames": [],
+                "totalGamesPlayed": 0,
+                "totalDaresCompleted": 0,
+                "version": 0,
+                "updatedAt": 1788175734942
+            },
+            "lastAccessedAt": 1788175958096,
+            "name": "",
+            "updatedAt": 1788175958096,
+            "veratown": {
+                "lastPositionAt": 1788175734942,
+                "lastAppearanceAt": 1788175734942,
+                "cageIncarcerations": [],
+                "totalTimeInCages": 0,
+                "kennelSessions": [],
+                "totalTimeInKennels": 0,
+                "currentRestraints": [],
+                "roleplayFlags": {
+                    "lastFlagChange": 1788175734942
+                },
+                "auditLog": [],
+                "roles": [],
+                "keypadAccess": [
+                    {
+                        "doorKey": "auto_location_lara_keypad",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175734967,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_lara_keypad"
+                    },
+                    {
+                        "doorKey": "auto_location_lara_keypad",
+                        "groupName": "auto_whitelist",
+                        "grantedAt": 1788175958040,
+                        "expiresAt": null,
+                        "grantedBy": 0,
+                        "grantedReason": "Auto-migrated from legacy location auto_location_lara_keypad"
+                    }
+                ],
+                "version": 2,
+                "updatedAt": 1788175958096
+            },
+            "version": 2,
+            "lastAccessedBy": "veratown"
+        }
+    ]
+}
