@@ -162,10 +162,10 @@ export class KeypadAccessService {
         doorKey: string,
         isAdmin: boolean,
     ): Promise<boolean> {
-        // Admins always have access
-        if (isAdmin) return true;
+        // NOTE: Admins do NOT auto-bypass - they must enter a code
+        // This ensures fair access control for everyone
 
-        // Check character's keypad access
+        // Check character's keypad access (via groups/whitelists)
         const access = await this.getCharacterAccessToDoor(
             memberNumber,
             doorKey,

@@ -580,11 +580,16 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Main message handler
      */
     private onMessage = async (msg: API_Message): Promise<void> => {
-        // Check if this is a whisper message
-        if (msg.message.Type !== "Whisper") return;
+        // Handle whisper messages and potentially room emotes/commands
+        if (msg.message.Type !== "Whisper" && msg.message.Type !== "Emote")
+            return;
 
         const content = msg.message.Content.toLowerCase();
         const character = msg.sender;
+
+        this.logger.log(
+            `[onMessage] Received ${msg.message.Type}: "${msg.message.Content}" from ${character.Name}`,
+        );
 
         // Handle !door command (with or without arguments)
         if (content === "!door" || content.startsWith("!door ")) {
@@ -611,10 +616,17 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
             // Handle admin commands with arguments: !door <action> [args...]
             const args = content.slice("!door ".length);
+            this.logger.log(
+                `[onMessage] Routing admin door command: "${args}"`,
+            );
             const handled = await this.onAdminMessage(character, args);
             if (handled) {
                 this.logger.log(
-                    `Admin door command from ${character.Name}: ${args}`,
+                    `[onMessage] Admin door command from ${character.Name} succeeded: ${args}`,
+                );
+            } else {
+                this.logger.warn(
+                    `[onMessage] Admin door command from ${character.Name} failed or not admin: ${args}`,
                 );
             }
             return;
