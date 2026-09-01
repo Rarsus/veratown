@@ -362,22 +362,25 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     /**
      * Main message handler
      */
-    private onMessage = async (message: API_Message): Promise<void> => {
-        const content = message.Content.toLowerCase();
-        const character = message.Sender;
+    private onMessage = async (msg: API_Message): Promise<void> => {
+        // Check if this is a whisper message
+        if (msg.message.Type !== "Whisper") return;
+
+        const content = msg.message.Content.toLowerCase();
+        const character = msg.sender;
 
         // Handle whispered admin commands
-        if (message.Type === "Whisper") {
-            if (content.startsWith("!door ")) {
-                const args = content.slice("!door ".length);
-                await this.onAdminMessage(character, args);
-            }
+        if (content.startsWith("!door ")) {
+            const args = content.slice("!door ".length);
+            await this.onAdminMessage(character, args);
+            return;
         }
 
         // Handle code entry
         if (content.startsWith("!code ")) {
             const code = content.slice("!code ".length).trim();
             await this.onCodeMessage(character, code);
+            return;
         }
     };
 
