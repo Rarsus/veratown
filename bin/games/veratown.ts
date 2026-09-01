@@ -456,6 +456,13 @@ export class Veratown {
                         this.commandParser,
                     );
                 });
+
+                // Initialize keypad system after creation (load door definitions)
+                if (this.keypadDoorSystem) {
+                    this.pendingFeatureRegistrations.push(
+                        this.keypadDoorSystem.init(),
+                    );
+                }
             } catch (err) {
                 console.error(
                     "[Veratown] Failed to initialize keypad system:",
