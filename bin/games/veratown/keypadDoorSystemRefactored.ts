@@ -120,6 +120,70 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     /**
+     * Reload keypad tile triggers from locations
+     * Called by Veratown when locations change
+     */
+    async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        try {
+            // Remove all existing keypad tile triggers
+            for (const door of this.doors.values()) {
+                this.conn.chatRoom.map.removeTileTrigger(
+                    door.doorX,
+                    door.doorY,
+                    this.keypadTrigger,
+                );
+                if (door.autoOpenX && door.autoOpenY) {
+                    this.conn.chatRoom.map.removeTileTrigger(
+                        door.autoOpenX,
+                        door.autoOpenY,
+                        this.autoOpenTrigger,
+                    );
+                }
+            }
+
+            // Reload door definitions
+            await this.reloadDoors();
+
+            // Register tile triggers for all keypad locations
+            const keypadLocations = locations.filter(
+                (loc) => loc.type === "keypad_door" && loc.enabled,
+            );
+
+            for (const location of keypadLocations) {
+                const doorKey = (location.data as any)?.doorKey;
+                if (!doorKey) continue;
+
+                const door = this.doors.get(doorKey);
+                if (!door) continue;
+
+                // Register keypad tile trigger
+                this.conn.chatRoom.map.addTileTrigger(
+                    { X: door.doorX, Y: door.doorY },
+                    this.keypadTrigger,
+                );
+
+                // Register auto-open trigger if configured
+                if (door.autoOpenX && door.autoOpenY) {
+                    this.conn.chatRoom.map.addTileTrigger(
+                        { X: door.autoOpenX, Y: door.autoOpenY },
+                        this.autoOpenTrigger,
+                    );
+                }
+            }
+
+            this.logger.log(
+                `Registered ${keypadLocations.length} keypad tile triggers`,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to reload keypad locations: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+    }
+
+    /**
      * Reload all door definitions from service
      * Called on startup and when locations change
      */
