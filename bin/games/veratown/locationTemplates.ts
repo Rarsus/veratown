@@ -64,15 +64,12 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
     keypad_door: {
         type: "keypad_door",
         label: "Keypad Door",
-        description: "A code-locked door with access groups",
+        description:
+            "A keypad location that references a door definition. Door asset configuration is stored separately in keypadDoorDefinitions collection.",
         fields: [
-            "x (keypad)",
-            "y (keypad)",
-            "doorX",
-            "doorY",
-            "lockedTile",
-            "unlockedTile",
-            "codes (data.codes)",
+            "x (keypad position)",
+            "y (keypad position)",
+            "doorKey (data.doorKey) - References a door definition",
         ],
         example: {
             key: "basement_keypad",
@@ -82,15 +79,16 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
             y: 8,
             enabled: true,
             data: {
-                doorX: 20,
-                doorY: 10,
-                lockedTile: "MetalDown",
-                unlockedTile: "SteelDoorOpen",
-                unlockDurationMs: 10000,
-                codes: { admin: "ADMIN123", guest: "GUEST456" },
-                whitelistMemberNumbers: [],
+                doorKey: "basement_exit_door", // References door definition
             },
         },
+        notes: [
+            "Door configuration (doorX, doorY, tiles, codes) is now stored in keypadDoorDefinitions",
+            "Use /bot door create to create door definitions",
+            "Use data.doorKey to link this keypad location to a door definition",
+            "Backward compatibility: Old locations with embedded config will auto-migrate",
+            "Multiple keypads can reference the same door definition",
+        ],
         keywords: ["door", "keypad", "code", "lock"],
     },
     bed: {

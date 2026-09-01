@@ -40,6 +40,24 @@ step onto the keypad again.
 The location must have `type` set to `keypad_door`, valid keypad coordinates,
 and `enabled` set to `true`.
 
+**New format (recommended):**
+
+```json
+{
+    "key": "basement_keypad",
+    "name": "Basement keypad",
+    "type": "keypad_door",
+    "x": 10,
+    "y": 8,
+    "enabled": true,
+    "data": {
+        "doorKey": "basement_exit_door"
+    }
+}
+```
+
+**Legacy format (auto-migrated):**
+
 ```json
 {
     "key": "basement_keypad",
@@ -64,6 +82,27 @@ and `enabled` set to `true`.
         "insideBottomRightX": 39,
         "insideBottomRightY": 20
     }
+}
+```
+
+## Door Definition Schema
+
+Door definitions are stored in the `keypadDoorDefinitions` collection and referenced
+by keypad locations via `data.doorKey`:
+
+```json
+{
+    "_id": "basement_exit_door",
+    "doorKey": "basement_exit_door",
+    "doorX": 20,
+    "doorY": 10,
+    "lockedTile": "MetalDown",
+    "unlockedTile": "SteelDoorOpen",
+    "unlockDurationMs": 10000,
+    "enabled": true,
+    "description": "Exit to basement",
+    "createdAt": 1234567890,
+    "updatedAt": 1234567890
 }
 ```
 
