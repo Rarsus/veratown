@@ -359,6 +359,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Check if already unlocked
         if (this.doorUnlockTimers.has(door.doorKey)) {
+            this.logger.log(
+                `[onCharacterAtKeypad] Door '${door.doorKey}' already unlocked, skipping`,
+            );
             this.sendNotification(character, "The door is already unlocked.");
             return;
         }
@@ -370,8 +373,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             character.IsRoomAdmin(),
         );
 
+        this.logger.log(
+            `[onCharacterAtKeypad] Access check for ${character.Name} on door '${door.doorKey}': ${canAccess ? "GRANTED" : "DENIED"}`,
+        );
+
         if (canAccess) {
             this.unlockDoor(door);
+            this.logger.log(
+                `[onCharacterAtKeypad] Sending 'Access granted' notification to ${character.Name}`,
+            );
             this.sendNotification(
                 character,
                 "Access granted. The door unlocks.",
@@ -380,6 +390,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Request code entry - show clear instructions
+        this.logger.log(
+            `[onCharacterAtKeypad] Sending keypad code prompt to ${character.Name}`,
+        );
         this.sendNotification(
             character,
             `[Keypad] Use command: !code <code> to unlock this door`,
@@ -544,8 +557,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Throttle notifications
         if (this.notificationTimers.has(timerId)) {
+            this.logger.log(
+                `[sendNotification] THROTTLED for ${character.Name}: "${message}"`,
+            );
             return;
         }
+
+        this.logger.log(
+            `[sendNotification] SENDING to ${character.Name}: "${message}"`,
+        );
 
         this.notificationTimers.set(
             timerId,
