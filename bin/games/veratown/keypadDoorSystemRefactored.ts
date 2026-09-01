@@ -573,7 +573,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
 
-        this.conn.sendNotification(character.MemberNumber, message);
+        this.conn.SendMessage("Whisper", message, character.MemberNumber);
     }
 
     /**
