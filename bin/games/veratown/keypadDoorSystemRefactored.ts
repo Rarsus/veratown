@@ -164,20 +164,43 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
             // Build mapping: keypad location → door definition
             let triggersRegistered = 0;
+            let keypadLocationsFound = 0;
+            let keypadLocationsSkipped = 0;
+
             for (const location of locations) {
-                if (location.type !== "keypad_door" || !location.enabled)
+                if (location.type !== "keypad_door" || !location.enabled) {
                     continue;
+                }
+
+                keypadLocationsFound++;
+                this.logger.log(
+                    `[reloadLocations] Processing keypad location '${location.key}' at (${location.x}, ${location.y})`,
+                );
 
                 // Get doorKey from location data
                 const doorKey = (location.data as any)?.doorKey;
-                if (!doorKey) continue;
+                if (!doorKey) {
+                    this.logger.warn(
+                        `[reloadLocations] Keypad location '${location.key}' has no doorKey in data`,
+                    );
+                    keypadLocationsSkipped++;
+                    continue;
+                }
+
+                this.logger.log(
+                    `[reloadLocations] Looking up door definition for doorKey: '${doorKey}'`,
+                );
+                this.logger.log(
+                    `[reloadLocations] Available doors: ${Array.from(this.doors.keys()).join(", ")}`,
+                );
 
                 // Get door definition
                 const door = this.doors.get(doorKey);
                 if (!door) {
                     this.logger.warn(
-                        `Keypad location '${location.key}' references non-existent door: ${doorKey}`,
+                        `[reloadLocations] Keypad location '${location.key}' references non-existent door: '${doorKey}'`,
                     );
+                    keypadLocationsSkipped++;
                     continue;
                 }
 
@@ -220,7 +243,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             }
 
             this.logger.log(
-                `Registered ${triggersRegistered} keypad tile triggers for ${this.keypadLocationToDoor.size} keypad locations`,
+                `[reloadLocations] Complete: Found ${keypadLocationsFound} keypad_door locations, skipped ${keypadLocationsSkipped}, registered ${triggersRegistered} triggers for ${this.keypadLocationToDoor.size} mapped doors`,
             );
         } catch (error) {
             this.logger.error(
