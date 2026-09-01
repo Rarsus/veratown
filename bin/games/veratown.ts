@@ -284,30 +284,7 @@ export class Veratown {
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn),
         );
-        this.keypadDoorSystem = this.initFeature(() => {
-            // Initialize refactored keypad system with new command suite
-            // Services are set up in db initialization phase
-            if (
-                !this.keypadDefinitionService ||
-                !this.keypadAccessService ||
-                !this.keypadLocationIntegration ||
-                !this.keypadCommandDispatcher
-            ) {
-                throw new Error(
-                    "Keypad services not initialized - database required",
-                );
-            }
-
-            return new KeypadDoorSystem(
-                this.conn,
-                this.locationStore!,
-                this.keypadDefinitionService,
-                this.keypadAccessService,
-                this.keypadCommandDispatcher,
-                this.keypadLocationIntegration,
-                this.commandParser,
-            );
-        });
+        // Note: keypadDoorSystem is initialized in init() method after services are set up
         this.catDogSystem = this.initFeature(
             () =>
                 new CatDogSystem(
@@ -466,6 +443,19 @@ export class Veratown {
                     this.keypadAccessService,
                     unifiedStore,
                 );
+
+                // Now initialize the keypad door system with the services
+                this.keypadDoorSystem = this.initFeature(() => {
+                    return new KeypadDoorSystem(
+                        this.conn,
+                        this.locationStore!,
+                        this.keypadDefinitionService!,
+                        this.keypadAccessService!,
+                        this.keypadCommandDispatcher!,
+                        this.keypadLocationIntegration!,
+                        this.commandParser,
+                    );
+                });
             } catch (err) {
                 console.error(
                     "[Veratown] Failed to initialize keypad system:",
