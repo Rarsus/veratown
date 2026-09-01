@@ -109,8 +109,17 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     registerTriggers(): void {
         // CommandParser handles Chat (!cmd) and Hidden (/bot cmd) message types
-        this.commandParser?.register("code", (sender, _msg, args) => {
-            const code = args.join(" ").trim();
+        this.commandParser?.register("code", (sender, msg, _args) => {
+            // Extract code with original casing from raw message (CommandParser lowercases args)
+            const raw =
+                msg.Content.startsWith("(") && msg.Content.endsWith(")")
+                    ? msg.Content.slice(1, -1)
+                    : msg.Content;
+            // Strip the command prefix: "!code " or "ChatRoomBot  code "
+            const codeMatch = /^(?:!|ChatRoomBot\s+)code\s+(.+)$/i.exec(
+                raw.trim(),
+            );
+            const code = codeMatch?.[1]?.trim() ?? "";
             if (!code) {
                 this.reply(sender, "Usage: !code <code>");
                 return;
@@ -118,24 +127,32 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             void this.onCodeMessage(sender, code);
         });
 
+        // Direct door management actions (list/create/etc.) lack the "door" resource prefix
+        // because "door" is consumed as the BC command name — prepend it for the dispatcher.
+        const DOOR_ACTIONS = new Set([
+            "create",
+            "update",
+            "delete",
+            "list",
+            "info",
+        ]);
         this.commandParser?.register("door", (sender, _msg, args) => {
-            const argsStr = args.join(" ").trim();
-            if (!argsStr) {
+            if (!args.length) {
                 const coordKey = `${sender.MapPos.X},${sender.MapPos.Y}`;
                 const door = this.keypadLocationToDoor.get(coordKey);
-                if (door) {
-                    this.reply(
-                        sender,
-                        "[Keypad] Use !code <code> to unlock this door",
-                    );
-                } else {
-                    this.reply(
-                        sender,
-                        "You are not standing on a keypad door.",
-                    );
-                }
+                this.reply(
+                    sender,
+                    door
+                        ? "[Keypad] Use !code <code> to unlock this door"
+                        : "You are not standing on a keypad door.",
+                );
                 return;
             }
+            // Prefix bare door actions so dispatcher routes to door/* handlers
+            const firstArg = args[0];
+            const argsStr = DOOR_ACTIONS.has(firstArg)
+                ? `door ${args.join(" ")}`
+                : args.join(" ");
             void this.onAdminMessage(sender, argsStr);
         });
     }
