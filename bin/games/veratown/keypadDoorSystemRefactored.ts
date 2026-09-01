@@ -112,7 +112,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         this.commandParser?.register("code", (sender, _msg, args) => {
             const code = args.join(" ").trim();
             if (!code) {
-                this.sendNotification(sender, "Usage: !code <code>");
+                this.reply(sender, "Usage: !code <code>");
                 return;
             }
             void this.onCodeMessage(sender, code);
@@ -124,12 +124,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 const coordKey = `${sender.MapPos.X},${sender.MapPos.Y}`;
                 const door = this.keypadLocationToDoor.get(coordKey);
                 if (door) {
-                    this.sendNotification(
+                    this.reply(
                         sender,
                         "[Keypad] Use !code <code> to unlock this door",
                     );
                 } else {
-                    this.sendNotification(
+                    this.reply(
                         sender,
                         "You are not standing on a keypad door.",
                     );
@@ -464,7 +464,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             this.logger.log(
                 `Character ${character.Name} (${character.MemberNumber}) tried code at (${charLoc.X}, ${charLoc.Y}) but no keypad found`,
             );
-            this.sendNotification(
+            this.reply(
                 character,
                 `Stand on a keypad to enter an access code. Available keypads: ${Array.from(this.keypadLocationToDoor.keys()).join(", ") || "none"}`,
             );
@@ -473,7 +473,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Check if door is in unlock cooldown
         if (this.doorUnlockTimers.has(doorDef.doorKey)) {
-            this.sendNotification(character, "The door is already unlocked.");
+            this.reply(character, "The door is already unlocked.");
             return true;
         }
 
@@ -487,9 +487,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         if (canAccessWithCode) {
             this.unlockDoor(doorDef);
-            this.sendNotification(character, "Correct code. The door unlocks.");
+            this.reply(character, "Correct code. The door unlocks.");
         } else {
-            this.sendNotification(character, "Incorrect code.");
+            this.reply(character, "Incorrect code.");
         }
 
         return true; // Command was handled
@@ -518,7 +518,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 ? `✓ ${result.message}`
                 : `✗ ${result.message}`;
 
-            this.sendNotification(character, message);
+            this.reply(character, message);
             return true;
         } catch (error) {
             const errorMsg =
@@ -526,7 +526,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             this.logger.warn(
                 `Admin command error for ${character.Name}: ${errorMsg}`,
             );
-            this.sendNotification(character, `Command error: ${errorMsg}`);
+            this.reply(character, `Command error: ${errorMsg}`);
             return true;
         }
     };
@@ -556,30 +556,26 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         );
     }
 
-    /**
-     * Send notification to character
-     */
+    /** Throttled notification for passive tile-trigger prompts only. */
     private sendNotification(character: API_Character, message: string): void {
         const timerId = `notification_${character.MemberNumber}`;
-
-        // Throttle notifications
         if (this.notificationTimers.has(timerId)) {
             this.logger.log(
                 `[sendNotification] THROTTLED for ${character.Name}: "${message}"`,
             );
             return;
         }
-
-        this.logger.log(
-            `[sendNotification] SENDING to ${character.Name}: "${message}"`,
-        );
-
         this.notificationTimers.set(
             timerId,
             () => {},
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
+        this.reply(character, message);
+    }
 
+    /** Unthrottled direct reply for explicit commands. */
+    private reply(character: API_Character, message: string): void {
+        this.logger.log(`[reply] SENDING to ${character.Name}: "${message}"`);
         character.Tell("Whisper", message);
     }
 
