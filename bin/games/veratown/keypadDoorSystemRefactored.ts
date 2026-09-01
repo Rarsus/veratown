@@ -87,18 +87,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             this.key,
             this.onCharacterAtAutoOpenTile,
         );
-
-        // Wire up event handlers
-        this.conn.on("Message", guardHandler(this.key, this.onMessage));
-        this.locationStore.watchLocations(
-            guardHandler(this.key, this.onLocationsChanged),
-        );
-
-        // Register code command with CommandParser
-        this.commandParser?.register(
-            "code",
-            guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser),
-        );
     }
 
     /**
@@ -108,15 +96,27 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         await this.definitionService.init();
         await this.accessService.init();
         await this.reloadDoors();
+
+        // Wire up location change watcher after system is ready
+        this.locationStore.watchLocations(
+            guardHandler(this.key, this.onLocationsChanged),
+        );
     }
 
     /**
      * Register event handlers and triggers with Veratown
      * Required by VeratownFeatureSystem interface
+     * Called after system creation to ensure proper initialization order
      */
     registerTriggers(): void {
-        // Already registered in constructor, but this method is required by the interface
-        // The message handler and location watcher are already set up
+        // Register message handler for admin commands and code entry
+        this.conn.on("Message", guardHandler(this.key, this.onMessage));
+
+        // Register code command with CommandParser so BC knows it's valid
+        this.commandParser?.register(
+            "code",
+            guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser),
+        );
     }
 
     /**
@@ -147,34 +147,50 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             await this.reloadDoors();
 
             // Register tile triggers for all keypad locations
+            // Match locations to doors by coordinates
             const keypadLocations = locations.filter(
                 (loc) => loc.type === "keypad_door" && loc.enabled,
             );
 
+            let triggersRegistered = 0;
             for (const location of keypadLocations) {
-                const doorKey = (location.data as any)?.doorKey;
-                if (!doorKey) continue;
+                if (!location.x || !location.y) continue;
 
-                const door = this.doors.get(doorKey);
-                if (!door) continue;
+                // Find door at this location by matching coordinates
+                let matchingDoor: KeypadDoorDefinitionDoc | undefined;
+                for (const door of this.doors.values()) {
+                    if (
+                        door.doorX === location.x &&
+                        door.doorY === location.y
+                    ) {
+                        matchingDoor = door;
+                        break;
+                    }
+                }
+
+                if (!matchingDoor) continue;
 
                 // Register keypad tile trigger
                 this.conn.chatRoom.map.addTileTrigger(
-                    { X: door.doorX, Y: door.doorY },
+                    { X: matchingDoor.doorX, Y: matchingDoor.doorY },
                     this.keypadTrigger,
                 );
+                triggersRegistered++;
 
                 // Register auto-open trigger if configured
-                if (door.autoOpenX && door.autoOpenY) {
+                if (matchingDoor.autoOpenX && matchingDoor.autoOpenY) {
                     this.conn.chatRoom.map.addTileTrigger(
-                        { X: door.autoOpenX, Y: door.autoOpenY },
+                        {
+                            X: matchingDoor.autoOpenX,
+                            Y: matchingDoor.autoOpenY,
+                        },
                         this.autoOpenTrigger,
                     );
                 }
             }
 
             this.logger.log(
-                `Registered ${keypadLocations.length} keypad tile triggers`,
+                `Registered ${triggersRegistered} keypad tile triggers`,
             );
         } catch (error) {
             this.logger.error(
@@ -240,11 +256,19 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> => {
         if (location.type !== "keypad_door") return;
 
-        // Get door definition
-        const doorKey = (location.data as any)?.doorKey;
-        if (!doorKey) return; // No door reference in location
+        // Find door definition by matching coordinates
+        // (locations and doors are linked by position, not explicit reference)
+        let door: KeypadDoorDefinitionDoc | undefined;
+        for (const d of this.doors.values()) {
+            if (
+                d.doorX === character.MapPos.X &&
+                d.doorY === character.MapPos.Y
+            ) {
+                door = d;
+                break;
+            }
+        }
 
-        const door = this.doors.get(doorKey);
         if (!door) {
             this.sendNotification(
                 character,
@@ -254,7 +278,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Check if already unlocked
-        if (this.doorUnlockTimers.has(doorKey)) {
+        if (this.doorUnlockTimers.has(door.doorKey)) {
             this.sendNotification(character, "The door is already unlocked.");
             return;
         }
@@ -262,7 +286,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         // Check access without code (admin override or existing whitelist)
         const canAccess = await this.accessService.canAccessDoor(
             character.MemberNumber,
-            doorKey,
+            door.doorKey,
             character.IsRoomAdmin(),
         );
 
