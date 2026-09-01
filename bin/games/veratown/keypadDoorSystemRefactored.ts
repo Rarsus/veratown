@@ -337,17 +337,18 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     private onCharacterAtKeypad = async (
         character: API_Character,
-        location: VeratownLocationDoc,
     ): Promise<void> => {
-        if (location.type !== "keypad_door") return;
-
         // Find door by keypad location coordinates
         const coordKey = `${character.MapPos.X},${character.MapPos.Y}`;
         const door = this.keypadLocationToDoor.get(coordKey);
 
+        this.logger.log(
+            `[onCharacterAtKeypad] Triggered for ${character.Name} at (${character.MapPos.X}, ${character.MapPos.Y}), door found: ${door ? door.doorKey : "NO"}`,
+        );
+
         if (!door) {
             this.logger.warn(
-                `No door found for keypad location at (${character.MapPos.X}, ${character.MapPos.Y}). Keypad may not be properly configured.`,
+                `[onCharacterAtKeypad] No door found for keypad location at (${character.MapPos.X}, ${character.MapPos.Y}). Available keypads: ${Array.from(this.keypadLocationToDoor.keys()).join(", ")}`,
             );
             this.sendNotification(
                 character,
@@ -378,10 +379,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             return;
         }
 
-        // Request code entry
+        // Request code entry - show clear instructions
         this.sendNotification(
             character,
-            `Enter the access code to unlock the door.`,
+            `[Keypad] Use command: !code <code> to unlock this door`,
         );
     };
 
@@ -391,10 +392,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     private onCharacterAtAutoOpenTile = async (
         character: API_Character,
-        location: VeratownLocationDoc,
     ): Promise<void> => {
-        if (location.type !== "keypad_door") return;
-
         // Find door at current location by matching coordinates
         let door: KeypadDoorDefinitionDoc | undefined;
         for (const d of this.doors.values()) {
