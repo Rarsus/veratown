@@ -28,6 +28,7 @@ import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
 import { KeypadLocationIntegration } from "./migrations/keypadLocationIntegration";
+import { KeypadBackwardCompatibility } from "./migrations/keypadBackwardCompatibility";
 import { KeypadDoorDefinitionDoc } from "./keypadTypes";
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
@@ -177,11 +178,40 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                     `[reloadLocations] Processing keypad location '${location.key}' at (${location.x}, ${location.y})`,
                 );
 
-                // Get doorKey from location data
-                const doorKey = (location.data as any)?.doorKey;
+                // Get doorKey from location data (new format)
+                let doorKey = (location.data as any)?.doorKey;
+
+                // If no explicit doorKey, check for legacy embedded config
+                if (!doorKey) {
+                    if (
+                        KeypadBackwardCompatibility.isLegacyKeypadLocation(
+                            location,
+                        )
+                    ) {
+                        this.logger.log(
+                            `[reloadLocations] Found legacy keypad location '${location.key}', auto-migrating...`,
+                        );
+
+                        // Extract legacy config and create door definition
+                        const legacyDoor =
+                            KeypadBackwardCompatibility.extractLegacyDoorConfig(
+                                location,
+                            );
+                        if (legacyDoor) {
+                            doorKey = legacyDoor.doorKey;
+                            this.logger.log(
+                                `[reloadLocations] Auto-created door definition: '${doorKey}'`,
+                            );
+
+                            // Store the door in memory (and in doors map via reloadDoors)
+                            this.doors.set(doorKey, legacyDoor);
+                        }
+                    }
+                }
+
                 if (!doorKey) {
                     this.logger.warn(
-                        `[reloadLocations] Keypad location '${location.key}' has no doorKey in data`,
+                        `[reloadLocations] Keypad location '${location.key}' has no doorKey and is not a legacy keypad`,
                     );
                     keypadLocationsSkipped++;
                     continue;
