@@ -181,7 +181,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Check if already unlocked
-        if (this.doorUnlockTimers.isActive(doorKey)) {
+        if (this.doorUnlockTimers.has(doorKey)) {
             this.sendNotification(character, "The door is already unlocked.");
             return;
         }
@@ -227,11 +227,11 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Prevent spam
         const timerId = `auto_open_${doorKey}`;
-        if (this.autoOpenTimers.isActive(timerId)) {
+        if (this.autoOpenTimers.has(timerId)) {
             return;
         }
 
-        this.autoOpenTimers.start(timerId, AUTO_OPEN_TRIGGER_DELAY_MS);
+        this.autoOpenTimers.set(timerId, () => {}, AUTO_OPEN_TRIGGER_DELAY_MS);
         this.unlockDoor(door);
     };
 
@@ -254,7 +254,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Check if door is in unlock cooldown
-        if (this.doorUnlockTimers.isActive(doorDef.doorKey)) {
+        if (this.doorUnlockTimers.has(doorDef.doorKey)) {
             this.sendNotification(character, "The door is already unlocked.");
             return true;
         }
@@ -328,12 +328,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         this.conn.setTile(door.doorX, door.doorY, door.unlockedTile);
 
         // Start unlock timer
-        this.doorUnlockTimers.start(timerId, door.unlockDurationMs);
+        this.doorUnlockTimers.set(timerId, () => {}, door.unlockDurationMs);
 
         // Re-lock when timer expires
         setTimeout(() => {
-            if (this.doorUnlockTimers.isActive(timerId)) {
-                this.doorUnlockTimers.cancel(timerId);
+            if (this.doorUnlockTimers.has(timerId)) {
+                this.doorUnlockTimers.clear(timerId);
                 this.conn.setTile(door.doorX, door.doorY, door.lockedTile);
             }
         }, door.unlockDurationMs);
@@ -346,11 +346,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const timerId = `notification_${character.MemberNumber}`;
 
         // Throttle notifications
-        if (this.notificationTimers.isActive(timerId)) {
+        if (this.notificationTimers.has(timerId)) {
             return;
         }
 
-        this.notificationTimers.start(timerId, KEYPAD_NOTIFICATION_DELAY_MS);
+        this.notificationTimers.set(
+            timerId,
+            () => {},
+            KEYPAD_NOTIFICATION_DELAY_MS,
+        );
 
         this.conn.sendNotification(character.MemberNumber, message);
     }
@@ -381,8 +385,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Cleanup on system shutdown
      */
     async shutdown(): Promise<void> {
-        this.doorUnlockTimers.cancelAll();
-        this.notificationTimers.cancelAll();
-        this.autoOpenTimers.cancelAll();
+        this.doorUnlockTimers.clearAll();
+        this.notificationTimers.clearAll();
+        this.autoOpenTimers.clearAll();
     }
 }
