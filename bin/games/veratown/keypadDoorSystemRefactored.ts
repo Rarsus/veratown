@@ -58,6 +58,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private doors: Map<string, KeypadDoorDefinitionDoc> = new Map();
+    // Map keypad location coordinates to door definitions
+    private keypadLocationToDoor: Map<string, KeypadDoorDefinitionDoc> =
+        new Map();
     private readonly doorUnlockTimers = createTimerManager<string>(
         "KeypadDoorSystem.doorUnlock",
     );
@@ -128,38 +131,73 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> {
         try {
             // Remove all existing keypad tile triggers
-            for (const door of this.doors.values()) {
-                this.conn.chatRoom.map.removeTileTrigger(
-                    door.doorX,
-                    door.doorY,
-                    this.keypadTrigger,
-                );
-                if (door.autoOpenTile) {
+            for (const [coordKey, door] of this.keypadLocationToDoor) {
+                const [x, y] = coordKey.split(",").map(Number);
+                try {
                     this.conn.chatRoom.map.removeTileTrigger(
-                        door.autoOpenTile.X,
-                        door.autoOpenTile.Y,
-                        this.autoOpenTrigger,
+                        x,
+                        y,
+                        this.keypadTrigger,
                     );
+                } catch (e) {
+                    // Ignore if trigger wasn't registered
+                }
+
+                if (door.autoOpenTile) {
+                    try {
+                        this.conn.chatRoom.map.removeTileTrigger(
+                            door.autoOpenTile.X,
+                            door.autoOpenTile.Y,
+                            this.autoOpenTrigger,
+                        );
+                    } catch (e) {
+                        // Ignore if trigger wasn't registered
+                    }
                 }
             }
 
             // Reload door definitions from database
             await this.reloadDoors();
 
-            // Register tile triggers for all loaded door definitions
-            // Doors already have their coordinates (doorX, doorY) defined
+            // Clear keypad location mapping
+            this.keypadLocationToDoor.clear();
+
+            // Build mapping: keypad location → door definition
             let triggersRegistered = 0;
-            for (const door of this.doors.values()) {
-                // Register keypad tile trigger
+            for (const location of locations) {
+                if (location.type !== "keypad_door" || !location.enabled)
+                    continue;
+
+                // Get doorKey from location data
+                const doorKey = (location.data as any)?.doorKey;
+                if (!doorKey) continue;
+
+                // Get door definition
+                const door = this.doors.get(doorKey);
+                if (!door) {
+                    this.logger.warn(
+                        `Keypad location '${location.key}' references non-existent door: ${doorKey}`,
+                    );
+                    continue;
+                }
+
+                // Register trigger at keypad location (not door coordinates!)
                 try {
+                    const coordKey = `${location.x},${location.y}`;
+                    this.keypadLocationToDoor.set(coordKey, door);
+
                     this.conn.chatRoom.map.addTileTrigger(
-                        { X: door.doorX, Y: door.doorY },
+                        { X: location.x, Y: location.y },
                         this.keypadTrigger,
                     );
                     triggersRegistered++;
+
+                    this.logger.log(
+                        `Registered keypad trigger at (${location.x}, ${location.y}) for door '${doorKey}'`,
+                    );
                 } catch (e) {
                     this.logger.warn(
-                        `Failed to register trigger for door ${door.doorKey} at (${door.doorX}, ${door.doorY}): ${e instanceof Error ? e.message : String(e)}`,
+                        `Failed to register trigger for keypad '${location.key}' at (${location.x}, ${location.y}): ${e instanceof Error ? e.message : String(e)}`,
                     );
                 }
 
@@ -170,16 +208,19 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                             { X: door.autoOpenTile.X, Y: door.autoOpenTile.Y },
                             this.autoOpenTrigger,
                         );
+                        this.logger.log(
+                            `Registered auto-open trigger at (${door.autoOpenTile.X}, ${door.autoOpenTile.Y}) for door '${doorKey}'`,
+                        );
                     } catch (e) {
                         this.logger.warn(
-                            `Failed to register auto-open trigger for door ${door.doorKey}: ${e instanceof Error ? e.message : String(e)}`,
+                            `Failed to register auto-open trigger for door ${doorKey}: ${e instanceof Error ? e.message : String(e)}`,
                         );
                     }
                 }
             }
 
             this.logger.log(
-                `Registered ${triggersRegistered} keypad tile triggers for ${this.doors.size} door definitions`,
+                `Registered ${triggersRegistered} keypad tile triggers for ${this.keypadLocationToDoor.size} keypad locations`,
             );
         } catch (error) {
             this.logger.error(
@@ -200,7 +241,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             for (const door of allDoors) {
                 this.doors.set(door.doorKey, door);
             }
-            this.logger.log(`Loaded ${this.doors.size} door definitions`);
+            this.logger.log(
+                `Loaded ${this.doors.size} door definitions from database`,
+            );
         } catch (error) {
             this.logger.error(
                 `Failed to reload doors: ${error instanceof Error ? error.message : String(error)}`,
@@ -245,20 +288,14 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> => {
         if (location.type !== "keypad_door") return;
 
-        // Find door definition by matching coordinates
-        // (locations and doors are linked by position, not explicit reference)
-        let door: KeypadDoorDefinitionDoc | undefined;
-        for (const d of this.doors.values()) {
-            if (
-                d.doorX === character.MapPos.X &&
-                d.doorY === character.MapPos.Y
-            ) {
-                door = d;
-                break;
-            }
-        }
+        // Find door by keypad location coordinates
+        const coordKey = `${character.MapPos.X},${character.MapPos.Y}`;
+        const door = this.keypadLocationToDoor.get(coordKey);
 
         if (!door) {
+            this.logger.warn(
+                `No door found for keypad location at (${character.MapPos.X}, ${character.MapPos.Y}). Keypad may not be properly configured.`,
+            );
             this.sendNotification(
                 character,
                 "The door appears to be malfunctioning.",
@@ -337,15 +374,21 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         character: API_Character,
         code: string,
     ): Promise<boolean> => {
-        // Find doors at character's current location
+        // Find door by keypad location (where the character is standing)
         const charLoc = character.MapPos;
-        const doorDef = await this.definitionService.getDoorAt(
-            charLoc.X,
-            charLoc.Y,
-        );
+        const coordKey = `${charLoc.X},${charLoc.Y}`;
+        const doorDef = this.keypadLocationToDoor.get(coordKey);
 
         if (!doorDef) {
-            return false; // No door here
+            // Provide helpful debugging when outside keypad area
+            this.logger.log(
+                `Character ${character.Name} (${character.MemberNumber}) tried code at (${charLoc.X}, ${charLoc.Y}) but no keypad found`,
+            );
+            this.sendNotification(
+                character,
+                `Stand on a keypad to enter an access code. Available keypads: ${Array.from(this.keypadLocationToDoor.keys()).join(", ") || "none"}`,
+            );
+            return true; // Handled, just not at a keypad
         }
 
         // Check if door is in unlock cooldown
@@ -398,10 +441,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             this.sendNotification(character, message);
             return true;
         } catch (error) {
-            this.sendNotification(
-                character,
-                `Command error: ${error instanceof Error ? error.message : String(error)}`,
+            const errorMsg =
+                error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+                `Admin command error for ${character.Name}: ${errorMsg}`,
             );
+            this.sendNotification(character, `Command error: ${errorMsg}`);
             return true;
         }
     };
@@ -467,14 +512,24 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         // Handle whispered admin commands
         if (content.startsWith("!door ")) {
             const args = content.slice("!door ".length);
-            await this.onAdminMessage(character, args);
+            const handled = await this.onAdminMessage(character, args);
+            if (handled) {
+                this.logger.log(
+                    `Admin door command from ${character.Name}: ${args}`,
+                );
+            }
             return;
         }
 
         // Handle code entry
         if (content.startsWith("!code ")) {
             const code = content.slice("!code ".length).trim();
-            await this.onCodeMessage(character, code);
+            const handled = await this.onCodeMessage(character, code);
+            if (handled) {
+                this.logger.log(
+                    `Code entry from ${character.Name} at (${character.MapPos.X}, ${character.MapPos.Y})`,
+                );
+            }
             return;
         }
     };
