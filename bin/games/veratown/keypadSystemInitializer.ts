@@ -249,7 +249,7 @@ export class KeypadSystemInitializer {
         };
 
         try {
-            const system = new KeypadDoorSystemRefactored(
+            const system = new KeypadDoorSystem(
                 this.conn,
                 this.locationStore,
                 services.definitionService,
