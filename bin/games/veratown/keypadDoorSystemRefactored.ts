@@ -577,6 +577,11 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Main message handler
      */
     private onMessage = async (msg: API_Message): Promise<void> => {
+        // Log ALL messages before filtering so we can see what type is arriving
+        this.logger.log(
+            `[onMessage] Received type="${msg.message.Type}" content="${msg.message.Content}" from ${msg.sender.Name}`,
+        );
+
         if (msg.message.Type !== "Whisper") return;
 
         // BC wraps whisper content in parentheses: "(message)" → "message"
@@ -587,10 +592,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 : rawContent;
         const content = unwrapped.toLowerCase().trim();
         const character = msg.sender;
-
-        this.logger.log(
-            `[onMessage] Received ${msg.message.Type}: "${msg.message.Content}" from ${character.Name}`,
-        );
 
         // Handle !door command (with or without arguments)
         if (content === "!door" || content.startsWith("!door ")) {
