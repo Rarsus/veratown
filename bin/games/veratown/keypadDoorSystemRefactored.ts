@@ -343,7 +343,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const door = this.keypadLocationToDoor.get(coordKey);
 
         this.logger.log(
-            `[onCharacterAtKeypad] Triggered for ${character.Name} at (${character.MapPos.X}, ${character.MapPos.Y}), door found: ${door ? door.doorKey : "NO"}`,
+            `[onCharacterAtKeypad] Triggered for ${character.Name} at (${character.MapPos.X}, ${character.MapPos.Y}), door: ${door?.doorKey || "NOT FOUND"}`,
         );
 
         if (!door) {
@@ -516,7 +516,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const timerId = door.doorKey;
 
         // Set the tile to unlocked
-        this.conn.setTile(door.doorX, door.doorY, door.unlockedTile);
+        this.conn.chatRoom?.map.setObject(
+            { X: door.doorX, Y: door.doorY },
+            door.unlockedTile,
+        );
 
         // Start unlock timer
         this.doorUnlockTimers.set(timerId, () => {}, door.unlockDurationMs);
@@ -525,7 +528,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         setTimeout(() => {
             if (this.doorUnlockTimers.has(timerId)) {
                 this.doorUnlockTimers.clear(timerId);
-                this.conn.setTile(door.doorX, door.doorY, door.lockedTile);
+                this.conn.chatRoom?.map.setObject(
+                    { X: door.doorX, Y: door.doorY },
+                    door.lockedTile,
+                );
             }
         }, door.unlockDurationMs);
     }
@@ -560,8 +566,30 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const content = msg.message.Content.toLowerCase();
         const character = msg.sender;
 
-        // Handle whispered admin commands
-        if (content.startsWith("!door ")) {
+        // Handle !door command (with or without arguments)
+        if (content === "!door" || content.startsWith("!door ")) {
+            // If just "!door" with no args, check if they're on a keypad tile
+            if (content === "!door") {
+                const coordKey = `${character.MapPos.X},${character.MapPos.Y}`;
+                const door = this.keypadLocationToDoor.get(coordKey);
+                if (door) {
+                    this.sendNotification(
+                        character,
+                        `[Keypad] Use command: !code <code> to unlock this door`,
+                    );
+                } else {
+                    this.sendNotification(
+                        character,
+                        "You are not standing on a keypad door. Available keypads: " +
+                            (Array.from(this.keypadLocationToDoor.keys()).join(
+                                ", ",
+                            ) || "none configured"),
+                    );
+                }
+                return;
+            }
+
+            // Handle admin commands with arguments: !door <action> [args...]
             const args = content.slice("!door ".length);
             const handled = await this.onAdminMessage(character, args);
             if (handled) {
@@ -573,7 +601,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Handle code entry
-        if (content.startsWith("!code ")) {
+        if (content === "!code" || content.startsWith("!code ")) {
+            // If just "!code" with no args, show usage
+            if (content === "!code") {
+                this.sendNotification(character, "Usage: !code <code>");
+                return;
+            }
+
             const code = content.slice("!code ".length).trim();
             const handled = await this.onCodeMessage(character, code);
             if (handled) {
