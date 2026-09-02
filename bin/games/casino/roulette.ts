@@ -20,6 +20,7 @@ import {
     BC_Server_ChatRoomMessage,
     API_AppearanceItem,
     AssetGet,
+    CommandParser,
 } from "bc-bot";
 import { FORFEITS } from "./forfeits";
 import { Bet, Game } from "./game";
@@ -160,17 +161,31 @@ export class RouletteGame implements Game {
     public registerCommands(commandParser: CommandParser): void {
         commandParser.register("cancel", this.onCommandCancel);
         commandParser.register("bet", this.onCommandBet);
-        commandParser.register("sign", (sender, msg, args) => {
-            const sign = this.casino.getSign();
+        commandParser.register(
+            "sign",
+            (
+                sender: API_Character,
+                msg: BC_Server_ChatRoomMessage,
+                args: string[],
+            ) => {
+                const sign = this.casino.getSign();
 
-            sign.setProperty("OverridePriority", { Text: 63 });
-            sign.setProperty("Text", "Place bets!");
-            sign.setProperty("Text2", " ");
-            this.casino.setTextColor("#ffffff");
-        });
-        commandParser.register("wheel", (sender, msg, args) => {
-            this.getWheel();
-        });
+                sign.setProperty("OverridePriority", { Text: 63 });
+                sign.setProperty("Text", "Place bets!");
+                sign.setProperty("Text2", " ");
+                this.casino.setTextColor("#ffffff");
+            },
+        );
+        commandParser.register(
+            "wheel",
+            (
+                sender: API_Character,
+                msg: BC_Server_ChatRoomMessage,
+                args: string[],
+            ) => {
+                this.getWheel();
+            },
+        );
     }
 
     public constructor(
@@ -305,7 +320,7 @@ export class RouletteGame implements Game {
         }
 
         const stakeValue = stakeResult.stake!;
-        const stakeForfeit = stakeResult.stakeForfeit || undefined;
+        const stakeForfeit = stakeResult.stakeForfeit ?? "";
 
         switch (betKind) {
             case "red":
@@ -449,8 +464,8 @@ export class RouletteGame implements Game {
             }
 
             const needItems = [...FORFEITS[bet.stakeForfeit].items(sender)];
-            if (FORFEITS[bet.stakeForfeit].lock)
-                needItems.push(FORFEITS[bet.stakeForfeit].lock);
+            const lock = FORFEITS[bet.stakeForfeit].lock;
+            if (lock) needItems.push(lock);
             const blocked = needItems.filter(
                 (i) => !sender.IsItemPermissionAccessible(i),
             );
@@ -465,14 +480,15 @@ export class RouletteGame implements Game {
             bet.stake *= this.casino.multiplier;
         }
 
-        if (FORFEITS[bet.stakeForfeit]?.items(sender).length === 1) {
-            const forfeitItem = FORFEITS[bet.stakeForfeit].items(sender)[0];
-            if (
-                Date.now() <
-                this.casino.lockedItems
-                    .get(sender.MemberNumber)
-                    ?.get(forfeitItem.Group)
-            ) {
+        const forfeitDef = bet.stakeForfeit
+            ? FORFEITS[bet.stakeForfeit]
+            : undefined;
+        if (forfeitDef?.items(sender).length === 1) {
+            const forfeitItem = forfeitDef.items(sender)[0];
+            const lockedUntil = this.casino.lockedItems
+                .get(sender.MemberNumber)
+                ?.get(forfeitItem.Group);
+            if (lockedUntil && Date.now() < lockedUntil) {
                 this.logger?.info(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );
@@ -520,7 +536,10 @@ export class RouletteGame implements Game {
             return;
         }
 
-        const timeLeft = this.willSpinAt - Date.now();
+        const timeLeft = Math.max(
+            0,
+            this.willSpinAt ? this.willSpinAt - Date.now() : 0,
+        );
         if (timeLeft <= BET_CANCEL_THRESHOLD_MS) {
             this.conn.reply(msg, "You can't cancel your bet now.");
             return;
@@ -584,6 +603,7 @@ export class RouletteGame implements Game {
 
     public clearBetsForPlayer(memberNumber: number): undefined {
         this.bets = this.bets.filter((b) => b.memberNumber !== memberNumber);
+        return undefined;
     }
 
     private getWinnings(winningNumber: number, bet: RouletteBet): number {
@@ -614,6 +634,7 @@ export class RouletteGame implements Game {
         ) {
             return bet.stake * 3;
         }
+        return 0;
     }
 
     public clear(): void {
@@ -625,9 +646,11 @@ export class RouletteGame implements Game {
 
         const sign = this.casino.getSign();
 
-        const timeLeft = this.willSpinAt - Date.now();
+        const timeLeft = this.willSpinAt
+            ? this.willSpinAt - Date.now()
+            : Number.POSITIVE_INFINITY;
         if (timeLeft <= 0) {
-            sign.Extended.SetText("");
+            sign.Extended?.SetText("");
             sign.setProperty("Text2", "");
 
             this.spinTimer.clear();
@@ -647,7 +670,8 @@ export class RouletteGame implements Game {
 
     private async spinWheel(): Promise<void> {
         const wheel = this.getWheel();
-        const prevAngle = wheel.getData().Property.TargetAngle;
+        const wheelData = wheel.getData();
+        const prevAngle = wheelData?.Property?.TargetAngle ?? 0;
 
         const winningNumber = this.generateWinningNumber();
 
@@ -723,7 +747,7 @@ export class RouletteGame implements Game {
     public getWheel(): API_AppearanceItem {
         const wheel = this.conn.Player.Appearance.InventoryGet("ItemDevices");
         this.conn.Player.Appearance.applyBundle(ROULETTE_WHEEL);
-        return this.conn.Player.Appearance.InventoryGet("ItemDevices");
+        return this.conn.Player.Appearance.InventoryGet("ItemDevices")!;
     }
 
     public isBettingOpen(): boolean {
@@ -762,10 +786,15 @@ export class RouletteGame implements Game {
     async endGame(): Promise<void> {
         await waitForCondition(() => this.willSpinAt === undefined);
         await wait(2000);
-        this.casino.commandParser.unregister("cancel");
-        this.casino.commandParser.unregister("bet");
-        this.casino.commandParser.unregister("sign");
-        this.casino.commandParser.unregister("wheel");
+        const commandParser = (this.casino as any).commandParser as
+            | CommandParser
+            | undefined;
+        if (commandParser) {
+            commandParser.unregister("cancel");
+            commandParser.unregister("bet");
+            commandParser.unregister("sign");
+            commandParser.unregister("wheel");
+        }
         this.clear();
     }
 }
