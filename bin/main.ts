@@ -90,7 +90,7 @@ function parseJsonArray(
         }
         return parsed;
     } catch (error) {
-        logger.warn(`Failed to parse ${fieldName} as JSON array`, error, {
+        logger.error(`Failed to parse ${fieldName} as JSON array`, error, {
             field: fieldName,
             value,
         });
@@ -116,7 +116,7 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             fileConfig = JSON.parse(configString);
             logger.info("Loaded from file", { path: configFilePath });
         } catch (err) {
-            logger.warn(
+            logger.error(
                 "Failed to read config file, using environment variables",
                 err,
                 { path: configFilePath },
