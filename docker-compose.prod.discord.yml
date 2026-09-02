@@ -1,0 +1,103 @@
+# Production docker-compose for Cloud Run or Compute Engine with Discord Bot
+# Uses MongoDB Atlas for persistence (stateless containers)
+# Discord bot admin interface configuration
+
+version: "3.8"
+
+services:
+    ropeybot:
+        image: ${IMAGE_TAG:-us-central1-docker.pkg.dev/PROJECT/docker-repo/ropeybot:latest}
+        container_name: ropeybot
+        restart: always
+
+        # Read-only config mount (config.json contains Atlas connection string)
+        volumes:
+            - ./config.json:/bot/cfg/config.json:ro
+
+        environment:
+            NODE_ENV: production
+
+            # MongoDB Atlas Configuration
+            # Use MongoDB Atlas (mongodb+srv://...)
+            MONGODB_URI: ${MONGODB_URI}
+            MONGODB_DB: ${MONGODB_DB:-ropeybot}
+            MONGODB_TLS: "true"
+
+            # Discord Bot Configuration
+            # Use secure secret management (e.g., Google Secret Manager, AWS Secrets Manager)
+            DISCORD_ENABLED: "true"
+
+            # Discord Bot Token (use secret manager in production)
+            DISCORD_TOKEN: ${DISCORD_TOKEN}
+
+            # Discord Server ID
+            DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+
+            # Admin role IDs as JSON array
+            DISCORD_ADMIN_ROLES: ${DISCORD_ADMIN_ROLES}
+
+            # Optional: Audit log channel
+            DISCORD_AUDIT_CHANNEL_ID: ${DISCORD_AUDIT_CHANNEL_ID:-}
+
+            # Optional: BC bot configuration override
+            # BOT_USER: ${BOT_USER}
+            # BOT_PASSWORD: ${BOT_PASSWORD}
+            # BOT_ENV: production
+
+        stdin_open: true
+        tty: true
+
+        # Health check for container orchestration
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "node",
+                    "-e",
+                    "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+
+        # Resource limits (adjust based on player count)
+        deploy:
+            resources:
+                limits:
+                    cpus: "1" # 1 CPU core max
+                    memory: 1G # 1GB memory max
+                reservations:
+                    cpus: "0.5" # 0.5 CPU core reserved
+                    memory: 512M # 512MB memory reserved
+
+
+# No MongoDB service - uses MongoDB Atlas (mongodb+srv://...)
+# No volumes - stateless container
+# Config must contain mongo_uri pointing to Atlas cluster
+
+# Deployment Instructions:
+#
+# 1. Set environment variables:
+#    export IMAGE_TAG="us-central1-docker.pkg.dev/PROJECT/repo/ropeybot:latest"
+#    export MONGODB_URI="mongodb+srv://user:pass@cluster.mongodb.net/"
+#    export MONGODB_DB="ropeybot"
+#    export DISCORD_TOKEN="your_bot_token"
+#    export DISCORD_GUILD_ID="your_guild_id"
+#    export DISCORD_ADMIN_ROLES='["role_id_1", "role_id_2"]'
+#
+# 2. Deploy:
+#    docker-compose -f docker-compose.prod.discord.yml up -d
+#
+# 3. Monitor:
+#    docker-compose -f docker-compose.prod.discord.yml logs -f
+#
+# 4. Verify Discord bot:
+#    docker logs ropeybot | grep -i discord
+#
+# Security Notes:
+# - Never hardcode secrets in this file
+# - Use environment variables or secret managers
+# - Rotate Discord token periodically
+# - Use read-only volumes for config
+# - Enable health checks for automatic restart

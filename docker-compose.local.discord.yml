@@ -1,0 +1,87 @@
+# Docker Compose for Local Development with Discord Bot
+# Includes local MongoDB and Discord bot configuration
+#
+# Usage: docker-compose -f docker-compose.local.yml up -d
+#
+# For production, use:
+# - docker-compose.yml with MongoDB Atlas (cloud-hosted)
+# - docker-compose.prod.yml for Cloud Run deployment
+
+version: "3.8"
+
+services:
+    mongo:
+        image: mongo:7
+        container_name: ropeybot-mongo
+        restart: unless-stopped
+        volumes:
+            - mongo-data:/data/db
+        environment:
+            MONGO_INITDB_DATABASE: ropeybot
+        # Optional: Uncomment to access MongoDB from host machine
+        # ports:
+        #     - "27017:27017"
+
+    ropeybot:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: ropeybot
+        restart: unless-stopped
+        depends_on:
+            - mongo
+        volumes:
+            - ./config.json:/bot/cfg/config.json:ro
+            # Optional: Uncomment to map logs to host directory
+            # - ./logs:/bot/logs
+        environment:
+            NODE_ENV: production
+            # MongoDB Configuration (local)
+            MONGODB_URI: "mongodb://mongo:27017/ropeybot"
+            MONGODB_DB: "ropeybot"
+
+            # Discord Bot Configuration
+            # Get these values from Discord Developer Portal
+            # https://discord.com/developers/applications
+            DISCORD_ENABLED: "true"
+
+            # Bot token from Developer Portal > Bot > TOKEN
+            DISCORD_TOKEN: ${DISCORD_TOKEN}
+
+            # Server ID (right-click server > Copy Server ID)
+            DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+
+            # Admin role IDs as JSON array
+            # Get role IDs: right-click role > Copy Role ID
+            DISCORD_ADMIN_ROLES: '["YOUR_ROLE_ID_1", "YOUR_ROLE_ID_2"]'
+
+            # Optional: Channel for audit logs
+            DISCORD_AUDIT_CHANNEL_ID: ${DISCORD_AUDIT_CHANNEL_ID:-}
+
+            # BC Bot Configuration (can override here if needed)
+            # BOT_USER: ${BOT_USER}
+            # BOT_PASSWORD: ${BOT_PASSWORD}
+
+        stdin_open: true
+        tty: true
+
+        # Optional: Health check
+        # healthcheck:
+        #     test: ["CMD", "node", "-e", "console.log('ok')"]
+        #     interval: 30s
+        #     timeout: 10s
+        #     retries: 3
+
+volumes:
+    mongo-data:
+        driver: local
+
+# Setup Instructions:
+# 1. Copy .env.example to .env
+# 2. Fill in Discord credentials in .env:
+#    - DISCORD_TOKEN: Get from Discord Developer Portal
+#    - DISCORD_GUILD_ID: Right-click your Discord server > Copy Server ID
+#    - DISCORD_AUDIT_CHANNEL_ID (optional): Right-click channel > Copy Channel ID
+# 3. Run: docker-compose -f docker-compose.local.yml up -d
+# 4. Check logs: docker-compose -f docker-compose.local.yml logs -f ropeybot
+# 5. Verify Discord bot connected: docker logs ropeybot | grep -i discord

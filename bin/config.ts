@@ -39,6 +39,13 @@ export interface ConfigFile {
     user3?: string;
     password3?: string;
 
+    // Discord Bot Configuration (optional)
+    discord_enabled?: boolean;
+    discord_token?: string;
+    discord_guild_id?: string;
+    discord_admin_roles?: string[];
+    discord_audit_channel_id?: string;
+
     casino?: CasinoConfig;
     dare?: DareConfig;
 }

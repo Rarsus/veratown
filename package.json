@@ -15,6 +15,7 @@
     "dependencies": {
         "bc-bot": "link:src",
         "bc-stubs": "131.0.0",
+        "discord.js": "^14.14.0",
         "lodash": "^4.17.21",
         "lz-string": "^1.5.0",
         "mongodb": "^6.21.0",

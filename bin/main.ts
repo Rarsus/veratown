@@ -34,6 +34,11 @@ import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
 import { initializeLoggingFromEnv, LoggerRegistry } from "./logging";
 import { createLogger } from "./logging";
+import {
+    initializeDiscordBot,
+    shutdownDiscordBot,
+    type DiscordBotConfig,
+} from "./discord";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -212,6 +217,32 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     if (blockCategoryArray) config.room.BlockCategory = blockCategoryArray;
 
     // ============================================================================
+    // DISCORD BOT CONFIGURATION (optional, for admin interface)
+    // ============================================================================
+    if (process.env.DISCORD_ENABLED !== undefined) {
+        config.discord_enabled = parseBoolean(
+            process.env.DISCORD_ENABLED,
+            true,
+        );
+    }
+    if (process.env.DISCORD_TOKEN)
+        config.discord_token = process.env.DISCORD_TOKEN;
+    if (process.env.DISCORD_GUILD_ID)
+        config.discord_guild_id = process.env.DISCORD_GUILD_ID;
+
+    const discordAdminRolesArray = parseJsonArray(
+        process.env.DISCORD_ADMIN_ROLES,
+        "DISCORD_ADMIN_ROLES",
+    );
+    if (discordAdminRolesArray) {
+        config.discord_admin_roles = discordAdminRolesArray;
+    }
+
+    if (process.env.DISCORD_AUDIT_CHANNEL_ID) {
+        config.discord_audit_channel_id = process.env.DISCORD_AUDIT_CHANNEL_ID;
+    }
+
+    // ============================================================================
     // CONFIGURATION LOGGING (for debugging)
     // ============================================================================
     logger.info("Configuration loaded successfully", {
@@ -242,6 +273,7 @@ interface BootstrapContext {
 
 let activeConnections: BotConnections | undefined;
 let activeDatabase: { close(): Promise<void> } | undefined;
+let activeDiscordClient: any | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
 async function shutdown(): Promise<void> {
@@ -250,8 +282,22 @@ async function shutdown(): Promise<void> {
     const logger = LoggerRegistry.getAppLogger();
 
     shutdownPromise = (async () => {
-        logger.info("Shutting down bot connections and database");
+        logger.info("Shutting down bot connections, Discord bot, and database");
+
+        // Shutdown Discord bot first if it was initialized
+        if (activeDiscordClient) {
+            try {
+                await shutdownDiscordBot();
+                logger.info("Discord bot shut down successfully");
+            } catch (error) {
+                logger.error("Error shutting down Discord bot", error, {});
+            }
+        }
+
+        // Shutdown BC bot connections
         await closeBotConnections(activeConnections);
+
+        // Shutdown database
         await activeDatabase?.close();
         logger.info("Shutdown complete");
     })();
@@ -431,6 +477,44 @@ export async function startBot(): Promise<RopeyBot> {
     activeDatabase = database;
     const connections = await createBotConnections(serverUrl, config, database);
     activeConnections = connections;
+
+    // Initialize Discord bot if configured and not explicitly disabled
+    const isDiscordEnabled =
+        config.discord_enabled !== false &&
+        config.discord_token &&
+        config.discord_token.length > 0 &&
+        config.discord_guild_id &&
+        config.discord_guild_id.length > 0;
+
+    if (isDiscordEnabled && db) {
+        try {
+            const discordConfig: DiscordBotConfig = {
+                discord_token: config.discord_token || "",
+                discord_guild_id: config.discord_guild_id || "",
+                discord_admin_roles: config.discord_admin_roles || [],
+                discord_audit_channel_id: config.discord_audit_channel_id,
+                discord_enabled: config.discord_enabled !== false,
+            };
+
+            activeDiscordClient = await initializeDiscordBot(discordConfig, db);
+            if (activeDiscordClient) {
+                logger.info("Discord bot initialized successfully");
+            }
+        } catch (error) {
+            logger.error(
+                "Failed to initialize Discord bot (continuing without it)",
+                error,
+                {},
+            );
+        }
+    } else if (!isDiscordEnabled) {
+        logger.info("Discord bot disabled or not configured", {
+            discord_enabled: config.discord_enabled,
+            has_token: !!config.discord_token,
+            has_guild_id: !!config.discord_guild_id,
+        });
+    }
+
     await startConfiguredGame({ config, connections, db });
 
     return {
