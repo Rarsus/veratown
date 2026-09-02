@@ -4,6 +4,200 @@
 
 ---
 
+## Documentation Structure & Guidelines
+
+### Repository Documentation Organization
+
+All documentation follows a clear hierarchical structure designed for easy navigation and maintenance:
+
+```
+Root Directory (Essential only):
+├── README.md                 ← Project overview
+├── LICENSE                   ← Legal
+├── CONTRIBUTING.md          ← Development guidelines
+├── CHANGELOG.md             ← Version history
+
+docs/
+├── README.md                ← Documentation navigation hub
+├── QUICK_START.md           ← 5-minute getting started
+├── ARCHITECTURE/            ← System design and architectural decisions
+│   ├── README.md            ← Architecture navigation
+│   ├── KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md
+│   ├── UNIFIED_STATE_ARCHITECTURE.md
+│   ├── REGION_SYSTEM.md
+│   └── ...
+├── DEPLOYMENT/              ← Deployment and infrastructure guides
+│   ├── README.md            ← Deployment options
+│   ├── RAILWAY_DEPLOYMENT.md
+│   ├── GOOGLE_CLOUD_DEPLOYMENT.md
+│   └── ...
+├── GUIDES/                  ← How-to guides and setup instructions
+│   ├── README.md            ← Guides index
+│   ├── BUILD_SETUP.md
+│   ├── ENVIRONMENT_VARIABLES.md
+│   └── ...
+├── IMPLEMENTATION/          ← Development practices and standards
+│   ├── README.md            ← Dev practices overview
+│   ├── LOGGING_GUIDE.md     ← Using centralized logging system
+│   └── ...
+├── FEATURES/                ← Game systems and features
+│   ├── README.md            ← Features overview
+│   ├── VERATOWN_COMPLETE_GUIDE.md
+│   └── ...
+├── REFERENCE/               ← API references and configuration
+│   ├── README.md            ← Reference index
+│   ├── RELEASE_SYSTEM.md
+│   └── ...
+├── MAINTENANCE/             ← Operations and troubleshooting
+│   ├── README.md            ← Maintenance overview
+│   └── ...
+└── archived/                ← Historical documentation
+    ├── README.md            ← Archive index
+    └── [completed phases, epics, migrations]
+```
+
+### When to Create Documentation
+
+Create documentation when:
+
+- **Architectural decision made**: Decision impacting system design (→ `docs/ARCHITECTURE/`)
+- **New feature system added**: Document system design and usage (→ `docs/FEATURES/`)
+- **Deployment process documented**: How to deploy to platforms (→ `docs/DEPLOYMENT/`)
+- **Setup/getting-started needed**: Guides for developers and users (→ `docs/GUIDES/`)
+- **Implementation pattern discovered**: Coding standards and practices (→ `docs/IMPLEMENTATION/`)
+- **Infrastructure reference**: APIs, configuration, schemas (→ `docs/REFERENCE/`)
+- **Phase/epic completed**: Move to `docs/archived/` (add date tag)
+
+### How to Organize New Documents
+
+**1. Choose the Right Folder**
+
+- **Architecture**: System design, data models, patterns, decisions
+- **Deployment**: Cloud setup, Docker, environment configuration
+- **Guides**: Tutorials, setup instructions, how-tos
+- **Implementation**: Dev practices, testing, logging, code standards
+- **Features**: Game systems, feature documentation
+- **Reference**: APIs, schemas, configuration options
+- **Maintenance**: Operations, troubleshooting, performance
+- **Archived**: Historical phase reports, completed epics, past migrations
+
+**2. File Naming Convention**
+
+- Use UPPERCASE_WITH_UNDERSCORES for file names
+- Be descriptive: `KEYPAD_SYSTEM_REFACTORING_BLUEPRINT.md` not `keypad.md`
+- Include the domain: `UNIFIED_STATE_ARCHITECTURE.md` not just `ARCHITECTURE.md`
+- Use numbered sections for related docs: `PHASE_1_*.md`, `PHASE_2_*.md`
+
+**3. Add Navigation**
+
+Each category has a `README.md` that lists contents:
+
+```markdown
+# Category Name
+
+Brief overview of what's in this section.
+
+## Documents
+
+| Document              | Purpose        |
+| --------------------- | -------------- |
+| [Document 1](DOC1.md) | What it covers |
+| [Document 2](DOC2.md) | What it covers |
+
+**See Also**: [Related section](../OTHER_SECTION/README.md)
+```
+
+**4. Link Between Related Documents**
+
+Start with: `**See Also**: [Link](path/to/doc.md)` to other relevant docs
+
+In content: `See [guide](../GUIDES/SETUP.md) for setup instructions`
+
+**5. Consistent Header Format**
+
+Every doc should start with:
+
+```markdown
+# Document Title
+
+**Purpose**: What problem does this solve?  
+**Audience**: Who should read this?  
+**Related**: Links to related documentation
+
+---
+
+[Content here]
+
+---
+
+**See Also**: [Other docs](...)
+```
+
+### Documentation Standards
+
+**Format**: Use Markdown with proper heading hierarchy (h1 → h2 → h3)
+
+**Code Examples**: Always include working examples
+
+```typescript
+// Good code example with context
+const logger = createLogger("SystemName");
+logger.info("Operation started", { memberNumber });
+```
+
+**Cross-references**: Link to related docs instead of repeating content
+
+**Accuracy**: Verify documentation matches current implementation
+
+**Audience Clarity**: Indicate who should read this (Developers, DevOps, Architects)
+
+### When Documentation Becomes Outdated
+
+**Process**:
+
+1. Update relevant doc immediately when code changes
+2. Add date of last update to doc header
+3. If doc is fundamentally outdated (not just updates), move to `archived/`
+4. Add explanatory note in `archived/README.md` explaining why it was archived
+5. Link from new doc to archived version if applicable
+
+### Automated Documentation Checks
+
+When generating documentation, verify:
+
+- ✅ Links are valid (use relative paths: `../FOLDER/file.md`)
+- ✅ Code examples are correct (they should run/compile)
+- ✅ Formatting is consistent (check with `npx prettier --check`)
+- ✅ File is in correct folder (matches the taxonomy above)
+- ✅ Navigation README is updated (add entry to category README)
+- ✅ Old doc is archived if replaced (move to `archived/` if obsolete)
+
+### Quick Reference
+
+**Starting a new doc?**
+
+1. Choose folder (ARCHITECTURE, DEPLOYMENT, etc.)
+2. Use UPPERCASE_FILENAME.md naming
+3. Add to folder's README.md
+4. Include purpose/audience/related at top
+5. Link to other relevant docs
+6. Run `npx prettier --write docs/`
+
+**Updating existing doc?**
+
+1. Verify it's still accurate (mark date of last update)
+2. Update links if structure changed
+3. Move to `archived/` if completely obsolete
+4. Run prettier formatting
+
+**Creating archive entry?**
+
+1. Move file to `docs/archived/`
+2. Note in `docs/archived/README.md` why it was archived
+3. Link from new doc if replacement exists
+
+---
+
 ## Golden Rules (Non-Negotiable)
 
 ### 1. Atomic Operations Always
