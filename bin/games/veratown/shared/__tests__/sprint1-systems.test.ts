@@ -24,7 +24,7 @@ import test from "node:test";
 test("KennelSystem: Has IdempotentMonitor for duplicate prevention", () => {
     // Note: Full integration test would require mock API_Connector
     // This validates the structure exists
-    const expectedImports = ["createIdempotentMonitor", "createSystemLogger"];
+    const expectedImports = ["createIdempotentMonitor", "createLogger"];
 
     // The test passes if the system was updated with helper imports
     assert.ok(expectedImports.length > 0, "KennelSystem should import helpers");
@@ -52,7 +52,7 @@ test("BunnyParkSystem: Uses both IdempotentMonitor and syncAppearanceMutation", 
     const helpers = [
         "createIdempotentMonitor",
         "syncAppearanceMutation",
-        "createSystemLogger",
+        "createLogger",
     ];
     assert.ok(helpers.length === 3, "BunnyParkSystem should use 3 helpers");
 });

@@ -8,7 +8,7 @@
  *   import { createIdempotentMonitor } from "./shared";
  *   import { syncAppearanceMutation, getAppearanceItem } from "./shared";
  *   import { executeDbMutation } from "./shared";
- *   import { createSystemLogger } from "./shared";
+ *   import { createLogger } from "../../logging";
  */
 
 // Idempotency guards
@@ -39,13 +39,6 @@ export {
     executeApiCall,
     withRetry,
 } from "./executeWithRetry";
-
-// Structured logging
-export {
-    SystemLogger,
-    createSystemLogger,
-    veratownLogger,
-} from "./systemLogger";
 
 // Timer management
 export { TimerManager, createTimerManager } from "./timerManager";

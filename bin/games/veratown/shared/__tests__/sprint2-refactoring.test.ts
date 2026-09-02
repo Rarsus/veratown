@@ -24,10 +24,10 @@ import test from "node:test";
 test("BedSystem: Refactored to use IdempotentMonitor helper", () => {
     // Validates that BedSystem now uses the centralized monitor helper
     // instead of manual activeMonitors Set management
-    const helperImports = ["createIdempotentMonitor", "createSystemLogger"];
+    const helperImports = ["createIdempotentMonitor", "createLogger"];
     assert.ok(
         helperImports.length === 2,
-        "BedSystem should import IdempotentMonitor and SystemLogger",
+        "BedSystem should import IdempotentMonitor and Logger",
     );
 });
 
@@ -89,9 +89,9 @@ test("CageSystem (2.1): Uses IdempotentMonitor for concurrent protection", () =>
     );
 });
 
-test("FurnitureBondageSystem (2.2): Uses IdempotentMonitor + SystemLogger", () => {
+test("FurnitureBondageSystem (2.2): Uses IdempotentMonitor + Logger", () => {
     // Validates dual patterns for furniture restraint safety
-    const patterns = ["createIdempotentMonitor", "createSystemLogger"];
+    const patterns = ["createIdempotentMonitor", "createLogger"];
     assert.strictEqual(patterns.length, 2, "Should use both helpers");
 });
 

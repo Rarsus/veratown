@@ -16,7 +16,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createIdempotentMonitor } from "../idempotentMonitor";
 import { createTimerManager } from "../timerManager";
-import { createSystemLogger } from "../systemLogger";
 import { executeWithRetry } from "../executeWithRetry";
 
 // ============================================================================
@@ -66,19 +65,6 @@ test("TimerManager: getSize returns correct count", () => {
 });
 
 // ============================================================================
-// SystemLogger Tests - Structure Validation
-// ============================================================================
-
-test("SystemLogger: Helper is exported correctly", () => {
-    const logger = createSystemLogger("test-system");
-    assert.ok(logger, "Should create logger instance");
-    assert.ok(typeof logger.info === "function", "Should have info method");
-    assert.ok(typeof logger.warn === "function", "Should have warn method");
-    assert.ok(typeof logger.error === "function", "Should have error method");
-    assert.ok(typeof logger.debug === "function", "Should have debug method");
-});
-
-// ============================================================================
 // ExecuteWithRetry Tests - Structure Validation
 // ============================================================================
 
@@ -97,11 +83,9 @@ test("executeWithRetry: Helper is exported correctly", async () => {
 test("Helpers: All can be instantiated together", () => {
     const monitor = createIdempotentMonitor<number>("system");
     const timers = createTimerManager<string>("system");
-    const logger = createSystemLogger("system");
 
     assert.ok(monitor, "Monitor created");
     assert.ok(timers, "Timer manager created");
-    assert.ok(logger, "Logger created");
 });
 
 test("Helpers: No import errors or circular dependencies", () => {
