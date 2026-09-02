@@ -67,8 +67,7 @@ export async function executeWithRetry<T>(
                     Math.pow(opts.backoffMultiplier, attempt - 1);
 
                 logger.warn(
-                    `[RetryExecutor] ${operationName} failed (attempt ${attempt}/${opts.maxRetries + 1}), retrying in ${backoffMs}ms:`,
-                    lastError.message,
+                    `[RetryExecutor] ${operationName} failed (attempt ${attempt}/${opts.maxRetries + 1}), retrying in ${backoffMs}ms: ${lastError.message}`,
                 );
 
                 opts.onRetry(attempt, lastError);
