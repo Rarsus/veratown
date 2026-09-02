@@ -180,8 +180,8 @@ export class Casino implements GamePlugin {
     private async getTopPlayers(limit: number = 50): Promise<any[]> {
         const profiles = await this.unifiedStore.getLeaderboard(limit);
         return profiles.map((p) => ({
-            name: p.characterName,
-            memberNumber: p.memberNumber,
+            name: p.name,
+            memberNumber: p._id,
             score: p.casino?.score || 0,
             credits: p.casino?.chips || 0,
         }));
@@ -189,11 +189,11 @@ export class Casino implements GamePlugin {
 
     private async getUnredeemedPurchases(): Promise<any[]> {
         // Query game events for unredeemed purchases
-        const events = await this.unifiedStore.getUnprocessedEvents();
+        const events = await this.unifiedStore.getUnprocessedEvents("casino");
         return events
-            .filter((e) => e.type === "casino_purchase" && !e.data?.redeemed)
+            .filter((e) => e.data?.redeemed === false)
             .map((e) => ({
-                memberNumber: e.memberNumber,
+                memberNumber: e.target,
                 purchaseId: e.data?.purchaseId,
                 items: e.data?.items || [],
             }));
@@ -209,11 +209,10 @@ export class Casino implements GamePlugin {
     private async getPlayer(memberNumber: number): Promise<any> {
         const profile = await this.unifiedStore.getProfile(memberNumber);
         return {
-            memberNumber: profile.memberNumber,
-            name: profile.characterName,
+            memberNumber: profile._id,
+            name: profile.name,
             credits: profile.casino?.chips || 0,
             score: profile.casino?.score || 0,
-            games: profile.casino?.games || [],
         };
     }
 
@@ -237,8 +236,8 @@ export class Casino implements GamePlugin {
         if (player.score !== undefined) {
             await this.unifiedStore.updateCasinoStats(player.memberNumber, {
                 score: player.score,
-                gamesWon: player.gamesWon || 0,
-                gamesLost: player.gamesLost || 0,
+                totalWins: player.totalWins || 0,
+                totalLosses: player.totalLosses || 0,
             });
         }
     }
@@ -272,7 +271,7 @@ export class Casino implements GamePlugin {
 
     private async claimDailyFreeChips(memberNumber: number): Promise<boolean> {
         const profile = await this.unifiedStore.getProfile(memberNumber);
-        const lastClaimTime = profile.casino?.lastFreeChipsClaimTime || 0;
+        const lastClaimTime = profile.casino?.lastDailyClaimAt || 0;
         const now = Date.now();
         const dayInMs = 24 * 60 * 60 * 1000;
 
@@ -374,8 +373,8 @@ export class Casino implements GamePlugin {
      * Note: Command registration happens in registerCommands() via GamePluginCommandRouter.
      */
     public registerTriggers(): void {
-        if (this.gameConfig?.region) {
-            this.conn.chatRoom.map.addEnterRegionTrigger(
+        if (this.gameConfig?.region && this.conn) {
+            this.conn?.chatRoom.map.addEnterRegionTrigger(
                 this.gameConfig.region,
                 guardHandler(
                     "casino:enterRegion",
@@ -396,11 +395,11 @@ export class Casino implements GamePlugin {
             );
         }
 
-        this.conn.on(
+        this.conn?.on(
             "CharacterEntered",
             guardHandler("casino:characterEntered", this.onCharacterEntered),
         );
-        this.conn.on("Beep", (msg) =>
+        this.conn?.on("Beep", (msg) =>
             guardHandler("casino:beep", this.onBeep)(msg),
         );
     }
@@ -413,11 +412,8 @@ export class Casino implements GamePlugin {
             character.toString(),
         );
 
-        const cooldownMs = 20 * 60 * 60 * 1000;
         const granted = await this.getStore().claimDailyFreeChips(
             character.MemberNumber,
-            FREE_CHIPS,
-            cooldownMs,
         );
 
         if (granted) {
@@ -429,7 +425,9 @@ export class Casino implements GamePlugin {
             const player = await this.getStore().getPlayer(
                 character.MemberNumber,
             );
-            const nextFreeCreditsAt = player.lastFreeCredits + cooldownMs;
+            const dayInMs = 24 * 60 * 60 * 1000;
+            const lastClaimTime = player.lastFreeCredits || 0;
+            const nextFreeCreditsAt = lastClaimTime + dayInMs;
             character.Tell(
                 "Whisper",
                 `Welcome back, ${character}. ${remainingTimeString(nextFreeCreditsAt)} until your next free chips. See my bio for how to play.`,
@@ -447,9 +445,9 @@ export class Casino implements GamePlugin {
             fallbackLocations,
         );
 
-        if (this.gameRegion) {
+        if (this.gameRegion && this.conn) {
             // Register enter trigger with loaded region
-            this.conn.chatRoom.map.addEnterRegionTrigger(
+            this.conn!.chatRoom.map.addEnterRegionTrigger(
                 this.gameRegion,
                 this.onCharacterEnterCasinoRegion,
             );
@@ -487,7 +485,7 @@ export class Casino implements GamePlugin {
                 if (parts.length < 4) {
                     this.conn.AccountBeep(
                         beep.MemberNumber,
-                        null,
+                        "",
                         "Usage: outfit add <name> <code>",
                     );
                     return;
@@ -505,13 +503,13 @@ export class Casino implements GamePlugin {
                     });
                     this.conn.AccountBeep(
                         beep.MemberNumber,
-                        null,
+                        "",
                         `Outfit ${name} added, thank you!`,
                     );
                 } catch (e) {
                     this.conn.AccountBeep(
                         beep.MemberNumber,
-                        null,
+                        "",
                         "Invalid outfit code",
                     );
                     return;
@@ -520,26 +518,19 @@ export class Casino implements GamePlugin {
                 if (!this.game) {
                     this.conn.AccountBeep(
                         beep.MemberNumber,
-                        null,
+                        "",
                         "No game is currently running.",
                     );
                     return;
                 }
-                this.conn.AccountBeep(
-                    beep.MemberNumber,
-                    null,
-                    "Ending game...",
-                );
+                this.conn.AccountBeep(beep.MemberNumber, "", "Ending game...");
                 this.conn.SendMessage(
                     "Chat",
                     `This is the last round, the game ends after.`,
                 );
                 this.game.endGame().then(() => {
-                    this.conn.AccountBeep(
-                        beep.MemberNumber,
-                        null,
-                        "Game ended.",
-                    );
+                    if (!this.conn || !this.commandParser) return;
+                    this.conn.AccountBeep(beep.MemberNumber, "", "Game ended.");
                     this.conn.SendMessage(
                         "Chat",
                         `The game has ended, thank you for playing!`,
@@ -554,11 +545,7 @@ export class Casino implements GamePlugin {
                         memberName: beep.MemberName,
                     },
                 );
-                this.conn.AccountBeep(
-                    beep.MemberNumber,
-                    null,
-                    "Unknown command",
-                );
+                this.conn.AccountBeep(beep.MemberNumber, "", "Unknown command");
             }
         } catch (e) {
             logger.error("Failed to process beep", e);
@@ -570,8 +557,8 @@ export class Casino implements GamePlugin {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.enabled) return;
-        this.conn.reply(msg, this.game.HELPCOMMANDMESSAGE);
+        if (!this.enabled || !this.conn) return;
+        this.conn.reply(msg, this.game?.HELPCOMMANDMESSAGE || "");
     };
 
     private onCommandForfeits = (
@@ -602,7 +589,7 @@ ${forfeitsString()}
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.enabled) return;
+        if (!this.enabled || !this.conn) return;
 
         if (args.length > 0) {
             if (!sender.IsRoomAdmin()) {
@@ -651,6 +638,7 @@ ${forfeitsString()}
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.conn) return;
         if (!sender.IsRoomAdmin()) {
             this.conn.reply(msg, "Sorry, you need to be an admin");
             return;
@@ -736,6 +724,7 @@ ${forfeitsString()}
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.conn) return;
         if (args.length < 1) {
             this.conn.reply(msg, "Usage: buy <service>");
             return;
@@ -789,22 +778,22 @@ ${forfeitsString()}
         await this.getStore().savePlayer(player);
 
         if (serviceName === "player") {
-            target.Appearance.RemoveItem("ItemDevices");
-            if (!target.Appearance.InventoryGet("ItemNeck")) {
-                target.Appearance.AddItem(
+            target!.Appearance.RemoveItem("ItemDevices");
+            if (!target!.Appearance.InventoryGet("ItemNeck")) {
+                target!.Appearance.AddItem(
                     AssetGet("ItemNeck", "LeatherCollar"),
                 );
             }
-            target.Appearance.AddItem(
+            target!.Appearance.AddItem(
                 AssetGet("ItemNeckRestraints", "CollarLeash"),
             );
-            const sign = target.Appearance.AddItem(
+            const sign = target!.Appearance.AddItem(
                 AssetGet("ItemMisc", "WoodenSign"),
             );
             sign.setProperty("Text", "Property of");
             sign.setProperty("Text2", sender.toString());
 
-            this.lockedItems.get(target.MemberNumber)?.delete("ItemDevices");
+            this.lockedItems.get(target!.MemberNumber)?.delete("ItemDevices");
 
             this.conn.SendMessage(
                 "Chat",
@@ -925,6 +914,7 @@ ${forfeitsString()}
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.conn) return;
         if (!sender.IsRoomAdmin()) {
             this.conn.reply(msg, "Sorry, you need to be an admin");
             return;
@@ -1073,6 +1063,7 @@ ${forfeitsString()}
     }
 
     public applyForfeit(bet: Bet): void {
+        if (!this.conn) return;
         const char = this.conn.chatRoom.findMember(bet.memberNumber);
         if (!char) return;
 
@@ -1099,7 +1090,7 @@ ${forfeitsString()}
         }
     }
 
-    public cheatPunishment(char: API_Character, player: Player): void {
+    public cheatPunishment(char: API_Character, player: any): void {
         // Use ForfeitService to apply cheat punishment
         this.forfeitService.applyCheatPunishment(char, player.cheatStrikes);
     }
