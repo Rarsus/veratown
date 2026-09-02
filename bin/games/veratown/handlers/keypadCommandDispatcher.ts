@@ -38,6 +38,7 @@ import { DeleteGroupHandler } from "./groupCommandHandlers";
 import { ListGroupsHandler } from "./groupCommandHandlers";
 import { GroupInfoHandler } from "./groupCommandHandlers";
 import { ListGroupMembersHandler } from "./groupCommandHandlers";
+import { CreateLocationHandler } from "./locationCommandHandlers";
 
 /**
  * Keypad Command Dispatcher
@@ -196,6 +197,16 @@ export class KeypadCommandDispatcher {
                 this.unifiedStore,
             ),
         );
+
+        // Location management commands
+        this.handlers.set(
+            "location/create",
+            new CreateLocationHandler(
+                this.definitionService,
+                this.accessService,
+                this.unifiedStore,
+            ),
+        );
     }
 
     /**
@@ -233,7 +244,9 @@ export class KeypadCommandDispatcher {
             resource === "door" &&
             ["create", "update", "delete", "list", "info"].includes(action)
                 ? `door/${action}`
-                : `${resource}/${action}`;
+                : resource === "location" && ["create"].includes(action)
+                  ? `location/${action}`
+                  : `${resource}/${action}`;
 
         const handler = this.handlers.get(handlerKey);
         if (!handler) {
@@ -281,6 +294,12 @@ Group Management:
   /bot door group list <doorKey>
   /bot door group info <doorKey> <groupName>
   /bot door group members <doorKey> <groupName>
+
+Location Management:
+  /bot door location create <doorKey> [autoOpenX] [autoOpenY]
+
+Wizard & Reference:
+  /bot door wizard - Display door creation wizard guide
 
 Admin access required for all commands.
         `.trim();

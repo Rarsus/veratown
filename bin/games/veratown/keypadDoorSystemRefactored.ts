@@ -97,9 +97,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         await this.reloadDoors();
 
         // Wire up location change watcher after system is ready
-        this.locationStore.watchLocations(
-            guardHandler(this.key, this.onLocationsChanged),
-        );
+        await this.locationStore.watchLocations();
     }
 
     /**
@@ -135,8 +133,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             "delete",
             "list",
             "info",
+            "wizard",
         ]);
-        this.commandParser?.register("door", (sender, _msg, args) => {
+        this.commandParser?.register("door", (sender, msg, args) => {
             if (!args.length) {
                 const coordKey = `${sender.MapPos.X},${sender.MapPos.Y}`;
                 const door = this.keypadLocationToDoor.get(coordKey);
@@ -148,11 +147,16 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 );
                 return;
             }
-            // Prefix bare door actions so dispatcher routes to door/* handlers
+            // Special handling for wizard (interactive, no raw args needed)
             const firstArg = args[0];
+            if (firstArg === "wizard") {
+                void this.startDoorWizard(sender);
+                return;
+            }
+            // Prefix bare door actions so dispatcher routes to door/* handlers
             const argsStr = DOOR_ACTIONS.has(firstArg)
-                ? `door ${args.join(" ")}`
-                : args.join(" ");
+                ? `door ${this.extractRawArgs(msg)}`
+                : this.extractRawArgs(msg);
             void this.onAdminMessage(sender, argsStr);
         });
     }
@@ -630,6 +634,95 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private reply(character: API_Character, message: string): void {
         this.logger.log(`[reply] SENDING to ${character.Name}: "${message}"`);
         character.Tell("Whisper", message);
+    }
+
+    /**
+     * Extract raw command arguments from message, preserving case
+     */
+    private extractRawArgs(msg: BC_Server_ChatRoomMessage): string {
+        const rawContent =
+            msg.Content.startsWith("(") && msg.Content.endsWith(")")
+                ? msg.Content.slice(1, -1)
+                : msg.Content;
+
+        // Handle different command prefixes: /bot door, !door, ChatRoomBot door
+        let match = /^\/bot\s+door\s+(.*)$/i.exec(rawContent.trim());
+        if (!match) {
+            match = /^(?:!|ChatRoomBot\s+)door\s+(.*)$/i.exec(
+                rawContent.trim(),
+            );
+        }
+        return match?.[1]?.trim() ?? "";
+    }
+
+    /**
+     * Interactive door creation wizard for admins
+     */
+    private async startDoorWizard(sender: API_Character): Promise<void> {
+        if (!sender.IsRoomAdmin()) {
+            this.reply(sender, "Admin access required.");
+            return;
+        }
+
+        const wizardGuide = `
+🔧 DOOR CREATION WIZARD GUIDE
+────────────────────────────────────────────────
+
+Step 1: Create a Door
+  /bot door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [unlockMs]
+  
+  Example: /bot door create admin_office 5 10 MetalDoorDown SteelOpen
+  
+  Where:
+  - doorKey: Unique identifier (case-sensitive, e.g., "admin_office")
+  - x, y: Locked tile coordinates
+  - lockedTile: Tile name when locked (case-sensitive, e.g., "MetalDown")
+  - unlockedTile: Tile name when unlocked (case-sensitive, e.g., "SteelDoorOpen")
+  - unlockMs: Milliseconds to keep door unlocked (default: 10000)
+
+Step 2: Create Access Group(s)
+  /bot door group create <doorKey> <groupName> <code> [type]
+  
+  Example: /bot door group create admin_office admins MySecretCode123
+  
+  Where:
+  - doorKey: Must match the door from Step 1
+  - groupName: Name of access group (case-sensitive)
+  - code: Code needed to unlock (case-sensitive)
+  - type: "builtin" or "custom" (default: custom)
+
+Step 3: Grant Members Access
+  /bot door access grant <doorKey> <groupName> <memberNumber> [reason]
+  
+  Example: /bot door access grant admin_office admins 123456 Initial setup
+  
+  Where:
+  - memberNumber: Character's BC member number
+  - This adds them to the group so they can use the code
+
+Step 4: Setup Keypad Location
+  Stand on the tile where the keypad should be, then:
+  /bot door location create <doorKey> [autoOpenX] [autoOpenY]
+  
+  Where:
+  - autoOpenX, autoOpenY: Optional auto-open tile coordinates
+  - This registers the current location as the keypad for this door
+
+Step 5: Verify Setup
+  /bot door info <doorKey>
+  /bot door group info <doorKey> <groupName>
+  /bot door group members <doorKey> <groupName>
+
+────────────────────────────────────────────────
+Tips:
+- All identifiers are CASE-SENSITIVE (doorKey, groupName, code, tile names)
+- Member numbers are numeric IDs from BC
+- Duration is in milliseconds (10000 ms = 10 seconds)
+- Multiple groups can access the same door
+- Each group has its own unique code and member list
+`;
+
+        this.reply(sender, wizardGuide);
     }
 
     /**
