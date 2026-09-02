@@ -24,11 +24,13 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) for the results of an in-depth code review
 (fixes made and proposals for further work).
 
-## Veratown+ Documentation
+## 📖 Documentation
+
+**Start here**: [docs/README.md](docs/README.md) - Complete navigation and quick links to all documentation.
+
+**For quick start**: [docs/QUICK_START.md](docs/QUICK_START.md) - Get Ropeybot running in 5 minutes.
 
 **Veratown+** is a persistent-world roleplay bot with integrated games, multi-bot architecture, and region management.
-
-**Start here**: [docs/VERATOWN_DOCUMENTATION_INDEX.md](docs/VERATOWN_DOCUMENTATION_INDEX.md) - Complete documentation suite with quick start, features, commands, development guide, and troubleshooting.
 
 **For different roles**:
 
