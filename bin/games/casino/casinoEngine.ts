@@ -17,8 +17,8 @@
  * - Emits gameEvents through EventBus
  */
 
-import { UnifiedCharacterStore, GameEvent } from "./unifiedCharacterStore";
-import { CasinoVenueSystem } from "./casinoVenueSystem";
+import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import { CasinoVenueSystem } from "../shared/casinoVenueSystem";
 import { createLogger } from "../../logging";
 import { MapRegion } from "bc-bot";
 
@@ -131,7 +131,6 @@ export class CasinoEngine {
             await this.unifiedStore.recordAuditEntry(
                 outcome.memberId,
                 `${outcome.gameType}_loss`,
-                0,
                 {
                     betAmount: outcome.betAmount,
                     venue: outcome.venueMultiplier,
@@ -158,7 +157,6 @@ export class CasinoEngine {
         await this.unifiedStore.recordAuditEntry(
             outcome.memberId,
             `${outcome.gameType}_win`,
-            0,
             {
                 betAmount: outcome.betAmount,
                 payoutAmount: effectivePayout,

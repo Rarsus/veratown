@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { Collection, Db } from "mongodb";
+import { Collection, Db, ObjectId } from "mongodb";
 import {
     UnifiedCharacterProfile,
     GameEvent,
@@ -25,6 +25,7 @@ import {
     CrossSystemState,
     RoleplayFlags,
     KeypadAccessRecord,
+    SuspendedGame,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 
@@ -462,7 +463,7 @@ export class UnifiedCharacterStore {
             dressingBlockedUntil: profile.dare.dressingBlockedUntil,
             totalGamesPlayed: profile.dare.totalGamesPlayed,
             // Phase 3: Game suspension
-            suspendedGames: profile.dare.suspendedGames,
+            suspendedGames: profile.dare.suspendedGames.map((g) => g.gameId),
         };
     }
 
@@ -745,7 +746,13 @@ export class UnifiedCharacterStore {
                 gameId,
                 suspendedAt: now,
                 suspendReason: "cage_entry",
-                playerSnapshot: participation || { gameId, joinedAt: now }, // Use minimal snapshot if no history
+                playerSnapshot: participation || {
+                    gameId,
+                    joinedAt: now,
+                    strippedCount: 0,
+                    passCounts: 0,
+                    bondageItems: [],
+                }, // Use minimal snapshot if no history
             });
         }
 
@@ -876,7 +883,7 @@ export class UnifiedCharacterStore {
             data: {
                 operation,
                 ...context,
-                playerName: profile.characterName,
+                playerName: profile.name,
                 memberNumber,
                 timestamp: now,
             },
@@ -1170,10 +1177,10 @@ export class UnifiedCharacterStore {
     }
 
     /**
-     * Record audit entry.
+     * Record Veratown audit entry.
      * Automatically appended to audit log (kept to last 100).
      */
-    public async recordAuditEntry(
+    public async recordVeratownAuditEntry(
         memberNumber: number,
         action: string,
         performedBy?: number,
@@ -1333,7 +1340,7 @@ export class UnifiedCharacterStore {
     ): Promise<void> {
         await this.init();
         await this.events.updateOne(
-            { _id: eventId },
+            { _id: new ObjectId(eventId) },
             {
                 $addToSet: { processedBy: systemName },
             },

@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { Player } from "./casinostore";
+import { UnifiedCharacterProfile } from "../shared/unifiedCharacterTypes";
 import {
     forfeitsString,
     restraintsRemoveString,
@@ -108,7 +108,7 @@ https://github.com/FriendsOfBC/ropeybot
      * Converts player objects into a numbered leaderboard string.
      * Each line follows format: "N. PlayerName (MemberNumber): ScoreValue chips won"
      *
-     * @param topPlayers - Array of Player objects, typically from getTopPlayers(limit)
+     * @param topPlayers - Array of UnifiedCharacterProfile objects, typically from getTopPlayers(limit)
      * @returns Formatted leaderboard string with each player on new line
      *
      * @example
@@ -118,7 +118,7 @@ https://github.com/FriendsOfBC/ropeybot
      * // Returns: "1. Alice (12345): 1000 chips won\n2. Bob (54321): 950 chips won\n..."
      * ```
      */
-    public formatLeaderboard(topPlayers: Player[]): string {
+    public formatLeaderboard(topPlayers: UnifiedCharacterProfile[]): string {
         return topPlayers
             .map((player, idx) => this.formatLeaderboardLine(player, idx + 1))
             .join("\n");
@@ -130,21 +130,24 @@ https://github.com/FriendsOfBC/ropeybot
      * Converts one player entry into a formatted line for the leaderboard display.
      * Format: "Position. PlayerName (MemberNumber): Score chips won"
      *
-     * @param player - Player object with name, memberNumber, and score
+     * @param player - UnifiedCharacterProfile object with name, _id (memberNumber), and casino.score
      * @param position - Display position (1-based). Default: 1
      * @returns Formatted leaderboard line
      *
      * @example
      * ```typescript
      * const line = manager.formatLeaderboardLine(
-     *   { name: "Alice", memberNumber: 12345, score: 1000, ... },
+     *   { name: "Alice", _id: 12345, casino: { score: 1000, ... }, ... },
      *   1
      * );
      * // Returns: "1. Alice (12345): 1000 chips won"
      * ```
      */
-    public formatLeaderboardLine(player: Player, position: number = 1): string {
-        return `${position}. ${player.name} (${player.memberNumber}): ${player.score} chips won`;
+    public formatLeaderboardLine(
+        player: UnifiedCharacterProfile,
+        position: number = 1,
+    ): string {
+        return `${position}. ${player.name} (${player._id}): ${player.casino.score} chips won`;
     }
 }
 
