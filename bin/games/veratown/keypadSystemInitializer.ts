@@ -19,7 +19,7 @@ import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
-import { KeypadDoorSystemRefactored } from "./keypadDoorSystemRefactored";
+import { KeypadDoorSystem } from "./keypadDoorSystemRefactored";
 import { KeypadLocationIntegration } from "./migrations/keypadLocationIntegration";
 import { KeypadCollectionSetup } from "./migrations/keypadCollectionSetup";
 import { KeypadBackwardCompatibility } from "./migrations/keypadBackwardCompatibility";
@@ -66,7 +66,7 @@ export class KeypadSystemInitializer {
         };
 
         try {
-            this.logger.log("Starting keypad system initialization...");
+            this.logger.info("Starting keypad system initialization...");
 
             // Step 1: Create collections
             result.steps.push(await this.step1_createCollections());
@@ -97,7 +97,7 @@ export class KeypadSystemInitializer {
             result.steps.push(await this.step5_warmupCaches(result.services));
 
             result.success = true;
-            this.logger.log("✓ Keypad system initialized successfully");
+            this.logger.info("✓ Keypad system initialized successfully");
         } catch (error) {
             result.errors.push(
                 error instanceof Error ? error.message : String(error),
@@ -128,7 +128,7 @@ export class KeypadSystemInitializer {
             step.success = true;
             step.message =
                 "Created 3 collections (doorDefinitions, groupDefinitions, memberships) with schema validators";
-            this.logger.log(`✓ ${step.message}`);
+            this.logger.info(`✓ ${step.message}`);
         } catch (error) {
             step.message = `Failed to create collections: ${error instanceof Error ? error.message : String(error)}`;
             this.logger.error(`✗ ${step.message}`);
@@ -161,7 +161,7 @@ export class KeypadSystemInitializer {
                 this.logger.warn(`⚠ ${step.message}`);
             } else {
                 step.message = "All collections validated successfully";
-                this.logger.log(`✓ ${step.message}`);
+                this.logger.info(`✓ ${step.message}`);
             }
         } catch (error) {
             step.success = false;
@@ -190,7 +190,7 @@ export class KeypadSystemInitializer {
             // Create Definition Service (Layer 3)
             const definitionService = new KeypadDefinitionService(this.db);
             await definitionService.init();
-            this.logger.log("✓ KeypadDefinitionService initialized");
+            this.logger.info("✓ KeypadDefinitionService initialized");
 
             // Create Access Service (Layer 2)
             const accessService = new KeypadAccessService(
@@ -199,13 +199,13 @@ export class KeypadSystemInitializer {
                 this.characterStore,
             );
             await accessService.init();
-            this.logger.log("✓ KeypadAccessService initialized");
+            this.logger.info("✓ KeypadAccessService initialized");
 
             // Create Location Integration
             const locationIntegration = new KeypadLocationIntegration(
                 definitionService,
             );
-            this.logger.log("✓ KeypadLocationIntegration initialized");
+            this.logger.info("✓ KeypadLocationIntegration initialized");
 
             // Create Command Dispatcher
             const commandDispatcher = new KeypadCommandDispatcher(
@@ -213,7 +213,7 @@ export class KeypadSystemInitializer {
                 accessService,
                 this.characterStore,
             );
-            this.logger.log("✓ KeypadCommandDispatcher initialized");
+            this.logger.info("✓ KeypadCommandDispatcher initialized");
 
             step.services = {
                 definitionService,
@@ -223,7 +223,7 @@ export class KeypadSystemInitializer {
             };
             step.success = true;
             step.message = "All 4 services initialized successfully";
-            this.logger.log(`✓ ${step.message}`);
+            this.logger.info(`✓ ${step.message}`);
         } catch (error) {
             step.message = `Failed to initialize services: ${error instanceof Error ? error.message : String(error)}`;
             this.logger.error(`✗ ${step.message}`);
@@ -249,7 +249,7 @@ export class KeypadSystemInitializer {
         };
 
         try {
-            const system = new KeypadDoorSystemRefactored(
+            const system = new KeypadDoorSystem(
                 this.conn,
                 this.locationStore,
                 services.definitionService,
@@ -262,8 +262,8 @@ export class KeypadSystemInitializer {
             await system.init();
             step.system = system;
             step.success = true;
-            step.message = "KeypadDoorSystemRefactored created and initialized";
-            this.logger.log(`✓ ${step.message}`);
+            step.message = "KeypadDoorSystem created and initialized";
+            this.logger.info(`✓ ${step.message}`);
         } catch (error) {
             step.message = `Failed to create system: ${error instanceof Error ? error.message : String(error)}`;
             this.logger.error(`✗ ${step.message}`);
@@ -291,10 +291,10 @@ export class KeypadSystemInitializer {
             // Load all doors into memory
             const doors =
                 await services.definitionService.getAllDoorDefinitions();
-            this.logger.log(`✓ Preloaded ${doors.length} door definitions`);
+            this.logger.info(`✓ Preloaded ${doors.length} door definitions`);
 
             step.message = `Warmed up caches: ${doors.length} doors loaded`;
-            this.logger.log(`✓ ${step.message}`);
+            this.logger.info(`✓ ${step.message}`);
         } catch (error) {
             step.success = false;
             step.message = `Cache warmup warning: ${error instanceof Error ? error.message : String(error)}`;
@@ -325,7 +325,7 @@ export class KeypadSystemInitializer {
         };
 
         try {
-            this.logger.log(
+            this.logger.info(
                 `Starting keypad data migration (dryRun=${options.dryRun ?? false})`,
             );
 
@@ -353,7 +353,7 @@ export class KeypadSystemInitializer {
 
             if (migrationResult.success) {
                 result.success = true;
-                this.logger.log(
+                this.logger.info(
                     `✓ Migration completed successfully (${result.totalRecordsMigrated} records migrated)`,
                 );
             } else {

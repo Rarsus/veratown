@@ -13,10 +13,10 @@
  */
 
 import { Collection, Db } from "mongodb";
-import { KeypadAccessRecord } from "../shared/unifiedCharacterTypes";
-import { KeypadAccessLevel, KeypadGroupMembershipDoc } from "./keypadTypes";
+import { KeypadAccessRecord } from "../../shared/unifiedCharacterTypes";
+import { KeypadAccessLevel, KeypadGroupMembershipDoc } from "../keypadTypes";
 import { KeypadDefinitionService } from "./keypadDefinitionService";
-import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
 
 /**
  * KeypadAccessService (Layer 2)
@@ -134,8 +134,7 @@ export class KeypadAccessService {
     async getCharacterAccess(
         memberNumber: number,
     ): Promise<KeypadAccessRecord[]> {
-        const profile =
-            await this.unifiedStore.getCharacterProfile(memberNumber);
+        const profile = await this.unifiedStore.getProfile(memberNumber);
         return profile?.veratown?.keypadAccess ?? [];
     }
 

@@ -69,9 +69,9 @@ export async function initializeKeypadSystem(
     // Step 4: Get initialized system
     const keypadSystem = initResult.system;
 
-    // Step 5: Register as feature system
-    // (Assuming you have a feature registry)
-    connector.registerFeatureSystem(keypadSystem);
+    // Step 5: Note: Feature system registration is handled by Veratown orchestrator
+    // The system is returned for integration into the feature registry
+    // connector.registerFeatureSystem(keypadSystem);
 
     logger.info("✓ Keypad system initialized and registered\n");
 
@@ -84,7 +84,7 @@ export async function initializeKeypadSystem(
             logger.info(`     ${step.message}`);
         }
     }
-    logger.info();
+    logger.info("Keypad system initialization complete");
 }
 
 /**
@@ -97,7 +97,7 @@ export async function migrateKeypadData(
     db: Db,
     locationStore: VeratownLocationStore,
     characterStore: UnifiedCharacterStore,
-    options?: {
+    _options?: {
         dryRun?: boolean;
         startPhase?: number;
         stopPhase?: number;
@@ -113,7 +113,7 @@ export async function migrateKeypadData(
     );
 
     const migrationResult = await initializer.runMigration({
-        dryRun: options?.dryRun ?? false,
+        dryRun: _options?.dryRun ?? false,
         validateOnly: false,
     });
 
@@ -269,8 +269,8 @@ export async function quickStart(
 
     if (result.success) {
         logger.info("✅ Keypad system ready to use!\n");
-        // Register with feature system
-        connector.registerFeatureSystem(result.system);
+        // Note: Feature system registration is handled by veratown orchestrator
+        // No need to call registerFeatureSystem here
     } else {
         throw new Error(`Initialization failed: ${result.errors.join(", ")}`);
     }

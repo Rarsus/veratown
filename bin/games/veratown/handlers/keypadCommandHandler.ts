@@ -13,10 +13,10 @@
  */
 
 import { API_Character } from "bc-bot";
-import { CommandPermissionLevel } from "./keypadTypes";
-import { KeypadAccessService } from "./services/keypadAccessService";
-import { KeypadDefinitionService } from "./services/keypadDefinitionService";
-import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import { CommandPermissionLevel } from "../keypadTypes";
+import { KeypadAccessService } from "../services/keypadAccessService";
+import { KeypadDefinitionService } from "../services/keypadDefinitionService";
+import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
 
 /**
  * Command execution context and result
@@ -166,8 +166,7 @@ export abstract class KeypadCommandHandler {
     ): Promise<
         { success: true; profile: any } | { success: false; message: string }
     > {
-        const profile =
-            await this.unifiedStore.getCharacterProfile(memberNumber);
+        const profile = await this.unifiedStore.getProfile(memberNumber);
         if (!profile) {
             return {
                 success: false,
