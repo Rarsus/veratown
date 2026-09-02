@@ -374,7 +374,7 @@ export class Casino implements GamePlugin {
      */
     public registerTriggers(): void {
         if (this.gameConfig?.region && this.conn) {
-            this.conn?.chatRoom.map.addEnterRegionTrigger(
+            this.conn!.chatRoom!.map.addEnterRegionTrigger(
                 this.gameConfig.region,
                 guardHandler(
                     "casino:enterRegion",
@@ -447,7 +447,7 @@ export class Casino implements GamePlugin {
 
         if (this.gameRegion && this.conn) {
             // Register enter trigger with loaded region
-            this.conn!.chatRoom.map.addEnterRegionTrigger(
+            this.conn!.chatRoom!.map.addEnterRegionTrigger(
                 this.gameRegion,
                 this.onCharacterEnterCasinoRegion,
             );
@@ -600,7 +600,7 @@ ${forfeitsString()}
                 return;
             }
 
-            const target = this.conn.chatRoom.findCharacter(args[0]);
+            const target = this.conn?.chatRoom?.findCharacter(args[0]);
             if (!target) {
                 this.conn.reply(msg, "I can't find that person.");
                 return;
@@ -649,7 +649,7 @@ ${forfeitsString()}
             return;
         }
 
-        const toAdd = this.conn.chatRoom.findCharacter(args[0]);
+        const toAdd = this.conn?.chatRoom?.findCharacter(args[0]);
         if (!toAdd) {
             this.conn.reply(msg, "I can't find that person");
             return;
@@ -691,13 +691,21 @@ ${forfeitsString()}
             return;
         }
 
+        const restraintItem = sender.Appearance.InventoryGet(
+            restraint.items(sender)[0].Group,
+        );
+        if (!restraintItem) {
+            this.conn!.reply(
+                msg,
+                `You can only buy yourself out of my restraints, not others.`,
+            );
+            return;
+        }
         if (
-            sender.Appearance.InventoryGet(
-                restraint.items(sender)[0].Group,
-            ).getData().Property.LockMemberNumber !==
-            this.conn.Player.MemberNumber
+            restraintItem.getData().Property?.LockMemberNumber !==
+            this.conn!.Player.MemberNumber
         ) {
-            this.conn.reply(
+            this.conn!.reply(
                 msg,
                 `You can only buy yourself out of my restraints, not others.`,
             );
@@ -746,7 +754,7 @@ ${forfeitsString()}
                 );
                 return;
             }
-            target = this.conn.chatRoom.findCharacter(args[1]);
+            target = this.conn?.chatRoom?.findCharacter(args[1]);
             if (!target) {
                 this.conn.reply(msg, "I can't find that person.");
                 return;
@@ -883,13 +891,13 @@ ${forfeitsString()}
             return;
         }
 
-        const target = this.conn.chatRoom.findCharacter(args[0]);
+        const target = this.conn?.chatRoom?.findCharacter(args[0]);
         if (!target) {
-            this.conn.reply(msg, "I can't find that person.");
+            this.conn?.reply(msg, "I can't find that person.");
             return;
         }
         if (target.MemberNumber === sender.MemberNumber) {
-            this.conn.reply(msg, "You can't give yourself chips.");
+            this.conn?.reply(msg, "You can't give yourself chips.");
             return;
         }
 
@@ -934,15 +942,15 @@ ${forfeitsString()}
             return;
         }
 
-        const target = this.conn.chatRoom.findCharacter(args[0]);
+        const target = this.conn?.chatRoom?.findCharacter(args[0]);
         if (!target) {
-            this.conn.reply(msg, "I can't find that person.");
+            this.conn?.reply(msg, "I can't find that person.");
             return;
         }
 
         await this.getStore().addCredits(target.MemberNumber, amount);
 
-        this.conn.reply(msg, `Granted ${amount} chips to ${target}.`);
+        this.conn?.reply(msg, `Granted ${amount} chips to ${target}.`);
     };
 
     private closingInProgress = false;
@@ -1064,7 +1072,7 @@ ${forfeitsString()}
 
     public applyForfeit(bet: Bet): void {
         if (!this.conn) return;
-        const char = this.conn.chatRoom.findMember(bet.memberNumber);
+        const char = this.conn?.chatRoom?.findMember(bet.memberNumber);
         if (!char) return;
 
         // Use ForfeitService to apply the forfeit
