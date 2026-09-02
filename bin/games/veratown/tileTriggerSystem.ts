@@ -31,7 +31,7 @@
  */
 
 import { API_Connector, API_Character } from "bc-bot";
-import { createSystemLogger } from "./shared";
+import { createLogger } from "../../logging";
 
 /**
  * Trigger handler function signature.
@@ -87,7 +87,7 @@ export interface BatchTriggerResult {
 export class TileTriggerSystem {
     private triggers = new Map<string, RegisteredTrigger>();
     private nextTriggerId = 1;
-    private readonly logger = createSystemLogger("TileTriggerSystem");
+    private readonly logger = createLogger("TileTriggerSystem");
 
     public constructor(private conn: API_Connector) {}
 

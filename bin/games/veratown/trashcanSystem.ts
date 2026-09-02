@@ -22,7 +22,8 @@ import {
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
-import { createTimerManager, createSystemLogger } from "./shared";
+import { createTimerManager } from "./shared";
+import { createLogger } from "../../logging";
 
 // The trashcan easter egg: searching the trash (an "Emote" containing both
 // "search" and "trash") while standing at one of the trashcan tiles finds a
@@ -42,7 +43,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     private readonly searchCooldown = createTimerManager<number>(
         "TrashcanSystem.searchCooldown",
     );
-    private readonly logger = createSystemLogger("TrashcanSystem");
+    private readonly logger = createLogger("TrashcanSystem");
     private readonly COOLDOWN_MS = 7000; // 7 second cooldown between searches
 
     public constructor(private conn: API_Connector) {}

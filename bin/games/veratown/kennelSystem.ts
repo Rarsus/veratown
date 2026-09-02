@@ -19,7 +19,8 @@ import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
-import { createSystemLogger } from "./shared/systemLogger";
+
+import { createLogger } from "../../logging";
 
 // Owns the kennel tiles: equips a Kennel device (door open, padded) on
 // entry, then automatically closes the door after a short delay as long as
@@ -29,6 +30,7 @@ import { createSystemLogger } from "./shared/systemLogger";
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(kennelPos, "Emote", `*The kennel door clicks shut*`);
 export class KennelSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("KennelSystem");
     public readonly key = "kennel";
     public readonly label = "Kennels";
     public enabled = true;
@@ -37,8 +39,6 @@ export class KennelSystem implements VeratownFeatureSystem {
     private readonly kennelTrigger: ReturnType<typeof guardHandler>;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
-    private readonly logger = createSystemLogger("KennelSystem");
-
     public constructor(private conn: API_Connector) {
         this.kennelTrigger = guardHandler(
             this.key,
@@ -76,11 +76,11 @@ export class KennelSystem implements VeratownFeatureSystem {
                 );
             }
 
-            console.log(
+            this.logger?.info(
                 `[KennelSystem] Registered ${this.kennelPositions.length} kennel location(s)`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[KennelSystem] Unexpected error during initialization",
                 e,
             );

@@ -18,6 +18,10 @@ import {
     VeratownLocationDoc,
 } from "../veratown/veratownLocationStore";
 
+import { createLogger } from "../../logging";
+
+const logger = createLogger("locationUtils");
+
 /**
  * Loads a single region from the location store, with type-based filtering.
  *
@@ -74,7 +78,7 @@ export async function loadRegionFromDatabase(
             };
         }
     } catch (e) {
-        console.error(`[locationUtils] Failed to load region ${regionType}`, e);
+        logger.error(`[locationUtils] Failed to load region ${regionType}`, e);
     }
     return undefined;
 }

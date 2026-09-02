@@ -26,7 +26,10 @@ import {
     CRATE_LOCK_PASSWORD,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
-import { createIdempotentMonitor, createSystemLogger } from "./shared";
+import { createIdempotentMonitor } from "./shared";
+import { createLogger } from "../../logging";
+
+import { createLogger } from "../../logging";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -36,6 +39,7 @@ import { createIdempotentMonitor, createSystemLogger } from "./shared";
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(cagePos, "Emote", `*Cage door slams shut with a click*`);
 export class CageSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("CageSystem");
     public readonly key = "cage";
     public readonly label = "Containment cages";
     public enabled = true;
@@ -47,7 +51,6 @@ export class CageSystem implements VeratownFeatureSystem {
 
     // Monitor for preventing duplicate cage entry handlers
     private monitor = createIdempotentMonitor<API_Character>("CageSystem");
-    private logger = createSystemLogger("CageSystem");
 
     // Maps loaded from the database. Indexed by position for fast lookup.
     // Format: key is "X,Y" string, value is location doc + related metadata.
@@ -208,11 +211,11 @@ export class CageSystem implements VeratownFeatureSystem {
                 );
             }
 
-            console.log(
+            this.logger?.info(
                 `[CageSystem] Registered ${this.cagesByPos.size} cage location(s)`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[CageSystem] Unexpected error during initialization",
                 e,
             );

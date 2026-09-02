@@ -56,7 +56,7 @@ import {
     syncAppearanceMutation,
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
-import { createSystemLogger } from "./veratown/shared/systemLogger";
+import { createLogger } from "../logging";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -69,6 +69,8 @@ import {
     VERATOWN_LOCATIONS_FALLBACK,
     FEATURE_REGIONS_STATIC,
 } from "./veratown/veratownConfig";
+
+const logger = createLogger("Veratown");
 
 // Re-exported for callers importing map layout/items from this module (kept
 // at its original path so bin/main.ts and bin/games/casino/forfeits.ts
@@ -244,7 +246,7 @@ export class Veratown {
             this.locationEventSystem = new LocationEventSystem(db);
             this.playerRoleSystem = new PlayerRoleSystem(db);
         } else {
-            console.log(
+            logger.info(
                 "mongo_uri/mongo_db must be configured to enable the dare/pick commands and persistent map storage in Veratown; skipping.",
             );
         }
@@ -396,9 +398,8 @@ export class Veratown {
             }
             return system;
         } catch (e) {
-            console.error(
-                `[Veratown] Failed to start feature${system ? ` "${system.label}"` : ""}; ` +
-                    "it will be unavailable, but the rest of the bot is unaffected.",
+            logger.error(
+                `Failed to start feature${system ? ` "${system.label}"` : ""}; it will be unavailable, but the rest of the bot is unaffected.`,
                 e,
             );
             return undefined;
@@ -413,8 +414,9 @@ export class Veratown {
         if (this.locationStore) {
             await this.locationStore.watchLocations();
             this.locationStore.on("locationChanged", async (operationType) => {
-                console.log(
-                    `[Veratown] Database change detected (${operationType}), reloading locations...`,
+                logger.info(
+                    "Database change detected, reloading locations...",
+                    { operationType },
                 );
                 await this.reloadLocations();
             });
@@ -444,7 +446,7 @@ export class Veratown {
                     for (const warning of this.regionManager.validateRegions(
                         FEATURE_REGIONS_STATIC,
                     )) {
-                        console.warn(warning);
+                        logger.warn(warning);
                     }
                 }
 
@@ -455,11 +457,9 @@ export class Veratown {
                             feature.reloadLocations!(this.locationSnapshot),
                         ),
                 );
-                console.log(
-                    `[Veratown] Loaded ${this.locationSnapshot.length} locations`,
-                );
+                logger.info(`Loaded ${this.locationSnapshot.length} locations`);
             } catch (e) {
-                console.error("[Veratown] Failed to reload locations", e);
+                logger.error("Failed to reload locations", e);
                 throw e;
             } finally {
                 this.locationReload = undefined;
@@ -507,7 +507,9 @@ export class Veratown {
                 storedMapData ?? JSON.parse(decompressFromBase64(MAP));
             this.conn.chatRoom.map.setMapFromData(mapData);
         } catch (e) {
-            console.log("Map data not loaded", e);
+            logger.warn("Map data not loaded, using fallback", {
+                error: String(e),
+            });
         }
     };
 
@@ -553,7 +555,7 @@ export class Veratown {
     };
 
     private freeCharacter(character: API_Character): void {
-        const logger = createSystemLogger("Veratown.freeCharacter");
+        const logger = createLogger("Veratown.freeCharacter");
 
         // Use atomic appearance sync to prevent data corruption if process crashes
         // during strip-then-restore sequence

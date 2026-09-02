@@ -13,6 +13,8 @@ import {
     API_AppearanceItem,
     AssetGet,
 } from "bc-bot";
+import { createLogger } from "../../logging";
+
 //TODOs:
 // + fix forfeit pushing
 // + reconsider payouts for forfeits half as much makes more sense
@@ -90,6 +92,7 @@ export interface BlackjackBet extends Bet {
 type Hand = Card[];
 
 export class BlackjackGame implements Game {
+    private readonly logger = createLogger("BlackjackGame");
     private casino: Casino;
     private deck: Card[] = [];
     private dealerHand: Hand = [];
@@ -146,7 +149,7 @@ export class BlackjackGame implements Game {
             this.casino.setTextColor("#ffffff");
 
             this.casino.setBio().catch((e) => {
-                console.error("Failed to set bio.", e);
+                this.logger?.error("Failed to set bio.", e);
             });
 
             this.conn.Player.setScriptPermissions(true, false);
@@ -194,7 +197,7 @@ export class BlackjackGame implements Game {
     getPole(): API_AppearanceItem {
         let pole = this.conn.Player.Appearance.InventoryGet("ItemDevices");
         if (pole && pole.Name === "Pole") {
-            // console.log("Pole already exists in inventory", pole);
+            // this.logger?.info("Pole already exists in inventory", pole);
             return pole;
         }
 
@@ -202,10 +205,10 @@ export class BlackjackGame implements Game {
         pole = this.conn.Player.Appearance.AddItem(
             AssetGet("ItemDevices", "Pole"),
         );
-        console.log("Adding pole to appearance");
+        this.logger?.info("Adding pole to appearance");
         pole.SetColor(["#AC9A85"]);
 /**/
-        console.log("Adding pole to inventory");
+        this.logger?.info("Adding pole to inventory");
         let newPole = AssetGet("ItemDevices", "Pole");
         newPole.Color = ["#AC9A85"];
         this.conn.Player.Appearance.AddItem(newPole);
@@ -657,7 +660,7 @@ export class BlackjackGame implements Game {
             for (const bet of player.bets) {
                 const playerHand = this.playerHands.get(bet);
                 if (!playerHand) {
-                    console.error(
+                    this.logger?.error(
                         `No hand found for player ${player.memberName} (${player.memberNumber})`,
                     );
                     continue;
@@ -784,7 +787,7 @@ export class BlackjackGame implements Game {
         return this.players.map((b) => b.bets[0]);
     }
     public getBetsForPlayer(memberNumber: number): BlackjackBet[] {
-        // console.log(this.players.find((b) => b.memberNumber === memberNumber));
+        // this.logger?.info(this.players.find((b) => b.memberNumber === memberNumber));
         return this.players
             .filter((b) => b.memberNumber === memberNumber)
             .flatMap((b) => b.bets);
@@ -854,7 +857,7 @@ export class BlackjackGame implements Game {
                 FORFEITS[bet.stakeForfeit].items(sender),
             );
             if (blockers.length > 0) {
-                console.log(
+                this.logger?.info(
                     `Blocked forfeit bet of ${bet.stakeForfeit} with blockers `,
                     blockers,
                 );
@@ -902,7 +905,7 @@ export class BlackjackGame implements Game {
                     .get(sender.MemberNumber)
                     ?.get(forfeitItem.Group)
             ) {
-                console.log(
+                this.logger?.info(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );
                 ++player.cheatStrikes;
@@ -1065,7 +1068,7 @@ export class BlackjackGame implements Game {
     }
 
     private createShoe(decks: number = 1): void {
-        console.log(`Creating a shoe with ${decks} decks.`);
+        this.logger?.info(`Creating a shoe with ${decks} decks.`);
         for (let i = 0; i < decks; i++) {
             if (this.deck.length > 0) {
                 this.deck.push(...createDeck());

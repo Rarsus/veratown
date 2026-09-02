@@ -17,7 +17,7 @@
  */
 
 import { MapRegion } from "bc-bot";
-import { createSystemLogger } from "../veratown/shared/systemLogger";
+import { createLogger } from "../../logging";
 
 export interface VenueBonus {
     region: MapRegion;
@@ -30,7 +30,7 @@ export interface VenueBonus {
  * CasinoVenueSystem manages regional chip economy multipliers
  */
 export class CasinoVenueSystem {
-    private readonly logger = createSystemLogger("CasinoVenueSystem");
+    private readonly logger = createLogger("CasinoVenueSystem");
     private venues: Map<MapRegion, VenueBonus> = new Map();
 
     /**

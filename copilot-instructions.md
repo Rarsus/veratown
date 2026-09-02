@@ -151,29 +151,47 @@ This applies to:
 
 ---
 
-### 8. Error Context in All Logs
+### 8. Structured Logging with createLogger
 
-Logs must contain enough information to diagnose failures.
+All systems must use the centralized logging system. Never use `console.log/error/warn` directly.
 
-```typescript
-console.error(
-    `[Veratown:releaseSystem] Failed to teleport ${char.MemberNumber}:`,
-    error,
-);
-```
-
-Include:
-
-- system name
-- operation
-- member number (where relevant)
-- relevant identifiers
-
-Avoid generic:
+**Required:**
 
 ```typescript
-console.error(error);
+import { createLogger } from "../logging";
+
+const logger = createLogger("ReleaseSystem");
+
+logger.error("Failed to teleport", error, {
+    memberNumber: char.MemberNumber,
+    operation: "teleport",
+    stage: "stage_2",
+});
 ```
+
+**Avoid:**
+
+```typescript
+console.error(`Failed: ${error}`);
+```
+
+**Why:** Structured logging enables:
+
+- Consistent timestamps and formatting
+- Configurable log levels (LOG_LEVEL=DEBUG for debugging)
+- Rich context objects (memberNumber, operation, attempt, etc.)
+- Emoji indicators for quick visual scanning
+- Stack traces automatically included
+
+**Context Keys:**
+
+- `memberNumber` - Character ID
+- `operation` - Name of operation
+- `attempt` - Retry attempt number
+- `stage` - Stage in state machine
+- `location` - Location/system within feature
+
+See [LOGGING_GUIDE.md](LOGGING_GUIDE.md) for complete documentation and examples.
 
 ---
 

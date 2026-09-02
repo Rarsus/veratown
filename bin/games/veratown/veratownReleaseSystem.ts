@@ -30,11 +30,9 @@ import {
     RELEASE_PAROLE_DURATION_MS,
     RELEASE_COOLDOWN_MS,
 } from "./veratownConfig";
-import {
-    createIdempotentMonitor,
-    createSystemLogger,
-    PosturePreserver,
-} from "./shared";
+import { createIdempotentMonitor, PosturePreserver } from "./shared";
+
+import { createLogger } from "../../logging";
 
 /**
  * Refactored Release System with:
@@ -97,6 +95,7 @@ interface ParoleStatus {
 }
 
 export class ReleaseSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("ReleaseSystem");
     public readonly key = "release";
     public readonly label = "Emergency Release System";
     public enabled = true;
@@ -132,7 +131,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private paroleMonitor = createIdempotentMonitor<API_Character>(
         "ReleaseSystem.parole",
     );
-    private logger = createSystemLogger("ReleaseSystem");
 
     public constructor(
         private conn: API_Connector,
@@ -168,7 +166,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     public registerTriggers(): void {
         this.initializeReleaseParoles().catch((e) => {
-            console.error(`[ReleaseSystem] Failed to initialize paroles`, e);
+            this.logger?.error(
+                `[ReleaseSystem] Failed to initialize paroles`,
+                e,
+            );
         });
     }
 
@@ -197,7 +198,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         if (!isNaked(character)) {
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Parole violation on shower entry: ${character.MemberNumber}`,
             );
             await this.handleParoleViolation(character, "dressed");
@@ -226,7 +227,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 maxParoleDurationMs,
             );
 
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Re-release requested by ${character.MemberNumber}, escalating parole from ${existingParole.paroleDurationMs}ms to ${newDurationMs}ms`,
             );
 
@@ -266,7 +267,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     private async performRelease(character: API_Character): Promise<void> {
         try {
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Starting release for ${character.MemberNumber}`,
             );
 
@@ -292,13 +293,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             await wait(500);
 
             // CONFIRMATION STEP: Ask for confirmation with 20s timeout
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Requesting confirmation from ${character.MemberNumber}`,
             );
             const confirmed = await this.requestReleaseConfirmation(character);
 
             if (!confirmed) {
-                console.log(
+                this.logger?.info(
                     `[ReleaseSystem] Release cancelled - confirmation denied or timeout for ${character.MemberNumber}`,
                 );
                 this.whisper(
@@ -340,7 +341,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             this.recordStage(character.MemberNumber, "checking_nudity", "end");
 
             if (!isNaked) {
-                console.log(
+                this.logger?.info(
                     `[ReleaseSystem] Nudity check failed for ${character.MemberNumber}`,
                 );
                 this.whisper(
@@ -420,7 +421,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             // Record stage timings to database for audit trail
             await this.recordStageTimingsToDatabase(character);
 
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Release completed successfully for ${character.MemberNumber}`,
             );
 
@@ -432,7 +433,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
             }
         } catch (e) {
-            console.error(`[ReleaseSystem] Release failed:`, e);
+            this.logger?.error(`[ReleaseSystem] Release failed:`, e);
             this.whisper(character, "Release sequence encountered an error.");
             await this.recordReleaseEvent(character, "release_error");
             this.stageTimings.delete(character.MemberNumber);
@@ -461,7 +462,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             // Timeout handler
             setTimeout(() => {
                 if (this.pendingConfirmations.has(character.MemberNumber)) {
-                    console.log(
+                    this.logger?.info(
                         `[ReleaseSystem] Confirmation timeout for ${character.MemberNumber}`,
                     );
                     this.pendingConfirmations.delete(character.MemberNumber);
@@ -503,7 +504,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         character: API_Character,
         startingLocation: ChatRoomMapPos,
     ): Promise<void> {
-        console.log(`[ReleaseSystem] Stage 3: Teleporting to punishment room`);
+        this.logger?.info(
+            `[ReleaseSystem] Stage 3: Teleporting to punishment room`,
+        );
 
         const location = await this.getPunishmentRoomLocation();
 
@@ -543,7 +546,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async executeStrip(
         character: API_Character,
     ): Promise<RemovedBondageItem[]> {
-        console.log(`[ReleaseSystem] Stage 4: Stripping all items`);
+        this.logger?.info(`[ReleaseSystem] Stage 4: Stripping all items`);
 
         const removedItems = await this.stripNonOwnerItems(character);
 
@@ -564,7 +567,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async executeNudityCheck(
         character: API_Character,
     ): Promise<boolean> {
-        console.log(`[ReleaseSystem] Stage 5: Checking for nudity`);
+        this.logger?.info(`[ReleaseSystem] Stage 5: Checking for nudity`);
 
         const location = await this.getPunishmentRoomLocation();
         const maxWaitMs = RELEASE_NUDITY_TIMEOUT_MS;
@@ -619,7 +622,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async executeGrantDoorAccess(
         character: API_Character,
     ): Promise<boolean> {
-        console.log(`[ReleaseSystem] Stage 6: Granting door access`);
+        this.logger?.info(`[ReleaseSystem] Stage 6: Granting door access`);
 
         if (!this.locationStore) {
             return false;
@@ -630,7 +633,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 await this.locationStore.getLocation(RELEASE_KEYPAD_KEY);
 
             if (!keypadLocation?.data) {
-                console.warn(`[ReleaseSystem] Keypad location not found`);
+                this.logger?.warn(`[ReleaseSystem] Keypad location not found`);
                 return false;
             }
 
@@ -638,7 +641,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             const guestCode = codes?.guest;
 
             if (!guestCode) {
-                console.warn(`[ReleaseSystem] Guest code not found`);
+                this.logger?.warn(`[ReleaseSystem] Guest code not found`);
                 return false;
             }
 
@@ -648,7 +651,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
             return true;
         } catch (e) {
-            console.error(`[ReleaseSystem] Failed to grant door access`, e);
+            this.logger?.error(
+                `[ReleaseSystem] Failed to grant door access`,
+                e,
+            );
             return false;
         }
     }
@@ -737,7 +743,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 false, // stripLocked: also remove locked items
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 `[ReleaseSystem] Error enforcing parole nudity with slowlyStripBulk:`,
                 e,
             );
@@ -789,7 +795,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async finalizeParoleExpiration(
         character: API_Character,
     ): Promise<void> {
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Parole duration expired for ${character.MemberNumber}`,
         );
 
@@ -797,7 +803,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const finalNakedCheck = isNaked(character);
 
         if (!finalNakedCheck) {
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Parole violation at expiration: ${character.MemberNumber}`,
             );
             this.whisper(
@@ -809,7 +815,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         // SUCCESS
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Parole successful for ${character.MemberNumber}`,
         );
 
@@ -857,7 +863,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Get current metadata
         let metadata = this.paroleMetadata.get(character.MemberNumber);
         if (!metadata) {
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] No metadata for violation handler, skipping`,
             );
             return;
@@ -866,7 +872,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Check restart attempts
         metadata.restartAttempts = (metadata.restartAttempts ?? 0) + 1;
         if (metadata.restartAttempts > this.MAX_PAROLE_RESTART_ATTEMPTS) {
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Max restart attempts exceeded for ${character.MemberNumber}`,
             );
             this.whisper(
@@ -886,7 +892,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return;
         }
 
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Parole violation (${reason}) for ${character.MemberNumber}, attempt ${metadata.restartAttempts}/${this.MAX_PAROLE_RESTART_ATTEMPTS}`,
         );
 
@@ -993,7 +999,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 `parole_violation_${restartAttempt}_restarted`,
             );
         } catch (e) {
-            console.error(`[ReleaseSystem] Error during restart sequence:`, e);
+            this.logger?.error(
+                `[ReleaseSystem] Error during restart sequence:`,
+                e,
+            );
             this.whisper(
                 character,
                 "An error occurred during restart. Release cancelled.",
@@ -1015,7 +1024,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private async stripNonOwnerItems(
         character: API_Character,
     ): Promise<RemovedBondageItem[]> {
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] stripNonOwnerItems: Removing unlocked items only`,
         );
 
@@ -1054,13 +1063,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             if (isOwnerLocked) {
                 ownerLockedItems.push(bondageItem);
-                console.log(
+                this.logger?.info(
                     `[ReleaseSystem] Preserving owner-locked item: ${item.Name} (lock: ${item.Property.Lock})`,
                 );
             } else if (isCosplay(item)) {
                 // Preserve cosmetic and cosplay items using actual BC asset definitions
                 preservedCosplayItems.push(bondageItem);
-                console.log(
+                this.logger?.info(
                     `[ReleaseSystem] Preserving cosmetic/cosplay item: ${item.Name} (group: ${item.Group})`,
                 );
             } else {
@@ -1077,7 +1086,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 false, // stripLocked: false since no locks on clothing
             );
         } catch (e) {
-            console.error(`[ReleaseSystem] Error during clothing strip:`, e);
+            this.logger?.error(
+                `[ReleaseSystem] Error during clothing strip:`,
+                e,
+            );
             // Fallback to instant strip
             character.Appearance.stripBulk(
                 { clothing: true, item: false },
@@ -1090,7 +1102,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Remove unlocked bondage items individually and slowly
         // This avoids both WCE detection and any interference with owner-locked items
         if (removedItems.length > 0) {
-            console.log(
+            this.logger?.info(
                 `[ReleaseSystem] Removing ${removedItems.length} unlocked bondage items`,
             );
 
@@ -1099,12 +1111,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     const asset = AssetGet("Female3DCG", item.group, item.name);
                     if (asset) {
                         character.Appearance.RemoveItem(asset);
-                        console.log(
+                        this.logger?.info(
                             `[ReleaseSystem] Removed unlocked item: ${item.name}`,
                         );
                     }
                 } catch (e) {
-                    console.error(
+                    this.logger?.error(
                         `[ReleaseSystem] Error removing item ${item.name}:`,
                         e,
                     );
@@ -1114,7 +1126,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Strip summary: removed ${removedItems.length} clothing/bondage items, preserved ${ownerLockedItems.length} owner-locked + ${preservedCosplayItems.length} cosmetic items`,
         );
 
@@ -1157,7 +1169,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             return { success: 0, failed: 0 };
         }
 
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Restoring ${paroleState.removedBondageItems.length} items`,
         );
 
@@ -1169,7 +1181,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             try {
                 const asset = AssetGet(item.group);
                 if (!asset) {
-                    console.log(
+                    this.logger?.info(
                         `[ReleaseSystem] Asset not found for ${item.group}`,
                     );
                     failedItems.push(item);
@@ -1181,7 +1193,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 successCount++;
                 await wait(50);
             } catch (e) {
-                console.error(
+                this.logger?.error(
                     `[ReleaseSystem] Error restoring ${item.name}:`,
                     e,
                 );
@@ -1192,13 +1204,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         await wait(100);
 
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Item restoration complete: ${successCount} success, ${failedCount} failed`,
         );
 
         // Log failed items for admin recovery
         if (failedItems.length > 0) {
-            console.warn(
+            this.logger?.warn(
                 `[ReleaseSystem] Failed to restore items, manual intervention may be needed:`,
                 failedItems,
             );
@@ -1272,7 +1284,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const maxWaitMs = 60 * 1000;
         const startTime = Date.now();
 
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Stage 6b: Waiting for character to leave punishment room`,
         );
 
@@ -1281,13 +1293,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 character.MapPos.X !== punishmentRoomPos.X ||
                 character.MapPos.Y !== punishmentRoomPos.Y
             ) {
-                console.log(`[ReleaseSystem] Character left punishment room`);
+                this.logger?.info(
+                    `[ReleaseSystem] Character left punishment room`,
+                );
                 return;
             }
             await wait(500);
         }
 
-        console.log(
+        this.logger?.info(
             `[ReleaseSystem] Character did not leave punishment room within timeout`,
         );
     }
@@ -1596,7 +1610,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         if (this.paroleMonitoringInterval) {
             clearInterval(this.paroleMonitoringInterval);
             this.paroleMonitoringInterval = undefined;
-            console.log(`[ReleaseSystem] Stopped parole monitoring`);
+            this.logger?.info(`[ReleaseSystem] Stopped parole monitoring`);
         }
     }
 
@@ -1667,7 +1681,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             try {
                 await this.enforceParoleNudity(character);
             } catch (e) {
-                console.error(`[ReleaseSystem] Enforcement error:`, e);
+                this.logger?.error(`[ReleaseSystem] Enforcement error:`, e);
             }
         }
     }
@@ -1676,7 +1690,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
     public async shutdown(): Promise<void> {
         this.stopParoleMonitoring();
-        console.log(`[ReleaseSystem] Shutdown complete`);
+        this.logger?.info(`[ReleaseSystem] Shutdown complete`);
     }
 
     private handleRelease = async (character: API_Character): Promise<void> => {

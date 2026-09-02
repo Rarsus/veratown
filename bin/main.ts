@@ -32,6 +32,8 @@ import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
+import { initializeLoggingFromEnv, LoggerRegistry } from "./logging";
+import { createLogger } from "./logging";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -75,20 +77,23 @@ function parseJsonArray(
     value: string | undefined,
     fieldName: string,
 ): any[] | undefined {
+    const logger = createLogger("Config");
     if (!value) return undefined;
     try {
         const parsed = JSON.parse(value);
         if (!Array.isArray(parsed)) {
-            console.warn(
-                `[Config] ${fieldName} is not a valid JSON array, ignoring`,
-            );
+            logger.warn(`${fieldName} is not a valid JSON array, ignoring`, {
+                field: fieldName,
+                value,
+            });
             return undefined;
         }
         return parsed;
-    } catch {
-        console.warn(
-            `[Config] Failed to parse ${fieldName} as JSON array: ${value}`,
-        );
+    } catch (error) {
+        logger.warn(`Failed to parse ${fieldName} as JSON array`, error, {
+            field: fieldName,
+            value,
+        });
         return undefined;
     }
 }
@@ -101,6 +106,7 @@ function parseJsonArray(
  * Priority: env vars > config.json > defaults
  */
 async function loadConfig(configFilePath: string): Promise<ConfigFile> {
+    const logger = createLogger("Config");
     let fileConfig: any = {};
 
     // Try to load config from file if it exists
@@ -108,16 +114,18 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         try {
             const configString = await readFile(configFilePath, "utf-8");
             fileConfig = JSON.parse(configString);
-            console.log(`[Config] Loaded from file: ${configFilePath}`);
+            logger.info("Loaded from file", { path: configFilePath });
         } catch (err) {
-            console.warn(
-                `[Config] Failed to read ${configFilePath}, using environment variables`,
+            logger.warn(
+                "Failed to read config file, using environment variables",
+                err,
+                { path: configFilePath },
             );
         }
     } else {
-        console.log(
-            `[Config] No config file found at ${configFilePath}, using environment variables`,
-        );
+        logger.info("No config file found, using environment variables", {
+            path: configFilePath,
+        });
     }
 
     // Start with file config as base
@@ -206,18 +214,15 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     // ============================================================================
     // CONFIGURATION LOGGING (for debugging)
     // ============================================================================
-    console.log("[Config] Configuration sources:");
-    console.log(`  - Bot: ${config.user || "<missing>"}`);
-    console.log(`  - Game: ${config.game || "<missing>"}`);
-    console.log(
-        `  - MongoDB: ${config.mongo_uri ? "configured" : "<missing>"}`,
-    );
-    console.log(`  - Environment: ${config.env || "live"}`);
-    console.log(`  - Room: ${config.room?.Name || "<default>"}`);
-    if (config.superusers?.length)
-        console.log(`  - Superusers: ${config.superusers.length} configured`);
-    if (config.room?.Admin?.length)
-        console.log(`  - Room admins: ${config.room.Admin.length} configured`);
+    logger.info("Configuration loaded successfully", {
+        bot: config.user || "<missing>",
+        game: config.game || "<missing>",
+        mongoDb: config.mongo_uri ? "configured" : "<missing>",
+        environment: config.env || "live",
+        room: config.room?.Name || "<default>",
+        superusersCount: config.superusers?.length || 0,
+        roomAdminsCount: config.room?.Admin?.length || 0,
+    });
 
     return config as ConfigFile;
 }
@@ -242,11 +247,13 @@ let shutdownPromise: Promise<void> | undefined;
 async function shutdown(): Promise<void> {
     if (shutdownPromise) return shutdownPromise;
 
+    const logger = LoggerRegistry.getAppLogger();
+
     shutdownPromise = (async () => {
-        console.log("Shutting down bot connections and database...");
+        logger.info("Shutting down bot connections and database");
         await closeBotConnections(activeConnections);
         await activeDatabase?.close();
-        console.log("Shutdown complete.");
+        logger.info("Shutdown complete");
     })();
 
     return shutdownPromise;
@@ -257,16 +264,17 @@ async function startConfiguredGame({
     connections,
     db,
 }: BootstrapContext): Promise<void> {
+    const logger = LoggerRegistry.getAppLogger();
     const main = connections.main;
 
     switch (config.game) {
         case undefined:
         case "veratown": {
-            console.log("Starting game: Veratown (primary entry point)");
+            logger.info("Starting game: Veratown (primary entry point)");
 
             if (!db) {
-                console.log(
-                    "mongo_uri/mongo_db must be configured to run Veratown; exiting.",
+                logger.fatal(
+                    "mongo_uri/mongo_db must be configured to run Veratown",
                 );
                 process.exit(1);
             }
@@ -275,7 +283,7 @@ async function startConfiguredGame({
             if (!global.unifiedCharacterStore) {
                 const unifiedStore = new UnifiedCharacterStore(db);
                 global.unifiedCharacterStore = unifiedStore;
-                console.log("✅ UnifiedCharacterStore initialized");
+                logger.info("UnifiedCharacterStore initialized");
             }
 
             main.accountUpdate({ Nickname: "Veratown Bot" });
@@ -287,8 +295,8 @@ async function startConfiguredGame({
             if (!global.casinoVenueSystem) {
                 const venueSystem = new CasinoVenueSystem();
                 global.casinoVenueSystem = venueSystem;
-                console.log(
-                    "✅ CasinoVenueSystem initialized (location bonuses, EPIC 2)",
+                logger.info(
+                    "CasinoVenueSystem initialized (location bonuses, EPIC 2)",
                 );
             }
 
@@ -299,8 +307,8 @@ async function startConfiguredGame({
                     global.casinoVenueSystem,
                 );
                 global.casinoEngine = casinoEngine;
-                console.log(
-                    "✅ CasinoEngine initialized (game logic extraction, EPIC 2)",
+                logger.info(
+                    "CasinoEngine initialized (game logic extraction, EPIC 2)",
                 );
             }
 
@@ -310,7 +318,7 @@ async function startConfiguredGame({
                     global.unifiedCharacterStore,
                 );
                 global.crossSystemSubscribers = subscribers;
-                console.log("✅ CrossSystemSubscribers initialized");
+                logger.info("CrossSystemSubscribers initialized");
             }
 
             // Initialize and start Veratown with integrated plugins
@@ -325,19 +333,19 @@ async function startConfiguredGame({
             // Phase 5: Activate event subscriptions after systems are ready
             if (global.crossSystemSubscribers) {
                 await global.crossSystemSubscribers.initialize();
-                console.log("✅ Cross-system event subscriptions activated");
+                logger.info("Cross-system event subscriptions activated");
             }
 
-            console.log(
-                "✅ Phase 5 adapter cleanup complete - 100% unified architecture",
+            logger.info(
+                "Phase 5 adapter cleanup complete - 100% unified architecture",
             );
-            console.log("   All systems use UnifiedCharacterStore directly");
+            logger.info("All systems use UnifiedCharacterStore directly");
 
             main.setBotDescription(Veratown.description);
             return;
         }
         case "kidnappers": {
-            console.log("Starting game: Kidnappers (legacy)");
+            logger.info("Starting game: Kidnappers (legacy)");
             const game = new KidnappersGameRoom(main, config);
             main.accountUpdate({ Nickname: "Kidnappers Bot" });
             main.setBotDescription(KidnappersGameRoom.description);
@@ -345,16 +353,16 @@ async function startConfiguredGame({
             return;
         }
         case "roleplay": {
-            console.log("Starting game: Roleplay challenge (legacy)");
+            logger.info("Starting game: Roleplay challenge (legacy)");
             const game = new RoleplaychallengeGameRoom(main, config);
             main.setBotDescription(RoleplaychallengeGameRoom.description);
             main.startBot(game);
             return;
         }
         case "maidspartynight": {
-            console.log("Starting game: Maid's Party Night (legacy)");
+            logger.info("Starting game: Maid's Party Night (legacy)");
             if (!connections.secondary) {
-                console.log("Need user2 and password2 for Maid's Party Night");
+                logger.fatal("Need user2 and password2 for Maid's Party Night");
                 process.exit(1);
             }
             const game = new MaidsPartyNightSinglePlayerAdventure(
@@ -365,19 +373,27 @@ async function startConfiguredGame({
             return;
         }
         default:
-            console.log("No such game " + config.game);
+            logger.fatal("No such game configured", undefined, {
+                game: config.game,
+            });
             process.exit(1);
     }
 }
 
 export async function startBot(): Promise<RopeyBot> {
+    // Initialize logging as first operation
+    initializeLoggingFromEnv();
+    const logger = LoggerRegistry.getAppLogger();
+
+    logger.info("Bot startup initiated");
+
     process.once("SIGINT", () => {
-        console.log("SIGINT received, exiting");
+        logger.info("SIGINT received, shutting down gracefully");
         void shutdown().then(() => process.exit(0));
     });
 
     process.once("SIGTERM", () => {
-        console.log("SIGTERM received, exiting");
+        logger.info("SIGTERM received, shutting down gracefully");
         void shutdown().then(() => process.exit(0));
     });
 
@@ -389,11 +405,15 @@ export async function startBot(): Promise<RopeyBot> {
     // modern Node. Logging and continuing means one buggy feature/game
     // can't take the entire bot offline.
     process.on("unhandledRejection", (reason) => {
-        console.error("Unhandled promise rejection", reason);
+        logger.error(
+            "Unhandled promise rejection",
+            reason instanceof Error ? reason : undefined,
+            { rejection: String(reason) },
+        );
     });
 
     process.on("uncaughtException", (err) => {
-        console.error("Uncaught exception", err);
+        logger.fatal("Uncaught exception", err);
     });
 
     const cfgFile = process.argv[2] ?? "./config.json";
@@ -402,7 +422,7 @@ export async function startBot(): Promise<RopeyBot> {
     const serverUrl = config.url ?? SERVER_URL[config.env];
 
     if (!serverUrl) {
-        console.log("env must be live or test");
+        logger.fatal("env must be live or test");
         process.exit(1);
     }
 
@@ -423,15 +443,23 @@ export async function startBot(): Promise<RopeyBot> {
 
 async function main() {
     const { game } = await startBot();
+    const logger = LoggerRegistry.getAppLogger();
 
     if (!game) {
-        console.error("No game specified!");
+        logger.fatal("No game specified!");
         process.exit(1);
     }
 }
 
 main().catch(async (e) => {
-    console.error(e);
+    const logger = LoggerRegistry.getAppLogger();
+    logger.fatal(
+        "Application startup failed",
+        e instanceof Error ? e : undefined,
+        {
+            error: String(e),
+        },
+    );
     await shutdown();
     process.exit(1);
 });

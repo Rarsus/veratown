@@ -34,7 +34,7 @@ import {
 } from "./casino/forfeits";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
-import { createSystemLogger } from "./veratown/shared";
+import { createLogger } from "../logging";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 
 // Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
@@ -239,7 +239,7 @@ Game Overview
     private region?: MapRegion;
     private dareRegion?: MapRegion;
     private configuredRegion?: MapRegion;
-    private readonly logger = createSystemLogger("Dare");
+    private readonly logger = createLogger("Dare");
     private commandValidator = new CommandValidator();
 
     // Epic 1.2 Managers (Feature 1.2.7 Integration)

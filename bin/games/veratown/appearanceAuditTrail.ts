@@ -13,7 +13,7 @@
 
 import { Collection, Db } from "mongodb";
 import { BC_AppearanceItem } from "bc-bot";
-import { createSystemLogger } from "./shared";
+import { createLogger } from "../../logging";
 
 export interface AppearanceChange {
     timestamp: number;
@@ -45,7 +45,7 @@ const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 export class AppearanceAuditTrail {
     private collection: Collection<AppearanceAuditLog>;
     private inited = false;
-    private readonly logger = createSystemLogger("AppearanceAuditTrail");
+    private readonly logger = createLogger("AppearanceAuditTrail");
 
     public constructor(private db: Db) {
         this.collection = this.db.collection<AppearanceAuditLog>(

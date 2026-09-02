@@ -13,7 +13,7 @@
 
 import { Collection, Db } from "mongodb";
 import { API_Connector, API_Character } from "bc-bot";
-import { createSystemLogger } from "./shared";
+import { createLogger } from "../../logging";
 
 export interface FurnitureInteractionCallback {
     (
@@ -46,7 +46,7 @@ export class FurnitureInteractionSystem {
     private collection: Collection<FurnitureState>;
     private interactions = new Map<string, FurnitureInteraction[]>();
     private inited = false;
-    private readonly logger = createSystemLogger("FurnitureInteractionSystem");
+    private readonly logger = createLogger("FurnitureInteractionSystem");
 
     public constructor(
         private db: Db,

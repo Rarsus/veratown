@@ -13,7 +13,7 @@
  */
 
 import { Db } from "mongodb";
-import { createSystemLogger } from "../shared";
+import { createLogger } from "../../../logging";
 import { KeypadCollectionSetup } from "./keypadCollectionSetup";
 import { KeypadBackwardCompatibility } from "./keypadBackwardCompatibility";
 import { KeypadDefinitionService } from "../services/keypadDefinitionService";
@@ -87,7 +87,7 @@ import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
  *   console.log(result);
  */
 export class KeypadDataMigrator {
-    private readonly logger = createSystemLogger("KeypadDataMigrator");
+    private readonly logger = createLogger("KeypadDataMigrator");
 
     constructor(
         private db: Db,

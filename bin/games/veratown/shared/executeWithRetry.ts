@@ -11,7 +11,11 @@
  *   );
  */
 
+import { createLogger } from "../../../logging";
+
 import { wait } from "../../../hub/utils"; // Adjust path as needed
+
+const logger = createLogger("executeWithRetry");
 
 /**
  * Configuration for retry behavior
@@ -62,7 +66,7 @@ export async function executeWithRetry<T>(
                     opts.initialDelayMs *
                     Math.pow(opts.backoffMultiplier, attempt - 1);
 
-                console.warn(
+                logger.warn(
                     `[RetryExecutor] ${operationName} failed (attempt ${attempt}/${opts.maxRetries + 1}), retrying in ${backoffMs}ms:`,
                     lastError.message,
                 );
@@ -74,7 +78,7 @@ export async function executeWithRetry<T>(
     }
 
     // All attempts exhausted
-    console.error(
+    logger.error(
         `[RetryExecutor] ${operationName} failed after ${opts.maxRetries + 1} attempts:`,
         lastError?.message,
     );

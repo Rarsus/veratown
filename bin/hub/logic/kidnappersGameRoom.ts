@@ -10,6 +10,8 @@ import {
     AssetGet,
     BC_Server_ChatRoomMessage,
 } from "bc-bot";
+import { createLogger } from "../../logging";
+
 
 import promClient from "prom-client";
 
@@ -2388,7 +2390,7 @@ https://github.com/FriendsOfBC/ropeybot
                 p.MemberNumber !== this.fan?.MemberNumber &&
                 this.persistent_copy_of_kidnappers.has(p)
             ) {
-                console.log(`Freeing ${p}`);
+                this.logger?.info(`Freeing ${p}`);
                 this.freePlayerInItemSlots(p, listOfUsedItemGroups);
             }
         }

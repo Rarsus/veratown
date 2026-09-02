@@ -9,6 +9,8 @@
  *   await monitor.run(character, async () => { ... });
  */
 
+import { createLogger } from "../../../logging";
+
 export interface IdempotentMonitorOptions {
     logDetails?: boolean;
 }
@@ -17,6 +19,7 @@ export interface IdempotentMonitorOptions {
  * Generic idempotent monitor for preventing concurrent execution
  */
 export class IdempotentMonitor<T> {
+    private readonly logger = createLogger("IdempotentMonitor");
     private readonly activeMonitors = new Set<number>();
     private readonly systemName: string;
     private readonly logDetails: boolean;
@@ -65,7 +68,7 @@ export class IdempotentMonitor<T> {
             this.log(`Monitor completed for ${key}`);
             return result;
         } catch (error) {
-            console.error(
+            this.logger?.error(
                 `[${this.systemName}] Monitor failed for ${key}:`,
                 error,
             );
@@ -108,7 +111,7 @@ export class IdempotentMonitor<T> {
 
     private log(message: string): void {
         if (this.logDetails) {
-            console.log(`[${this.systemName}] ${message}`);
+            this.logger?.info(`[${this.systemName}] ${message}`);
         }
     }
 }

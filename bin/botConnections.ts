@@ -2,6 +2,7 @@ import { API_Connector } from "bc-bot";
 import { Db, MongoClient } from "mongodb";
 import { ConfigFile } from "./config";
 import { GAME_MISTRESS_POSITION, VeratownConnections } from "./games/veratown";
+import { createLogger } from "./logging";
 
 export interface BotConnections extends VeratownConnections {
     secondary?: API_Connector;
@@ -15,6 +16,7 @@ export interface DatabaseConnection {
 async function connectDatabase(
     config: ConfigFile,
 ): Promise<DatabaseConnection | undefined> {
+    const logger = createLogger("Database");
     if (!config.mongo_uri || !config.mongo_db) return undefined;
 
     const useTls = config.mongo_tls ?? true;
@@ -23,18 +25,24 @@ async function connectDatabase(
         tls: useTls,
     });
     try {
-        console.log("Connecting to mongo...");
+        logger.info("Connecting to MongoDB", {
+            database: config.mongo_db,
+            tls: useTls,
+        });
         await mongoClient.connect();
-        console.log("...connected!");
+        logger.info("Connected to MongoDB");
 
         const db = mongoClient.db(config.mongo_db);
         await db.command({ ping: 1 });
-        console.log("...ping successful!");
+        logger.info("MongoDB ping successful");
         return {
             db,
             close: () => mongoClient.close(),
         };
     } catch (error) {
+        logger.error("Failed to connect to MongoDB", error, {
+            database: config.mongo_db,
+        });
         await mongoClient.close();
         throw error;
     }
@@ -66,7 +74,9 @@ async function waitForConnectionStability(
     connection: API_Connector,
     maxWaitMs: number = 5000,
 ): Promise<void> {
+    const logger = createLogger("BotConnection");
     const startTime = Date.now();
+    const botName = connection.Player?.Name || "<unknown>";
 
     while (Date.now() - startTime < maxWaitMs) {
         try {
@@ -77,26 +87,35 @@ async function waitForConnectionStability(
             }
 
             // Connection is stable
+            logger.debug("Connection stable", { bot: botName });
             return;
         } catch {
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
     }
 
-    console.warn(
-        `Connection for ${connection.Player?.Name} did not stabilize within ${maxWaitMs}ms, proceeding anyway`,
-    );
+    logger.warn("Connection did not stabilize in time, proceeding anyway", {
+        bot: botName,
+        maxWaitMs,
+    });
 }
 
 export function validateBotAccountConfiguration(config: ConfigFile): void {
+    const logger = createLogger("BotConfiguration");
     const accountRoles = new Map<string, string>();
     for (const account of getBotAccountRoles(config)) {
         const normalizedUsername = account.username.trim().toLowerCase();
         const previousRole = accountRoles.get(normalizedUsername);
         if (previousRole) {
-            throw new Error(
+            const error = new Error(
                 `Bot account "${account.username}" is configured for both ${previousRole} and ${account.role}; each logged-in bot role must use a different account.`,
             );
+            logger.error("Account configuration conflict", error, {
+                account: account.username,
+                newRole: account.role,
+                previousRole,
+            });
+            throw error;
         }
         accountRoles.set(normalizedUsername, account.role);
     }
@@ -127,16 +146,22 @@ function ensureBotIsRoomAdmin(
     adminConn: API_Connector,
     botConn: API_Connector,
 ): void {
+    const logger = createLogger("RoomAdmin");
+
     if (!adminConn.Player.IsRoomAdmin()) {
-        console.log(
-            `${adminConn.Player.Name} isn't a room admin, so it can't promote ${botConn.Player.Name} to admin; a human admin will need to do this manually.`,
-        );
+        logger.info("Admin cannot promote bot - not a room admin", {
+            admin: adminConn.Player.Name,
+            bot: botConn.Player.Name,
+        });
         return;
     }
 
     if (botConn.Player.IsRoomAdmin()) return;
 
-    console.log(`Promoting ${botConn.Player.Name} to room admin.`);
+    logger.info("Promoting bot to room admin", {
+        bot: botConn.Player.Name,
+        memberNumber: botConn.Player.MemberNumber,
+    });
     adminConn.chatRoom!.promoteAdmin(botConn.Player.MemberNumber);
 }
 
@@ -145,9 +170,10 @@ export async function createBotConnections(
     config: ConfigFile,
     database?: DatabaseConnection,
 ): Promise<BotConnections> {
+    const logger = createLogger("BotConnections");
     validateBotAccountConfiguration(config);
 
-    console.log(`[Startup] Creating main bot connection...`);
+    logger.info("Creating main bot connection");
     const main = await connectBotAccount(
         serverUrl,
         config,
@@ -155,12 +181,15 @@ export async function createBotConnections(
         config.password,
         true,
     );
-    console.log(`[Startup] Main connection established: ${main.Player.Name}`);
+    logger.info("Main connection established", {
+        bot: main.Player.Name,
+        memberId: main.Player.MemberNumber,
+    });
 
     if (!main.Player.IsRoomAdmin()) {
-        console.log(
-            `${main.Player.Name} isn't a room admin; some admin-only bot commands and any other bot accounts won't work until a human admin promotes it manually.`,
-        );
+        logger.warn("Bot is not a room admin - some commands may not work", {
+            bot: main.Player.Name,
+        });
     }
 
     const connections: BotConnections = { main };
@@ -169,7 +198,7 @@ export async function createBotConnections(
         if (!config.user2 || !config.password2) {
             throw new Error("Need user2/password2 for Maid's Party Night");
         }
-        console.log(`[Startup] Creating secondary connection...`);
+        logger.info("Creating secondary connection");
         // Wait a moment before creating the next connection
         await new Promise((resolve) => setTimeout(resolve, 1000));
         connections.secondary = await connectBotAccount(
@@ -179,15 +208,16 @@ export async function createBotConnections(
             config.password2,
             false,
         );
-        console.log(
-            `[Startup] Secondary connection established: ${connections.secondary.Player.Name}`,
-        );
+        logger.info("Secondary connection established", {
+            bot: connections.secondary.Player.Name,
+            memberId: connections.secondary.Player.MemberNumber,
+        });
     }
 
     if (config.game !== "veratown") return connections;
 
     if (config.user2 && config.password2) {
-        console.log(`[Startup] Creating shower connection...`);
+        logger.info("Creating shower connection");
         // Wait a moment before creating the next connection
         await new Promise((resolve) => setTimeout(resolve, 1000));
         connections.shower = await connectBotAccount(
@@ -197,23 +227,22 @@ export async function createBotConnections(
             config.password2,
             true,
         );
-        console.log(
-            `[Startup] Shower connection established: ${connections.shower.Player.Name}`,
-        );
+        logger.info("Shower connection established", {
+            bot: connections.shower.Player.Name,
+            memberId: connections.shower.Player.MemberNumber,
+        });
         ensureBotIsRoomAdmin(main, connections.shower);
     } else {
-        console.log(
-            "No user2/password2 configured; the shower role will use the main bot connection.",
+        logger.info(
+            "No user2/password2 configured - shower role will use main bot",
         );
     }
 
     if (config.user3 && config.password3) {
         if (!database) {
-            console.log(
-                "mongo_uri/mongo_db must be configured to run the casino feature; skipping.",
-            );
+            logger.warn("MongoDB not configured - casino feature disabled");
         } else {
-            console.log(`[Startup] Creating casino connection...`);
+            logger.info("Creating casino connection");
             // Wait a moment before creating the next connection
             await new Promise((resolve) => setTimeout(resolve, 1000));
             connections.casino = await connectBotAccount(
@@ -223,9 +252,10 @@ export async function createBotConnections(
                 config.password3,
                 true,
             );
-            console.log(
-                `[Startup] Casino connection established: ${connections.casino.Player.Name}`,
-            );
+            logger.info("Casino connection established", {
+                bot: connections.casino.Player.Name,
+                memberId: connections.casino.Player.MemberNumber,
+            });
             ensureBotIsRoomAdmin(main, connections.casino);
             connections.casino.moveOnMap(
                 GAME_MISTRESS_POSITION.X,
@@ -233,16 +263,15 @@ export async function createBotConnections(
             );
         }
     } else {
-        console.log(
-            "No user3/password3 configured; the casino role is unavailable.",
-        );
+        logger.info("No user3/password3 configured - casino feature disabled");
     }
 
-    console.log(
-        `[Startup] Bot roles active: main=${connections.main.Player.Name}, ` +
-            `shower=${connections.shower?.Player.Name ?? "main (fallback)"}, ` +
-            `casino=${connections.casino?.Player.Name ?? "disabled"}`,
-    );
+    logger.info("All bot roles active", {
+        main: connections.main.Player.Name,
+        shower: connections.shower?.Player.Name ?? "main (fallback)",
+        casino: connections.casino?.Player.Name ?? "disabled",
+        secondary: connections.secondary?.Player.Name,
+    });
 
     return connections;
 }
@@ -250,8 +279,10 @@ export async function createBotConnections(
 export async function closeBotConnections(
     connections: BotConnections | undefined,
 ): Promise<void> {
+    const logger = createLogger("BotConnections");
     if (!connections) return;
 
+    logger.info("Closing bot connections");
     const uniqueConnections = new Set<API_Connector>([
         connections.main,
         connections.shower,
@@ -260,6 +291,10 @@ export async function closeBotConnections(
     ]);
     for (const connection of uniqueConnections) {
         if (connection) {
+            logger.debug("Disconnecting bot", {
+                bot: connection.Player?.Name,
+                memberId: connection.Player?.MemberNumber,
+            });
             connection.disconnect();
         }
     }

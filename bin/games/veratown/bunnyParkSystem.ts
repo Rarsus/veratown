@@ -25,7 +25,8 @@ import {
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
-import { createSystemLogger } from "./shared/systemLogger";
+
+import { createLogger } from "../../logging";
 
 // Owns the bunny park: warns visitors on entry, then punishes anyone who
 // steps on one of the protected bunnies with a randomly-chosen rope
@@ -35,6 +36,7 @@ import { createSystemLogger } from "./shared/systemLogger";
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(bunnyPos, \"Emote\", `*A fluffy bunny hops away*`);
 export class BunnyParkSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("BunnyParkSystem");
     public readonly key = "bunnyPark";
     public readonly label = "Bunny park";
     public enabled = true;
@@ -45,8 +47,6 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
     private readonly parkTrigger: ReturnType<typeof guardHandler>;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("BunnyParkSystem");
-    private readonly logger = createSystemLogger("BunnyParkSystem");
-
     public constructor(private conn: API_Connector) {
         this.bunnyTrigger = guardHandler(this.key, this.onCharacterStepOnBunny);
         this.parkTrigger = guardHandler(this.key, this.onCharacterEnterPark);
@@ -104,11 +104,11 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
                 );
             }
 
-            console.log(
+            this.logger?.info(
                 `[BunnyParkSystem] Loaded ${this.bunnyPositions.length} bunny location(s) and park region`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[BunnyParkSystem] Unexpected error during initialization",
                 e,
             );

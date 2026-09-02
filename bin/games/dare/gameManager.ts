@@ -13,7 +13,7 @@
  */
 
 import { GameTimer } from "../casino/gameTimer";
-import { createSystemLogger } from "../veratown/shared";
+import { createLogger } from "../../logging";
 
 /**
  * Represents a single running dare game.
@@ -58,7 +58,7 @@ export class GameManager {
     private games = new Map<number, Game>();
     private playerGame = new Map<number, number>();
     private nextGameId = 1;
-    private readonly logger = createSystemLogger("GameManager");
+    private readonly logger = createLogger("GameManager");
 
     /**
      * Create a new game with the given player roster.

@@ -12,7 +12,7 @@
  */
 
 import { Collection, Db } from "mongodb";
-import { createSystemLogger } from "./shared";
+import { createLogger } from "../../logging";
 
 export interface KeypadAccessGroupConfig {
     doorKey: string; // Unique door identifier (e.g., "door_20_10")
@@ -34,7 +34,7 @@ export interface KeypadDoorAccessGroups {
 export class KeypadAccessGroupManager {
     private collection: Collection<KeypadDoorAccessGroups>;
     private inited = false;
-    private readonly logger = createSystemLogger("KeypadAccessGroupManager");
+    private readonly logger = createLogger("KeypadAccessGroupManager");
 
     public constructor(private db: Db) {
         this.collection =

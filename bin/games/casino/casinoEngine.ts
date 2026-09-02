@@ -19,7 +19,7 @@
 
 import { UnifiedCharacterStore, GameEvent } from "./unifiedCharacterStore";
 import { CasinoVenueSystem } from "./casinoVenueSystem";
-import { createSystemLogger } from "../veratown/shared/systemLogger";
+import { createLogger } from "../../logging";
 import { MapRegion } from "bc-bot";
 
 export interface BetContext {
@@ -48,7 +48,7 @@ export interface GameOutcome {
  * Phase 5: Direct UnifiedCharacterStore access (no adapters)
  */
 export class CasinoEngine {
-    private readonly logger = createSystemLogger("CasinoEngine");
+    private readonly logger = createLogger("CasinoEngine");
 
     constructor(
         private unifiedStore: UnifiedCharacterStore,

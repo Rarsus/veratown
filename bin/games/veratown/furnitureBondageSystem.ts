@@ -16,7 +16,9 @@ import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
-import { createIdempotentMonitor, createSystemLogger } from "./shared";
+import { createIdempotentMonitor } from "./shared";
+import { createLogger } from "../../logging";
+import { createLogger } from "../../logging";
 
 interface BondageRestraint {
     group: string;
@@ -81,6 +83,7 @@ interface CharacterTimerState {
 }
 
 export class FurnitureBondageSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("FurnitureBondageSystem");
     public readonly key = "furnitureBondage";
     public readonly label = "Bondage furniture";
     public enabled = true;
@@ -94,7 +97,6 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
     private monitor = createIdempotentMonitor<API_Character>(
         "FurnitureBondageSystem",
     );
-    private logger = createSystemLogger("FurnitureBondageSystem");
 
     public constructor(private conn: API_Connector) {
         this.furnitureTrigger = guardHandler(
@@ -190,11 +192,11 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 );
             }
 
-            console.log(
+            this.logger?.info(
                 `[FurnitureBondageSystem] Loaded ${this.tiles.length} furniture bondage location(s)`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[FurnitureBondageSystem] Unexpected error during initialization",
                 e,
             );
@@ -211,7 +213,7 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 ? data.furnitureAsset
                 : undefined;
         if (!furnitureAsset) {
-            console.warn(
+            this.logger?.warn(
                 `[FurnitureBondageSystem] Location ${location.key} missing furnitureAsset`,
             );
             return null;
@@ -433,7 +435,7 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 item?.SetColor(restraint.color as any);
             }
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 `[FurnitureBondageSystem] Failed to apply restraint ${restraint.group}/${restraint.asset}:`,
                 e,
             );
@@ -470,7 +472,7 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
                 `(Your time with the ${config.furnitureAsset} has ended. Restraints removed.)`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[FurnitureBondageSystem] Error removing restraints:",
                 e,
             );

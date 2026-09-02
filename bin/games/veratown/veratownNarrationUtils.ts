@@ -13,11 +13,11 @@
  */
 
 import { API_Connector } from "bc-bot";
-import { createSystemLogger } from "./shared/systemLogger";
+import { createLogger } from "../../logging";
 
 type ChatRoomMapPos = { X: number; Y: number };
 
-const logger = createSystemLogger("NarratorUtils");
+const logger = createLogger("NarratorUtils");
 
 /**
  * Veratown Narration Utilities (Phase 3.5 Enhanced)

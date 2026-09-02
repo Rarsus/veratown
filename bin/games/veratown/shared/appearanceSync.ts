@@ -9,7 +9,11 @@
  *   const item = getAppearanceItem(character, "ItemDevices");
  */
 
+import { createLogger } from "../../../logging";
+
 import { wait } from "../../../hub/utils"; // Adjust path as needed
+
+const logger = createLogger("appearanceSync");
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 
@@ -34,7 +38,7 @@ export async function syncAppearanceMutation(
             await wait(delayMs);
         }
     } catch (error) {
-        console.error(
+        logger.error(
             `[AppearanceSync] Failed to sync appearance for ${character.MemberNumber}:`,
             error,
         );
@@ -125,7 +129,7 @@ export function getAppearanceBundle(
         refreshAppearance(character);
         return character.Appearance.MakeAppearanceBundle();
     } catch (error) {
-        console.error(
+        logger.error(
             `[AppearanceSync] Failed to get appearance bundle for ${character.MemberNumber}:`,
             error,
         );

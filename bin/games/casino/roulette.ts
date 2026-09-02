@@ -28,6 +28,8 @@ import { BetValidator } from "./betValidator";
 import { GameTimer } from "./gameTimer";
 import { CommandValidator } from "../shared/commandValidator";
 
+import { createLogger } from "../../logging";
+
 const ROULETTECOMMANDMESSAGE = `
 Available commands:
 /bot bet red <amount> - Bet on red. Odds: 1:1.
@@ -133,6 +135,7 @@ export const rouletteColors: Color[] = [
 ];
 
 export class RouletteGame implements Game {
+    private readonly logger = createLogger("RouletteGame");
     private bets: RouletteBet[] = [];
 
     private willSpinAt: number | undefined;
@@ -197,7 +200,7 @@ export class RouletteGame implements Game {
             this.casino.setTextColor("#ffffff");
 
             this.casino.setBio().catch((e) => {
-                console.error("Failed to set bio.", e);
+                this.logger?.error("Failed to set bio.", e);
             });
 
             this.conn.Player.setScriptPermissions(true, false);
@@ -425,7 +428,7 @@ export class RouletteGame implements Game {
                 FORFEITS[bet.stakeForfeit].items(sender),
             );
             if (blockers.length > 0) {
-                console.log(
+                this.logger?.info(
                     `Blocked forfeit bet of ${bet.stakeForfeit} with blockers `,
                     blockers,
                 );
@@ -470,7 +473,7 @@ export class RouletteGame implements Game {
                     .get(sender.MemberNumber)
                     ?.get(forfeitItem.Group)
             ) {
-                console.log(
+                this.logger?.info(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );
 
@@ -629,7 +632,7 @@ export class RouletteGame implements Game {
 
             this.spinTimer.clear();
             this.spinWheel().catch((e) => {
-                console.error("Failed to spin wheel.", e);
+                this.logger?.error("Failed to spin wheel.", e);
             });
         } else {
             if (timeLeft <= LAST_CALL_THRESHOLD_MS && !this.lastCallAnnounced) {
@@ -669,12 +672,12 @@ export class RouletteGame implements Game {
         }
         const targetAngle = (targetSection * 45 - 22.5) % 360;
 
-        console.log(`Winning number: ${winningNumber}`);
-        console.log(`Prev angle: ${prevAngle}`);
-        console.log(`Prev section: ${prevSection}`);
-        console.log(`Target section: ${targetSection}`);
-        console.log(`Target angle: ${targetAngle}`);
-        console.log(`Spinning wheel from ${prevAngle} to ${targetAngle}`);
+        this.logger?.info(`Winning number: ${winningNumber}`);
+        this.logger?.info(`Prev angle: ${prevAngle}`);
+        this.logger?.info(`Prev section: ${prevSection}`);
+        this.logger?.info(`Target section: ${targetSection}`);
+        this.logger?.info(`Target angle: ${targetAngle}`);
+        this.logger?.info(`Spinning wheel from ${prevAngle} to ${targetAngle}`);
 
         wheel.setProperty("TargetAngle", targetAngle);
 

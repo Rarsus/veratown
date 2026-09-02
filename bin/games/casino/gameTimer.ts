@@ -12,6 +12,8 @@
  * limitations under the License.
  */
 
+import { createLogger } from "../../logging";
+
 /**
  * GameTimer - Lifecycle-managed wrapper for game timers
  *
@@ -32,12 +34,12 @@
  *
  * // Start a one-shot timer
  * timer.start(5000, () => {
- *   console.log("Timer fired!");
+ *   this.logger?.info("Timer fired!");
  * });
  *
  * // Check if active
  * if (timer.isActive()) {
- *   console.log("Timer is running");
+ *   this.logger?.info("Timer is running");
  * }
  *
  * // Reset to new duration
@@ -48,6 +50,7 @@
  * ```
  */
 export class GameTimer {
+    private readonly logger = createLogger("GameTimer");
     private handle: NodeJS.Timeout | undefined;
     private isInterval: boolean = false;
 
@@ -63,8 +66,8 @@ export class GameTimer {
      *
      * @example
      * ```typescript
-     * timer.start(5000, () => console.log("Done"), false);      // One-shot
-     * timer.start(1000, () => console.log("Tick"), true);       // Interval
+     * timer.start(5000, () => this.logger?.info("Done"), false);      // One-shot
+     * timer.start(1000, () => this.logger?.info("Tick"), true);       // Interval
      * ```
      */
     public start(
@@ -126,8 +129,8 @@ export class GameTimer {
      *
      * @example
      * ```typescript
-     * timer.start(10000, () => console.log("Original"));
-     * timer.reset(5000, () => console.log("Reseted"));  // Will fire earlier
+     * timer.start(10000, () => this.logger?.info("Original"));
+     * timer.reset(5000, () => this.logger?.info("Reseted"));  // Will fire earlier
      * ```
      */
     public reset(durationMs: number, callback: () => void): boolean {
@@ -150,9 +153,9 @@ export class GameTimer {
      * @example
      * ```typescript
      * if (timer.isActive()) {
-     *   console.log("Timer is running");
+     *   this.logger?.info("Timer is running");
      * } else {
-     *   console.log("No active timer");
+     *   this.logger?.info("No active timer");
      * }
      * ```
      */

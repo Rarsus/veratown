@@ -21,6 +21,8 @@ import {
 import { FORFEITS } from "./forfeits";
 import { generatePassword } from "../../utils";
 
+import { createLogger } from "../../logging";
+
 /**
  * Result of forfeit validation
  */
@@ -38,6 +40,7 @@ export interface ForfeitValidation {
  */
 export class ForfeitService {
     /** Tracks locked items per member: memberNumber -> (itemGroup -> unlockTime) */
+    private readonly logger = createLogger("ForfeitService");
     private lockedItems: Map<number, Map<string, number>> = new Map();
 
     /** Tracks cheat strikes per member */
@@ -188,7 +191,7 @@ export class ForfeitService {
                 added.SetColor(characterHairColor);
             }
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 `Failed to set color for item ${item.Name} on character ${character.MemberNumber}`,
                 e,
             );

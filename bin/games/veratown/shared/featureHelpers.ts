@@ -8,7 +8,11 @@
  *   if (isOwnerLocked(item)) { ... }
  */
 
+import { createLogger } from "../../../logging";
+
 import { wait } from "../../../hub/utils"; // Adjust path as needed
+
+const logger = createLogger("featureHelpers");
 
 /**
  * Wrap a handler with consistent error handling
@@ -22,7 +26,7 @@ export function createFeatureGuard(
         try {
             await handler(...args);
         } catch (error) {
-            console.error(
+            logger.error(
                 `[${systemName}] Unhandled error in feature handler:`,
                 error instanceof Error ? error.message : String(error),
             );
@@ -39,7 +43,7 @@ export async function waitWithLog(
     systemName: string,
 ): Promise<void> {
     if (delayMs > 100) {
-        console.log(`[${systemName}] Waiting ${delayMs}ms (${reason})`);
+        logger.info(`[${systemName}] Waiting ${delayMs}ms (${reason})`);
     }
     await wait(delayMs);
 }
@@ -82,7 +86,7 @@ export function getAssetSafely(
     try {
         return AssetGet(group, name);
     } catch {
-        console.warn(`[FeatureHelpers] Asset not found: ${group}/${name}`);
+        logger.warn(`[FeatureHelpers] Asset not found: ${group}/${name}`);
         return undefined;
     }
 }

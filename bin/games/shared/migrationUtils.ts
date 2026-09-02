@@ -12,6 +12,8 @@ import type { CasinoStoreAdapter } from "./casinoStoreAdapter.js";
 import type { DareStoreAdapter } from "./dareStoreAdapter.js";
 import type { VeratownStoreAdapter } from "./veratownStoreAdapter.js";
 
+import { createLogger } from "../../logging";
+
 export enum MigrationPhase {
     ADAPTERS_ACTIVE = "adapters_active", // Phase 4: Adapters in use
     DIRECT_UNIFIED = "direct_unified", // Phase 5: Direct UnifiedCharacterStore usage
@@ -43,6 +45,7 @@ export interface MigrationStatus {
  * Tracks migration progress and validates cutover
  */
 export class MigrationTracker {
+    private readonly logger = createLogger("MigrationTracker");
     private status: MigrationStatus = {
         phase: MigrationPhase.ADAPTERS_ACTIVE,
         systemsMigrated: [],
@@ -212,7 +215,7 @@ export class MigrationValidator {
 
         for (const method of requiredMethods) {
             if (typeof store[method] !== "function") {
-                console.error(`Missing method: ${method}`);
+                this.logger?.error(`Missing method: ${method}`);
                 return false;
             }
         }
@@ -233,7 +236,7 @@ export class MigrationValidator {
             !system.unifiedStore &&
             !system.store?.unifiedStore
         ) {
-            console.error(
+            this.logger?.error(
                 `${storeName} does not reference UnifiedCharacterStore`,
             );
             return false;
@@ -255,7 +258,7 @@ export class MigrationValidator {
 
             // Basic comparison - results should match
             if (JSON.stringify(oldResult) !== JSON.stringify(newResult)) {
-                console.warn(
+                this.logger?.warn(
                     "Behavior mismatch between old and new implementation",
                 );
                 return false;
@@ -263,7 +266,7 @@ export class MigrationValidator {
 
             return true;
         } catch (error) {
-            console.error("Validation error:", error);
+            this.logger?.error("Validation error:", error);
             return false;
         }
     }
@@ -280,7 +283,7 @@ export class AdapterDeprecationWarning {
      */
     public static warn(adapterName: string, replacementCode: string): void {
         if (!this.issuedWarnings.has(adapterName)) {
-            console.warn(
+            this.logger?.warn(
                 `⚠️  DEPRECATION WARNING: ${adapterName} is deprecated.
 Use UnifiedCharacterStore directly instead.
 Example: ${replacementCode}

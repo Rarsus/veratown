@@ -13,7 +13,7 @@
  */
 
 import { Collection, Db } from "mongodb";
-import { createSystemLogger } from "../veratown/shared";
+import { createLogger } from "../../logging";
 
 /**
  * ============================================================================
@@ -88,7 +88,7 @@ export interface DareValidationResult {
 export class DareDataService {
     private dares: Collection<DareDoc>;
     private dareState: Collection<DareStateDoc>;
-    private logger = createSystemLogger("DareDataService");
+    private logger = createLogger("DareDataService");
     private inited = false;
 
     constructor(private db: Db) {

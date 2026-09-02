@@ -28,6 +28,10 @@ import { KeypadSystemInitializer } from "./keypadSystemInitializer";
 import { VeratownLocationStore } from "./veratownLocationStore";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 
+import { createLogger } from "../../logging";
+
+const logger = createLogger("KeypadSystemIntegration");
+
 /**
  * Example: Initialize keypad system during application startup
  *
@@ -41,7 +45,7 @@ export async function initializeKeypadSystem(
     characterStore: UnifiedCharacterStore,
     commandParser?: CommandParser,
 ): Promise<void> {
-    console.log("🔧 Initializing Keypad System...\n");
+    logger.info("🔧 Initializing Keypad System...\n");
 
     // Step 1: Create initializer
     const initializer = new KeypadSystemInitializer(
@@ -57,8 +61,8 @@ export async function initializeKeypadSystem(
 
     // Step 3: Check results
     if (!initResult.success) {
-        console.error("❌ Keypad system initialization failed!");
-        console.error("Errors:", initResult.errors);
+        logger.error("❌ Keypad system initialization failed!");
+        logger.error("Errors:", initResult.errors);
         throw new Error("Keypad system initialization failed");
     }
 
@@ -69,18 +73,18 @@ export async function initializeKeypadSystem(
     // (Assuming you have a feature registry)
     connector.registerFeatureSystem(keypadSystem);
 
-    console.log("✓ Keypad system initialized and registered\n");
+    logger.info("✓ Keypad system initialized and registered\n");
 
     // Step 6: Print init details (optional)
-    console.log("📊 Initialization Summary:");
+    logger.info("📊 Initialization Summary:");
     for (const step of initResult.steps) {
         const status = step.success ? "✓" : "✗";
-        console.log(`  ${status} ${step.name} (${step.duration}ms)`);
+        logger.info(`  ${status} ${step.name} (${step.duration}ms)`);
         if (step.message) {
-            console.log(`     ${step.message}`);
+            logger.info(`     ${step.message}`);
         }
     }
-    console.log();
+    logger.info();
 }
 
 /**
@@ -99,7 +103,7 @@ export async function migrateKeypadData(
         stopPhase?: number;
     },
 ): Promise<void> {
-    console.log("🔄 Running Keypad Data Migration...\n");
+    logger.info("🔄 Running Keypad Data Migration...\n");
 
     const initializer = new KeypadSystemInitializer(
         db,
@@ -114,12 +118,12 @@ export async function migrateKeypadData(
     });
 
     if (migrationResult.success) {
-        console.log(
+        logger.info(
             `✅ Migration successful! Migrated ${migrationResult.totalRecordsMigrated} records`,
         );
     } else {
-        console.error("❌ Migration failed!");
-        console.error("Errors:", migrationResult.errors);
+        logger.error("❌ Migration failed!");
+        logger.error("Errors:", migrationResult.errors);
         throw new Error("Migration failed");
     }
 }
@@ -134,7 +138,7 @@ export async function validateProductionReadiness(
     locationStore: VeratownLocationStore,
     characterStore: UnifiedCharacterStore,
 ): Promise<void> {
-    console.log("✓ Validating production readiness...\n");
+    logger.info("✓ Validating production readiness...\n");
 
     const initializer = new KeypadSystemInitializer(
         db,
@@ -145,33 +149,33 @@ export async function validateProductionReadiness(
 
     const validation = await initializer.validateProduction();
 
-    console.log("📋 Validation Results:");
-    console.log(`  Status: ${validation.ready ? "✓ READY" : "✗ NOT READY"}\n`);
+    logger.info("📋 Validation Results:");
+    logger.info(`  Status: ${validation.ready ? "✓ READY" : "✗ NOT READY"}\n`);
 
-    console.log("Checks:");
+    logger.info("Checks:");
     for (const check of validation.checks) {
         const status = check.passed ? "✓" : "✗";
-        console.log(`  ${status} ${check.name}`);
-        console.log(`     ${check.message}`);
+        logger.info(`  ${status} ${check.name}`);
+        logger.info(`     ${check.message}`);
     }
 
     if (validation.warnings.length > 0) {
-        console.log("\n⚠️  Warnings:");
+        logger.info("\n⚠️  Warnings:");
         for (const warning of validation.warnings) {
-            console.log(`  - ${warning}`);
+            logger.info(`  - ${warning}`);
         }
     }
 
     if (validation.errors.length > 0) {
-        console.log("\n❌ Errors:");
+        logger.info("\n❌ Errors:");
         for (const error of validation.errors) {
-            console.log(`  - ${error}`);
+            logger.info(`  - ${error}`);
         }
         throw new Error("Production validation failed");
     }
 
     if (validation.ready) {
-        console.log("\n✅ System is production-ready!\n");
+        logger.info("\n✅ System is production-ready!\n");
     }
 }
 
@@ -192,26 +196,26 @@ export async function deployKeypadSystem(
     commandParser?: CommandParser,
 ): Promise<{ success: boolean; message: string }> {
     try {
-        console.log("🚀 Starting Keypad System Deployment\n");
+        logger.info("🚀 Starting Keypad System Deployment\n");
 
         // Step 1: Validate
-        console.log("Step 1: Validating production readiness...");
+        logger.info("Step 1: Validating production readiness...");
         await validateProductionReadiness(db, locationStore, characterStore);
-        console.log("✓ Validation passed\n");
+        logger.info("✓ Validation passed\n");
 
         // Step 2: Migrate (if needed)
-        console.log("Step 2: Running data migration...");
+        logger.info("Step 2: Running data migration...");
         try {
             await migrateKeypadData(db, locationStore, characterStore, {
                 dryRun: false,
             });
-            console.log("✓ Migration completed\n");
+            logger.info("✓ Migration completed\n");
         } catch (error) {
-            console.log("⚠️  Migration skipped (may already be done)\n");
+            logger.info("⚠️  Migration skipped (may already be done)\n");
         }
 
         // Step 3: Initialize system
-        console.log("Step 3: Initializing keypad system...");
+        logger.info("Step 3: Initializing keypad system...");
         await initializeKeypadSystem(
             db,
             connector,
@@ -219,15 +223,15 @@ export async function deployKeypadSystem(
             characterStore,
             commandParser,
         );
-        console.log("✓ System initialized\n");
+        logger.info("✓ System initialized\n");
 
-        console.log("✅ Deployment complete!\n");
+        logger.info("✅ Deployment complete!\n");
         return {
             success: true,
             message: "Keypad system deployed successfully",
         };
     } catch (error) {
-        console.error(
+        logger.error(
             "❌ Deployment failed:",
             error instanceof Error ? error.message : String(error),
         );
@@ -251,7 +255,7 @@ export async function quickStart(
     characterStore: UnifiedCharacterStore,
     commandParser?: CommandParser,
 ): Promise<void> {
-    console.log("⚡ Quick start - initializing keypad system...\n");
+    logger.info("⚡ Quick start - initializing keypad system...\n");
 
     const initializer = new KeypadSystemInitializer(
         db,
@@ -264,7 +268,7 @@ export async function quickStart(
     const result = await initializer.initialize();
 
     if (result.success) {
-        console.log("✅ Keypad system ready to use!\n");
+        logger.info("✅ Keypad system ready to use!\n");
         // Register with feature system
         connector.registerFeatureSystem(result.system);
     } else {
@@ -277,6 +281,8 @@ export async function quickStart(
  *
  * ---
  * import { deployKeypadSystem } from './keypadSystemIntegration';
+
+const logger = createLogger("keypadSystemIntegration");
  *
  * // During application startup:
  * async function startup() {
@@ -296,15 +302,15 @@ export async function quickStart(
  *   );
  *
  *   if (!result.success) {
- *     console.error('Failed to start:', result.message);
+ *     logger.error('Failed to start:', result.message);
  *     process.exit(1);
  *   }
  *
- *   console.log('✅ Application started successfully');
+ *   logger.info('✅ Application started successfully');
  * }
  *
  * startup().catch(error => {
- *   console.error('Startup failed:', error);
+ *   logger.error('Startup failed:', error);
  *   process.exit(1);
  * });
  * ---

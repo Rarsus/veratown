@@ -15,6 +15,8 @@
 import { Collection, Db, ChangeStream, ChangeStreamDocument } from "mongodb";
 import { EventEmitter } from "events";
 
+import { createLogger } from "../../logging";
+
 export interface VeratownLocationDoc {
     _id?: string; // e.g. "cage_entrance", "basement_keypad"
     key: string; // Unique identifier for this location type
@@ -61,6 +63,7 @@ export interface VeratownLocationDoc {
 }
 
 export class VeratownLocationStore extends EventEmitter {
+    private readonly logger = createLogger("VeratownLocationStore");
     private locations: Collection<VeratownLocationDoc>;
     private inited = false;
     private cachedLocations?: VeratownLocationDoc[];
@@ -116,7 +119,7 @@ export class VeratownLocationStore extends EventEmitter {
         let docs = await this.locations.find({}).toArray();
         if (docs.length === 0 && fallbackConfig && fallbackConfig.length > 0) {
             // Database is empty - seed it from config
-            console.log(
+            this.logger?.info(
                 `[veratown] Database empty, seeding ${fallbackConfig.length} locations from config`,
             );
             await this.locations.insertMany(fallbackConfig);
@@ -233,7 +236,10 @@ export class VeratownLocationStore extends EventEmitter {
             },
         );
         this.changeStream.on("error", (error) => {
-            console.error("[VeratownLocationStore] Change stream error", error);
+            this.logger?.error(
+                "[VeratownLocationStore] Change stream error",
+                error,
+            );
             this.changeStream = undefined;
         });
     }

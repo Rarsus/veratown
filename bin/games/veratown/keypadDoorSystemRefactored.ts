@@ -23,7 +23,8 @@ import {
     VeratownLocationDoc,
     VeratownLocationStore,
 } from "./veratownLocationStore";
-import { createTimerManager, createSystemLogger } from "./shared";
+import { createTimerManager } from "./shared";
+import { createLogger } from "../../logging";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
@@ -67,7 +68,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private readonly autoOpenTimers = createTimerManager<string>(
         "KeypadDoorSystem.autoOpen",
     );
-    private readonly logger = createSystemLogger("KeypadDoorSystem");
+    private readonly logger = createLogger("KeypadDoorSystem");
 
     // Handlers
     private readonly keypadTrigger: ReturnType<typeof guardHandler>;

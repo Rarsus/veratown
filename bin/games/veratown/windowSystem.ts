@@ -19,7 +19,8 @@ import { NarratorBot } from "./veratownNarrationUtils";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
-import { createSystemLogger } from "./shared/systemLogger";
+
+import { createLogger } from "../../logging";
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
@@ -29,6 +30,7 @@ import { createSystemLogger } from "./shared/systemLogger";
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(windowPos, "Emote", `*Peeping Tom detected: ${character}*`);
 export class WindowSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("WindowSystem");
     public readonly key = "window";
     public readonly label = "Windows";
     public enabled = true;
@@ -37,8 +39,6 @@ export class WindowSystem implements VeratownFeatureSystem {
     private readonly windowTrigger: ReturnType<typeof guardHandler>;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("WindowSystem");
-    private readonly logger = createSystemLogger("WindowSystem");
-
     public constructor(private conn: API_Connector) {
         this.windowTrigger = guardHandler(
             this.key,
@@ -76,11 +76,11 @@ export class WindowSystem implements VeratownFeatureSystem {
                 );
             }
 
-            console.log(
+            this.logger?.info(
                 `[WindowSystem] Registered ${this.windowPositions.length} window location(s)`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[WindowSystem] Unexpected error during initialization",
                 e,
             );

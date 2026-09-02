@@ -23,6 +23,8 @@ import { EventBus } from "./eventBus";
 import { UnifiedCharacterStore } from "./unifiedCharacterStore";
 import { GameEvent } from "./unifiedCharacterTypes";
 
+import { createLogger } from "../../logging";
+
 /**
  * External system interfaces for event subscribers.
  * These are placeholder signatures - actual systems have richer interfaces.
@@ -52,6 +54,7 @@ export interface ExternalVeratownSystem {
  * Subscriptions are idempotent and can handle duplicate events.
  */
 export class CrossSystemSubscribers {
+    private readonly logger = createLogger("CrossSystemSubscribers");
     private eventBus: EventBus;
 
     constructor(
@@ -109,10 +112,7 @@ export class CrossSystemSubscribers {
                     );
                 }
             } catch (error) {
-                const logger =
-                    require("../veratown/shared/systemLogger").createSystemLogger(
-                        "CrossSystemSubscribers",
-                    );
+                const logger = createLogger("CrossSystemSubscribers");
                 logger.error("Failed to lock chips on bondage", error, {
                     memberNumber: event.target,
                     operation: "bondage_applied",
@@ -126,10 +126,7 @@ export class CrossSystemSubscribers {
                 // Unlock all chips
                 await this.unifiedStore.unlockChips(event.target, 0);
             } catch (error) {
-                const logger =
-                    require("../veratown/shared/systemLogger").createSystemLogger(
-                        "CrossSystemSubscribers",
-                    );
+                const logger = createLogger("CrossSystemSubscribers");
                 logger.error(
                     "Failed to unlock chips on bondage removal",
                     error,
@@ -168,10 +165,7 @@ export class CrossSystemSubscribers {
                     }
                 }
             } catch (error) {
-                const logger =
-                    require("../veratown/shared/systemLogger").createSystemLogger(
-                        "CrossSystemSubscribers",
-                    );
+                const logger = createLogger("CrossSystemSubscribers");
                 logger.error("Failed to suspend games on cage entry", error, {
                     memberNumber: event.target,
                     operation: "cage_entry",
@@ -185,10 +179,7 @@ export class CrossSystemSubscribers {
                 // Resume all suspended games when player uncaged
                 await this.unifiedStore.resumeSuspendedGames(event.target);
             } catch (error) {
-                const logger =
-                    require("../veratown/shared/systemLogger").createSystemLogger(
-                        "CrossSystemSubscribers",
-                    );
+                const logger = createLogger("CrossSystemSubscribers");
                 logger.error("Failed to resume games on cage exit", error, {
                     memberNumber: event.target,
                     operation: "cage_exit",
@@ -229,7 +220,7 @@ export class CrossSystemSubscribers {
                     "chip_received",
                 );
             } catch (error) {
-                console.error(
+                this.logger?.error(
                     "CrossSystemSubscribers: Failed to record relationship:",
                     event.actor,
                     event.target,
@@ -275,7 +266,7 @@ export class CrossSystemSubscribers {
                 }
             } catch (error) {
                 // Don't fail if audit logging fails
-                console.warn(
+                this.logger?.warn(
                     "CrossSystemSubscribers: Audit logging failed:",
                     error,
                 );

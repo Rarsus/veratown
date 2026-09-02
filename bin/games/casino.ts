@@ -47,6 +47,9 @@ import { loadRegionFromDatabase } from "./shared/locationUtils";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
+import { createLogger } from "../logging";
+
+const logger = createLogger("Casino");
 
 const FREE_CHIPS = 20;
 
@@ -452,8 +455,8 @@ export class Casino implements GamePlugin {
             );
         }
 
-        console.log(
-            `[casino] Loaded game region: ${this.gameRegion ? "from database" : "using config or none"}`,
+        logger.info(
+            `Loaded game region: ${this.gameRegion ? "from database" : "using config or none"}`,
         );
     }
 
@@ -544,18 +547,21 @@ export class Casino implements GamePlugin {
                     this.commandParser.unregisterAll();
                 });
             } else {
-                console.log(
+                logger.debug(
                     `Received beep: ${beep.Message} from ${beep.MemberName} (${beep.MemberNumber})`,
+                    {
+                        memberNumber: beep.MemberNumber,
+                        memberName: beep.MemberName,
+                    },
                 );
                 this.conn.AccountBeep(
                     beep.MemberNumber,
                     null,
                     "Unknown command",
                 );
-                // console.log(beep)
             }
         } catch (e) {
-            console.error("Failed to process beep", e);
+            logger.error("Failed to process beep", e);
         }
     };
 

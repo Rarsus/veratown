@@ -14,7 +14,7 @@
 
 import { API_Connector, CommandParser } from "bc-bot";
 import { Db } from "mongodb";
-import { createSystemLogger } from "../shared";
+import { createLogger } from "../../../logging";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
@@ -40,7 +40,7 @@ import { VeratownLocationStore } from "./veratownLocationStore";
  * @PRODUCTION Entry point for integrating keypad system
  */
 export class KeypadSystemInitializer {
-    private readonly logger = createSystemLogger("KeypadSystemInitializer");
+    private readonly logger = createLogger("KeypadSystemInitializer");
 
     constructor(
         private db: Db,

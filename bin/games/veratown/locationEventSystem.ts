@@ -13,7 +13,7 @@
  */
 
 import { Collection, Db } from "mongodb";
-import { createSystemLogger } from "./shared";
+import { createLogger } from "../../logging";
 
 export type EventTriggerType = "occupancy" | "daily" | "random" | "manual";
 
@@ -78,7 +78,7 @@ export class LocationEventSystem {
     private eventCollection: Collection<LocationEvent>;
     private executionCollection: Collection<LocationEventExecution>;
     private inited = false;
-    private readonly logger = createSystemLogger("LocationEventSystem");
+    private readonly logger = createLogger("LocationEventSystem");
     private timers = new Map<string, NodeJS.Timeout>();
 
     public constructor(private db: Db) {

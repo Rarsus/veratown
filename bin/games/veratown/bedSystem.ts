@@ -22,7 +22,8 @@ import {
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
-import { createIdempotentMonitor, createSystemLogger } from "./shared";
+import { createIdempotentMonitor } from "./shared";
+import { createLogger } from "../../logging";
 
 // While a character remains on a bed tile, keeps checking whether they have
 // the "Sleep" Emoticon expression active: equips a Bed device while both are
@@ -40,7 +41,7 @@ export class BedSystem implements VeratownFeatureSystem {
 
     private readonly activeMonitors = new Set<number>();
     private monitor = createIdempotentMonitor<API_Character>("BedSystem");
-    private logger = createSystemLogger("BedSystem");
+    private logger = createLogger("BedSystem");
 
     //   private sleepingCharacters = new Set<number>();
     private bedPositions: Array<{ X: number; Y: number }> = [];

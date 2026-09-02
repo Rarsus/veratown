@@ -5,7 +5,9 @@
         "strict": false,
         "module": "nodenext",
         "moduleResolution": "nodenext",
-        "esModuleInterop": true
+        "esModuleInterop": true,
+        "lib": ["ES2020"],
+        "types": ["node"]
     },
     "extends": "@tsconfig/node18/tsconfig.json",
     "include": ["node_modules/bc-stubs/bc/**/*.d.ts", "bin/**/*"],

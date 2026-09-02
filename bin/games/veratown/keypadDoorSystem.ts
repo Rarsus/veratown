@@ -10,8 +10,10 @@ import {
     VeratownLocationDoc,
     VeratownLocationStore,
 } from "./veratownLocationStore";
-import { createTimerManager, createSystemLogger } from "./shared";
+import { createTimerManager } from "./shared";
 import { KeypadAccessGroupManager } from "./keypadAccessGroupManager";
+
+import { createLogger } from "../../logging";
 
 // A keypad_door location uses this data shape:
 // {
@@ -178,6 +180,7 @@ function unwrapWhisper(content: string): string {
 }
 
 export class KeypadDoorSystem implements VeratownFeatureSystem {
+    private readonly logger = createLogger("KeypadDoorSystem");
     public readonly key = "keypadDoor";
     public readonly label = "Keypad doors";
     public enabled = true;
@@ -194,7 +197,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private readonly autoOpenTimers = createTimerManager<string>(
         "KeypadDoorSystem.autoOpen",
     );
-    private readonly logger = createSystemLogger("KeypadDoorSystem");
 
     public constructor(
         private conn: API_Connector,
@@ -300,7 +302,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             } else {
                 this.setDoorLocked(door);
             }
-            console.log(
+            this.logger?.info(
                 `[KeypadDoorSystem] Loaded keypad ${door.location.key} for door at ${door.config.doorX},${door.config.doorY}`,
             );
         }
@@ -561,7 +563,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         const door = this.findDoorAt(msg.sender);
         if (!door) {
-            console.log(
+            this.logger?.info(
                 `[KeypadDoorSystem] User '${msg.sender.Name}' at (${msg.sender.MapPos.X},${msg.sender.MapPos.Y}) tried door command but no keypad found. Available: ${this.doors.map((d) => `${d.location.key}@(${d.location.x},${d.location.y})`).join(", ") || "none"}`,
             );
             this.conn.reply(

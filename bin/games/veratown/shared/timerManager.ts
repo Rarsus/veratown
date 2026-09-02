@@ -11,11 +11,14 @@
  *   timers.clearAll();      // On system disable
  */
 
+import { createLogger } from "../../../logging";
+
 /**
  * Manages timers with automatic cleanup
  * Prevents memory leaks from orphaned setTimeout calls
  */
 export class TimerManager<K> {
+    private readonly logger = createLogger("TimerManager");
     private timers = new Map<K, NodeJS.Timeout>();
     private readonly systemName: string;
     private readonly logDetails: boolean;
@@ -43,7 +46,7 @@ export class TimerManager<K> {
             try {
                 await callback();
             } catch (error) {
-                console.error(
+                this.logger?.error(
                     `[${this.systemName}] Timer callback failed for ${this.keyString(key)}:`,
                     error,
                 );
@@ -124,7 +127,7 @@ export class TimerManager<K> {
 
     private log(message: string): void {
         if (this.logDetails) {
-            console.log(`[${this.systemName}] ${message}`);
+            this.logger?.info(`[${this.systemName}] ${message}`);
         }
     }
 

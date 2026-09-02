@@ -29,7 +29,7 @@ import {
     VeratownLocationDoc,
 } from "./veratownLocationStore";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
-import { createSystemLogger } from "./shared/systemLogger";
+import { createLogger } from "../../logging";
 import { RegionManager, VeratownRegion } from "./regionManager";
 import {
     getLocationTemplate,
@@ -50,7 +50,7 @@ export class VeratownAdminCommands {
     // Guards against overlapping "!maintenance" runs (eg. a second admin
     // triggering it while the one-minute warning is still counting down).
     private maintenanceInProgress = false;
-    private readonly logger = createSystemLogger("VeratownAdminCommands");
+    private readonly logger = createLogger("VeratownAdminCommands");
 
     public constructor(
         private conn: API_Connector,

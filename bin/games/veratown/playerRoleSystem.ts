@@ -13,7 +13,7 @@
  */
 
 import { Collection, Db } from "mongodb";
-import { createSystemLogger } from "./shared";
+import { createLogger } from "../../logging";
 
 export type PlayerRole =
     | "guard"
@@ -151,7 +151,7 @@ export class PlayerRoleSystem {
     private roleCollection: Collection<CharacterRole>;
     private definitionCollection: Collection<RoleDefinition>;
     private inited = false;
-    private readonly logger = createSystemLogger("PlayerRoleSystem");
+    private readonly logger = createLogger("PlayerRoleSystem");
 
     public constructor(private db: Db) {
         this.roleCollection = this.db.collection<CharacterRole>("playerRoles");

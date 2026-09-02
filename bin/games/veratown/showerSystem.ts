@@ -27,7 +27,8 @@ import {
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
 import type { ReleaseSystem } from "./veratownReleaseSystem";
-import { createIdempotentMonitor, createSystemLogger } from "./shared";
+import { createIdempotentMonitor } from "./shared";
+import { createLogger } from "../../logging";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -39,7 +40,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private monitor = createIdempotentMonitor<API_Character>("ShowerSystem");
-    private readonly logger = createSystemLogger("ShowerSystem");
+    private readonly logger = createLogger("ShowerSystem");
     private showerPositions: Array<{ X: number; Y: number }> = [];
     private showerBotHomePos: { X: number; Y: number } =
         SHOWER_BOT2_HOME_POSITION;

@@ -16,6 +16,9 @@ import { API_Character, AssetGet, BC_AppearanceItem } from "bc-bot";
 import { generatePassword } from "../../utils";
 import { wait } from "../../hub/utils";
 import { PET_EARS } from "../veratown";
+import { createLogger } from "../../logging";
+
+const logger = createLogger("forfeits");
 
 interface Forfeit {
     name: string;
@@ -430,13 +433,13 @@ export async function applyForfeitForDare(
     if (probeItems.length !== 1) return undefined;
     const group = probeItems[0].Group;
 
-    console.log(
+    logger.info(
         `[Casino] Applying forfeit ${forfeitKey} to ${character.MemberNumber}`,
     );
 
     const existing = character.Appearance.InventoryGet(group);
     if (existing) {
-        console.log(
+        logger.info(
             `[Casino] Extending existing item in group ${group} for forfeit ${forfeitKey}`,
         );
         const extendMs =
@@ -464,7 +467,7 @@ export async function applyForfeitForDare(
             await wait(50);
         }
 
-        console.log(
+        logger.info(
             `[Casino] Extended forfeit ${forfeitKey} for ${extendMs}ms`,
         );
 
@@ -478,7 +481,7 @@ export async function applyForfeitForDare(
     }
 
     if (forfeit.applyItems) {
-        console.log(
+        logger.info(
             `[Casino] Using custom applyItems for forfeit ${forfeitKey}`,
         );
         forfeit.applyItems(character, lockMemberNumber);
@@ -499,7 +502,7 @@ export async function applyForfeitForDare(
     const items = probeItems;
     if (items.length !== 1) return undefined;
 
-    console.log(
+    logger.info(
         `[Casino] Adding item ${items[0].Name} for forfeit ${forfeitKey}`,
     );
 
@@ -526,9 +529,9 @@ export async function applyForfeitForDare(
             added.SetColor(base);
         }
 
-        console.log(`[Casino] Set color for forfeit ${forfeitKey}`);
+        logger.info(`[Casino] Set color for forfeit ${forfeitKey}`);
     } catch (e) {
-        console.error(`Failed to set color for dare item ${items[0].Name}`, e);
+        logger.error(`Failed to set color for dare item ${items[0].Name}`, e);
         added.SetColor("Default");
     }
 
@@ -544,7 +547,7 @@ export async function applyForfeitForDare(
 
     const lockTime = durationMsOverride ?? forfeit.lockTimeMs;
     if (lockTime) {
-        console.log(`[Casino] Locking forfeit ${forfeitKey} for ${lockTime}ms`);
+        logger.info(`[Casino] Locking forfeit ${forfeitKey} for ${lockTime}ms`);
         added.lock("TimerPasswordPadlock", lockMemberNumber, {
             Password: generatePassword(),
             Hint: "Dare in progress!",
@@ -559,7 +562,7 @@ export async function applyForfeitForDare(
         await wait(50);
     }
 
-    console.log(
+    logger.info(
         `[Casino] Successfully applied forfeit ${forfeitKey} to ${character.MemberNumber}`,
     );
 

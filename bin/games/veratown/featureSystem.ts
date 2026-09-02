@@ -20,6 +20,10 @@
 // needing to know about each system's internals.
 import type { VeratownLocationDoc } from "./veratownLocationStore";
 
+import { createLogger } from "../../logging";
+
+const logger = createLogger("featureSystem");
+
 export interface VeratownFeatureSystem {
     // Stable, lowercase identifier used in admin commands, eg. "cage".
     readonly key: string;
@@ -55,11 +59,11 @@ export function guardHandler<Args extends unknown[]>(
             const result = handler(...args);
             if (result instanceof Promise) {
                 result.catch((e) => {
-                    console.error(`[Veratown:${key}] handler failed`, e);
+                    logger.error(`[Veratown:${key}] handler failed`, e);
                 });
             }
         } catch (e) {
-            console.error(`[Veratown:${key}] handler failed`, e);
+            logger.error(`[Veratown:${key}] handler failed`, e);
         }
     };
 }

@@ -17,6 +17,8 @@ import {
     VeratownLocationDoc,
 } from "./veratownLocationStore";
 
+import { createLogger } from "../../logging";
+
 /**
  * Represents a multi-tile region where features should execute only once per
  * region entry, not once per tile. Stored in the database alongside individual
@@ -36,6 +38,7 @@ export interface VeratownRegion extends VeratownLocationDoc {
  * which regions to prevent duplicate command execution across multiple tiles.
  */
 export class RegionManager {
+    private readonly logger = createLogger("RegionManager");
     private regions: Map<string, VeratownRegion> = new Map();
     private charactersInRegion: Map<string, Set<number>> = new Map(); // regionKey -> set of character MemberNumbers
 
@@ -59,11 +62,11 @@ export class RegionManager {
                 this.charactersInRegion.set(region.key, new Set());
             }
 
-            console.log(
+            this.logger?.info(
                 `[RegionManager] Loaded ${regionDocs.length} regions from database`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 "[RegionManager] Failed to load regions from database",
                 e,
             );
@@ -218,11 +221,11 @@ export class RegionManager {
             } else {
                 await locationStore.addLocation(region);
             }
-            console.log(
+            this.logger?.info(
                 `[RegionManager] Region "${region.key}" updated in database`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 `[RegionManager] Failed to update region "${region.key}" in database`,
                 e,
             );
@@ -241,11 +244,11 @@ export class RegionManager {
 
         try {
             await locationStore.deleteLocation(regionKey);
-            console.log(
+            this.logger?.info(
                 `[RegionManager] Region "${regionKey}" deleted from database`,
             );
         } catch (e) {
-            console.error(
+            this.logger?.error(
                 `[RegionManager] Failed to delete region "${regionKey}" from database`,
                 e,
             );
