@@ -3,7 +3,6 @@ import {
     BC_Server_ChatRoomMessage,
     CommandParser,
 } from "bc-bot";
-import { CasinoStore } from "./casinostore";
 import { RouletteBet } from "./roulette";
 
 export interface Game {

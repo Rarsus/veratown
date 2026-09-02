@@ -13,7 +13,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongoClient, Db } from "mongodb";
 import { CasinoStore } from "../../casino/casinostore";
 import { CasinoStoreAdapter } from "../casinoStoreAdapter";
-import { UnifiedCharacterStore } from "../unifiedCharacterStore";
+import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
 import { CasinoStoreMigrationWrapper } from "../casinoMigrationWrapper";
 
 describe("CasinoStoreMigrationWrapper (Phase 2.4b)", () => {

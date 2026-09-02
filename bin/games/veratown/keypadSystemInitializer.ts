@@ -14,7 +14,7 @@
 
 import { API_Connector, CommandParser } from "bc-bot";
 import { Db } from "mongodb";
-import { createLogger } from "../../../logging";
+import { createLogger } from "../../logging";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
