@@ -152,7 +152,7 @@ export const FORFEITS: Record<string, Forfeit> = {
                 Password: generatePassword(),
                 Hint: "Better luck next time!",
                 RemoveItem: true,
-                RemoveTimer: Date.now() + FORFEITS.cage.lockTimeMs,
+                RemoveTimer: Date.now() + (FORFEITS.cage.lockTimeMs ?? 0),
                 ShowTimer: true,
                 LockSet: true,
             });
@@ -295,18 +295,21 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
                 `After betting and losing at the Pixie Casino, ${character} has lost the privilege to orgasm. ` +
                 `This chastity cage will ensure that the rule is followed.`,
         });
-        const hairColor =
-            character.Appearance.InventoryGet("HairFront").GetColor();
+        const hairColor = character.Appearance.InventoryGet(
+            "HairFront",
+        )?.GetColor() ?? ["#000000"];
         const targetColor: BCColor =
-            hairColor.length > 1
+            Array.isArray(hairColor) && hairColor.length > 1
                 ? (hairColor[0] as HexColor)
-                : (hairColor as HexColor);
+                : Array.isArray(hairColor)
+                  ? (hairColor[0] as HexColor)
+                  : (hairColor as HexColor);
         chastityCage.SetColor(["Default", targetColor, targetColor, "#FFBC00"]);
         chastityCage.lock("TimerPasswordPadlock", lockMemberNumber, {
             Password: generatePassword(),
             Hint: "Better luck next time!",
             RemoveItem: true,
-            RemoveTimer: Date.now() + FORFEITS.chastity.lockTimeMs,
+            RemoveTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
             ShowTimer: true,
             LockSet: true,
         });
@@ -321,7 +324,9 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
                 `This chastity belt will ensure that she is kept chaste until her time is up.`,
         });
         chastityBelt.SetColor(
-            character.Appearance.InventoryGet("HairFront").GetColor(),
+            character.Appearance.InventoryGet("HairFront")?.GetColor() ?? [
+                "#000000",
+            ],
         );
         chastityBelt.setProperty("TypeRecord", {
             a: 1,
@@ -336,7 +341,7 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
             Password: generatePassword(),
             Hint: "Better luck next time!",
             RemoveItem: true,
-            RemoveTimer: Date.now() + FORFEITS.chastity.lockTimeMs,
+            RemoveTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
             ShowTimer: true,
             LockSet: true,
         });
@@ -506,7 +511,9 @@ export async function applyForfeitForDare(
         `[Casino] Adding item ${items[0].Name} for forfeit ${forfeitKey}`,
     );
 
-    const hairColor = character.Appearance.InventoryGet("HairFront").GetColor();
+    const hairColor = character.Appearance.InventoryGet(
+        "HairFront",
+    )?.GetColor() ?? ["#000000"];
     const added = character.Appearance.AddItem(items[0]);
 
     // Refresh appearance after adding item
@@ -604,8 +611,9 @@ function makePet(
     character: API_Character,
     lockMemberNumber: number,
 ): void {
-    const characterHairColor =
-        character.Appearance.InventoryGet("HairFront").GetColor();
+    const characterHairColor = character.Appearance.InventoryGet(
+        "HairFront",
+    )?.GetColor() ?? ["#000000"];
 
     const petSuitItem = character.Appearance.AddItem(
         AssetGet("ItemArms", "ShinyPetSuit"),
@@ -617,7 +625,7 @@ function makePet(
             `here to be adorable for all our patrons. Please enjoy their helplessness!`,
     });
     petSuitItem.SetColor(characterHairColor);
-    petSuitItem.Extended.SetType("Classic");
+    petSuitItem.Extended?.SetType("Classic");
     petSuitItem.lock("TimerPasswordPadlock", lockMemberNumber, {
         Password: generatePassword(),
         Hint: "Better luck next time!",
@@ -632,7 +640,9 @@ function makePet(
         const ears = character.Appearance.AddItem(PET_EARS);
         ears.SetDifficulty(20);
         ears.SetColor(
-            character.Appearance.InventoryGet("HairFront").GetColor(),
+            character.Appearance.InventoryGet("HairFront")?.GetColor() ?? [
+                "#000000",
+            ],
         );
     }
 
@@ -641,7 +651,9 @@ function makePet(
             AssetGet("TailStraps", "PuppyTailStrap"),
         );
         tail.SetColor(
-            character.Appearance.InventoryGet("HairFront").GetColor(),
+            character.Appearance.InventoryGet("HairFront")?.GetColor() ?? [
+                "#000000",
+            ],
         );
     }
 
