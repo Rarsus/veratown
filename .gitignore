@@ -5,3 +5,5 @@ out
 
 config*.json
 !config.sample.json
+
+.vscode/settings.json
