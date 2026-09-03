@@ -36,11 +36,11 @@ jobs:
             - name: Install library dependencies
               working-directory: src
               run: |
-                pnpm install --no-verify-store-integrity || (rm -rf pnpm-lock.yaml && pnpm install --no-verify-store-integrity)
+                  pnpm install --no-verify-store-integrity || (rm -rf pnpm-lock.yaml && pnpm install --no-verify-store-integrity)
 
             - name: Install app dependencies
               run: |
-                pnpm install --no-verify-store-integrity || (rm -rf pnpm-lock.yaml && pnpm install --no-verify-store-integrity)
+                  pnpm install --no-verify-store-integrity || (rm -rf pnpm-lock.yaml && pnpm install --no-verify-store-integrity)
 
             - name: Bundle
               run: "pnpm run bundle"

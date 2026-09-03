@@ -229,8 +229,7 @@ export class BlackjackGame implements Game {
 
         if (this.casino) {
             const parser = (this.casino as any).commandParser as
-                | CommandParser
-                | undefined;
+                CommandParser | undefined;
             if (parser) {
                 parser.unregister("cancel");
                 parser.unregister("bet");

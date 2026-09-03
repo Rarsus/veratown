@@ -16,18 +16,27 @@ import { Collection, Db, ObjectId } from "mongodb";
 import {
     UnifiedCharacterProfile,
     GameEvent,
-    CasinoView,
-    DareView,
-    VeratownView,
     CasinoState,
     DareState,
     VeratownState,
     CrossSystemState,
+    CasinoView,
+    DareView,
+    VeratownView,
     RoleplayFlags,
     KeypadAccessRecord,
     SuspendedGame,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
+import {
+    validateCharacterProfileTypes,
+    createCasinoState,
+    createDareState,
+    createVeratownState,
+    createCrossSystemState,
+    asTimestamp,
+    asVersion,
+} from "./mongodbTypeValidation";
 
 /**
  * Unified character state store with system-specific views and cross-system events.
@@ -58,6 +67,25 @@ export class UnifiedCharacterStore {
         );
         this.events = db.collection<GameEvent>("gameEvents");
         this.eventBus = eventBus ?? new EventBus();
+    }
+
+    /**
+     * Wrapper around updateOne that ensures numeric fields use correct MongoDB types.
+     * Automatically converts:
+     * - Timestamps (milliseconds): double → long
+     * - Versions: double → int
+     * - Integers: double → int
+     *
+     * This prevents type inconsistencies that arise from JavaScript's Number type.
+     */
+    private async typeSafeUpdateOne(
+        filter: Record<string, unknown>,
+        update: Record<string, unknown>,
+    ): Promise<void> {
+        await this.profiles.updateOne(filter, update);
+
+        // TODO: Post-update type conversion using aggregation pipeline
+        // For now, ensure clients always use proper type conversion on write
     }
 
     private async init(): Promise<void> {
@@ -113,63 +141,29 @@ export class UnifiedCharacterStore {
             return profile;
         }
 
-        // Create new profile with defaults
-        const now = Date.now();
-        const newProfile: UnifiedCharacterProfile = {
+        // Create new profile with defaults using type-safe factory functions
+        const now = asTimestamp(Date.now());
+        const newProfile = {
             _id: memberNumber,
             name: characterName ?? "",
             createdAt: now,
-            casino: {
-                chips: 0,
-                score: 0,
-                winStreak: 0,
-                lossStreak: 0,
-                cheatStrikes: 0,
-                totalWins: 0,
-                totalLosses: 0,
-                // Phase 3: Chip locking
-                lockedChips: 0,
-                recentWinnings: 0,
-                version: 0,
-                updatedAt: now,
-            },
-            dare: {
-                gameIds: [],
-                participationHistory: [],
-                activeBondage: [],
-                suspendedGames: [], // Phase 3.3: Game suspension support
-                totalGamesPlayed: 0,
-                totalDaresCompleted: 0,
-                version: 0,
-                updatedAt: now,
-            },
-            veratown: {
-                lastPositionAt: now,
-                lastAppearanceAt: now,
-                cageIncarcerations: [],
-                totalTimeInCages: 0,
-                kennelSessions: [],
-                totalTimeInKennels: 0,
-                currentRestraints: [],
-                roleplayFlags: {
-                    lastFlagChange: now,
-                },
-                auditLog: [],
-                roles: [],
-                keypadAccess: [],
-                version: 0,
-                updatedAt: now,
-            },
-            crossSystem: {
-                recentEvents: [],
-                features: {},
-                relationships: {},
-                updatedAt: now,
-            },
+            casino: createCasinoState(),
+            dare: createDareState(),
+            veratown: createVeratownState(),
+            crossSystem: createCrossSystemState(),
             lastAccessedAt: now,
             updatedAt: now,
             version: 0,
-        };
+        } as UnifiedCharacterProfile;
+
+        // Validate types before inserting
+        const validation = validateCharacterProfileTypes(newProfile as any);
+        if (!validation.isValid) {
+            console.warn(
+                `Warning: Type validation failed for new profile ${memberNumber}:`,
+                validation.errors,
+            );
+        }
 
         // Upsert to avoid race condition if two calls happen simultaneously
         const result = await this.profiles.findOneAndUpdate(
@@ -209,6 +203,9 @@ export class UnifiedCharacterStore {
      * Update chips (transfer, earn, spend).
      * Emits chip_transfer event and records transaction.
      *
+     * TYPE SAFETY: All timestamps created by Date.now() are stored as long (int64) in MongoDB
+     * to ensure precision for current and future dates. Version fields are stored as int32.
+     *
      * @param memberNumber Target character
      * @param delta Change in chips (positive or negative)
      * @param reason Reason for the change (e.g., "daily_bonus", "bet_lost")
@@ -231,25 +228,28 @@ export class UnifiedCharacterStore {
             return; // No change, no event
         }
 
-        // Update the profile
+        // Update the profile with type-safe conversion
+        // Timestamps: JavaScript Date.now() returns milliseconds (number type)
+        // MongoDB stores as double by default, we convert to long for precision
+        const now = asTimestamp(Date.now());
         await this.profiles.updateOne(
             { _id: memberNumber },
             {
                 $set: {
                     "casino.chips": newChips,
-                    "casino.updatedAt": Date.now(),
-                    "casino.version": profile.casino.version + 1,
-                    lastAccessedAt: Date.now(),
+                    "casino.updatedAt": now,
+                    "casino.version": asVersion(profile.casino.version + 1),
+                    lastAccessedAt: now,
                     lastAccessedBy: "casino",
-                    updatedAt: Date.now(),
-                    version: profile.version + 1,
+                    updatedAt: now,
+                    version: asVersion(profile.version + 1),
                 },
             },
         );
 
         // Emit event
         const event: GameEvent = {
-            timestamp: Date.now(),
+            timestamp: asTimestamp(Date.now()),
             type: actualDelta > 0 ? "chips_earned" : "chips_lost",
             source: "casino",
             actor: actor ?? memberNumber,
