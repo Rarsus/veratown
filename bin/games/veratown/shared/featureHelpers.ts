@@ -8,6 +8,7 @@
  *   if (isOwnerLocked(item)) { ... }
  */
 
+import { API_Character } from "bc-bot";
 import { createLogger } from "../../../logging";
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
@@ -52,7 +53,7 @@ export async function waitWithLog(
  * Check if item is owner-locked
  * Owner-locked items should never be stripped
  */
-export function isOwnerLocked(item: API_Item): boolean {
+export function isOwnerLocked(item: any): boolean {
     if (!item.Property?.Lock) return false;
     const lock = item.Property.Lock;
     return (
@@ -65,26 +66,23 @@ export function isOwnerLocked(item: API_Item): boolean {
 /**
  * Check if item is a cosplay item
  */
-export function isCosplay(item: API_Item): boolean {
+export function isCosplay(item: any): boolean {
     return item.Asset.IsCosplay ?? false;
 }
 
 /**
  * Check if item is clothing
  */
-export function isClothing(item: API_Item): boolean {
+export function isClothing(item: any): boolean {
     return item.Asset.IsClothing ?? false;
 }
 
 /**
  * Get asset safely with fallback
  */
-export function getAssetSafely(
-    group: string,
-    name: string,
-): API_Asset | undefined {
+export function getAssetSafely(group: string, name: string): any | undefined {
     try {
-        return AssetGet(group, name);
+        return (AssetGet as any)(group, name);
     } catch {
         logger.warn(`[FeatureHelpers] Asset not found: ${group}/${name}`);
         return undefined;
