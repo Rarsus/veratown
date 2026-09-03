@@ -245,38 +245,45 @@ Specialized interfaces per system type (CageSystem, ReleaseSystem, etc.). Reject
 
 ---
 
-## 7. Database: MongoDB Collections per Domain vs. Single Collection
+## 7. Database: Unified Character Profiles with Domain Namespacing
 
-**Decision:** Three separate collections for profiles, locations, and maps rather than single "veratown" collection.
+**Decision (Phase 5):** Single unified `unifiedCharacterProfiles` collection for all game systems with domain-namespaced fields (casino, dare, veratown), plus separate collections for locations and maps.
 
 **Schema:**
 
 ```
-veratownCharacterProfiles  // One doc per character
-veratownLocations          // One doc per location
-veratownMap                // Current map state (plus backups)
+unifiedCharacterProfiles  // One doc per character with casino/dare/veratown namespaces
+├─ _id: memberNumber
+├─ name: string
+├─ casino: { chips, score, winStreak, ... }
+├─ dare: { gameIds, activeBondage, suspendedGames, ... }
+└─ veratown: { lastPosition, cageIncarcerations, kennelSessions, releaseParoleState, ... }
+
+veratownLocations        // One doc per location
+veratownMap              // Current map state (plus backups)
 ```
 
 **Reasoning:**
 
-- **Scale:** Characters >> Locations (profiles are large, accessed frequently)
-- **Persistence:** Profiles need backup history; locations are reference data
-- **Atomicity:** Profile updates are atomic per character
-- **Querying:** Easier to query "all characters in parole" from dedicated collection
-- **Archival:** Map backups kept separately (automatic snapshots)
+- **Atomicity:** All player state updates are atomic within a single document
+- **Consistency:** Cross-system queries guaranteed (casino + dare + veratown)
+- **Event-Driven:** Unified EventBus enables cross-system reactions
+- **Scaling:** Sharded by memberNumber for horizontal scale
+- **Separation of Concerns:** Locations and maps remain separate (reference data vs. player state)
 
-**Trade-offs:**
+**Previous Decision (Pre-Phase 5):**
+Three separate collections (veratownCharacterProfiles, CasinoStore, DareStore) with separate VeratownCharacterProfileStore, CasinoStore, and DareStore classes. This led to:
 
-- **Join Operations:** Finding all locations for a character requires two queries
-- **Consistency:** No ACID multi-collection transactions (operations could partially fail)
-- **Complexity:** Three collection schemas to maintain
+- 40-50% code duplication in player state management
+- Complex adapter patterns for cross-system state
+- Difficult to implement cross-system features
 
-**Alternative Considered:**
-Single "veratown" collection with nested documents. Rejected because:
+**Migration (Phase 5 Complete):**
 
-- Profile documents would become huge (audit log + appearance history)
-- Harder to shard across database
-- Backup strategy less clear
+- ✅ Removed VeratownCharacterProfileStore class (deprecated)
+- ✅ Consolidated to UnifiedCharacterStore with domain-namespaced fields
+- ✅ Veratown data now stored in `unifiedCharacterProfiles.veratown` subdocument
+- ✅ All systems use unified store for consistency
 
 ---
 

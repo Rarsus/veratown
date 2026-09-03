@@ -616,58 +616,62 @@ Easter egg treasure hunt with hidden items in trashcan.
 
 ## 11. CHARACTER PROFILE STORE
 
-**File:** `veratownCharacterProfileStore.ts` | **Lines:** 729 | **Status:** ✅ Stable  
+**File:** `bin/games/shared/unifiedCharacterStore.ts` | **Status:** ✅ Live (Phase 5)  
+**Deprecated:** `veratownCharacterProfileStore.ts` (removed from codebase)  
 **Owner:** Core System (non-optional)
 
 ### Purpose
 
-Persistent storage of character state across sessions with audit trail.
+Unified persistent storage of character state across all game systems (Casino, Dare, Veratown) with audit trail and cross-system event propagation.
 
-### Schema
+### Current Implementation (Phase 5)
+
+Uses `UnifiedCharacterStore` with `unifiedCharacterProfiles` collection:
 
 ```typescript
-interface CharacterProfile {
-    _id: number                    // memberNumber
-    lastPosition: {X, Y}
-    lastPositionAt: timestamp
-    currentAppearance: Item[]
-    lastAppearanceAt: timestamp
-    currentRestraints: BondageItem[]
-    releaseParoleState: {
-        parolingAt: timestamp
-        paroleDurationMs: number   // NEW: escalated duration
-        releasedFrom: string
-        removedItems: BondageItem[]
-    }
-    auditLog: Array<{
-        action: string,   // "caged", "freed", "stripped", etc.
-        actor?: string    // who did it
-        timestamp: number
-    }>  // Max 100, oldest dropped
-    cageHistory: Array<{
-        duration: number
-        cageKey: string
-        startedAt: timestamp
-    }>  // Max 10
-    kennelHistory: Array<{...}> // Max 10
+interface UnifiedCharacterProfile {
+    _id: number; // memberNumber
+    name: string;
+    casino: {
+        chips: number;
+        score: number;
+        lockedChips: number;
+        // ... game state
+    };
+    dare: {
+        gameIds: string[];
+        activeBondage: BondageItem[];
+        // ... game state
+    };
+    veratown: {
+        lastPosition: { X; Y };
+        cageIncarcerations: CageSession[];
+        kennelSessions: KennelSession[];
+        currentRestraints: BondageItem[];
+        releaseParoleState: ReleaseParoleState;
+        auditLog: AuditEntry[]; // Max 100
+        // ... location state
+    };
 }
 ```
 
-### Recent Changes (2026-08-27)
+### Previous Implementation (Pre-Phase 5 - DEPRECATED)
 
-- Added `paroleDurationMs` field for escalation tracking
-- New parole state structure supports escalating durations
+Was stored in separate `veratownCharacterProfiles` collection with `VeratownCharacterProfileStore` class. This separation is no longer used.
 
 ### Database Collection
 
-- **Name:** `veratownCharacterProfiles`
+- **Name:** `unifiedCharacterProfiles` (currently live)
+- **Deprecated Name:** `veratownCharacterProfiles` (to be dropped)
 - **Key:** `_id: memberNumber`
-- **Indexes:** memberNumber (primary), lastPositionAt (sorting)
+- **Indexes:** name, casino.chips, veratown.roles, updatedAt
 
-### Operations
+### Operations (via UnifiedCharacterStore)
 
-- `createProfile(memberId)` - Create new profile
-- `getProfile(memberId)` - Retrieve profile
+- `getProfile(memberId)` - Retrieve full profile
+- `recordCageEntry(memberId, ...)` - Log cage session
+- `recordCageExit(memberId)` - Log release
+- `getVeratownView(memberId)` - Project Veratown fields
 - `updateProfile(memberId, changes)` - Update specific fields
 - `addAuditEntry(memberId, action, actor)` - Log action
 - `updateRestraints(memberId, items)` - Update current bondage

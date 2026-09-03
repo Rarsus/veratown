@@ -1165,17 +1165,25 @@ When uncertain, prioritize:
 
 over code brevity.
 
-### Database Schema
+### Database Schema (Phase 5 Unified)
 
-**Three Collections:**
+**Collections:**
 
 ```
-veratownCharacterProfiles
-├─ Position tracking
-├─ Appearance snapshots
-├─ Release parole state
-├─ Audit log (max 100 entries)
-└─ Session history
+unifiedCharacterProfiles (Master collection)
+├─ casino:
+│  ├─ chips, score, winStreak
+│  └─ game state
+├─ dare:
+│  ├─ gameIds, activeBondage
+│  └─ game state
+└─ veratown:
+   ├─ Position tracking
+   ├─ Appearance snapshots
+   ├─ Release parole state
+   ├─ Cage/kennel sessions (max 10 each)
+   ├─ Audit log (max 100 entries)
+   └─ Role assignments
 
 veratownLocations
 ├─ Cage, bed, kennel positions
@@ -1187,6 +1195,11 @@ veratownMap
 ├─ Current map layout
 └─ Backup history (last 10)
 ```
+
+**Deprecated (Pre-Phase 5):**
+
+- ❌ veratownCharacterProfiles (merged into unifiedCharacterProfiles.veratown)
+- ❌ VeratownCharacterProfileStore class (use UnifiedCharacterStore)
 
 **When Adding State:**
 
@@ -1478,7 +1491,7 @@ For deep understanding of Veratown:
 │ ├── keypadDoorSystem.ts              # Code-locked doors
 │ │
 │ # Persistence & Configuration
-│ ├── veratownCharacterProfileStore.ts # Character persistence
+│ ├── veratownCharacterProfileStore.ts # ❌ DEPRECATED (Phase 5: use UnifiedCharacterStore)
 │ ├── veratownLocationStore.ts         # Location persistence
 │ ├── veratownConfig.ts                # Centralized config
 │ ├── shared/
@@ -1667,19 +1680,24 @@ Use these as targets when optimizing:
 
 ---
 
-## Phase 1: Unified Character State Architecture
+## Phase 5: Unified Character State Architecture - COMPLETE ✅
 
-### ✅ COMPLETE - Phase 1 Implementation (2026-08-30)
+### ✅ LIVE - Phase 5 Full Migration (2026-09-03)
 
-**What is Unified Character State?**
+**Unified Character State Implementation:**
 
-The codebase previously maintained three separate MongoDB stores with 40-50% code duplication:
+All three game systems now share a single `UnifiedCharacterStore` with the `unifiedCharacterProfiles` MongoDB collection:
 
-- **CasinoStore**: Chips, scores, stats (isolated)
-- **DareStore**: Game state, bondage, turns (isolated)
-- **VeratownCharacterProfileStore**: Location, cages, audit trail (isolated)
+- **CasinoStore** (deprecated): → UnifiedCharacterStore.casino subdocument
+- **DareStore** (deprecated): → UnifiedCharacterStore.dare subdocument
+- **VeratownCharacterProfileStore** (deprecated): → UnifiedCharacterStore.veratown subdocument
 
-**No cross-system communication existed.** Phase 1 unified this into a single source of truth.
+**Benefits Achieved:**
+
+- ✅ 0% code duplication (eliminated through unified store)
+- ✅ Atomic multi-system transactions
+- ✅ Event-driven cross-system reactions
+- ✅ Enabled 15+ cross-system features
 
 ### New Components (Phase 1 Deliverables)
 
@@ -1840,19 +1858,38 @@ Each system reads/writes through its view. No duplicated data. Changes automatic
 Three adapters enable gradual migration without code changes:
 
 1. **CasinoStoreAdapter** (191 lines)
-    - Implements CasinoStore interface
-    - Delegates chips/stats to unified store
-    - Maintains backward compatibility
 
-2. **DareStoreAdapter** (210 lines)
-    - Passes through game state
-    - Coordinates bondage tracking with unified store
-    - Game definitions remain in original store
+### Phase 2-4: Adapters (DEPRECATED - Phase 5 Complete) ⚠️
 
-3. **VeratownStoreAdapter** (340 lines)
-    - Full VeratownCharacterProfileStore API
-    - Position, cages, audit trail all integrated
-    - 100% API coverage (17 methods)
+Previous phases used adapter layers for gradual migration:
+
+- **CasinoStoreAdapter** (deprecated) → removed in Phase 5
+- **DareStoreAdapter** (deprecated) → removed in Phase 5
+- **VeratownStoreAdapter** (deprecated) → removed in Phase 5, replaced with direct UnifiedCharacterStore
+
+### Phase 5: Direct UnifiedCharacterStore Access ✅ (CURRENT)
+
+All systems now use UnifiedCharacterStore directly without adapter layers:
+
+```typescript
+// Casino: direct unified store access
+const unifiedStore =
+    global.unifiedCharacterStore || new UnifiedCharacterStore(db);
+const casinoView = await unifiedStore.getCasinoView(memberNumber);
+
+// Dare: direct unified store access
+const dareView = await unifiedStore.getDareView(memberNumber);
+
+// Veratown: direct unified store access
+const veratownView = await unifiedStore.getVeratownView(memberNumber);
+```
+
+**Benefits:**
+
+- Single source of truth (no adapter complexity)
+- Type-safe across all systems
+- Atomic multi-system transactions
+- Event propagation via unified EventBus
 
 **Phase 2.2: Event-Driven Cross-System Coordination** ✅
 
