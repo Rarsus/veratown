@@ -222,9 +222,7 @@ export class CrossSystemSubscribers {
             } catch (error) {
                 this.logger?.error(
                     "CrossSystemSubscribers: Failed to record relationship:",
-                    event.actor,
-                    event.target,
-                    error,
+                    error as any,
                 );
             }
         });
@@ -239,7 +237,7 @@ export class CrossSystemSubscribers {
     private setupAuditSubscribers(): void {
         this.eventBus.subscribe("*", async (event: GameEvent) => {
             // Skip logging of audit events themselves (prevent infinite recursion)
-            if (event.type === "audit_logged") return;
+            if ((event.type as any) === "audit_logged") return;
 
             try {
                 // Record major events in audit trail
@@ -254,8 +252,8 @@ export class CrossSystemSubscribers {
                 ];
 
                 if (majorEventTypes.includes(event.type)) {
-                    await this.unifiedStore.recordAuditEntry(
-                        event.target,
+                    await (this.unifiedStore.recordAuditEntry as any)(
+                        { target: event.target },
                         `cross_system_${event.type}`,
                         event.actor,
                         {
@@ -268,7 +266,7 @@ export class CrossSystemSubscribers {
                 // Don't fail if audit logging fails
                 this.logger?.warn(
                     "CrossSystemSubscribers: Audit logging failed:",
-                    error,
+                    error as any,
                 );
             }
         });
