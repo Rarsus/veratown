@@ -48,7 +48,10 @@ export class BedSystem implements VeratownFeatureSystem {
     private readonly bedTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(private conn: API_Connector) {
-        this.bedTrigger = guardHandler(this.key, this.onCharacterEnterBed);
+        this.bedTrigger = guardHandler(
+            this.key,
+            this.onCharacterEnterBed as any,
+        );
     }
 
     public registerTriggers(): void {
@@ -65,7 +68,7 @@ export class BedSystem implements VeratownFeatureSystem {
             });
 
             for (const bedPos of this.bedPositions) {
-                this.conn.chatRoom.map.removeTileTrigger(
+                this.conn.chatRoom!.map.removeTileTrigger(
                     bedPos.X,
                     bedPos.Y,
                     this.bedTrigger,
@@ -93,7 +96,7 @@ export class BedSystem implements VeratownFeatureSystem {
 
             for (const bedPos of this.bedPositions) {
                 try {
-                    this.conn.chatRoom.map.addTileTrigger(
+                    this.conn.chatRoom!.map.addTileTrigger(
                         bedPos,
                         this.bedTrigger,
                     );
@@ -148,7 +151,7 @@ export class BedSystem implements VeratownFeatureSystem {
         const memberNumber = character.MemberNumber;
 
         const isOnBed = () => {
-            if (!this.conn.chatRoom.getCharacter(memberNumber)) {
+            if (!this.conn.chatRoom!.getCharacter(memberNumber)) {
                 return false;
             }
 

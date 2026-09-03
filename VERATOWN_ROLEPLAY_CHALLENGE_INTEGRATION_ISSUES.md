@@ -4,8 +4,10 @@
 
 **Status**: Planning  
 **Priority**: High  
-**Effort**: ~240-280 story points  
+**Effort**: ~200-240 story points (with shared infrastructure synergies)  
 **Target Release**: Phase 5.1+
+
+> **📋 Cross-Integration Note**: This effort is part of a three-game integration strategy. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) for shared infrastructure components, MongoDB Atlas optimization, and cross-game features that reduce total effort from ~780-900 points to ~730-815 points.
 
 ---
 
@@ -31,15 +33,38 @@
 
 ---
 
+## PREREQUISITES: Shared Infrastructure (One-Time Effort, ~25 points)
+
+These components are created once and shared across RoleplayChallenge, MaidsPartyNight, and KidnappersGame. Reduce development time for all three integrations by 20-30%.
+
+**Shared Components** (see [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) Section 1):
+
+- [ ] `VeratownGameFeatureBase` - Abstract base class with lifecycle, state, error handling
+- [ ] `PlayerGameSession` model - Unified player state across games
+- [ ] `AppearanceManager` utilities - Capture/restore/apply logic (all three games need this)
+- [ ] `GameTimerManager` - Unified timer and pacing system
+- [ ] `GameCommandRouter` - Consistent command parsing + role-based access control
+
+**MongoDB Atlas Features** (see [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) Section 2):
+
+- [ ] Schema validation + TTL indexes
+- [ ] Aggregation pipelines for analytics
+- [ ] Change Streams for real-time discovery
+
+**Effort Impact**: ~40 points saved per game through code reuse. RoleplayChallenge = 240 → 200 points.
+
+---
+
 ## ISSUE 1: Architecture & Refactoring Planning
 
 **Parent**: EPIC  
-**Story Points**: 13  
-**Status**: Ready for refinement
+**Story Points**: 8 (reduced from 13 with VeratownGameFeatureBase)  
+**Status**: Ready for refinement  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Define the architectural refactor from standalone hub room to Veratown feature system. This establishes the foundation for all other work.
+Define the architectural refactor from standalone hub room to Veratown feature system. Extends shared `VeratownGameFeatureBase` to eliminate duplicate lifecycle management. This establishes the foundation for all other work.
 
 ### Acceptance Criteria
 
@@ -1385,15 +1410,17 @@ export async function seedRoleplayChallenges(db: Db): Promise<void> {
 ## ISSUE 6: Appearance Storage & Restoration
 
 **Parent**: EPIC  
-**Story Points**: 16  
-**Status**: Ready for development
+**Story Points**: 8 (reduced from 16 with shared AppearanceManager)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Implement safe appearance storage on entry and restoration on exit, coordinating with appearance audit trail.
+Implement safe appearance storage on entry and restoration on exit using shared `AppearanceManager` utility. Coordinate with appearance audit trail for compliance.
 
 ### Acceptance Criteria
 
+- [ ] Use shared AppearanceManager for capture/restore logic
 - [ ] Appearance captured on region entry
 - [ ] Stored in UnifiedCharacterStore
 - [ ] Appearance restored on region exit
@@ -1403,15 +1430,19 @@ Implement safe appearance storage on entry and restoration on exit, coordinating
 
 ### Related Files
 
-- `bin/games/veratown/shared/appearanceSync.ts` (utilities)
+- `bin/games/veratown/shared/appearanceUtils.ts` (SHARED - do not duplicate)
 - `bin/games/veratown/appearanceAuditTrail.ts` (audit)
 - `bin/games/veratown/roleplaychallengeGameFeature.ts` (consumer)
 
+### Shared Infrastructure Note
+
+The `AppearanceManager` class is created once and shared across all three game integrations (RoleplayChallenge, MaidsPartyNight, KidnappersGame). This eliminates 150+ LOC duplication. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.3](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#13-shared-appearance--item-management-utilities).
+
 ### Sub-Issues
 
-- [ ] ISSUE 6.1: Design appearance capture/restore flow
-- [ ] ISSUE 6.2: Implement appearance storage on entry
-- [ ] ISSUE 6.3: Implement appearance restoration on exit
+- [ ] ISSUE 6.1: Use AppearanceManager.captureAppearance()
+- [ ] ISSUE 6.2: Store and retrieve using shared methods
+- [ ] ISSUE 6.3: Use AppearanceManager.restoreAppearance()
 - [ ] ISSUE 6.4: Integrate with AppearanceAuditTrail
 - [ ] ISSUE 6.5: Test appearance sync edge cases
 
@@ -1708,16 +1739,17 @@ Comprehensive edge case testing for appearance sync.
 ## ISSUE 7: Timer & UI System
 
 **Parent**: EPIC  
-**Story Points**: 14  
-**Status**: Ready for development
+**Story Points**: 10 (reduced from 14 with shared GameTimerManager)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Implement game timer, sign updates, and user feedback messages.
+Implement game timer, sign updates, and user feedback messages using shared `GameTimerManager`.
 
 ### Acceptance Criteria
 
-- [ ] Tick timer running during active roleplay
+- [ ] Use shared GameTimerManager for tick timers
 - [ ] Countdown display (e.g., "14m 37s remaining")
 - [ ] Sign updated with game state
 - [ ] 2-min warning before game end
@@ -1727,11 +1759,16 @@ Implement game timer, sign updates, and user feedback messages.
 
 ### Related Files
 
+- `bin/games/veratown/shared/gameTimerManager.ts` (SHARED - do not duplicate)
 - `bin/games/veratown/roleplaychallengeGameFeature.ts`
+
+### Shared Infrastructure Note
+
+The `GameTimerManager` class is created once and shared across all three game integrations. All games use the same timer, warning, and cleanup patterns. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.4](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#14-shared-timer--pacing-system).
 
 ### Sub-Issues
 
-- [ ] ISSUE 7.1: Implement tick timer with state machine
+- [ ] ISSUE 7.1: Use GameTimerManager.startPhaseTimer()
 - [ ] ISSUE 7.2: Implement wooden sign updates
 - [ ] ISSUE 7.3: Implement game announcement system
 - [ ] ISSUE 7.4: Implement 2-min warning & extension vote notification
