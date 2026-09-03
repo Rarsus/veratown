@@ -5,14 +5,10 @@
 ########################################
 FROM node:22-slim AS build
 
-RUN npm install -g pnpm@11
+RUN npm install -g pnpm@10
 
 # Run non-interactively so pnpm never blocks waiting for a confirmation prompt.
 ENV CI=true
-
-# Allow build scripts in CI environment
-# pnpm v11 requires explicit approval for build scripts
-ENV PNPM_SCRIPT_ALLOW_SCRIPTS=*
 
 WORKDIR /app
 
@@ -21,13 +17,9 @@ WORKDIR /app
 COPY . .
 
 # Install dependencies
-# pnpm v11 has stricter supply-chain policies and build script verification
-# Use --no-verify-store-integrity to skip package age checks (discord-api-types frequently updated)
-# Use --no-frozen-lockfile to allow regeneration if needed
-RUN pnpm install --no-verify-store-integrity --no-frozen-lockfile 2>&1 || \
-    (echo "First install failed, regenerating lockfile..." && \
-     rm -rf pnpm-lock.yaml node_modules .pnpm && \
-     pnpm install --no-verify-store-integrity)
+# Use pnpm v10 which is more lenient with build scripts than v11
+# This allows necessary build scripts (esbuild) to run without strict verification
+RUN pnpm install --no-frozen-lockfile
 
 # Build the production bundle.
 RUN pnpm run bundle
