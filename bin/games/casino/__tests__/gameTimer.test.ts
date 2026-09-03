@@ -160,7 +160,7 @@ test("GameTimer: interval timer can be stopped with clear", async () => {
 
 test("GameTimer: reset returns false when no timer active", () => {
     const timer = new GameTimer();
-    const result = timer.reset(1000);
+    const result = timer.reset(1000, () => {});
     assert.strictEqual(result, false);
 });
 

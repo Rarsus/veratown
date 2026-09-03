@@ -256,15 +256,13 @@ export class GameManager {
      * Get serialized state for persistence.
      */
     public serialize(): SerializedGame[] {
-        return [...this.games.values()].map(
-            (g): SerializedGame => ({
-                id: g.id,
-                turnOrder: [...g.turnOrder],
-                currentTurnIndex: g.currentTurnIndex,
-                round: g.round,
-                turnStartedAt: g.turnStartedAt,
-            }),
-        );
+        return [...this.games.values()].map((g): SerializedGame => ({
+            id: g.id,
+            turnOrder: [...g.turnOrder],
+            currentTurnIndex: g.currentTurnIndex,
+            round: g.round,
+            turnStartedAt: g.turnStartedAt,
+        }));
     }
 
     /**
@@ -282,7 +280,7 @@ export class GameManager {
             const game: Game = {
                 id: sg.id,
                 turnOrder: [...sg.turnOrder],
-                currentTurnIndex: sg.currentTurnIndex,
+                currentTurnIndex: sg.currentTurnIndex || 0,
                 round: sg.round,
                 turnStartedAt: sg.turnStartedAt,
                 turnReminderTimer: new GameTimer(),

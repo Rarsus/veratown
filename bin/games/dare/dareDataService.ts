@@ -153,7 +153,7 @@ export class DareDataService {
         const dare = result[0];
         await this.dares.updateOne({ _id: dare._id }, { $inc: { uses: 1 } });
 
-        return dare;
+        return dare as DareDoc;
     }
 
     /**
@@ -162,7 +162,7 @@ export class DareDataService {
     public async addDare(dare: DareDoc): Promise<string> {
         await this.init();
 
-        const doc: DareDoc = {
+        const doc: any = {
             ...dare,
             createdAt: Date.now(),
             updatedAt: Date.now(),

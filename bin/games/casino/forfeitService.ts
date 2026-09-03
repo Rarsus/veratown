@@ -165,9 +165,9 @@ export class ForfeitService {
         forfeit: (typeof FORFEITS)[string],
         adminMemberNumber: number,
     ): void {
-        let characterHairColor = character.Appearance.InventoryGet(
+        let characterHairColor = (character.Appearance.InventoryGet(
             "HairFront",
-        ).GetColor() as BCColor | BCColor[];
+        )!.GetColor() || "") as BCColor | BCColor[];
 
         const added = character.Appearance.AddItem(item);
 
