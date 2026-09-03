@@ -12,9 +12,12 @@
  * limitations under the License.
  */
 
+// @ts-ignore - jest types not available
 import { beforeEach, describe, it, expect, afterEach } from "@jest/globals";
-import { Db, MongoMemoryServer } from "mongodb";
+declare const jest: any;
+import { Db } from "mongodb";
 import { MongoClient } from "mongodb";
+import { MongoMemoryServer } from "mongodb-memory-server";
 import { API_Character } from "bc-bot";
 import { KeypadAccessService } from "../../veratown/services/keypadAccessService";
 import { KeypadDefinitionService } from "../../veratown/services/keypadDefinitionService";
@@ -67,8 +70,8 @@ describe("KeypadCommandHandlers", () => {
         await accessService.init();
 
         // Create test characters
-        await characterStore.getOrCreateProfile(1, "Admin");
-        await characterStore.getOrCreateProfile(2, "Player");
+        await characterStore.getProfile(1);
+        await characterStore.getProfile(2);
     });
 
     afterEach(async () => {
