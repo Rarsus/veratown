@@ -496,7 +496,11 @@ export async function startBot(): Promise<RopeyBot> {
                 discord_enabled: config.discord_enabled !== false,
             };
 
-            activeDiscordClient = await initializeDiscordBot(discordConfig, db);
+            activeDiscordClient = await initializeDiscordBot(
+                discordConfig,
+                db,
+                activeConnections,
+            );
             if (activeDiscordClient) {
                 logger.info("Discord bot initialized successfully");
             }

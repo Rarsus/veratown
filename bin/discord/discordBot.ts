@@ -27,6 +27,7 @@ import {
 } from "discord.js";
 import type { Db } from "mongodb";
 import type { DiscordBotConfig, CommandContext } from "./types";
+import type { BotConnections } from "../botConnections";
 import { createLogger } from "../logging";
 import { formatResultAsEmbed } from "./utils/discordHelpers";
 import { handlePlayerListCommand } from "./commands/playerManagement";
@@ -54,17 +55,20 @@ let isInitialized = false;
  */
 let globalDb: Db | undefined;
 let globalConfig: DiscordBotConfig | undefined;
+let globalBotConnections: BotConnections | undefined;
 
 /**
  * Initialize the Discord bot client and register slash commands
  *
  * @param config Discord bot configuration
  * @param db MongoDB database instance for shared access
+ * @param botConnections Bot connections for status tracking
  * @returns Initialized Discord client, or undefined if Discord is disabled
  */
 export async function initializeDiscordBot(
     config: DiscordBotConfig,
     db: Db,
+    botConnections?: BotConnections,
 ): Promise<Client<boolean> | undefined> {
     const isEnabled = config.discord_enabled ?? true;
     if (!isEnabled) {
@@ -117,9 +121,10 @@ export async function initializeDiscordBot(
             ],
         });
 
-        // Store config and db globally for handler access
+        // Store config, db, and connections globally for handler access
         globalConfig = config;
         globalDb = db;
+        globalBotConnections = botConnections;
 
         // Set up event listeners
         discordClient.once("ready", (): void => {
@@ -361,6 +366,7 @@ export async function handleCommandInteraction(
         );
         const context: CommandContext = {
             db,
+            botConnections: globalBotConnections,
             userId,
             guildId: guildId || "",
             isAdmin,
