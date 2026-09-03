@@ -29,7 +29,7 @@ const mockCharacter = {
 } as any;
 
 // Mock dare doc for testing
-const mockDare: DareDoc = {
+const mockDare: any = {
     id: "dare-1",
     type: "strip",
     content: "Strip completely",
