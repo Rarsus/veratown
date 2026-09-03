@@ -45,43 +45,43 @@ export class CasinoVenueSystem {
      */
     private initializeDefaultVenues(): void {
         // Main casino floor
-        this.venues.set("MainHall", {
-            region: "MainHall",
+        this.venues.set("MainHall" as any, {
+            region: "MainHall" as any,
             chipMultiplier: 1.0,
             description: "Main Casino Floor (Standard Payout)",
         });
 
         // High roller area
-        this.venues.set("MainHallThrone", {
-            region: "MainHallThrone",
+        this.venues.set("MainHallThrone" as any, {
+            region: "MainHallThrone" as any,
             chipMultiplier: 1.25,
             description: "Royal Suite (25% Bonus)",
         });
 
         // VIP area
-        this.venues.set("MainHallPrivateRoom", {
-            region: "MainHallPrivateRoom",
+        this.venues.set("MainHallPrivateRoom" as any, {
+            region: "MainHallPrivateRoom" as any,
             chipMultiplier: 1.5,
             description: "Private Room (50% Bonus)",
         });
 
         // Lounge
-        this.venues.set("MainHallLounge", {
-            region: "MainHallLounge",
+        this.venues.set("MainHallLounge" as any, {
+            region: "MainHallLounge" as any,
             chipMultiplier: 1.1,
             description: "Lounge Area (10% Bonus)",
         });
 
         // Restaurant
-        this.venues.set("MainHallRestaurant", {
-            region: "MainHallRestaurant",
+        this.venues.set("MainHallRestaurant" as any, {
+            region: "MainHallRestaurant" as any,
             chipMultiplier: 0.9,
             description: "Restaurant (10% Penalty)",
         });
 
         // Security area (no gambling)
-        this.venues.set("MainHallShop", {
-            region: "MainHallShop",
+        this.venues.set("MainHallShop" as any, {
+            region: "MainHallShop" as any,
             chipMultiplier: 0.0,
             description: "Shop (No Gambling)",
         });
