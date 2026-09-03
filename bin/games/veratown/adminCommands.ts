@@ -145,7 +145,7 @@ export class VeratownAdminCommands {
             return;
         }
 
-        const target = this.conn.chatRoom.findCharacter(args[0]);
+        const target = this.conn.chatRoom!.findCharacter(args[0]);
         if (!target) {
             this.conn.reply(msg, "I can't find that person.");
             return;
@@ -238,7 +238,7 @@ export class VeratownAdminCommands {
             case "update": {
                 if (!this.requireAdmin(sender, msg)) return;
 
-                const mapData = this.conn.chatRoom.map.mapData;
+                const mapData = this.conn.chatRoom!.map.mapData;
                 if (!mapData) {
                     this.conn.reply(msg, "No map data is currently loaded.");
                     return;
@@ -264,7 +264,7 @@ export class VeratownAdminCommands {
                 const mapData = JSON.parse(
                     decompressFromBase64(DEFAULT_MAP_BUNDLE),
                 );
-                this.conn.chatRoom.map.setMapFromData(mapData);
+                this.conn.chatRoom!.map.setMapFromData(mapData);
 
                 if (this.mapStore) {
                     await this.mapStore.reset();
@@ -279,7 +279,7 @@ export class VeratownAdminCommands {
             case "export": {
                 if (!this.requireAdmin(sender, msg)) return;
 
-                const mapData = this.conn.chatRoom.map.mapData;
+                const mapData = this.conn.chatRoom!.map.mapData;
                 if (!mapData) {
                     this.conn.reply(msg, "No map data is currently loaded.");
                     return;
@@ -359,7 +359,7 @@ export class VeratownAdminCommands {
                     await this.mapStore.restoreBackup(backupId);
                     const restoredMapData = await this.mapStore.load();
                     if (restoredMapData) {
-                        this.conn.chatRoom.map.setMapFromData(restoredMapData);
+                        this.conn.chatRoom!.map.setMapFromData(restoredMapData);
                     }
                     this.conn.reply(
                         msg,
@@ -1368,7 +1368,7 @@ export class VeratownAdminCommands {
             return;
         }
 
-        this.conn.chatRoom.map.setMapFromData(mapData);
+        this.conn.chatRoom!.map.setMapFromData(mapData);
 
         if (this.mapStore) {
             await this.mapStore.save(mapData, ev.sender.MemberNumber);
