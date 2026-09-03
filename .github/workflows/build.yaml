@@ -38,7 +38,8 @@ jobs:
               run: "pnpm install"
 
             - name: Install app dependencies
-              run: "pnpm install"
+              run: |
+                pnpm install || (pnpm clean --lockfile && pnpm install)
 
             - name: Bundle
               run: "pnpm run bundle"

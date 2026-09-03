@@ -23,13 +23,15 @@ jobs:
               uses: actions/checkout@v4
 
             - name: Install dependencies
-              run: "pnpm install"
+              run: |
+                pnpm install || (pnpm clean --lockfile && pnpm install)
 
             - name: Run Prettier
               run: "pnpm run prettier"
 
             - name: Install library dependencies
-              run: "cd src && pnpm install"
+              run: |
+                cd src && (pnpm install || (pnpm clean --lockfile && pnpm install))
 
             - name: Compile library
               run: "cd src && pnpm run compile"
