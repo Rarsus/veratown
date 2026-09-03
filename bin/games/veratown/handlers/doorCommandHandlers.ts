@@ -24,7 +24,7 @@ import { KeypadDoorDefinitionDoc } from "../keypadTypes";
  * Create a new door definition
  */
 export class CreateDoorHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (
@@ -104,7 +104,7 @@ export class CreateDoorHandler extends KeypadCommandHandler {
  * Update a door definition field
  */
 export class UpdateDoorHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1] || !context.args[2]) {
@@ -161,7 +161,7 @@ export class UpdateDoorHandler extends KeypadCommandHandler {
  * Delete a door definition
  */
 export class DeleteDoorHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0]) {
@@ -197,7 +197,7 @@ export class DeleteDoorHandler extends KeypadCommandHandler {
  * List all door definitions
  */
 export class ListDoorsHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected async handle(
         context: KeypadCommandContext,
@@ -226,7 +226,7 @@ export class ListDoorsHandler extends KeypadCommandHandler {
  * Get detailed information about a door
  */
 export class DoorInfoHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0]) {
