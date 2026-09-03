@@ -205,10 +205,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private reloadLocationsCallback?: () => Promise<void>,
         private keypadAccessGroupManager?: KeypadAccessGroupManager,
     ) {
-        this.keypadTrigger = guardHandler(this.key, this.onCharacterAtKeypad);
+        this.keypadTrigger = guardHandler(
+            this.key,
+            this.onCharacterAtKeypad as any,
+        );
         this.autoOpenTrigger = guardHandler(
             this.key,
-            this.onCharacterAtAutoOpenTile,
+            this.onCharacterAtAutoOpenTile as any,
         );
     }
 
@@ -1237,10 +1240,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         return characters.some(
             (character) =>
                 character.MemberNumber !== this.conn.Player.MemberNumber &&
-                character.MapPos.X >= door.config.insideRegion.TopLeft.X &&
-                character.MapPos.X <= door.config.insideRegion.BottomRight.X &&
-                character.MapPos.Y >= door.config.insideRegion.TopLeft.Y &&
-                character.MapPos.Y <= door.config.insideRegion.BottomRight.Y,
+                character.MapPos.X >= door.config.insideRegion!.TopLeft.X &&
+                character.MapPos.X <= door.config.insideRegion!.BottomRight.X &&
+                character.MapPos.Y >= door.config.insideRegion!.TopLeft.Y &&
+                character.MapPos.Y <= door.config.insideRegion!.BottomRight.Y,
         );
     }
 }
