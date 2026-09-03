@@ -3,5 +3,8 @@ src/bcdata/*
 # Code from the bot hub with minimal modifications, kept formatted as they were
 bin/hub/*
 
+# MongoDB migration scripts use mongosh syntax, not valid JavaScript
+scripts/*.mongodb.js
+
 pnpm-lock.yaml
 src/pnpm-lock.yaml
