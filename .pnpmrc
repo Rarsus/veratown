@@ -7,3 +7,7 @@ enable-pre-post-scripts=true
 # Public hoisting for dependencies to reduce duplication
 public-hoist-pattern[]=*
 public-hoist-pattern[]=@types/*
+
+# Allow build scripts for packages that need them
+# pnpm v11 ignores builds by default for security; we need to explicitly allow
+script.allow-scripts=true

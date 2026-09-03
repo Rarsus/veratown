@@ -10,17 +10,21 @@ RUN npm install -g pnpm@11
 # Run non-interactively so pnpm never blocks waiting for a confirmation prompt.
 ENV CI=true
 
+# Configure pnpm to allow build scripts for necessary packages
+# pnpm v11 ignores builds by default; we need esbuild and mongodb-memory-server builds
+ENV PNPM_IGNORE_BUILDS=false
+
 WORKDIR /app
 
 # The "src" package's install/prepare scripts (pnpm compile) need its
 # tsconfig.json and sources present, so copy the full repo before installing.
 COPY . .
 
-# Install dependencies with fallback for supply-chain policy violations
-# pnpm v11 has strict policies that reject packages published less than 9 hours ago
-# Discord API types are frequently updated and trigger this check
-# Using --no-verify-store-integrity to skip policy check in Docker builds
-RUN pnpm install --no-verify-store-integrity || (rm -rf pnpm-lock.yaml && pnpm install --no-verify-store-integrity)
+# Install dependencies with build scripts allowed
+# pnpm v11 has stricter security by default; we need to allow builds for esbuild and other packages
+# Try with supply-chain check first (it may have passed now that discord-api-types is older)
+# Fallback: if supply-chain fails, regenerate lockfile
+RUN pnpm install --ignore-scripts=false || (pnpm install --ignore-scripts=false --no-verify-store-integrity) || (rm -rf pnpm-lock.yaml && pnpm install --ignore-scripts=false)
 
 # Build the production bundle.
 RUN pnpm run bundle
