@@ -23,7 +23,7 @@ import {
  * Grant access to a door for a character
  */
 export class GrantAccessHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1] || !context.args[2]) {
@@ -86,7 +86,7 @@ export class GrantAccessHandler extends KeypadCommandHandler {
  * Revoke access to a door for a character
  */
 export class RevokeAccessHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1]) {
@@ -138,7 +138,7 @@ export class RevokeAccessHandler extends KeypadCommandHandler {
  * Get all keypad access records for a character
  */
 export class GetAccessHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0]) {
@@ -193,7 +193,7 @@ export class GetAccessHandler extends KeypadCommandHandler {
  * Check if a character can access a specific door
  */
 export class CheckAccessHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1]) {
