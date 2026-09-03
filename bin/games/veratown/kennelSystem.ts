@@ -42,7 +42,7 @@ export class KennelSystem implements VeratownFeatureSystem {
     public constructor(private conn: API_Connector) {
         this.kennelTrigger = guardHandler(
             this.key,
-            this.onCharacterEnterKennel,
+            this.onCharacterEnterKennel as any,
         );
     }
 
@@ -55,7 +55,7 @@ export class KennelSystem implements VeratownFeatureSystem {
     ): Promise<void> {
         try {
             for (const kennelPos of this.kennelPositions) {
-                this.conn.chatRoom.map.removeTileTrigger(
+                this.conn.chatRoom!.map.removeTileTrigger(
                     kennelPos.X,
                     kennelPos.Y,
                     this.kennelTrigger,
@@ -70,7 +70,7 @@ export class KennelSystem implements VeratownFeatureSystem {
             }
 
             for (const kennelPos of this.kennelPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
+                this.conn.chatRoom!.map.addTileTrigger(
                     kennelPos,
                     this.kennelTrigger,
                 );
@@ -125,7 +125,7 @@ export class KennelSystem implements VeratownFeatureSystem {
     public freeCharacterIfKenneled(character: API_Character): void {
         const kennel = character.Appearance.getItemData("ItemDevices");
         if (kennel?.Name === "Kennel") {
-            character.Appearance.RemoveItem("ItemDevices", "Kennel");
+            character.Appearance.RemoveItem("ItemDevices" as any);
         }
     }
 }

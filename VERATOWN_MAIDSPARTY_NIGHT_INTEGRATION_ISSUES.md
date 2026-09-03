@@ -4,8 +4,10 @@
 
 **Status**: Planning  
 **Priority**: High  
-**Effort**: ~260-300 story points  
+**Effort**: ~220-260 story points (with shared infrastructure synergies)  
 **Target Release**: Phase 5.2+
+
+> **📋 Cross-Integration Note**: This effort is part of a three-game integration strategy. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) for shared infrastructure components, MongoDB Atlas optimization, and cross-game features that reduce total effort from ~780-900 points to ~730-815 points.
 
 ---
 
@@ -34,15 +36,38 @@
 
 ---
 
+## PREREQUISITES: Shared Infrastructure (One-Time Effort, ~25 points)
+
+These components are created once and shared across RoleplayChallenge, MaidsPartyNight, and KidnappersGame. Reduce development time for all three integrations by 20-30%.
+
+**Shared Components** (see [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) Section 1):
+
+- [ ] `VeratownGameFeatureBase` - Abstract base class with lifecycle, state, error handling
+- [ ] `PlayerGameSession` model - Unified player state across games
+- [ ] `AppearanceManager` utilities - Capture/restore/apply logic (all three games need this)
+- [ ] `GameTimerManager` - Unified timer and pacing system
+- [ ] `GameCommandRouter` - Consistent command parsing + role-based access control
+
+**MongoDB Atlas Features** (see [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) Section 2):
+
+- [ ] Schema validation + TTL indexes
+- [ ] Aggregation pipelines for analytics
+- [ ] Change Streams for real-time discovery
+
+**Effort Impact**: ~40 points saved per game through code reuse. MaidsPartyNight = 260-300 → 220-260 points.
+
+---
+
 ## ISSUE 1: Architecture & Single-Player Game Design Planning
 
 **Parent**: EPIC  
-**Story Points**: 15  
-**Status**: Ready for refinement
+**Story Points**: 12 (reduced from 15 with VeratownGameFeatureBase)  
+**Status**: Ready for refinement  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Define architectural approach for converting single-player story-driven adventure from standalone room to Veratown region-bound feature.
+Define architectural approach for converting single-player story-driven adventure from standalone room to Veratown region-bound feature. Extends shared `VeratownGameFeatureBase` for lifecycle management. This establishes the foundation for all other work.
 
 ### Acceptance Criteria
 
@@ -1516,15 +1541,17 @@ Create migration to seed story content to database.
 ## ISSUE 6: Appearance & Item Management System
 
 **Parent**: EPIC  
-**Story Points**: 20  
-**Status**: Ready for development
+**Story Points**: 10 (reduced from 20 with shared AppearanceManager)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Implement safe appearance changes, item application/removal, and costume management.
+Implement safe appearance changes, item application/removal, and costume management using shared `AppearanceManager` utility.
 
 ### Acceptance Criteria
 
+- [ ] Use shared AppearanceManager for capture/restore logic
 - [ ] Appearance captured on game start
 - [ ] Costume/outfit changes applied
 - [ ] Items added safely (check permissions)
@@ -1534,13 +1561,17 @@ Implement safe appearance changes, item application/removal, and costume managem
 - [ ] No permanent modifications if error
 - [ ] AuditTrail integration
 
+### Shared Infrastructure Note
+
+The `AppearanceManager` class is created once and shared across all three game integrations (RoleplayChallenge, MaidsPartyNight, KidnappersGame). This eliminates 150+ LOC duplication. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.3](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#13-shared-appearance--item-management-utilities).
+
 ### Sub-Issues
 
 - [ ] ISSUE 6.1: Design appearance/costume system
-- [ ] ISSUE 6.2: Implement costume application
-- [ ] ISSUE 6.3: Implement item application
-- [ ] ISSUE 6.4: Implement item removal
-- [ ] ISSUE 6.5: Implement appearance restoration
+- [ ] ISSUE 6.2: Use AppearanceManager.applyOutfit()
+- [ ] ISSUE 6.3: Use AppearanceManager.applyRestraint()
+- [ ] ISSUE 6.4: Use AppearanceManager.removeRestraint()
+- [ ] ISSUE 6.5: Use AppearanceManager.restoreAppearance()
 - [ ] ISSUE 6.6: Integrate AppearanceAuditTrail
 - [ ] ISSUE 6.7: Test appearance edge cases
 

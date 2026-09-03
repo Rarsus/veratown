@@ -288,12 +288,13 @@ Design how RoleplaychallengeGameFeature will use CommandParser to restrict comma
 ## ISSUE 2: FeatureSystem Conversion & Refactoring
 
 **Parent**: EPIC  
-**Story Points**: 34  
-**Status**: Ready for development
+**Story Points**: 24 (reduced from 34 with VeratownGameFeatureBase)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Convert RoleplaychallengeGameRoom from standalone hub logic to proper VeratownFeature implementation.
+Convert RoleplaychallengeGameRoom from standalone hub logic to proper VeratownFeature implementation. Extend shared `VeratownGameFeatureBase` to inherit lifecycle management, event handlers, and state persistence.
 
 ### Acceptance Criteria
 
@@ -323,28 +324,32 @@ Convert RoleplaychallengeGameRoom from standalone hub logic to proper VeratownFe
 ## ISSUE 2.1: Create RoleplaychallengeGameFeature Base Class
 
 **Parent**: ISSUE 2  
-**Story Points**: 5
+**Story Points**: 2 (reduced from 5 - now just extends VeratownGameFeatureBase)
 
 ### Description
 
-Create the new class skeleton with proper inheritance, constructor, and required interface methods.
+Create the new class by extending `VeratownGameFeatureBase`. Override game-specific methods for challenge management.
 
 ### Acceptance Criteria
 
 - [ ] Class file created and exports correctly
-- [ ] All VeratownFeatureSystem methods stubbed
-- [ ] Constructor initializes all dependencies
-- [ ] guardHandler() used for error isolation
+- [ ] Extends `VeratownGameFeatureBase` (no duplicate lifecycle code)
+- [ ] Override `getGameName()`, `getRegionBounds()`, `handleRegionCommand()`
+- [ ] Constructor calls super() with dependencies
 - [ ] Logger configured
 - [ ] Compiles without errors
 
 ### Implementation Steps
 
 1. Create `bin/games/veratown/roleplaychallengeGameFeature.ts`
-2. Implement constructor with dependency injection
-3. Stub `registerTriggers()`, `reloadLocations()`, `init()`, `destroy()`
-4. Add property declarations for game state
+2. `extends VeratownGameFeatureBase`
+3. Implement abstract methods (getGameName, getRegionBounds, handleRegionCommand)
+4. Initialize game-specific state (activeGame, players, etc.)
 5. Add TypeScript type safety
+
+### Note
+
+See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.1](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#11-common-veratorngamefeaturebase-class) for the base class design.
 
 ### Testing
 
@@ -2656,7 +2661,57 @@ Quick reference for developers extending the feature.
 
 ---
 
-## SUCCESS METRICS
+## CROSS-GAME SYNERGIES & MONGODB ATLAS FEATURES
+
+### Phase 4 (Optional, After Core Integration)
+
+These features are built on top of the core integration and shared with MaidsPartyNight and KidnappersGame.
+
+#### Player Leaderboards & Stats
+
+**New ISSUE**: Cross-Game Player Statistics (EPIC bonus, ~8 points)
+
+- [ ] Implement aggregation pipeline in `GameAnalyticsService`
+- [ ] Query RoleplayChallenge stats with $group and $sort
+- [ ] Display global leaderboard (top 100 players by wins)
+- [ ] Display per-game leaderboards
+- [ ] Track XP earned from wins
+
+**MongoDB Atlas Benefit**: Aggregation pipelines are 10-100x faster than post-processing in Node.js.
+
+#### Game Discovery
+
+**New ISSUE**: Real-Time Game Discovery with Change Streams (EPIC bonus, ~6 points)
+
+- [ ] Implement `GameDiscoveryService` with Change Streams
+- [ ] Broadcast available games to "looking-for-game" channel
+- [ ] Show game status (# of players, time remaining)
+- [ ] Allow spectator join if game accepts it
+
+**MongoDB Atlas Benefit**: Change Streams provide push-based updates without polling.
+
+#### Player Achievements
+
+**New ISSUE**: Achievement System (EPIC bonus, ~5 points)
+
+- [ ] Create achievements: "Won 5 Challenges", "Won 3-player challenge", etc.
+- [ ] Track progress in `player_achievements` collection
+- [ ] Award badges and cosmetics
+
+**Shared Benefit**: Same achievement infrastructure used by all three games.
+
+### Summary of Synergies for RoleplayChallenge
+
+| Area                    | Benefit                                                          | Effort Savings   |
+| ----------------------- | ---------------------------------------------------------------- | ---------------- |
+| **Shared Code**         | Use VeratownGameFeatureBase, AppearanceManager, GameTimerManager | ~40 points       |
+| **MongoDB Atlas**       | Aggregation pipelines, Change Streams, TTL cleanup               | ~15 points       |
+| **Cross-Game Features** | Unified leaderboards, achievements, social                       | (optional)       |
+| **Total Reduction**     | From 240-280 to 200-240 points                                   | ~40 points saved |
+
+See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) for complete details.
+
+---
 
 By completion, the feature should support:
 
