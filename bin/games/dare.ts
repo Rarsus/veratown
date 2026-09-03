@@ -263,7 +263,7 @@ Game Overview
     public constructor(
         private conn: API_Connector,
         private commandParser?: CommandParser,
-        private unifiedStore?: UnifiedCharacterStore,
+        private unifiedStore: UnifiedCharacterStore = undefined as any,
         private dareDataService?: DareDataService,
         private dareStateService?: DareStateService,
         private config?: DareConfig,
@@ -271,19 +271,19 @@ Game Overview
         // Initialize unified store (Layer 1: character state)
         this.unifiedStore =
             unifiedStore ||
-            global.unifiedCharacterStore ||
+            (global as any).unifiedCharacterStore ||
             new UnifiedCharacterStore(undefined as any);
 
         // Initialize dare data service (Layer 3: reference data)
         // If not provided, will be injected later via setter
-        if (!this.dareDataService && global.dareDataService) {
-            this.dareDataService = global.dareDataService as any;
+        if (!this.dareDataService && (global as any).dareDataService) {
+            this.dareDataService = (global as any).dareDataService as any;
         }
 
         // Initialize dare state service (Layer 2: system state)
         // If not provided, will be injected later via setter
-        if (!this.dareStateService && global.dareStateService) {
-            this.dareStateService = global.dareStateService as any;
+        if (!this.dareStateService && (global as any).dareStateService) {
+            this.dareStateService = (global as any).dareStateService as any;
         }
 
         this.region = config?.region;
@@ -308,7 +308,7 @@ Game Overview
      * Returns the unified store for direct access to character state
      */
     public getUnifiedStore(): UnifiedCharacterStore {
-        return this.unifiedStore;
+        return this.unifiedStore!;
     }
 
     /**
@@ -561,7 +561,7 @@ Game Overview
                 // as they were at the start (see declareWinner()).
                 for (const memberNumber of turnOrder) {
                     const character =
-                        this.conn.chatRoom.findMember(memberNumber);
+                        this.conn.chatRoom!.findMember(memberNumber);
                     if (character)
                         await this.captureOriginalOutfitIfMissing(character);
                 }
@@ -793,7 +793,7 @@ Game Overview
                 await wait(2000);
 
                 const dare = await this.dareDataService?.drawDare();
-                if (dare === undefined) {
+                if (!dare) {
                     this.conn.SendMessage("Emote", `*No more dares left!`);
                     return;
                 }
@@ -1121,7 +1121,7 @@ Game Overview
         const asNumber = Number.parseInt(input, 10);
         if (Number.isInteger(asNumber) && isTracked(asNumber)) return asNumber;
 
-        const fromRoom = this.conn.chatRoom.findCharacter(input);
+        const fromRoom = this.conn.chatRoom!.findCharacter(input);
         if (fromRoom && isTracked(fromRoom.MemberNumber)) {
             return fromRoom.MemberNumber;
         }
@@ -1130,7 +1130,7 @@ Game Overview
     };
 
     private describeMember = (memberNumber: number): string => {
-        const character = this.conn.chatRoom.findMember(memberNumber);
+        const character = this.conn.chatRoom!.findMember(memberNumber);
         return character ? `${character}` : `#${memberNumber}`;
     };
 
@@ -1192,7 +1192,7 @@ Game Overview
     // outfit.
     private enforceDressingBlocks = (): void => {
         for (const [memberNumber, stripCap] of [...this.dressingBlocked]) {
-            const character = this.conn.chatRoom.findMember(memberNumber);
+            const character = this.conn.chatRoom!.findMember(memberNumber);
             if (!character) continue;
 
             character.Appearance.stripBulk({ clothing: true }, false, stripCap);
@@ -1365,7 +1365,7 @@ Game Overview
         if (!game) return;
         if (this.gameManager.getCurrentPlayer(gameId) !== memberNumber) return;
 
-        const character = this.conn.chatRoom.findMember(memberNumber);
+        const character = this.conn.chatRoom!.findMember(memberNumber);
         if (!character) {
             this.removeParticipantByMemberNumber(
                 memberNumber,
@@ -1559,7 +1559,7 @@ Game Overview
                 return;
             }
 
-            const nextCharacter = this.conn.chatRoom.findMember(nextMember);
+            const nextCharacter = this.conn.chatRoom!.findMember(nextMember);
             if (!nextCharacter) {
                 this.removeParticipantByMemberNumber(
                     nextMember,
@@ -1613,7 +1613,7 @@ Game Overview
         winner: number,
         reasonPhrase: string,
     ): void => {
-        const winnerCharacter = this.conn.chatRoom.findMember(winner);
+        const winnerCharacter = this.conn.chatRoom!.findMember(winner);
         winnerCharacter?.Appearance.stripBulk({ item: true }, true);
 
         if (winnerCharacter) {
@@ -1697,7 +1697,7 @@ Game Overview
 
         const candidates = pool
             .filter((memberNumber) => memberNumber !== drawer.MemberNumber)
-            .map((memberNumber) => this.conn.chatRoom.findMember(memberNumber))
+            .map((memberNumber) => this.conn.chatRoom!.findMember(memberNumber))
             .filter((character): character is API_Character => !!character);
 
         if (candidates.length === 0) {
@@ -1728,7 +1728,7 @@ Game Overview
         this.pendingBondageDeadlines.delete(memberNumber);
         this.pendingDraws.delete(memberNumber);
 
-        const character = this.conn.chatRoom.findMember(memberNumber);
+        const character = this.conn.chatRoom!.findMember(memberNumber);
         if (!character) {
             this.finishTurn(memberNumber);
             return;
@@ -1950,7 +1950,7 @@ Game Overview
         );
         await wait(2000);
 
-        const possibleMembers = this.conn.chatRoom.characters.filter(
+        const possibleMembers = this.conn.chatRoom!.characters.filter(
             (m) =>
                 ![
                     senderCharacter.MemberNumber,
