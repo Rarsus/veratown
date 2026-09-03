@@ -29,8 +29,6 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { createLogger } from "../../logging";
 
-import { createLogger } from "../../logging";
-
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
 // information screen showing current occupancy.
@@ -75,20 +73,23 @@ export class CageSystem implements VeratownFeatureSystem {
     private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
 
     public constructor(private conn: API_Connector) {
-        this.cageTrigger = guardHandler(this.key, this.onCharacterEnterCage);
+        this.cageTrigger = guardHandler(
+            this.key,
+            this.onCharacterEnterCage as any,
+        );
         this.cageEntryTrigger = guardHandler(
             this.key,
-            this.onCharacterEnterCageEntry,
+            this.onCharacterEnterCageEntry as any,
         );
         this.cageInformationTrigger = guardHandler(
             this.key,
-            this.onCharacterViewCageInformation,
+            this.onCharacterViewCageInformation as any,
         );
     }
 
     public registerTriggers(): void {
         // Register region trigger for cage information screen (doesn't depend on locations)
-        this.conn.chatRoom.map.addEnterRegionTrigger(
+        this.conn.chatRoom!.map.addEnterRegionTrigger(
             CAGE_INFORMATION_SCREEN,
             this.cageInformationTrigger,
         );
@@ -104,7 +105,7 @@ export class CageSystem implements VeratownFeatureSystem {
         try {
             for (const posKey of this.cagesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom.map.removeTileTrigger(
+                this.conn.chatRoom!.map.removeTileTrigger(
                     x,
                     y,
                     this.cageTrigger,
@@ -112,7 +113,7 @@ export class CageSystem implements VeratownFeatureSystem {
             }
             for (const posKey of this.cageEntriesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom.map.removeTileTrigger(
+                this.conn.chatRoom!.map.removeTileTrigger(
                     x,
                     y,
                     this.cageEntryTrigger,
@@ -196,7 +197,7 @@ export class CageSystem implements VeratownFeatureSystem {
             // Register tile triggers for cage positions
             for (const posKey of this.cagesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom.map.addTileTrigger(
+                this.conn.chatRoom!.map.addTileTrigger(
                     { X: x, Y: y },
                     this.cageTrigger,
                 );
@@ -205,7 +206,7 @@ export class CageSystem implements VeratownFeatureSystem {
             // Register tile triggers for cage entry positions
             for (const posKey of this.cageEntriesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom.map.addTileTrigger(
+                this.conn.chatRoom!.map.addTileTrigger(
                     { X: x, Y: y },
                     this.cageEntryTrigger,
                 );
