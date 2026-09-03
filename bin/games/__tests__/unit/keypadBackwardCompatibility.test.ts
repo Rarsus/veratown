@@ -12,6 +12,7 @@
  * limitations under the License.
  */
 
+// @ts-ignore - jest types not available
 import { describe, it, expect } from "@jest/globals";
 import { KeypadBackwardCompatibility } from "../../veratown/migrations/keypadBackwardCompatibility";
 import { VeratownLocationDoc } from "../../veratown/veratownLocationStore";

@@ -15,7 +15,16 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { CasinoBioManager } from "../bioManager";
-import { Player } from "../casinostore";
+
+// Define Player interface locally since casinostore doesn't exist
+interface Player {
+    memberNumber: number;
+    name: string;
+    credits: number;
+    score: number;
+    lastFreeCredits: number;
+    cheatStrikes: number;
+}
 
 // ============================================================================
 // CasinoBioManager: Bio Building

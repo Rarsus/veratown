@@ -20,7 +20,7 @@ import {
     BondageEffect,
     RewardEffect,
 } from "../dareEffectApplier";
-import { DareDoc } from "../../dareStore";
+import { DareDoc } from "../dareDataService";
 
 // Mock character for testing
 const mockCharacter = {

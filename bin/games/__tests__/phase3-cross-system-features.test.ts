@@ -274,7 +274,11 @@ describe("Phase 3: Cross-System Features", () => {
             });
 
             // Action: Record cage entry
-            await unifiedStore.recordCageEntry(memberNumber, "main_cage");
+            await unifiedStore.recordCageEntry(
+                memberNumber,
+                "main_cage",
+                3600000,
+            );
 
             // Verify: Event was received
             assert(eventReceived, "cage_entry event should be emitted");

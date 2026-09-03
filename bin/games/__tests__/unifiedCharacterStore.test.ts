@@ -176,9 +176,14 @@ test("UnifiedCharacterStore - Veratown view and position tracking", async () => 
     assert.deepStrictEqual(view.lastPosition, position);
 
     // Record audit entry
-    await store.recordAuditEntry(444, "entered_cage", 555, {
-        cage: "stock",
-    });
+    await store.recordAuditEntry(
+        444,
+        "entered_cage",
+        {
+            cage: "stock",
+        },
+        555,
+    );
     view = await store.getVeratownView(444);
     assert.strictEqual(view.auditLog.length, 1);
     assert.strictEqual(view.auditLog[0].action, "entered_cage");

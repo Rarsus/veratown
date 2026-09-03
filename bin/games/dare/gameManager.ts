@@ -277,12 +277,12 @@ export class GameManager {
         this.nextGameId = 1;
 
         for (const sg of serialized) {
-            const game: Game = {
+            const game: any = {
                 id: sg.id,
                 turnOrder: [...sg.turnOrder],
                 currentTurnIndex: sg.currentTurnIndex || 0,
                 round: sg.round,
-                turnStartedAt: sg.turnStartedAt,
+                turnStartedAt: sg.turnStartedAt || Date.now(),
                 turnReminderTimer: new GameTimer(),
                 turnAutoPassTimer: new GameTimer(),
             };
