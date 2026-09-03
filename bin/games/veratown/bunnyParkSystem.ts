@@ -48,8 +48,14 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
     private readonly monitor =
         createIdempotentMonitor<API_Character>("BunnyParkSystem");
     public constructor(private conn: API_Connector) {
-        this.bunnyTrigger = guardHandler(this.key, this.onCharacterStepOnBunny);
-        this.parkTrigger = guardHandler(this.key, this.onCharacterEnterPark);
+        this.bunnyTrigger = guardHandler(
+            this.key,
+            this.onCharacterStepOnBunny as any,
+        );
+        this.parkTrigger = guardHandler(
+            this.key,
+            this.onCharacterEnterPark as any,
+        );
     }
 
     public registerTriggers(): void {
@@ -60,9 +66,9 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
         try {
-            this.conn.chatRoom.map.removeEnterRegionTrigger(this.parkTrigger);
+            this.conn.chatRoom!.map.removeEnterRegionTrigger(this.parkTrigger);
             for (const bunnyPos of this.bunnyPositions) {
-                this.conn.chatRoom.map.removeTileTrigger(
+                this.conn.chatRoom!.map.removeTileTrigger(
                     bunnyPos.X,
                     bunnyPos.Y,
                     this.bunnyTrigger,
@@ -91,14 +97,14 @@ export class BunnyParkSystem implements VeratownFeatureSystem {
                 this.bunnyPositions = [...BUNNY_POSITIONS];
             }
 
-            this.conn.chatRoom.map.addEnterRegionTrigger(
+            this.conn.chatRoom!.map.addEnterRegionTrigger(
                 this.parkRegion,
                 this.parkTrigger,
             );
 
             // Register tile triggers for bunny positions
             for (const bunnyPos of this.bunnyPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
+                this.conn.chatRoom!.map.addTileTrigger(
                     bunnyPos,
                     this.bunnyTrigger,
                 );
