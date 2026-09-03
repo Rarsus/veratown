@@ -390,9 +390,7 @@ async function triggerEscapeAttempt(
             locationId,
             executedAt: Date.now(),
             outcome,
-            details: {
-                /* outcome-specific data */
-            },
+            details: {/* outcome-specific data */},
         });
     }
 

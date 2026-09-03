@@ -449,7 +449,13 @@ async function initializeVeratownGame(
     logger.info("CrossSystemSubscribers initialized");
 
     // Create new Veratown instance with DI container
-    const game = new Veratown(connections, db, config.dare, config.casino, container);
+    const game = new Veratown(
+        connections,
+        db,
+        config.dare,
+        config.casino,
+        container,
+    );
     await game.init();
     activeVeratownGame = game;
 

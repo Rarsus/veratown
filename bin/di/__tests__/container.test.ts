@@ -33,7 +33,8 @@ describe("DIContainer", () => {
     test("get throws error for non-existent service", () => {
         assert.throws(
             () => container.get("nonExistent"),
-            (err: Error) => err.message.includes("Service 'nonExistent' not found"),
+            (err: Error) =>
+                err.message.includes("Service 'nonExistent' not found"),
         );
     });
 
@@ -74,10 +75,7 @@ describe("DIContainer", () => {
             typeof DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS,
             "string",
         );
-        assert.strictEqual(
-            typeof DIServiceKeys.CASINO_VENUE_SYSTEM,
-            "string",
-        );
+        assert.strictEqual(typeof DIServiceKeys.CASINO_VENUE_SYSTEM, "string");
         assert.strictEqual(typeof DIServiceKeys.CASINO_ENGINE, "string");
     });
 

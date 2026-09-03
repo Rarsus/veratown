@@ -16,12 +16,7 @@ import { Collection, Db } from "mongodb";
 import { createLogger } from "../../logging";
 
 export type PlayerRole =
-    | "guard"
-    | "nurse"
-    | "prisoner"
-    | "visitor"
-    | "staff"
-    | string; // Allow custom roles
+    "guard" | "nurse" | "prisoner" | "visitor" | "staff" | string; // Allow custom roles
 
 export interface RolePermission {
     resourceType: "location" | "item" | "action" | "custom";

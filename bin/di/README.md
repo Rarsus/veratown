@@ -43,11 +43,15 @@ container.register("myService", serviceInstance);
 
 ```typescript
 // Get a service with type safety
-const store = container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE);
+const store = container.get<UnifiedCharacterStore>(
+    DIServiceKeys.UNIFIED_CHARACTER_STORE,
+);
 
 // Check if a service is registered
 if (container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)) {
-    const store = container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE);
+    const store = container.get<UnifiedCharacterStore>(
+        DIServiceKeys.UNIFIED_CHARACTER_STORE,
+    );
 }
 ```
 
@@ -72,7 +76,9 @@ try {
 const game = new Veratown(connections, db, dareConfig, casinoConfig, container);
 
 // Internally, it uses the container to access services
-const store = this.container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE);
+const store = this.container.get<UnifiedCharacterStore>(
+    DIServiceKeys.UNIFIED_CHARACTER_STORE,
+);
 ```
 
 ### In Casino
@@ -83,7 +89,9 @@ const casino = new Casino(conn, db, config, commandParser, container);
 
 // Casino uses it to retrieve the unified store
 this.unifiedStore = container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-    ? container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+    ? container.get<UnifiedCharacterStore>(
+          DIServiceKeys.UNIFIED_CHARACTER_STORE,
+      )
     : new UnifiedCharacterStore(db);
 ```
 
@@ -97,20 +105,28 @@ import { UnifiedCharacterStore } from "../games/shared/unifiedCharacterStore";
 
 test("my feature test", () => {
     const mockContainer = new DIContainer();
-    
+
     // Create a mock service
     const mockStore: UnifiedCharacterStore = {
-        getCasinoView: () => ({ /* mock data */ }),
-        updateChips: async () => { /* mock */ },
+        getCasinoView: () => ({/* mock data */}),
+        updateChips: async () => {
+            /* mock */
+        },
         // ... other methods
     };
-    
+
     // Register the mock
     mockContainer.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, mockStore);
-    
+
     // Pass mock container to your code
-    const game = new Veratown(connections, db, config, undefined, mockContainer);
-    
+    const game = new Veratown(
+        connections,
+        db,
+        config,
+        undefined,
+        mockContainer,
+    );
+
     // Test your code
     // ...
 });
@@ -136,14 +152,18 @@ console.log(container.has("anyService")); // false
 ## Migration from Global State
 
 Old way (global state):
+
 ```typescript
 const store = global.unifiedCharacterStore || new UnifiedCharacterStore(db);
 ```
 
 New way (DI container):
+
 ```typescript
 const store = container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-    ? container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+    ? container.get<UnifiedCharacterStore>(
+          DIServiceKeys.UNIFIED_CHARACTER_STORE,
+      )
     : new UnifiedCharacterStore(db);
 ```
 
@@ -156,6 +176,7 @@ The DIContainer maintains a Map of services indexed by string keys. When a servi
 3. If no, throw an error
 
 This provides:
+
 - **Type Safety**: Full TypeScript generic support
 - **Clarity**: Dependencies are explicit at the API level
 - **Testability**: Mock services can be injected via the container

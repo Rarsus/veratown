@@ -118,9 +118,11 @@ export class Casino implements GamePlugin {
         container?: DIContainer,
     ) {
         this.unifiedStore = container
-            ? (container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-                  ? container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-                  : new UnifiedCharacterStore(db))
+            ? container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                ? container.get<UnifiedCharacterStore>(
+                      DIServiceKeys.UNIFIED_CHARACTER_STORE,
+                  )
+                : new UnifiedCharacterStore(db)
             : global.unifiedCharacterStore || new UnifiedCharacterStore(db);
 
         // If no CommandParser provided, create one for this casino instance

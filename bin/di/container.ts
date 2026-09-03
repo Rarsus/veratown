@@ -15,7 +15,7 @@
 /**
  * Dependency Injection Container for managing application services.
  * Replaces global state pattern with explicit service registration and retrieval.
- * 
+ *
  * This container provides:
  * - Type-safe service registration and retrieval
  * - Centralized dependency management

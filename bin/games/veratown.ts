@@ -224,8 +224,12 @@ export class Veratown {
             this.dare = this.initFeature(() => {
                 // Phase 5: Direct UnifiedCharacterStore access (no adapters)
                 // Use DI container to get unified store
-                const unifiedStore = this.container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-                    ? this.container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                const unifiedStore = this.container.has(
+                    DIServiceKeys.UNIFIED_CHARACTER_STORE,
+                )
+                    ? this.container.get<UnifiedCharacterStore>(
+                          DIServiceKeys.UNIFIED_CHARACTER_STORE,
+                      )
                     : new UnifiedCharacterStore(db);
                 return new Dare(
                     this.conn,
@@ -299,7 +303,9 @@ export class Veratown {
                     this.locationStore,
                     undefined,
                     this.container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-                        ? this.container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                        ? this.container.get<UnifiedCharacterStore>(
+                              DIServiceKeys.UNIFIED_CHARACTER_STORE,
+                          )
                         : new UnifiedCharacterStore(db!),
                 ),
         );

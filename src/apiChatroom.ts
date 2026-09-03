@@ -402,8 +402,8 @@ export class API_Chatroom extends EventEmitter<ChatRoomEvents> {
     }
 
     public onReorder(memberNos: number[]): void {
-        this.data.Character = memberNos.map(
-            (num) => this.data.Character.find((m) => m.MemberNumber === num)!,
+        this.data.Character = memberNos.map((num) =>
+            this.data.Character.find((m) => m.MemberNumber === num)!,
         );
         this.reorderWatcher.emit("reorder");
     }

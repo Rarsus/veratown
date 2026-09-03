@@ -300,16 +300,12 @@ These are read-only virtual collections:
 // File: scripts/create-mongodb-views.js
 db.createCollection("casino_leaderboard_v1", {
     viewOn: "unifiedCharacterProfiles",
-    pipeline: [
-        /* see Example 1 above */
-    ],
+    pipeline: [/* see Example 1 above */],
 });
 
 db.createCollection("dares_active_v1", {
     viewOn: "dares",
-    pipeline: [
-        /* see Example 2 above */
-    ],
+    pipeline: [/* see Example 2 above */],
 });
 
 db.createCollection("veratown_roles_index_v1", {
