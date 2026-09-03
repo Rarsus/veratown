@@ -7,7 +7,3 @@ enable-pre-post-scripts=true
 # Public hoisting for dependencies to reduce duplication
 public-hoist-pattern[]=*
 public-hoist-pattern[]=@types/*
-
-# Disable supply-chain policy check that rejects recently published packages
-# Discord API types are frequently updated and this check is overly restrictive for CI
-policy.allow-missing-packages=true
