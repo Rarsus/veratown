@@ -220,7 +220,7 @@ describe("Log Context", () => {
             operation: "strip",
             attempt: 1,
             gameId: "game_abc123",
-        };
+        } as any;
 
         logger.info("Message with standard context", context);
         // Should not throw
