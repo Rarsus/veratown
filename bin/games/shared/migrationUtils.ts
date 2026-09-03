@@ -7,10 +7,10 @@
  * @file bin/games/shared/migrationUtils.ts
  */
 
-import type { UnifiedCharacterStore } from "./unifiedCharacterStore.js";
-import type { CasinoStoreAdapter } from "./casinoStoreAdapter.js";
-import type { DareStoreAdapter } from "./dareStoreAdapter.js";
-import type { VeratownStoreAdapter } from "./veratownStoreAdapter.js";
+import type { UnifiedCharacterStore } from "./unifiedCharacterStore";
+// import type { CasinoStoreAdapter } from "./casinoStoreAdapter";
+// import type { DareStoreAdapter } from "./dareStoreAdapter";
+// import type { VeratownStoreAdapter } from "./veratownStoreAdapter";
 
 import { createLogger } from "../../logging";
 
@@ -194,6 +194,8 @@ ${this.status.lastMigrationTime ? `Last Update: ${new Date(this.status.lastMigra
  * Validation utilities for migration safety
  */
 export class MigrationValidator {
+    private static readonly logger = createLogger("MigrationValidator");
+
     /**
      * Verify that UnifiedCharacterStore has all required methods
      */
@@ -276,6 +278,7 @@ export class MigrationValidator {
  * Adapter deprecation warning system
  */
 export class AdapterDeprecationWarning {
+    private static readonly logger = createLogger("AdapterDeprecationWarning");
     private static issuedWarnings = new Set<string>();
 
     /**
