@@ -414,6 +414,7 @@ export async function handleCommandInteraction(
                 result = await handleCharacterSearchCommand(
                     interaction,
                     context,
+                    (interaction as any).options?.getString("query") || "",
                 );
                 break;
 
