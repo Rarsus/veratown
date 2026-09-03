@@ -787,8 +787,7 @@ export class RouletteGame implements Game {
         await waitForCondition(() => this.willSpinAt === undefined);
         await wait(2000);
         const commandParser = (this.casino as any).commandParser as
-            | CommandParser
-            | undefined;
+            CommandParser | undefined;
         if (commandParser) {
             commandParser.unregister("cancel");
             commandParser.unregister("bet");

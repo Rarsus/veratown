@@ -138,11 +138,9 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private roomJoinPromise: PromiseResolve<string> | undefined;
     private roomCreatePromise: PromiseResolve<string> | undefined;
     private roomSearchPromise:
-        | PromiseResolve<ServerChatRoomSearchData[]>
-        | undefined;
+        PromiseResolve<ServerChatRoomSearchData[]> | undefined;
     private onlineFriendsPromise:
-        | PromiseResolve<ServerFriendInfo[]>
-        | undefined;
+        PromiseResolve<ServerFriendInfo[]> | undefined;
     private itemAllowQueries = new Map<
         number,
         PromiseResolve<ServerChatRoomAllowItemResponse>

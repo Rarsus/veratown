@@ -1288,11 +1288,7 @@ async function readOldLocationConfig(
             lockedTile: data.lockedTile,
             unlockedTile: data.unlockedTile,
             unlockDurationMs: data.unlockDurationMs ?? 10000,
-            insideRegion: data.insideTopLeftX
-                ? {
-                      /* ... */
-                  }
-                : undefined,
+            insideRegion: data.insideTopLeftX ? {/* ... */} : undefined,
             autoOpenTile: data.autoOpenTileX
                 ? { X: data.autoOpenTileX, Y: data.autoOpenTileY }
                 : undefined,

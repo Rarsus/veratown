@@ -40,6 +40,7 @@ import {
     shutdownDiscordBot,
     type DiscordBotConfig,
 } from "./discord";
+import { DIContainer, DIServiceKeys } from "./di/container";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -420,49 +421,47 @@ async function initializeVeratownGame(
 
     const db = database.db;
 
+    // Create DI container for service management
+    const container = new DIContainer();
+
     // Phase 2.3: Initialize unified store for cross-system coordination
-    if (!global.unifiedCharacterStore) {
-        const unifiedStore = new UnifiedCharacterStore(db);
-        global.unifiedCharacterStore = unifiedStore;
-        logger.info("UnifiedCharacterStore initialized");
-    }
+    const unifiedStore = new UnifiedCharacterStore(db);
+    container.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, unifiedStore);
+    global.unifiedCharacterStore = unifiedStore;
+    logger.info("UnifiedCharacterStore initialized");
 
     // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
-    if (!global.casinoVenueSystem) {
-        const venueSystem = new CasinoVenueSystem();
-        global.casinoVenueSystem = venueSystem;
-        logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
-    }
+    const venueSystem = new CasinoVenueSystem();
+    container.register(DIServiceKeys.CASINO_VENUE_SYSTEM, venueSystem);
+    global.casinoVenueSystem = venueSystem;
+    logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
 
     // EPIC 2: Initialize CasinoEngine for core game logic
-    if (!global.casinoEngine && global.casinoVenueSystem) {
-        const casinoEngine = new CasinoEngine(
-            global.unifiedCharacterStore,
-            global.casinoVenueSystem,
-        );
-        global.casinoEngine = casinoEngine;
-        logger.info("CasinoEngine initialized (game logic extraction, EPIC 2)");
-    }
+    const casinoEngine = new CasinoEngine(unifiedStore, venueSystem);
+    container.register(DIServiceKeys.CASINO_ENGINE, casinoEngine);
+    global.casinoEngine = casinoEngine;
+    logger.info("CasinoEngine initialized (game logic extraction, EPIC 2)");
 
     // Phase 5: Initialize cross-system subscribers
-    if (!global.crossSystemSubscribers) {
-        const subscribers = new CrossSystemSubscribers(
-            global.unifiedCharacterStore,
-        );
-        global.crossSystemSubscribers = subscribers;
-        logger.info("CrossSystemSubscribers initialized");
-    }
+    const subscribers = new CrossSystemSubscribers(unifiedStore);
+    container.register(DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS, subscribers);
+    global.crossSystemSubscribers = subscribers;
+    logger.info("CrossSystemSubscribers initialized");
 
-    // Create new Veratown instance
-    const game = new Veratown(connections, db, config.dare, config.casino);
+    // Create new Veratown instance with DI container
+    const game = new Veratown(
+        connections,
+        db,
+        config.dare,
+        config.casino,
+        container,
+    );
     await game.init();
     activeVeratownGame = game;
 
     // Phase 5: Activate event subscriptions after systems are ready
-    if (global.crossSystemSubscribers) {
-        await global.crossSystemSubscribers.initialize();
-        logger.info("Cross-system event subscriptions activated");
-    }
+    await subscribers.initialize();
+    logger.info("Cross-system event subscriptions activated");
 
     logger.info("Veratown initialized with all systems and map loaded");
     connections.main.setBotDescription(Veratown.description);
