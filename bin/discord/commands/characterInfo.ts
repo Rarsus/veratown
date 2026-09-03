@@ -219,15 +219,12 @@ export async function handleCharacterSearchCommand(
             requested_by: context.userId,
         });
 
-        const collection = context.db.collection("characters");
+        const collection = context.db.collection("unifiedCharacterProfiles");
 
-        // Search for characters with matching names
+        // Search for characters with matching names (case-insensitive)
         const matches = await collection
             .find({
-                $or: [
-                    { name: { $regex: searchQuery, $options: "i" } },
-                    { displayName: { $regex: searchQuery, $options: "i" } },
-                ],
+                name: { $regex: searchQuery, $options: "i" },
             })
             .limit(10)
             .toArray();

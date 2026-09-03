@@ -180,7 +180,7 @@ function getSystemDiagnostics(): SystemDiagnostics {
  */
 async function getPlayerCount(db: Db): Promise<number> {
     try {
-        const collection = db.collection("players");
+        const collection = db.collection("unifiedCharacterProfiles");
         const count = await collection.countDocuments();
         return count;
     } catch (error) {
