@@ -57,7 +57,7 @@ import { ListGroupMembersHandler } from "./groupCommandHandlers";
  * - Testable: Each handler tested independently
  */
 export class KeypadCommandDispatcher {
-    private handlers: Map<string, KeypadCommandHandler> = new Map();
+    private handlers: Map<string, any> = new Map();
 
     constructor(
         private definitionService: KeypadDefinitionService,
