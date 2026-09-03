@@ -8,6 +8,7 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { API_Character } from "bc-bot";
 import {
     BaseEffect,
     EffectSystem,
@@ -79,7 +80,7 @@ function createMockCharacter(
         IsRestrained: [] as any,
         Incha: 1,
         ...overrides,
-    } as API_Character;
+    } as any as API_Character;
 }
 
 describe("Phase 4: Shared Effects System", () => {
@@ -320,10 +321,10 @@ describe("Phase 4: Shared Effects System", () => {
 
         it("should find effects by type", () => {
             const effect1 = new MockEffect("test14a", 1001);
-            effect1.type = EffectType.FORFEIT;
+            (effect1 as any).type = EffectType.FORFEIT;
 
             const effect2 = new MockEffect("test14b", 1001);
-            effect2.type = EffectType.DARE;
+            (effect2 as any).type = EffectType.DARE;
 
             tracker.addEffect(effect1);
             tracker.addEffect(effect2);
@@ -374,10 +375,10 @@ describe("Phase 4: Shared Effects System", () => {
 
         it("should get history by type", () => {
             const effect1 = new MockEffect("test18a", 1001);
-            effect1.type = EffectType.FORFEIT;
+            (effect1 as any).type = EffectType.FORFEIT;
 
             const effect2 = new MockEffect("test18b", 1001);
-            effect2.type = EffectType.DARE;
+            (effect2 as any).type = EffectType.DARE;
 
             tracker.recordEvent(effect1);
             tracker.recordEvent(effect2);
@@ -436,10 +437,10 @@ describe("Phase 4: Shared Effects System", () => {
     describe("Feature 7: Conflict Detection", () => {
         it("should detect same-type conflicts", () => {
             const effect1 = new MockEffect("test23a", 1001);
-            effect1.type = EffectType.FORFEIT;
+            (effect1 as any).type = EffectType.FORFEIT;
 
             const effect2 = new MockEffect("test23b", 1001);
-            effect2.type = EffectType.FORFEIT;
+            (effect2 as any).type = EffectType.FORFEIT;
 
             const hasConflict = EffectConflictDetector.hasConflict(
                 effect1,
@@ -450,13 +451,13 @@ describe("Phase 4: Shared Effects System", () => {
 
         it("should find all conflicts in list", () => {
             const newEffect = new MockEffect("test24a", 1001);
-            newEffect.type = EffectType.FORFEIT;
+            (newEffect as any).type = EffectType.FORFEIT;
 
             const active1 = new MockEffect("test24b", 1001);
-            active1.type = EffectType.FORFEIT;
+            (active1 as any).type = EffectType.FORFEIT;
 
             const active2 = new MockEffect("test24c", 1001);
-            active2.type = EffectType.DARE;
+            (active2 as any).type = EffectType.DARE;
 
             const conflicts = EffectConflictDetector.findConflicts(newEffect, [
                 active1,
