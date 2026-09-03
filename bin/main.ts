@@ -353,7 +353,7 @@ export async function stopBotConnections(): Promise<void> {
  */
 async function initializeVeratownGame(
     connections: BotConnections,
-    db: { close(): Promise<void> },
+    db: Db,
     config: ConfigFile,
 ): Promise<void> {
     const logger = createLogger("VeratownInit");
@@ -420,7 +420,7 @@ interface BootstrapContext {
 }
 
 let activeConnections: BotConnections | undefined;
-let activeDatabase: { close(): Promise<void> } | undefined;
+let activeDatabase: Db | undefined;
 let activeDiscordClient: any | undefined;
 let activeVeratownGame: Veratown | undefined;
 let shutdownPromise: Promise<void> | undefined;
