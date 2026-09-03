@@ -1615,17 +1615,19 @@ Create migration to seed scenario templates.
 ## ISSUE 6: Restraint & Appearance Management System
 
 **Parent**: EPIC  
-**Story Points**: 22  
-**Status**: Ready for development
+**Story Points**: 12 (reduced from 22 with shared AppearanceManager)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Implement safe restraint management, appearance changes, and item safety.
+Implement safe restraint management, appearance changes, and item safety using shared `AppearanceManager` utility.
 
 ### Acceptance Criteria
 
+- [ ] Use shared AppearanceManager for capture/restore logic
 - [ ] Appearance captured on entry
-- [ ] Restraints applied/removed safely
+- [ ] Restraints applied/removed safely (via AppearanceManager.applyRestraint/removeRestraint)
 - [ ] Item permissions respected
 - [ ] Appearance restored on exit
 - [ ] Audit trail entries created
@@ -1633,13 +1635,17 @@ Implement safe restraint management, appearance changes, and item safety.
 - [ ] Safety locks respected
 - [ ] Error handling robust
 
+### Shared Infrastructure Note
+
+The `AppearanceManager` class is created once and shared across all three game integrations (RoleplayChallenge, MaidsPartyNight, KidnappersGame). This eliminates 150+ LOC duplication. The `applyRestraint` and `removeRestraint` methods are specifically designed for multi-player games like KidnappersGame. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.3](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#13-shared-appearance--item-management-utilities).
+
 ### Sub-Issues
 
-- [ ] ISSUE 6.1: Design appearance/restraint system
-- [ ] ISSUE 6.2: Implement appearance capture
-- [ ] ISSUE 6.3: Implement restraint application
-- [ ] ISSUE 6.4: Implement restraint removal
-- [ ] ISSUE 6.5: Implement appearance restoration
+- [ ] ISSUE 6.1: Design restraint whitelist and safety checks
+- [ ] ISSUE 6.2: Use AppearanceManager.captureAppearance()
+- [ ] ISSUE 6.3: Use AppearanceManager.applyRestraint()
+- [ ] ISSUE 6.4: Use AppearanceManager.removeRestraint()
+- [ ] ISSUE 6.5: Use AppearanceManager.restoreAppearance()
 - [ ] ISSUE 6.6: Integrate AppearanceAuditTrail
 - [ ] ISSUE 6.7: Test edge cases
 
@@ -2572,6 +2578,57 @@ Guide for creating new scenarios.
 7. ISSUE 8 → ISSUE 2 (timers)
 8. ISSUE 9 → ISSUE 2-8 (testing)
 9. ISSUE 10 → All (docs last)
+
+---
+
+## CROSS-GAME SYNERGIES & MONGODB ATLAS FEATURES
+
+### Phase 4 (Optional, After Core Integration)
+
+These features are built on top of the core integration and shared with RoleplayChallenge and MaidsPartyNight.
+
+#### Player Role Statistics & Leaderboards
+
+**New ISSUE**: Cross-Game Player Statistics (EPIC bonus, ~8 points)
+
+- [ ] Implement aggregation pipeline in `GameAnalyticsService`
+- [ ] Query KidnappersGame stats (wins by role, escape attempts, negotiation success rate)
+- [ ] Display leaderboard (top captors, top victims, best negotiators)
+- [ ] Track XP earned from scenario completion
+
+**MongoDB Atlas Benefit**: Aggregation pipelines are 10-100x faster than post-processing in Node.js.
+
+#### Game Discovery & Status
+
+**New ISSUE**: Real-Time Game Discovery with Change Streams (EPIC bonus, ~6 points)
+
+- [ ] Implement `GameDiscoveryService` with Change Streams
+- [ ] Broadcast active scenarios to discovery channel
+- [ ] Show scenario status (# of players, role availability, progress)
+- [ ] Enable spectator joining
+
+**MongoDB Atlas Benefit**: Change Streams provide push-based updates without polling.
+
+#### Player Achievements
+
+**New ISSUE**: Achievement System (EPIC bonus, ~5 points)
+
+- [ ] Create achievements: "Escaped 10 times", "Master Negotiator", "Captured 20 victims", etc.
+- [ ] Track progress in `player_achievements` collection
+- [ ] Award role-based badges (Captor Elite, Escape Artist, etc.)
+
+**Shared Benefit**: Same achievement infrastructure used by all three games.
+
+### Summary of Synergies for KidnappersGame
+
+| Area                    | Benefit                                                          | Effort Savings   |
+| ----------------------- | ---------------------------------------------------------------- | ---------------- |
+| **Shared Code**         | Use VeratownGameFeatureBase, AppearanceManager, GameTimerManager | ~48 points       |
+| **MongoDB Atlas**       | Aggregation pipelines, Change Streams, TTL cleanup               | ~15 points       |
+| **Cross-Game Features** | Unified leaderboards, achievements, social                       | (optional)       |
+| **Total Reduction**     | From 280-320 to 240-280 points                                   | ~60 points saved |
+
+See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) for complete details.
 
 ---
 

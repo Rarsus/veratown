@@ -53,7 +53,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
     ) {
         this.showerTrigger = guardHandler(
             this.key,
-            this.onCharacterEnterShower,
+            this.onCharacterEnterShower as any,
         );
     }
 
@@ -74,7 +74,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
     ): Promise<void> {
         try {
             for (const showerPos of this.showerPositions) {
-                this.conn.chatRoom.map.removeTileTrigger(
+                this.conn.chatRoom!.map.removeTileTrigger(
                     showerPos.X,
                     showerPos.Y,
                     this.showerTrigger,
@@ -96,7 +96,7 @@ export class ShowerSystem implements VeratownFeatureSystem {
             }
 
             for (const showerPos of this.showerPositions) {
-                this.conn.chatRoom.map.addTileTrigger(
+                this.conn.chatRoom!.map.addTileTrigger(
                     showerPos,
                     this.showerTrigger,
                 );
