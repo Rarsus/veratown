@@ -54,7 +54,7 @@ export class LoggingLogic extends LogicBase {
     ): void {
         logger.info(
             `Character ${character.Name} (${character.MemberNumber}) ` +
-                `left room ${connection.chatRoom.Name}, intentional: ${intentional}`,
+                `left room ${connection.chatRoom!.Name}, intentional: ${intentional}`,
         );
     }
 
@@ -68,7 +68,7 @@ export class LoggingLogic extends LogicBase {
         character: API_Character,
     ): Promise<void> {
         logger.info(
-            `Character ${character.Name} (${character.MemberNumber}) entered room ${connection.chatRoom.Name}`,
+            `Character ${character.Name} (${character.MemberNumber}) entered room ${connection.chatRoom!.Name}`,
         );
     }
 
@@ -78,7 +78,7 @@ export class LoggingLogic extends LogicBase {
      */
     protected onCharacterOrderChanged(connection: API_Connector): void {
         logger.info(
-            `Character order inside room ${connection.chatRoom.Name} changed`,
+            `Character order inside room ${connection.chatRoom!.Name} changed`,
         );
     }
 
@@ -133,7 +133,7 @@ export class LoggingLogic extends LogicBase {
         sourceMemberNumber: number,
     ): void {
         logger.info(
-            `Chatroom ${connection.chatRoom.Name} updated by ${sourceMemberNumber}`,
+            `Chatroom ${connection.chatRoom!.Name} updated by ${sourceMemberNumber}`,
         );
     }
 
@@ -150,32 +150,32 @@ export class LoggingLogic extends LogicBase {
             case "ItemAdd": {
                 if (event.initial) return;
                 const source =
-                    event.character === event.source
+                    event.character === event.source!
                         ? ""
-                        : ` from ${event.source.Name} (${event.source.MemberNumber})`;
+                        : ` from ${event.source!.Name} (${event.source!.MemberNumber})`;
                 logger.info(
-                    `ItemAdd for ${event.character.Name} (${event.character.MemberNumber})${source}: ${event.item.Group}:${event.item.Name}`,
+                    `ItemAdd for ${event.character.Name} (${event.character.MemberNumber})${source}: ${event.item!.Group}:${event.item!.Name}`,
                 );
                 break;
             }
             case "ItemChange": {
                 if (event.initial) return;
                 const source =
-                    event.character === event.source
+                    event.character === event.source!
                         ? ""
-                        : ` from ${event.source.Name} (${event.source.MemberNumber})`;
+                        : ` from ${event.source!.Name} (${event.source!.MemberNumber})`;
                 logger.info(
-                    `ItemChange for ${event.character.Name} (${event.character.MemberNumber})${source}: ${event.item.Group}:${event.item.Name}`,
+                    `ItemChange for ${event.character.Name} (${event.character.MemberNumber})${source}: ${event.item!.Group}:${event.item!.Name}`,
                 );
                 break;
             }
             case "ItemRemove": {
                 const source =
-                    event.character === event.source
+                    event.character === event.source!
                         ? ""
-                        : ` from ${event.source.Name} (${event.source.MemberNumber})`;
+                        : ` from ${event.source!.Name} (${event.source!.MemberNumber})`;
                 logger.info(
-                    `ItemRemove for ${event.character.Name} (${event.character.MemberNumber})${source}: ${event.item.Group}:${event.item.Name}`,
+                    `ItemRemove for ${event.character.Name} (${event.character.MemberNumber})${source}: ${event.item!.Group}:${event.item!.Name}`,
                 );
                 break;
             }
