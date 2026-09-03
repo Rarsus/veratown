@@ -17,10 +17,6 @@ import { isClothing, isCosplay, isBind } from "../../../src/assetHelpers";
 import { wait } from "../../hub/utils";
 import { VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationStore } from "./veratownLocationStore";
-import {
-    VeratownCharacterProfileStore,
-    RemovedBondageItem,
-} from "./veratownCharacterProfileStore";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import {
     RELEASE_NUDITY_CHECK_INTERVAL_MS,
@@ -33,6 +29,20 @@ import {
 import { createIdempotentMonitor, PosturePreserver } from "./shared";
 
 import { createLogger } from "../../logging";
+
+/**
+ * Removed bondage item tracking
+ */
+interface RemovedBondageItem {
+    group: string;
+    name: string;
+    asset?: string;
+    ownerLocked?: boolean;
+    lockType?: string;
+    lockedBy?: string;
+    color?: string;
+    difficulty?: number;
+}
 
 /**
  * Refactored Release System with:
@@ -121,6 +131,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private escalatedParoleDurations = new Map<number, number>(); // memberId -> custom duration for escalated paroles
     private pendingConfirmations = new Map<number, ConfirmationState>();
     private notificationCooldowns = new Map<number, Map<string, number>>();
+    private violationHistory = new Map<number, number>(); // memberId -> violation count
     private paroleMonitoringInterval?: NodeJS.Timeout; // Bot restart monitoring loop
     private stageTimings = new Map<
         number,
@@ -135,7 +146,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     public constructor(
         private conn: API_Connector,
         private locationStore?: VeratownLocationStore,
-        private characterProfileStore?: VeratownCharacterProfileStore,
+        private characterProfileStore?: any,
         private unifiedStore?: UnifiedCharacterStore,
     ) {}
 
@@ -1032,7 +1043,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Stripping operations can reset pose/kneeling state; we'll restore it after
         const posturePreserver = new PosturePreserver(character);
 
-        const appearance = character.Appearance.Items || [];
+        const appearance = (character.Appearance as any).Items || [];
         const removedItems: RemovedBondageItem[] = [];
         const ownerLockedItems: RemovedBondageItem[] = [];
         const preservedCosplayItems: RemovedBondageItem[] = [];
@@ -1108,9 +1119,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             for (const item of removedItems) {
                 try {
-                    const asset = AssetGet("Female3DCG", item.group, item.name);
+                    const asset = (AssetGet as any)(item.group, item.name);
                     if (asset) {
-                        character.Appearance.RemoveItem(asset);
+                        character.Appearance.RemoveItem(item.group as any);
                         this.logger?.info(
                             `[ReleaseSystem] Removed unlocked item: ${item.name}`,
                         );
@@ -1179,7 +1190,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         for (const item of paroleState.removedBondageItems) {
             try {
-                const asset = AssetGet(item.group);
+                const asset = (AssetGet as any)(item.group, item.name);
                 if (!asset) {
                     this.logger?.info(
                         `[ReleaseSystem] Asset not found for ${item.group}`,
@@ -1189,7 +1200,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     continue;
                 }
 
-                character.Appearance.AddItem(asset, item.color || undefined);
+                character.Appearance.AddItem(asset);
                 successCount++;
                 await wait(50);
             } catch (e) {
@@ -1561,6 +1572,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     paroleExpiresAt: parole.paroleState.paroleExpiresAt,
                     stage: "monitoring_parole",
                     restartAttempts: parole.paroleState.restartAttempts ?? 0,
+                    paroleDurationMs: RELEASE_PAROLE_DURATION_MS,
                 });
 
                 this.log(
