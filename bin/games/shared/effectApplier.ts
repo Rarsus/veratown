@@ -6,6 +6,7 @@
  * @file bin/games/shared/effectApplier.ts
  */
 
+import { API_Character } from "bc-bot";
 import type {
     EffectApplication,
     EffectCleanup,
