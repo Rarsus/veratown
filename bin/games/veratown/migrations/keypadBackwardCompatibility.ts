@@ -72,8 +72,8 @@ export class KeypadBackwardCompatibility {
         return {
             _id: doorKey,
             doorKey,
-            doorX: location.x,
-            doorY: location.y,
+            doorX: location.x!,
+            doorY: location.y!,
             lockedTile: (data.lockedTile as string) || "MetalDown",
             unlockedTile: (data.unlockedTile as string) || "SteelDoorOpen",
             unlockDurationMs: (data.unlockDurationMs as number) || 10000,

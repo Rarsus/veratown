@@ -84,20 +84,18 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private locationIntegration: KeypadLocationIntegration,
         private commandParser?: CommandParser,
     ) {
-        this.keypadTrigger = guardHandler<[API_Character, VeratownLocationDoc]>(
-            this.key,
-            this.onCharacterAtKeypad as (
-                ...args: [API_Character, VeratownLocationDoc]
-            ) => void | Promise<void>,
-        );
-        this.autoOpenTrigger = guardHandler<
-            [API_Character, VeratownLocationDoc]
-        >(
-            this.key,
-            this.onCharacterAtAutoOpenTile as (
-                ...args: [API_Character, VeratownLocationDoc]
-            ) => void | Promise<void>,
-        );
+        this.keypadTrigger = guardHandler(this.key, ((
+            character: API_Character,
+            location: VeratownLocationDoc,
+        ) => {
+            this.onCharacterAtKeypad(character, location);
+        }) as any);
+        this.autoOpenTrigger = guardHandler(this.key, ((
+            character: API_Character,
+            location: VeratownLocationDoc,
+        ) => {
+            this.onCharacterAtAutoOpenTile(character, location);
+        }) as any);
 
         // Register code command with CommandParser
         this.commandParser?.register(
