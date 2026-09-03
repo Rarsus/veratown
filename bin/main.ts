@@ -275,7 +275,15 @@ export async function restartBotConnections(): Promise<void> {
     }
 
     try {
-        logger.warn("Starting BC bot connection restart");
+        logger.warn(
+            "Starting full BC bot restart (connections + room configuration + map)",
+        );
+
+        // Close existing game instance (if running Veratown)
+        if (activeVeratownGame) {
+            logger.info("Closing active Veratown game instance");
+            activeVeratownGame = undefined;
+        }
 
         // Close existing connections
         await closeBotConnections(activeConnections);
@@ -296,8 +304,23 @@ export async function restartBotConnections(): Promise<void> {
             hasCasino: !!newConnections.casino,
             hasSecondary: !!newConnections.secondary,
         });
+
+        // If running Veratown, reinitialize the game with fresh configuration and map
+        if (cachedConfig.game === "veratown" || !cachedConfig.game) {
+            logger.info(
+                "Reinitializing Veratown with fresh configuration and map",
+            );
+            await initializeVeratownGame(
+                newConnections,
+                activeDatabase,
+                cachedConfig,
+            );
+            logger.info(
+                "Veratown game reinitialized with room configuration and map loaded",
+            );
+        }
     } catch (error) {
-        logger.error("Failed to restart BC bot connections", error, {});
+        logger.error("Failed to restart BC bot", error, {});
         throw error;
     }
 }
@@ -313,11 +336,74 @@ export async function stopBotConnections(): Promise<void> {
         logger.warn("Stopping BC bot connections");
         await closeBotConnections(activeConnections);
         activeConnections = undefined;
+        activeVeratownGame = undefined;
         logger.info("BC bot connections stopped");
     } catch (error) {
         logger.error("Error stopping BC bot connections", error, {});
         throw error;
     }
+}
+
+/**
+ * Initialize Veratown game with full configuration and map loading
+ * Used during both startup and restart to ensure room is properly configured
+ * @param connections Bot connections to use
+ * @param db Database connection
+ * @param config Game configuration
+ */
+async function initializeVeratownGame(
+    connections: BotConnections,
+    db: { close(): Promise<void> },
+    config: ConfigFile,
+): Promise<void> {
+    const logger = createLogger("VeratownInit");
+
+    // Phase 2.3: Initialize unified store for cross-system coordination
+    if (!global.unifiedCharacterStore) {
+        const unifiedStore = new UnifiedCharacterStore(db);
+        global.unifiedCharacterStore = unifiedStore;
+        logger.info("UnifiedCharacterStore initialized");
+    }
+
+    // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
+    if (!global.casinoVenueSystem) {
+        const venueSystem = new CasinoVenueSystem();
+        global.casinoVenueSystem = venueSystem;
+        logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
+    }
+
+    // EPIC 2: Initialize CasinoEngine for core game logic
+    if (!global.casinoEngine && global.casinoVenueSystem) {
+        const casinoEngine = new CasinoEngine(
+            global.unifiedCharacterStore,
+            global.casinoVenueSystem,
+        );
+        global.casinoEngine = casinoEngine;
+        logger.info("CasinoEngine initialized (game logic extraction, EPIC 2)");
+    }
+
+    // Phase 5: Initialize cross-system subscribers
+    if (!global.crossSystemSubscribers) {
+        const subscribers = new CrossSystemSubscribers(
+            global.unifiedCharacterStore,
+        );
+        global.crossSystemSubscribers = subscribers;
+        logger.info("CrossSystemSubscribers initialized");
+    }
+
+    // Create new Veratown instance
+    const game = new Veratown(connections, db, config.dare, config.casino);
+    await game.init();
+    activeVeratownGame = game;
+
+    // Phase 5: Activate event subscriptions after systems are ready
+    if (global.crossSystemSubscribers) {
+        await global.crossSystemSubscribers.initialize();
+        logger.info("Cross-system event subscriptions activated");
+    }
+
+    logger.info("Veratown initialized with all systems and map loaded");
+    connections.main.setBotDescription(Veratown.description);
 }
 
 export interface RopeyBot {
@@ -336,6 +422,7 @@ interface BootstrapContext {
 let activeConnections: BotConnections | undefined;
 let activeDatabase: { close(): Promise<void> } | undefined;
 let activeDiscordClient: any | undefined;
+let activeVeratownGame: Veratown | undefined;
 let shutdownPromise: Promise<void> | undefined;
 let cachedServerUrl: string | undefined;
 let cachedConfig: ConfigFile | undefined;
@@ -389,69 +476,16 @@ async function startConfiguredGame({
                 process.exit(1);
             }
 
-            // Phase 2.3: Initialize unified store for cross-system coordination
-            if (!global.unifiedCharacterStore) {
-                const unifiedStore = new UnifiedCharacterStore(db);
-                global.unifiedCharacterStore = unifiedStore;
-                logger.info("UnifiedCharacterStore initialized");
-            }
-
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
-            // Phase 5+: All systems use UnifiedCharacterStore directly
-            // Adapters removed - no legacy store initialization needed
-
-            // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
-            if (!global.casinoVenueSystem) {
-                const venueSystem = new CasinoVenueSystem();
-                global.casinoVenueSystem = venueSystem;
-                logger.info(
-                    "CasinoVenueSystem initialized (location bonuses, EPIC 2)",
-                );
-            }
-
-            // EPIC 2: Initialize CasinoEngine for core game logic
-            if (!global.casinoEngine && global.casinoVenueSystem) {
-                const casinoEngine = new CasinoEngine(
-                    global.unifiedCharacterStore,
-                    global.casinoVenueSystem,
-                );
-                global.casinoEngine = casinoEngine;
-                logger.info(
-                    "CasinoEngine initialized (game logic extraction, EPIC 2)",
-                );
-            }
-
-            // Phase 5: Initialize cross-system subscribers
-            if (!global.crossSystemSubscribers) {
-                const subscribers = new CrossSystemSubscribers(
-                    global.unifiedCharacterStore,
-                );
-                global.crossSystemSubscribers = subscribers;
-                logger.info("CrossSystemSubscribers initialized");
-            }
-
-            // Initialize and start Veratown with integrated plugins
-            const game = new Veratown(
-                connections,
-                db,
-                config.dare,
-                config.casino,
-            );
-            await game.init();
-
-            // Phase 5: Activate event subscriptions after systems are ready
-            if (global.crossSystemSubscribers) {
-                await global.crossSystemSubscribers.initialize();
-                logger.info("Cross-system event subscriptions activated");
-            }
+            // Use centralized initialization that handles both startup and restart
+            await initializeVeratownGame(connections, db, config);
+            activeVeratownGame = activeVeratownGame; // Reference already stored in function
 
             logger.info(
                 "Phase 5 adapter cleanup complete - 100% unified architecture",
             );
             logger.info("All systems use UnifiedCharacterStore directly");
-
-            main.setBotDescription(Veratown.description);
             return;
         }
         case "kidnappers": {
