@@ -24,7 +24,7 @@ import { KeypadGroupDefinitionDoc } from "../keypadTypes";
  * Create a new group definition for a door
  */
 export class CreateGroupHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1] || !context.args[2]) {
@@ -90,7 +90,7 @@ export class CreateGroupHandler extends KeypadCommandHandler {
  * Update a group definition field
  */
 export class UpdateGroupHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (
@@ -138,7 +138,7 @@ export class UpdateGroupHandler extends KeypadCommandHandler {
  * Delete a group definition
  */
 export class DeleteGroupHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1]) {
@@ -175,7 +175,7 @@ export class DeleteGroupHandler extends KeypadCommandHandler {
  * List all groups for a door
  */
 export class ListGroupsHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0]) {
@@ -221,7 +221,7 @@ export class ListGroupsHandler extends KeypadCommandHandler {
  * Get detailed information about a group
  */
 export class GroupInfoHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1]) {
@@ -266,7 +266,7 @@ Members: (use /bot door group members <doorKey> <groupName>)
  * List all members in a group
  */
 export class ListGroupMembersHandler extends KeypadCommandHandler {
-    protected requiredPermission = "admin";
+    protected requiredPermission = "admin" as const;
 
     protected validateContext(context: KeypadCommandContext) {
         if (!context.args[0] || !context.args[1]) {
