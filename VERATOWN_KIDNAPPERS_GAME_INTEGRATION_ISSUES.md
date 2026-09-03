@@ -4,8 +4,10 @@
 
 **Status**: Planning  
 **Priority**: High  
-**Effort**: ~280-320 story points  
+**Effort**: ~240-280 story points (with shared infrastructure synergies)  
 **Target Release**: Phase 5.3+
+
+> **📋 Cross-Integration Note**: This effort is part of a three-game integration strategy. See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) for shared infrastructure components, MongoDB Atlas optimization, and cross-game features that reduce total effort from ~780-900 points to ~730-815 points.
 
 ---
 
@@ -37,15 +39,38 @@
 
 ---
 
+## PREREQUISITES: Shared Infrastructure (One-Time Effort, ~25 points)
+
+These components are created once and shared across RoleplayChallenge, MaidsPartyNight, and KidnappersGame. Reduce development time for all three integrations by 20-30%.
+
+**Shared Components** (see [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) Section 1):
+
+- [ ] `VeratownGameFeatureBase` - Abstract base class with lifecycle, state, error handling
+- [ ] `PlayerGameSession` model - Unified player state across games
+- [ ] `AppearanceManager` utilities - Capture/restore/apply logic (all three games need this)
+- [ ] `GameTimerManager` - Unified timer and pacing system
+- [ ] `GameCommandRouter` - Consistent command parsing + role-based access control
+
+**MongoDB Atlas Features** (see [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) Section 2):
+
+- [ ] Schema validation + TTL indexes
+- [ ] Aggregation pipelines for analytics
+- [ ] Change Streams for real-time discovery
+
+**Effort Impact**: ~40 points saved per game through code reuse. KidnappersGame = 280-320 → 240-280 points.
+
+---
+
 ## ISSUE 1: Architecture & Multi-Player Scenario Design
 
 **Parent**: EPIC  
-**Story Points**: 17  
-**Status**: Ready for refinement
+**Story Points**: 12 (reduced from 17 with VeratownGameFeatureBase)  
+**Status**: Ready for refinement  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Define architectural approach for converting multi-player kidnapping scenarios from standalone room to Veratown region-bound feature.
+Define architectural approach for converting multi-player kidnapping scenarios from standalone room to Veratown region-bound feature. Extends shared `VeratownGameFeatureBase` for lifecycle management. This establishes the foundation for all other work.
 
 ### Acceptance Criteria
 
@@ -378,16 +403,17 @@ Resume:
 ## ISSUE 2: FeatureSystem Conversion & Multi-Player Implementation
 
 **Parent**: EPIC  
-**Story Points**: 48  
-**Status**: Ready for development
+**Story Points**: 32 (reduced from 48 with VeratownGameFeatureBase)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Convert KidnappersGame from standalone hub logic to Veratown FeatureSystem implementation with multi-player scenario support.
+Convert KidnappersGame from standalone hub logic to Veratown FeatureSystem implementation with multi-player scenario support. Extend shared `VeratownGameFeatureBase` to inherit lifecycle, state management, and error handling.
 
 ### Acceptance Criteria
 
-- [ ] New class `KidnappersGameFeature` created
+- [ ] New class `KidnappersGameFeature` created extending VeratownGameFeatureBase
 - [ ] Multi-player lifecycle implemented (setup/play/end)
 - [ ] Regional command parsing working
 - [ ] Role-based command filtering
@@ -404,7 +430,7 @@ Convert KidnappersGame from standalone hub logic to Veratown FeatureSystem imple
 
 ### Sub-Issues
 
-- [ ] ISSUE 2.1: Create KidnappersGameFeature base class
+- [ ] ISSUE 2.1: Create KidnappersGameFeature extending base class
 - [ ] ISSUE 2.2: Implement role assignment system
 - [ ] ISSUE 2.3: Implement scenario lifecycle handlers
 - [ ] ISSUE 2.4: Implement role-based command routing
@@ -417,40 +443,39 @@ Convert KidnappersGame from standalone hub logic to Veratown FeatureSystem imple
 ## ISSUE 2.1: Create KidnappersGameFeature Base Class
 
 **Parent**: ISSUE 2  
-**Story Points**: 4
+**Story Points**: 2 (reduced from 4 - now just extends VeratownGameFeatureBase)
 
 ### Description
 
-Create the core feature class with multi-player support.
+Create the core feature class by extending `VeratownGameFeatureBase`. Override game-specific methods for multi-player scenario management.
 
 ### Acceptance Criteria
 
-- [ ] Class extends VeratownFeatureSystem
-- [ ] All required methods implemented
-- [ ] Constructor with dependency injection
-- [ ] guardHandler() error isolation
-- [ ] Multi-player session management
+- [ ] Class extends VeratownGameFeatureBase
+- [ ] Override `getGameName()`, `getRegionBounds()`, `handleRegionCommand()`
+- [ ] Constructor calls super() with dependencies
+- [ ] Multi-player session management initialized
+- [ ] guardHandler() error isolation used
 - [ ] Logging configured
+
+### Note
+
+See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.1](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#11-common-veratorngamefeaturebase-class) for the base class design.
 
 ### Class Structure
 
 ```typescript
-export class KidnappersGameFeature implements VeratownFeatureSystem {
-    // Dependencies
-    private conn: API_Connector;
-    private locationStore: VeratownLocationStore;
-    private commandParser: CommandParser;
-    private unifiedStore: UnifiedCharacterStore;
+export class KidnappersGameFeature extends VeratownGameFeatureBase {
+    override getGameName(): string { return "kidnappers_game"; }
+    override getRegionBounds(): MapRegion { return KIDNAPPERS_GAME_REGION; }
+    override handleRegionCommand(...) { ... }
 
-    // Game state (per scenario)
+    // Multi-player session management
     private activeSessions: Map<string, GameSession>;
     private currentScenario?: GameSession;
 
     // Players in region
     private playersInRegion: Set<number>;
-
-    // Timers
-    private timers: Map<string, NodeJS.Timeout>;
 
     constructor(...deps);
     async registerTriggers(): Promise<void>;

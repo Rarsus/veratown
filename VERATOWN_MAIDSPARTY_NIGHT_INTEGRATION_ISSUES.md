@@ -420,16 +420,17 @@ Disconnect Recovery:
 ## ISSUE 2: FeatureSystem Conversion & Refactoring
 
 **Parent**: EPIC  
-**Story Points**: 42  
-**Status**: Ready for development
+**Story Points**: 28 (reduced from 42 with VeratownGameFeatureBase)  
+**Status**: Ready for development  
+**Dependencies**: PREREQUISITES completed
 
 ### Description
 
-Convert MaidsPartyNightSinglePlayerAdventure from standalone hub logic to Veratown FeatureSystem implementation.
+Convert MaidsPartyNightSinglePlayerAdventure from standalone hub logic to Veratown FeatureSystem implementation. Extend shared `VeratownGameFeatureBase` to inherit lifecycle, state management, and error handling.
 
 ### Acceptance Criteria
 
-- [ ] New class `MaidsPartyNightFeature` created
+- [ ] New class `MaidsPartyNightFeature` created extending VeratownGameFeatureBase
 - [ ] Single-player lifecycle integrated (enter/play/exit)
 - [ ] Regional command parsing working
 - [ ] Character event handlers for single-player
@@ -446,7 +447,7 @@ Convert MaidsPartyNightSinglePlayerAdventure from standalone hub logic to Verato
 
 ### Sub-Issues
 
-- [ ] ISSUE 2.1: Create MaidsPartyNightFeature base class
+- [ ] ISSUE 2.1: Create MaidsPartyNightFeature extending base class
 - [ ] ISSUE 2.2: Implement single-player lifecycle handlers
 - [ ] ISSUE 2.3: Implement choice parsing & branching engine
 - [ ] ISSUE 2.4: Implement story state transitions
@@ -458,26 +459,35 @@ Convert MaidsPartyNightSinglePlayerAdventure from standalone hub logic to Verato
 ## ISSUE 2.1: Create MaidsPartyNightFeature Base Class
 
 **Parent**: ISSUE 2  
-**Story Points**: 4
+**Story Points**: 2 (reduced from 4 - now just extends VeratownGameFeatureBase)
 
 ### Description
 
-Create the core feature class with proper inheritance and initialization.
+Create the core feature class by extending `VeratownGameFeatureBase`. Override game-specific methods for narrative management.
 
 ### Acceptance Criteria
 
-- [ ] Class extends VeratownFeatureSystem
-- [ ] All required methods stubbed
-- [ ] Constructor with dependency injection
-- [ ] guardHandler() error isolation
-- [ ] Property initialization
+- [ ] Class extends VeratownGameFeatureBase
+- [ ] Override `getGameName()`, `getRegionBounds()`, `handleRegionCommand()`
+- [ ] Constructor calls super() with dependencies
+- [ ] Story state initialization
+- [ ] guardHandler() error isolation used
+- [ ] Property initialization (players, stories)
 - [ ] Logging configured
+
+### Note
+
+See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md Section 1.1](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md#11-common-veratorngamefeaturebase-class) for the base class design.
 
 ### Class Structure
 
 ```typescript
-export class MaidsPartyNightFeature implements VeratownFeatureSystem {
-    // Dependencies
+export class MaidsPartyNightFeature extends VeratownGameFeatureBase {
+    override getGameName(): string { return "maids_party_night"; }
+    override getRegionBounds(): MapRegion { return MAIDS_PARTY_NIGHT_REGION; }
+    override handleRegionCommand(...) { ... }
+
+    // Game-specific
     private conn: API_Connector;
     private conn2?: API_Connector;
     private locationStore: VeratownLocationStore;
@@ -2679,6 +2689,57 @@ Guide for non-developers to add/modify story content.
 7. ISSUE 8 → ISSUE 2 (timer integration)
 8. ISSUE 9 → ISSUE 2-8 (testing depends on implementation)
 9. ISSUE 10 → All (documentation last)
+
+---
+
+## CROSS-GAME SYNERGIES & MONGODB ATLAS FEATURES
+
+### Phase 4 (Optional, After Core Integration)
+
+These features are built on top of the core integration and shared with RoleplayChallenge and KidnappersGame.
+
+#### Player Story Statistics & Analytics
+
+**New ISSUE**: Cross-Game Player Statistics (EPIC bonus, ~8 points)
+
+- [ ] Implement aggregation pipeline in `GameAnalyticsService`
+- [ ] Query MaidsPartyNight stats (story completion rates, endings reached)
+- [ ] Display leaderboard (most story branches completed, most time played)
+- [ ] Track XP earned from story completion
+
+**MongoDB Atlas Benefit**: Aggregation pipelines are 10-100x faster than post-processing in Node.js.
+
+#### Game Discovery & Status
+
+**New ISSUE**: Real-Time Game Discovery with Change Streams (EPIC bonus, ~6 points)
+
+- [ ] Implement `GameDiscoveryService` with Change Streams
+- [ ] Broadcast active stories to discovery channel
+- [ ] Show player progress (% complete, current branch)
+- [ ] Enable spectator observation of stories
+
+**MongoDB Atlas Benefit**: Change Streams provide push-based updates without polling.
+
+#### Player Achievements
+
+**New ISSUE**: Achievement System (EPIC bonus, ~5 points)
+
+- [ ] Create achievements: "Found all endings", "Completed 5 branches", "Master Storyteller", etc.
+- [ ] Track progress in `player_achievements` collection
+- [ ] Award narrative-based cosmetics
+
+**Shared Benefit**: Same achievement infrastructure used by all three games.
+
+### Summary of Synergies for MaidsPartyNight
+
+| Area                    | Benefit                                                          | Effort Savings   |
+| ----------------------- | ---------------------------------------------------------------- | ---------------- |
+| **Shared Code**         | Use VeratownGameFeatureBase, AppearanceManager, GameTimerManager | ~60 points       |
+| **MongoDB Atlas**       | Aggregation pipelines, Change Streams, TTL cleanup               | ~15 points       |
+| **Cross-Game Features** | Unified leaderboards, achievements, social                       | (optional)       |
+| **Total Reduction**     | From 260-300 to 220-260 points                                   | ~60 points saved |
+
+See [VERATOWN_GAMES_INTEGRATION_SYNERGIES.md](VERATOWN_GAMES_INTEGRATION_SYNERGIES.md) for complete details.
 
 ---
 
