@@ -191,7 +191,7 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
             await store.updateChips(memberNumber, 1000, "test_grant");
 
             let lockedEvent: GameEvent | undefined;
-            eventBus.subscribe("chips_locked", (event: GameEvent) => {
+            eventBus.subscribe("chips_locked", async (event: GameEvent) => {
                 lockedEvent = event;
             });
 
@@ -213,7 +213,7 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
             await store.lockChips(memberNumber, 500, "bondage");
 
             let unlockedEvent: GameEvent | undefined;
-            eventBus.subscribe("chips_unlocked", (event: GameEvent) => {
+            eventBus.subscribe("chips_unlocked", async (event: GameEvent) => {
                 unlockedEvent = event;
             });
 

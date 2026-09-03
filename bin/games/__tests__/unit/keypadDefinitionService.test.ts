@@ -12,9 +12,12 @@
  * limitations under the License.
  */
 
-import { beforeEach, describe, it, expect } from "@jest/globals";
-import { Db, MongoMemoryServer } from "mongodb";
+// @ts-ignore - jest types not available
+import { beforeEach, describe, it, expect, afterEach } from "@jest/globals";
+declare const jest: any;
+import { Db } from "mongodb";
 import { MongoClient } from "mongodb";
+import { MongoMemoryServer } from "mongodb-memory-server";
 import { KeypadDefinitionService } from "../../veratown/services/keypadDefinitionService";
 import {
     KeypadDoorDefinitionDoc,

@@ -186,7 +186,7 @@ describe("Phase 3.2: Escape Bondage Feature Tests", () => {
             await store.updateChips(memberNumber, 1000, "test_grant");
 
             let escapeEvent: GameEvent | undefined;
-            eventBus.subscribe("escape_payment", (event: GameEvent) => {
+            eventBus.subscribe("escape_payment", async (event: GameEvent) => {
                 escapeEvent = event;
             });
 
@@ -230,7 +230,7 @@ describe("Phase 3.2: Escape Bondage Feature Tests", () => {
             await store.updateChips(memberNumber, 1000, "test_grant");
 
             const bondageRemovedEvents: GameEvent[] = [];
-            eventBus.subscribe("bondage_removed", (event: GameEvent) => {
+            eventBus.subscribe("bondage_removed", async (event: GameEvent) => {
                 bondageRemovedEvents.push(event);
             });
 
