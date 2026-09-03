@@ -9,9 +9,10 @@
         "declaration": true,
         "outDir": "./dist/",
         "rewriteRelativeImportExtensions": true,
-        "allowImportingTsExtensions": true
+        "allowImportingTsExtensions": true,
+        "lib": ["ES2022"]
     },
-    "extends": "@tsconfig/node18/tsconfig.json",
+    "extends": "@tsconfig/node22/tsconfig.json",
     "include": ["node_modules/bc-stubs/bc/**/*.d.ts", "**/*"],
     "ts-node": {
         "files": true

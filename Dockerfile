@@ -3,9 +3,9 @@
 # (pnpm, dependencies) and produces the
 # production bundle from source.
 ########################################
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 
-RUN npm install -g pnpm@10
+RUN npm install -g pnpm@11
 
 # Run non-interactively so pnpm never blocks waiting for a confirmation prompt.
 ENV CI=true
@@ -25,7 +25,7 @@ RUN pnpm run bundle
 # and a plain Node.js runtime, no build
 # tools or source left in the image.
 ########################################
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 WORKDIR /bot
 COPY --from=build /app/dist/bundle.js* ./

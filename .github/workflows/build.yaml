@@ -15,9 +15,13 @@ jobs:
             contents: read
             packages: write
         steps:
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
             - uses: pnpm/action-setup@v2
               with:
-                  version: 10
+                  version: 11
 
             - name: Checkout
               uses: actions/checkout@v4

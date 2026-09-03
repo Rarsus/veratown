@@ -24,12 +24,12 @@ importers:
         specifier: ^4.8.3
         version: 4.8.3
     devDependencies:
-      '@tsconfig/node18':
-        specifier: ^18.2.6
-        version: 18.2.6
+      '@tsconfig/node22':
+        specifier: ^22.0.0
+        version: 22.0.6
       '@types/node':
-        specifier: ^20.19.27
-        version: 20.19.27
+        specifier: ^22.0.0
+        version: 22.20.1
       esbuild:
         specifier: ^0.27.2
         version: 0.27.2
@@ -204,11 +204,11 @@ packages:
   '@total-typescript/ts-reset@0.6.1':
     resolution: {integrity: sha512-cka47fVSo6lfQDIATYqb/vO1nvFfbPw7uWLayIXIhGETj0wcOOlrlkobOMDNQOFr9QOafegUPq13V2+6vtD7yg==}
 
-  '@tsconfig/node18@18.2.6':
-    resolution: {integrity: sha512-eAWQzAjPj18tKnDzmWstz4OyWewLUNBm9tdoN9LayzoboRktYx3Enk1ZXPmThj55L7c4VWYq/Bzq0A51znZfhw==}
+  '@tsconfig/node22@22.0.6':
+    resolution: {integrity: sha512-/5thavHAnWDZwH2H6eEn/T8pBEBhtuKaWGMslsj82kJfvzQgOgEMK7X4goBbIUjgVtAzPTtM9Ml64LA0uxO6Iw==}
 
-  '@types/node@20.19.27':
-    resolution: {integrity: sha512-N2clP5pJhB2YnZJ3PIHFk5RkygRX5WO/5f0WC08tp0wd+sv0rsJk3MqWn3CbNmT2J505a5336jaQj4ph1AdMug==}
+  '@types/node@22.20.1':
+    resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
   bc-stubs@131.0.0:
     resolution: {integrity: sha512-uGEX42Qims1iWgAp3Tc2EInsYtmbuw/KUk/kzx+0HBdxoW+6oj5ED84vlefxe9ko7yy8haOc/AIr1gAYg7Dvbw==}
@@ -414,9 +414,9 @@ snapshots:
 
   '@total-typescript/ts-reset@0.6.1': {}
 
-  '@tsconfig/node18@18.2.6': {}
+  '@tsconfig/node22@22.0.6': {}
 
-  '@types/node@20.19.27':
+  '@types/node@22.20.1':
     dependencies:
       undici-types: 6.21.0
 

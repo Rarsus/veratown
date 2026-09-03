@@ -478,7 +478,7 @@ export interface RopeyBot {
 interface BootstrapContext {
     config: ConfigFile;
     connections: BotConnections;
-    db?: Db;
+    database?: DatabaseConnection;
 }
 
 let activeConnections: BotConnections | undefined;
@@ -521,7 +521,7 @@ async function shutdown(): Promise<void> {
 async function startConfiguredGame({
     config,
     connections,
-    db,
+    database,
 }: BootstrapContext): Promise<void> {
     const logger = LoggerRegistry.getAppLogger();
     const main = connections.main;
@@ -531,7 +531,7 @@ async function startConfiguredGame({
         case "veratown": {
             logger.info("Starting game: Veratown (primary entry point)");
 
-            if (!db) {
+            if (!database) {
                 logger.fatal(
                     "mongo_uri/mongo_db must be configured to run Veratown",
                 );
@@ -695,12 +695,12 @@ export async function startBot(): Promise<RopeyBot> {
         });
     }
 
-    await startConfiguredGame({ config, connections, db });
+    await startConfiguredGame({ config, connections, database });
 
     return {
         connector: connections.main,
         config,
-        db,
+        db: database?.db,
         game: config.game,
     };
 }
