@@ -9,7 +9,7 @@
         "module": "nodenext",
         "moduleResolution": "nodenext",
         "esModuleInterop": true,
-        "lib": ["ES2022"],
+        "lib": ["ES2022", "DOM"],
         "types": ["node"]
     },
     "extends": "@tsconfig/node22/tsconfig.json",

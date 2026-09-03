@@ -28,6 +28,7 @@ describe("Feature 1.3.5: Location Event System", () => {
     describe("Event Creation and Retrieval", () => {
         it("should create a location event", async () => {
             const event = await eventSystem.createEvent("prison_yard", {
+                locationKey: "prison_yard",
                 eventId: "event_001",
                 eventName: "Morning Roll Call",
                 triggerType: "daily",
@@ -46,6 +47,7 @@ describe("Feature 1.3.5: Location Event System", () => {
 
         it("should retrieve event by ID", async () => {
             await eventSystem.createEvent("dining_hall", {
+                locationKey: "dining_hall",
                 eventId: "event_002",
                 eventName: "Dinner Service",
                 triggerType: "occupancy",
@@ -63,6 +65,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "garden";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_003",
                 eventName: "Birds Singing",
                 triggerType: "random",
@@ -73,6 +76,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             });
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_004",
                 eventName: "Rain",
                 triggerType: "random",
@@ -90,6 +94,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "courtyard";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_005",
                 eventName: "Active Event",
                 triggerType: "manual",
@@ -98,6 +103,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             });
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_006",
                 eventName: "Inactive Event",
                 triggerType: "manual",
@@ -114,6 +120,7 @@ describe("Feature 1.3.5: Location Event System", () => {
     describe("Event Management", () => {
         it("should enable or disable event", async () => {
             await eventSystem.createEvent("storage", {
+                locationKey: "storage",
                 eventId: "event_007",
                 eventName: "Inventory Check",
                 triggerType: "daily",
@@ -130,6 +137,7 @@ describe("Feature 1.3.5: Location Event System", () => {
 
         it("should update event configuration", async () => {
             await eventSystem.createEvent("workshop", {
+                locationKey: "workshop",
                 eventId: "event_008",
                 eventName: "Workshop Open",
                 triggerType: "daily",
@@ -151,6 +159,7 @@ describe("Feature 1.3.5: Location Event System", () => {
 
         it("should delete event", async () => {
             await eventSystem.createEvent("library", {
+                locationKey: "library",
                 eventId: "event_009",
                 eventName: "Reading Time",
                 triggerType: "daily",
@@ -169,6 +178,7 @@ describe("Feature 1.3.5: Location Event System", () => {
     describe("Event Execution", () => {
         it("should execute event and record execution", async () => {
             await eventSystem.createEvent("gym", {
+                locationKey: "gym",
                 eventId: "event_010",
                 eventName: "Exercise Time",
                 triggerType: "occupancy",
@@ -190,6 +200,7 @@ describe("Feature 1.3.5: Location Event System", () => {
 
         it("should update last triggered time", async () => {
             await eventSystem.createEvent("recreation", {
+                locationKey: "recreation",
                 eventId: "event_011",
                 eventName: "Recreation Time",
                 triggerType: "manual",
@@ -206,6 +217,7 @@ describe("Feature 1.3.5: Location Event System", () => {
 
         it("should record consecutive failures and auto-disable", async () => {
             await eventSystem.createEvent("infirmary", {
+                locationKey: "infirmary",
                 eventId: "event_012",
                 eventName: "Medical Check",
                 triggerType: "daily",
@@ -225,6 +237,7 @@ describe("Feature 1.3.5: Location Event System", () => {
 
         it("should get execution history", async () => {
             await eventSystem.createEvent("cafeteria", {
+                locationKey: "cafeteria",
                 eventId: "event_013",
                 eventName: "Breakfast",
                 triggerType: "daily",
@@ -251,6 +264,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "barracks";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_014",
                 eventName: "Occupancy Event",
                 triggerType: "occupancy",
@@ -271,6 +285,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "chapel";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_015",
                 eventName: "Daily Prayer",
                 triggerType: "daily",
@@ -291,6 +306,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "hallway";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_016",
                 eventName: "Random Encounter",
                 triggerType: "random",
@@ -314,6 +330,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "assembly";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_017",
                 eventName: "Assembly",
                 triggerType: "occupancy",
@@ -334,6 +351,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "lounge";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_018",
                 eventName: "Full Lounge",
                 triggerType: "occupancy",
@@ -354,6 +372,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "clock_tower";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_019",
                 eventName: "Bell Rings",
                 triggerType: "daily",
@@ -373,6 +392,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "watchtower";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_020",
                 eventName: "Watch Change",
                 triggerType: "daily",
@@ -398,6 +418,7 @@ describe("Feature 1.3.5: Location Event System", () => {
             const locationKey = "courtyard_2";
 
             await eventSystem.createEvent(locationKey, {
+                locationKey: locationKey,
                 eventId: "event_021",
                 eventName: "Random Patrol",
                 triggerType: "random",
@@ -419,6 +440,7 @@ describe("Feature 1.3.5: Location Event System", () => {
     describe("Pruning and Statistics", () => {
         it("should prune old execution history", async () => {
             await eventSystem.createEvent("trash", {
+                locationKey: "trash",
                 eventId: "event_022",
                 eventName: "Trash Duty",
                 triggerType: "daily",
