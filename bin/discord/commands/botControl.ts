@@ -20,6 +20,7 @@
 import type { CommandInteraction } from "discord.js";
 import type { CommandResult, CommandContext } from "../types";
 import { createLogger } from "../../logging";
+import { restartBotConnections, stopBotConnections } from "../../main";
 
 const logger = createLogger("Discord:BotControl");
 
@@ -47,22 +48,22 @@ export async function handleBotRestartCommand(
             requested_by: context.userId,
         });
 
-        // Trigger bot restart
-        // This would need to be coordinated with the main bot process
-        // For now, we'll return a placeholder response
-        // In production, you'd emit an event or use a message queue
+        // Attempt to restart bot connections
+        await restartBotConnections();
 
-        logger.info("Bot restart initiated", {
+        logger.info("Bot restart completed successfully", {
             initiated_by: context.userId,
             timestamp: new Date().toISOString(),
         });
 
         return {
             success: true,
-            message: "Bot restart initiated. The BC bot will restart shortly.",
+            message:
+                "✅ BC bot restart completed successfully. Bot is now reconnecting to Bondage Club.",
             data: {
                 initiatedBy: context.userId,
                 initiatedAt: new Date().toISOString(),
+                status: "BC bot restarting - Discord bot remains active",
             },
         };
     } catch (error) {
@@ -70,11 +71,13 @@ export async function handleBotRestartCommand(
             initiated_by: context.userId,
             error_type:
                 error instanceof Error ? error.constructor.name : typeof error,
+            error_message:
+                error instanceof Error ? error.message : String(error),
         });
 
         return {
             success: false,
-            message: "Failed to restart bot",
+            message: `❌ Failed to restart BC bot: ${error instanceof Error ? error.message : "Unknown error"}`,
             error,
         };
     }
@@ -104,62 +107,38 @@ export async function handleBotStopCommand(
             requested_by: context.userId,
         });
 
-        // Trigger bot shutdown
-        // This would need to be coordinated with the main bot process
-        logger.info("Bot stop initiated", {
+        // Stop bot connections
+        await stopBotConnections();
+
+        logger.info("Bot stop completed successfully", {
             initiated_by: context.userId,
             timestamp: new Date().toISOString(),
         });
 
         return {
             success: true,
-            message: "Bot stop initiated. The BC bot will stop shortly.",
+            message:
+                "✅ BC bot stopped successfully. Discord bot remains active for monitoring.",
             data: {
                 initiatedBy: context.userId,
                 initiatedAt: new Date().toISOString(),
+                status: "BC bot stopped - Discord bot remains active",
+                note: "Use /bot-restart to restart the BC bot",
             },
         };
     } catch (error) {
-        logger.error("Error initiating bot stop", error, {
+        logger.error("Error stopping bot", error, {
             initiated_by: context.userId,
             error_type:
                 error instanceof Error ? error.constructor.name : typeof error,
+            error_message:
+                error instanceof Error ? error.message : String(error),
         });
 
         return {
             success: false,
-            message: "Failed to stop bot",
+            message: `❌ Failed to stop BC bot: ${error instanceof Error ? error.message : "Unknown error"}`,
             error,
         };
     }
-}
-
-/**
- * Trigger actual bot restart
- * This function would be called to coordinate the restart
- *
- * @param delayMs Delay before restart in milliseconds
- */
-export function triggerBotRestart(delayMs: number = 5000): void {
-    logger.info("Scheduling bot restart", { delay_ms: delayMs });
-
-    setTimeout((): void => {
-        logger.info("Triggering bot restart", {});
-        process.exit(0); // Exit with success code to trigger restart
-    }, delayMs);
-}
-
-/**
- * Trigger actual bot shutdown
- * This function would be called to coordinate the shutdown
- *
- * @param delayMs Delay before shutdown in milliseconds
- */
-export function triggerBotShutdown(delayMs: number = 5000): void {
-    logger.info("Scheduling bot shutdown", { delay_ms: delayMs });
-
-    setTimeout((): void => {
-        logger.info("Triggering bot shutdown", {});
-        process.exit(0); // Exit cleanly
-    }, delayMs);
 }

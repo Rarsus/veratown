@@ -258,6 +258,68 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     return config as ConfigFile;
 }
 
+/**
+ * Restart only the BC bot connections without restarting the entire process
+ * Keeps Discord bot and database active
+ *
+ * @returns Promise that resolves when restart is complete
+ * @throws Error if restart fails
+ */
+export async function restartBotConnections(): Promise<void> {
+    const logger = createLogger("BotRestart");
+
+    if (!cachedServerUrl || !cachedConfig || !activeDatabase) {
+        throw new Error(
+            "Cannot restart bot connections: server not fully initialized",
+        );
+    }
+
+    try {
+        logger.warn("Starting BC bot connection restart");
+
+        // Close existing connections
+        await closeBotConnections(activeConnections);
+        logger.info("Old bot connections closed");
+
+        // Recreate connections
+        const newConnections = await createBotConnections(
+            cachedServerUrl,
+            cachedConfig,
+            activeDatabase,
+        );
+        activeConnections = newConnections;
+
+        logger.info("BC bot connections successfully restarted", {
+            mainBot: newConnections.main?.Player?.Name,
+            mainBotId: newConnections.main?.Player?.MemberNumber,
+            hasShower: !!newConnections.shower,
+            hasCasino: !!newConnections.casino,
+            hasSecondary: !!newConnections.secondary,
+        });
+    } catch (error) {
+        logger.error("Failed to restart BC bot connections", error, {});
+        throw error;
+    }
+}
+
+/**
+ * Gracefully stop BC bot connections without stopping Discord bot
+ * Useful for maintenance or temporary shutdown
+ */
+export async function stopBotConnections(): Promise<void> {
+    const logger = createLogger("BotStop");
+
+    try {
+        logger.warn("Stopping BC bot connections");
+        await closeBotConnections(activeConnections);
+        activeConnections = undefined;
+        logger.info("BC bot connections stopped");
+    } catch (error) {
+        logger.error("Error stopping BC bot connections", error, {});
+        throw error;
+    }
+}
+
 export interface RopeyBot {
     connector: API_Connector;
     config: ConfigFile;
@@ -275,6 +337,8 @@ let activeConnections: BotConnections | undefined;
 let activeDatabase: { close(): Promise<void> } | undefined;
 let activeDiscordClient: any | undefined;
 let shutdownPromise: Promise<void> | undefined;
+let cachedServerUrl: string | undefined;
+let cachedConfig: ConfigFile | undefined;
 
 async function shutdown(): Promise<void> {
     if (shutdownPromise) return shutdownPromise;
@@ -465,7 +529,11 @@ export async function startBot(): Promise<RopeyBot> {
     const cfgFile = process.argv[2] ?? "./config.json";
     const config = await loadConfig(cfgFile);
 
+    // Cache config and serverUrl for potential restarts via Discord commands
+    cachedConfig = config;
+
     const serverUrl = config.url ?? SERVER_URL[config.env];
+    cachedServerUrl = serverUrl;
 
     if (!serverUrl) {
         logger.fatal("env must be live or test");
@@ -477,6 +545,15 @@ export async function startBot(): Promise<RopeyBot> {
     activeDatabase = database;
     const connections = await createBotConnections(serverUrl, config, database);
     activeConnections = connections;
+
+    logger.info(
+        "Bot connections initialized and cached for potential restarts",
+        {
+            game: config.game,
+            env: config.env,
+            mainBot: connections.main?.Player?.Name,
+        },
+    );
 
     // Initialize Discord bot if configured and not explicitly disabled
     const isDiscordEnabled =
@@ -503,6 +580,9 @@ export async function startBot(): Promise<RopeyBot> {
             );
             if (activeDiscordClient) {
                 logger.info("Discord bot initialized successfully");
+                logger.info(
+                    "Discord bot can now manage BC bot restarts via /bot-restart and /bot-stop commands",
+                );
             }
         } catch (error) {
             logger.error(
