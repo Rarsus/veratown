@@ -27,6 +27,7 @@ import {
     closeBotConnections,
     connectDatabase,
     createBotConnections,
+    DatabaseConnection,
 } from "./botConnections";
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
@@ -279,45 +280,98 @@ export async function restartBotConnections(): Promise<void> {
             "Starting full BC bot restart (connections + room configuration + map)",
         );
 
-        // Close existing game instance (if running Veratown)
-        if (activeVeratownGame) {
-            logger.info("Closing active Veratown game instance");
-            activeVeratownGame = undefined;
-        }
+        // Store previous state in case we need to recover
+        const previousGame = activeVeratownGame;
+        const previousConnections = activeConnections;
 
-        // Close existing connections
-        await closeBotConnections(activeConnections);
-        logger.info("Old bot connections closed");
+        try {
+            // Close existing game instance (if running Veratown)
+            if (activeVeratownGame) {
+                logger.info("Closing active Veratown game instance");
+                activeVeratownGame = undefined;
+            }
 
-        // Recreate connections
-        const newConnections = await createBotConnections(
-            cachedServerUrl,
-            cachedConfig,
-            activeDatabase,
-        );
-        activeConnections = newConnections;
+            // Clear global state to prevent orphaned references during restart
+            if (global.unifiedCharacterStore) {
+                logger.info(
+                    "Clearing UnifiedCharacterStore for fresh initialization",
+                );
+                global.unifiedCharacterStore = undefined as any;
+            }
+            if (global.casinoVenueSystem) {
+                logger.info(
+                    "Clearing CasinoVenueSystem for fresh initialization",
+                );
+                global.casinoVenueSystem = undefined as any;
+            }
+            if (global.casinoEngine) {
+                logger.info("Clearing CasinoEngine for fresh initialization");
+                global.casinoEngine = undefined as any;
+            }
+            if (global.crossSystemSubscribers) {
+                logger.info(
+                    "Clearing CrossSystemSubscribers for fresh initialization",
+                );
+                global.crossSystemSubscribers = undefined as any;
+            }
 
-        logger.info("BC bot connections successfully restarted", {
-            mainBot: newConnections.main?.Player?.Name,
-            mainBotId: newConnections.main?.Player?.MemberNumber,
-            hasShower: !!newConnections.shower,
-            hasCasino: !!newConnections.casino,
-            hasSecondary: !!newConnections.secondary,
-        });
+            // Close existing connections
+            await closeBotConnections(previousConnections);
+            logger.info("Old bot connections closed");
 
-        // If running Veratown, reinitialize the game with fresh configuration and map
-        if (cachedConfig.game === "veratown" || !cachedConfig.game) {
-            logger.info(
-                "Reinitializing Veratown with fresh configuration and map",
-            );
-            await initializeVeratownGame(
-                newConnections,
-                activeDatabase,
+            // Optionally reconnect to database to ensure fresh connection
+            // This is particularly important if the database connection timed out
+            const shouldReconnectDb = false; // Set to true if you want automatic DB reconnection
+            if (shouldReconnectDb && activeDatabase) {
+                logger.info("Closing stale database connection");
+                await activeDatabase.close();
+                const newDatabase = await connectDatabase(cachedConfig);
+                activeDatabase = newDatabase;
+                logger.info("Database connection refreshed");
+            }
+
+            // Recreate connections
+            const newConnections = await createBotConnections(
+                cachedServerUrl,
                 cachedConfig,
+                activeDatabase,
             );
-            logger.info(
-                "Veratown game reinitialized with room configuration and map loaded",
+            activeConnections = newConnections;
+
+            logger.info("BC bot connections successfully restarted", {
+                mainBot: newConnections.main?.Player?.Name,
+                mainBotId: newConnections.main?.Player?.MemberNumber,
+                hasShower: !!newConnections.shower,
+                hasCasino: !!newConnections.casino,
+                hasSecondary: !!newConnections.secondary,
+            });
+
+            // If running Veratown, reinitialize the game with fresh configuration and map
+            if (cachedConfig.game === "veratown" || !cachedConfig.game) {
+                logger.info(
+                    "Reinitializing Veratown with fresh configuration and map",
+                );
+                await initializeVeratownGame(
+                    newConnections,
+                    activeDatabase,
+                    cachedConfig,
+                );
+                logger.info(
+                    "Veratown game reinitialized with room configuration and map loaded",
+                );
+            }
+        } catch (initError) {
+            // Partial restart failed - log and rethrow with context
+            logger.error(
+                "Restart initialization failed - partial restart detected",
+                initError,
+                {
+                    gameWasStopped: activeVeratownGame === undefined,
+                    connectionsWereClosed:
+                        activeConnections !== previousConnections,
+                },
             );
+            throw initError;
         }
     } catch (error) {
         logger.error("Failed to restart BC bot", error, {});
@@ -348,15 +402,23 @@ export async function stopBotConnections(): Promise<void> {
  * Initialize Veratown game with full configuration and map loading
  * Used during both startup and restart to ensure room is properly configured
  * @param connections Bot connections to use
- * @param db Database connection
+ * @param database Database connection (will extract db from it)
  * @param config Game configuration
  */
 async function initializeVeratownGame(
     connections: BotConnections,
-    db: Db,
+    database: DatabaseConnection | undefined,
     config: ConfigFile,
 ): Promise<void> {
     const logger = createLogger("VeratownInit");
+
+    if (!database) {
+        throw new Error(
+            "Database connection required for Veratown initialization",
+        );
+    }
+
+    const db = database.db;
 
     // Phase 2.3: Initialize unified store for cross-system coordination
     if (!global.unifiedCharacterStore) {
@@ -420,7 +482,7 @@ interface BootstrapContext {
 }
 
 let activeConnections: BotConnections | undefined;
-let activeDatabase: Db | undefined;
+let activeDatabase: DatabaseConnection | undefined;
 let activeDiscordClient: any | undefined;
 let activeVeratownGame: Veratown | undefined;
 let shutdownPromise: Promise<void> | undefined;
@@ -479,7 +541,7 @@ async function startConfiguredGame({
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
             // Use centralized initialization that handles both startup and restart
-            await initializeVeratownGame(connections, db, config);
+            await initializeVeratownGame(connections, database, config);
             activeVeratownGame = activeVeratownGame; // Reference already stored in function
 
             logger.info(
