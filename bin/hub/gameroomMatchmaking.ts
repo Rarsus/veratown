@@ -73,7 +73,7 @@ export class MatchmakingNotifier {
 
         this.matchmaking_list.add(sender);
         await this.cleanupOffline();
-        metric_registered.labels({ roomName: sender.chatRoom.Name }).inc();
+        metric_registered.labels({ roomName: sender.chatRoom!.Name }).inc();
         logger.info(
             `${sender} was added to the matchmaking queue. There are now ${this.matchmaking_list.size} in it.`,
         );
@@ -123,11 +123,11 @@ export class MatchmakingNotifier {
                 }
                 // beep everyone that there are enough for a game and then remove them from the friend list and queue
                 this.matchmaking_list.forEach((M) => {
-                    this.connection.AccountBeep(M.MemberNumber, null, beepMsg);
+                    this.connection.AccountBeep(M.MemberNumber, "", beepMsg);
                     M.unfriend();
                 });
                 metric_success
-                    .labels({ roomName: this.connection.chatRoom.Name })
+                    .labels({ roomName: this.connection.chatRoom!.Name })
                     .inc();
                 logger.alert(
                     `Successful matchmaking with ${this.matchmaking_list.size} on the list.`,
