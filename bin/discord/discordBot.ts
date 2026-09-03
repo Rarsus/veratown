@@ -366,7 +366,7 @@ export async function handleCommandInteraction(
         );
         const context: CommandContext = {
             db,
-            botConnections: globalBotConnections,
+            botConnections: globalBotConnections as any,
             userId,
             guildId: guildId || "",
             isAdmin,

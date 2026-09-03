@@ -81,7 +81,7 @@ async function waitForConnectionStability(
     while (Date.now() - startTime < maxWaitMs) {
         try {
             // Check if connection is alive
-            if (!connection.socket?.connected) {
+            if (!(connection as any).socket?.connected) {
                 await new Promise((resolve) => setTimeout(resolve, 100));
                 continue;
             }
@@ -288,7 +288,7 @@ export async function closeBotConnections(
         connections.shower,
         connections.casino,
         connections.secondary,
-    ]);
+    ] as any);
     for (const connection of uniqueConnections) {
         if (connection) {
             logger.debug("Disconnecting bot", {

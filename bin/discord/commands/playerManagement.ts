@@ -172,13 +172,13 @@ export async function handlePlayerInfoCommand(
         const parsedId = parseInt(playerQuery, 10);
         if (!isNaN(parsedId)) {
             // Try by member number first
-            player = await collection.findOne({ _id: parsedId });
+            player = await collection.findOne({ _id: parsedId } as any);
         }
         if (!player) {
             // Try by name (case-insensitive regex)
             player = await collection.findOne({
                 name: { $regex: playerQuery, $options: "i" },
-            });
+            } as any);
         }
 
         if (!player) {
@@ -301,13 +301,13 @@ export async function handlePlayerBlacklistCommand(
         const parsedId = parseInt(playerQuery, 10);
         if (!isNaN(parsedId)) {
             // Try by member number first
-            player = await collection.findOne({ _id: parsedId });
+            player = await collection.findOne({ _id: parsedId } as any);
         }
         if (!player) {
             // Try by name (case-insensitive regex)
             player = await collection.findOne({
                 name: { $regex: playerQuery, $options: "i" },
-            });
+            } as any);
         }
 
         if (!player) {
