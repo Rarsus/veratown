@@ -1,0 +1,225 @@
+{
+    "timestamp": 1788440680866,
+    "totalCollections": 14,
+    "totalFields": 24,
+    "totalDocumentsAffected": 7803,
+    "results": [
+        {
+            "collectionName": "keypadDoorDefinitions",
+            "field": "createdAt",
+            "targetType": "long",
+            "documentsAffected": 2,
+            "successCount": 2,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "keypadDoorDefinitions",
+            "field": "updatedAt",
+            "targetType": "long",
+            "documentsAffected": 2,
+            "successCount": 2,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "players_DEPRECATED",
+            "field": "lastFreeCredits",
+            "targetType": "long",
+            "documentsAffected": 1656,
+            "successCount": 1656,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "players_DEPRECATED",
+            "field": "credits",
+            "targetType": "int",
+            "documentsAffected": 4,
+            "successCount": 4,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "veratownMapBackups",
+            "field": "backedUpAt",
+            "targetType": "long",
+            "documentsAffected": 10,
+            "successCount": 10,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "veratownMapBackups",
+            "field": "backedUpFrom",
+            "targetType": "long",
+            "documentsAffected": 10,
+            "successCount": 10,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "veratownLocations",
+            "field": "createdAt",
+            "targetType": "long",
+            "documentsAffected": 32,
+            "successCount": 32,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "veratownLocations",
+            "field": "updatedAt",
+            "targetType": "long",
+            "documentsAffected": 36,
+            "successCount": 36,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "dares",
+            "field": "createdAt",
+            "targetType": "long",
+            "documentsAffected": 88,
+            "successCount": 88,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "keypadGroupMemberships",
+            "field": "grantedAt",
+            "targetType": "long",
+            "documentsAffected": 1,
+            "successCount": 1,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "veratownMap",
+            "field": "updatedAt",
+            "targetType": "long",
+            "documentsAffected": 1,
+            "successCount": 1,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "gameEvents",
+            "field": "timestamp",
+            "targetType": "long",
+            "documentsAffected": 646,
+            "successCount": 646,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "dareState",
+            "field": "updatedAt",
+            "targetType": "long",
+            "documentsAffected": 1,
+            "successCount": 1,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "createdAt",
+            "targetType": "long",
+            "documentsAffected": 1685,
+            "successCount": 1685,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "updatedAt",
+            "targetType": "long",
+            "documentsAffected": 1685,
+            "successCount": 1685,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "lastAccessedAt",
+            "targetType": "long",
+            "documentsAffected": 1685,
+            "successCount": 1685,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "casino.updatedAt",
+            "targetType": "long",
+            "documentsAffected": 70,
+            "successCount": 70,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "dare.updatedAt",
+            "targetType": "long",
+            "documentsAffected": 35,
+            "successCount": 35,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "veratown.lastPositionAt",
+            "targetType": "long",
+            "documentsAffected": 35,
+            "successCount": 35,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "veratown.lastAppearanceAt",
+            "targetType": "long",
+            "documentsAffected": 35,
+            "successCount": 35,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "veratown.updatedAt",
+            "targetType": "long",
+            "documentsAffected": 37,
+            "successCount": 37,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "field": "crossSystem.updatedAt",
+            "targetType": "long",
+            "documentsAffected": 35,
+            "successCount": 35,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "keypadAccessGroups_DEPRICATED",
+            "field": "createdAt",
+            "targetType": "long",
+            "documentsAffected": 6,
+            "successCount": 6,
+            "errorCount": 0,
+            "errors": []
+        },
+        {
+            "collectionName": "keypadAccessGroups_DEPRICATED",
+            "field": "updatedAt",
+            "targetType": "long",
+            "documentsAffected": 6,
+            "successCount": 6,
+            "errorCount": 0,
+            "errors": []
+        }
+    ],
+    "errors": []
+}

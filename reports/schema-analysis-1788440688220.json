@@ -1,0 +1,3522 @@
+{
+    "timestamp": 1788440688219,
+    "totalCollections": 14,
+    "documentedCollections": 14,
+    "undocumentedCollections": [],
+    "analysisPerCollection": [
+        {
+            "collectionName": "keypadDoorDefinitions",
+            "documentCount": 2,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "string",
+                    "documentCount": 2,
+                    "exampleValues": ["room1_door", "room2_door"]
+                },
+                {
+                    "fieldPath": "autoOpenTile",
+                    "mongoType": "object",
+                    "documentCount": 1,
+                    "exampleValues": [
+                        {
+                            "X": 23,
+                            "Y": 26
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "mongoType": "long",
+                    "documentCount": 2,
+                    "exampleValues": [1788260179480, 1788336564107]
+                },
+                {
+                    "fieldPath": "description",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["Room 1 entrance door"]
+                },
+                {
+                    "fieldPath": "doorKey",
+                    "mongoType": "string",
+                    "documentCount": 2,
+                    "exampleValues": ["room1_door", "room2_door"]
+                },
+                {
+                    "fieldPath": "doorX",
+                    "mongoType": "int",
+                    "documentCount": 2,
+                    "exampleValues": [23, 29]
+                },
+                {
+                    "fieldPath": "doorY",
+                    "mongoType": "int",
+                    "documentCount": 2,
+                    "exampleValues": [27, 27]
+                },
+                {
+                    "fieldPath": "duration",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["5000"]
+                },
+                {
+                    "fieldPath": "enable",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["true"]
+                },
+                {
+                    "fieldPath": "enabled",
+                    "mongoType": "bool",
+                    "documentCount": 2,
+                    "exampleValues": [true, true]
+                },
+                {
+                    "fieldPath": "lockedTile",
+                    "mongoType": "string",
+                    "documentCount": 2,
+                    "exampleValues": ["WoodLocked", "woodlocked"]
+                },
+                {
+                    "fieldPath": "unlockDurationMs",
+                    "mongoType": "int",
+                    "documentCount": 2,
+                    "exampleValues": [10000, 5000]
+                },
+                {
+                    "fieldPath": "unlockdurationms",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["5000"]
+                },
+                {
+                    "fieldPath": "unlockedTile",
+                    "mongoType": "string",
+                    "documentCount": 2,
+                    "exampleValues": ["WoodOpen", "woodopen"]
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "mongoType": "long",
+                    "documentCount": 2,
+                    "exampleValues": [1788262040018, 1788336564107]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "duration",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["5000"]
+                },
+                {
+                    "fieldPath": "enable",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["true"]
+                },
+                {
+                    "fieldPath": "unlockdurationms",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["5000"]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "outfits",
+            "documentCount": 0,
+            "fields": [],
+            "violations": [],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "dareOutfits",
+            "documentCount": 18,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "int",
+                    "documentCount": 18,
+                    "exampleValues": [254890, 192735, 245109]
+                },
+                {
+                    "fieldPath": "appearance",
+                    "mongoType": "array",
+                    "documentCount": 18,
+                    "exampleValues": [
+                        [
+                            {
+                                "Group": "ArmsLeft",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "ArmsRight",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "HandsLeft",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "HandsRight",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "Blush",
+                                "Name": "Blush",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Fluids",
+                                "Name": "Fluids",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Emoticon",
+                                "Name": "Emoticon",
+                                "Property": {
+                                    "Expression": "Afk"
+                                }
+                            },
+                            {
+                                "Group": "HairBack",
+                                "Name": "HairNone"
+                            },
+                            {
+                                "Group": "Eyebrows",
+                                "Name": "Eyebrows1",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Eyes",
+                                "Name": "Eyes1",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Eyes2",
+                                "Name": "Eyes1",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Mouth",
+                                "Name": "Regular",
+                                "Color": ["Default", "Default"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "l": 0,
+                                        "t": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Nipples",
+                                "Name": "Nipples1"
+                            },
+                            {
+                                "Group": "Head",
+                                "Name": "Default"
+                            },
+                            {
+                                "Group": "Pussy",
+                                "Name": "Penis",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "BodyLower",
+                                "Name": "XLarge"
+                            },
+                            {
+                                "Group": "BodyUpper",
+                                "Name": "FlatMedium",
+                                "Color": ["#F07878"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "Height",
+                                "Name": "H1000",
+                                "Color": []
+                            },
+                            {
+                                "Group": "BodyStyle",
+                                "Name": "EchoV1",
+                                "Color": []
+                            },
+                            {
+                                "Group": "ClothLower",
+                                "Name": "Jeans1",
+                                "Color": ["#202020"]
+                            },
+                            {
+                                "Group": "Shoes",
+                                "Name": "Sneakers2",
+                                "Color": ["#353535"]
+                            },
+                            {
+                                "Group": "Socks",
+                                "Name": "Socks2",
+                                "Color": ["#202020"]
+                            },
+                            {
+                                "Group": "Glasses",
+                                "Name": "Glasses1",
+                                "Color": ["#303030"]
+                            },
+                            {
+                                "Group": "FacialHair",
+                                "Name": "MediumBeard",
+                                "Color": ["#574B4B"]
+                            },
+                            {
+                                "Group": "HairFront",
+                                "Name": "HairFront2b",
+                                "Color": ["#574B4B"]
+                            },
+                            {
+                                "Group": "Decals",
+                                "Name": "Staff",
+                                "Color": ["#CC3232"]
+                            },
+                            {
+                                "Group": "Pronouns",
+                                "Name": "HeHim"
+                            },
+                            {
+                                "Group": "Cloth",
+                                "Name": "ButtonShirt",
+                                "Color": ["#202020"]
+                            },
+                            {
+                                "Group": "ClothOuter",
+                                "Name": "JacketHoodie",
+                                "Color": ["Default", "Default", "Default"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "h": 0,
+                                        "s": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [
+                                        "ItemArmsLeatherCuffs",
+                                        "ItemArmsLeatherDeluxeCuffs",
+                                        "ItemArmsFuturisticCuffs",
+                                        "ItemArmsOrnateCuffs",
+                                        "ItemArmsHighStyleSteelCuffs",
+                                        "ItemNipplesPiercingsRoundPiercing",
+                                        "ItemNipplesPiercingsNecklacePiercingChain",
+                                        "ItemNipplesLactationPump",
+                                        "ClothAccessoryPoncho"
+                                    ],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "Panties",
+                                "Name": "MaleCatsuitPanties",
+                                "Color": ["#202020", "Default"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "Suit",
+                                "Name": "MaleSeamlessCatsuit",
+                                "Color": ["#F07878", "#F07878"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "SuitLower",
+                                "Name": "MaleSeamlessCatsuit",
+                                "Color": ["#F07878", "#F07878"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "ItemHead",
+                                "Name": "HypnoticVisor",
+                                "Color": [
+                                    "#790BFF",
+                                    "#808080",
+                                    "#5B23D9",
+                                    "#100024",
+                                    "#808080",
+                                    "#E6E6E6"
+                                ],
+                                "Difficulty": 6,
+                                "Property": {
+                                    "TypeRecord": {
+                                        "t": 0,
+                                        "p": 0,
+                                        "d": 0,
+                                        "e": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": ["Mask", "Glasses"],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Text": ""
+                                }
+                            }
+                        ],
+                        [
+                            {
+                                "Group": "Cloth",
+                                "Name": "ShoulderlessTop",
+                                "Color": ["#400000"],
+                                "Property": {
+                                    "OverridePriority": 25
+                                }
+                            },
+                            {
+                                "Group": "ClothAccessory",
+                                "Name": "StudentOutfit3Bow2",
+                                "Color": ["#790000"],
+                                "Property": {
+                                    "OverridePriority": 34,
+                                    "LSCGLeadLined": false,
+                                    "LayerOverrides": [
+                                        {
+                                            "DrawingLeft": {
+                                                "": 200
+                                            },
+                                            "DrawingTop": {
+                                                "": 260
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Group": "Necklace",
+                                "Name": "AnimeGirlNecklace",
+                                "Color": ["#830505", "#848484", "#530000"],
+                                "Property": {
+                                    "OverridePriority": 7
+                                }
+                            },
+                            {
+                                "Group": "Suit",
+                                "Name": "SleevelessSlimLatexLeotard",
+                                "Color": ["#400000"],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "Latex": -1,
+                                        "Shine": -1,
+                                        "BreastShade": 26
+                                    },
+                                    "LSCGOpacity": 0.99
+                                }
+                            },
+                            {
+                                "Group": "SuitLower",
+                                "Name": "Stockings4",
+                                "Color": ["#300000"],
+                                "Property": {
+                                    "OverridePriority": 19
+                                }
+                            },
+                            {
+                                "Group": "ClothLower",
+                                "Name": "CrossSkirtLight",
+                                "Color": [
+                                    "#141414",
+                                    "#3F0000",
+                                    "#141414",
+                                    "#636262"
+                                ],
+                                "Property": {
+                                    "Opacity": [0.9, 1, 0.9, 1]
+                                }
+                            },
+                            {
+                                "Group": "Bra",
+                                "Name": "Bra10",
+                                "Color": ["#740000"]
+                            },
+                            {
+                                "Group": "Corset",
+                                "Name": "Corset4",
+                                "Color": ["#520000"],
+                                "Property": {
+                                    "OverridePriority": 27
+                                }
+                            },
+                            {
+                                "Group": "Panties",
+                                "Name": "StringPanties1",
+                                "Color": ["#6C0000"]
+                            },
+                            {
+                                "Group": "Socks",
+                                "Name": "GradientPantyhose",
+                                "Color": ["#776262", "#9F0202"],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "Upper": 12,
+                                        "Lower": 21
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "SocksRight",
+                                "Name": "Socks3",
+                                "Color": ["#250000"],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "Socks3": 19
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "SocksLeft",
+                                "Name": "Socks4",
+                                "Color": ["#250000"],
+                                "Property": {
+                                    "OverridePriority": 20
+                                }
+                            },
+                            {
+                                "Group": "AnkletRight",
+                                "Name": "Ribbon1",
+                                "Color": ["#440000"],
+                                "Property": {
+                                    "OverridePriority": 25
+                                }
+                            },
+                            {
+                                "Group": "AnkletLeft",
+                                "Name": "Ribbon1",
+                                "Color": ["#440000"],
+                                "Property": {
+                                    "OverridePriority": 25
+                                }
+                            },
+                            {
+                                "Group": "Garters",
+                                "Name": "GarterBelt2",
+                                "Color": ["#3C3C3C"],
+                                "Property": {
+                                    "OverridePriority": 23
+                                }
+                            },
+                            {
+                                "Group": "Shoes",
+                                "Name": "SneakersSport",
+                                "Color": ["#210000", "#9A9A9A", "#470000"],
+                                "Property": {
+                                    "OverridePriority": 24
+                                }
+                            },
+                            {
+                                "Group": "Hat",
+                                "Name": "Veil1",
+                                "Color": ["#000000"],
+                                "Property": {
+                                    "OverridePriority": 27,
+                                    "Opacity": 0.5,
+                                    "LayerOverrides": [
+                                        {
+                                            "DrawingLeft": {
+                                                "": 125
+                                            },
+                                            "DrawingTop": {
+                                                "": 8
+                                            }
+                                        },
+                                        {
+                                            "DrawingLeft": {
+                                                "": 125
+                                            },
+                                            "DrawingTop": {
+                                                "": 8
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Group": "HairAccessory3",
+                                "Name": "Ribbons1",
+                                "Color": ["#740000", "#740000"],
+                                "Property": {
+                                    "Opacity": [1, 0],
+                                    "OverridePriority": {
+                                        "Right": 0,
+                                        "Left": 6
+                                    },
+                                    "LayerOverrides": [
+                                        {
+                                            "DrawingLeft": {
+                                                "": 90
+                                            },
+                                            "DrawingTop": {
+                                                "": -40
+                                            }
+                                        },
+                                        {
+                                            "DrawingLeft": {
+                                                "": 90
+                                            },
+                                            "DrawingTop": {
+                                                "": -40
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Group": "Gloves",
+                                "Name": "FishnetGloves",
+                                "Color": ["#130000"],
+                                "Property": {
+                                    "OverridePriority": 24
+                                }
+                            },
+                            {
+                                "Group": "HandAccessoryLeft",
+                                "Name": "Claws",
+                                "Color": ["#570000", "#380000"]
+                            },
+                            {
+                                "Group": "HandAccessoryRight",
+                                "Name": "Claws",
+                                "Color": ["#570000", "#380000"]
+                            },
+                            {
+                                "Group": "Bracelet",
+                                "Name": "SpikeBands",
+                                "Color": ["#2F0000", "#444444"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "Type": null
+                                }
+                            },
+                            {
+                                "Group": "Glasses",
+                                "Name": "CatGlasses",
+                                "Color": ["#750000"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 1
+                                    },
+                                    "OverridePriority": 27,
+                                    "Type": "Back"
+                                }
+                            },
+                            {
+                                "Group": "Jewelry",
+                                "Name": "JewelrySet",
+                                "Color": ["#363636", "#363636", "#37231D"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "e": 3,
+                                        "a": 3,
+                                        "n": 0,
+                                        "f": 5
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Type": "e3a3n0f5",
+                                    "OverridePriority": {
+                                        "SeptumRing1": 33,
+                                        "EarHoopLeft": 52,
+                                        "EarHoopRight": 52,
+                                        "EarRingLeft": 33,
+                                        "EarRingRight": 33,
+                                        "EarRing2Left": 33,
+                                        "EarRing2Right": 33,
+                                        "EarRing3Left": 33,
+                                        "EarRing3Right": 33,
+                                        "EarStudLeft": 33,
+                                        "EarStudRight": 33,
+                                        "EarStud2Left": 33,
+                                        "EarStud2Right": 33,
+                                        "EarStud3Left": 33,
+                                        "EarStud3Right": 33,
+                                        "EarBigstudLeft": 33,
+                                        "EarBigstudRight": 33,
+                                        "EarIndustLeft": 33,
+                                        "EarIndustRight": 33,
+                                        "NoseStudLeft": 33,
+                                        "NoseStudRight": 33,
+                                        "NoseRingLeft": 33,
+                                        "NoseRingRight": 33,
+                                        "FaceDermalLeft": 33,
+                                        "FaceDermalRight": 33,
+                                        "FaceBridge": 27,
+                                        "FaceMonroeRight": 33,
+                                        "FaceMonroeLeft": 33,
+                                        "FaceCheeks": 33
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "Mask",
+                                "Name": "Glitter",
+                                "Color": ["#C39686", "#C39686"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "Type": null
+                                }
+                            },
+                            {
+                                "Group": "BodyMarkings",
+                                "Name": "Splatters",
+                                "Color": [
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "a": 0,
+                                        "b": 0,
+                                        "c": 0,
+                                        "d": 0,
+                                        "e": 0,
+                                        "f": 0,
+                                        "g": 0,
+                                        "h": 0,
+                                        "i": 0,
+                                        "j": 0,
+                                        "k": 0,
+                                        "l": 0,
+                                        "m": 0,
+                                        "n": 0,
+                                        "o": 0,
+                                        "p": 0,
+                                        "q": 0,
+                                        "r": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "OverridePriority": 60
+                                }
+                            },
+                            {
+                                "Group": "Height",
+                                "Name": "H0990",
+                                "Color": []
+                            },
+                            {
+                                "Group": "BodyUpper",
+                                "Name": "XLarge",
+                                "Color": ["#A59090"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "Type": null
+                                }
+                            },
+                            {
+                                "Group": "ArmsLeft",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "ArmsRight",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "HandsLeft",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "HandsRight",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "BodyLower",
+                                "Name": "XLarge",
+                                "Color": ["#A59090"]
+                            },
+                            {
+                                "Group": "HairFront",
+                                "Name": "HairFront69",
+                                "Color": ["#943602", "#943602"]
+                            },
+                            {
+                                "Group": "HairBack",
+                                "Name": "HairBack65",
+                                "Color": ["#943602", "#943602"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 2
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "Eyebrows",
+                                "Name": "Eyebrows2",
+                                "Color": ["#8B380A", "#363636"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "s": 1,
+                                        "p": 3,
+                                        "r": 2
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Type": "s1p3r2",
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Eyes",
+                                "Name": "Eyes15",
+                                "Color": [
+                                    "#FFFFFF",
+                                    "#E37E00",
+                                    "#7B7A7A",
+                                    "#282828",
+                                    "#FFFFFF",
+                                    "#080808"
+                                ],
+                                "Property": {
+                                    "Expression": "Dazed"
+                                }
+                            },
+                            {
+                                "Group": "Eyes2",
+                                "Name": "Eyes15",
+                                "Color": [
+                                    "#FFFFFF",
+                                    "#E37E00",
+                                    "#7B7A7A",
+                                    "#282828",
+                                    "#FFFFFF",
+                                    "#080808"
+                                ],
+                                "Property": {
+                                    "Expression": "Dazed"
+                                }
+                            },
+                            {
+                                "Group": "EyeShadow",
+                                "Name": "CatEye2",
+                                "Color": ["#830505"],
+                                "Property": {
+                                    "Opacity": 1
+                                }
+                            },
+                            {
+                                "Group": "Mouth",
+                                "Name": "Full",
+                                "Color": ["#690000", "#4A0A0A"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "l": 4,
+                                        "t": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Type": "l4t0",
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Nipples",
+                                "Name": "Nipples3",
+                                "Color": ["#BC9186"]
+                            },
+                            {
+                                "Group": "Pussy",
+                                "Name": "Pussy1",
+                                "Color": ["#BC9186"],
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Pronouns",
+                                "Name": "SheHer",
+                                "Color": ["#7C0000"],
+                                "Property": {
+                                    "Effect": []
+                                }
+                            },
+                            {
+                                "Group": "Head",
+                                "Name": "Default",
+                                "Color": ["#A59090"]
+                            },
+                            {
+                                "Group": "Blush",
+                                "Name": "Blush",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Fluids",
+                                "Name": "Fluids",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Emoticon",
+                                "Name": "Emoticon",
+                                "Property": {
+                                    "Effect": [],
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "左眼_Luzi",
+                                "Name": "眼睛6",
+                                "Color": [
+                                    "#A59090",
+                                    "#FFFFFF",
+                                    "#FF8D00",
+                                    "#995400",
+                                    "#050505",
+                                    "#050505"
+                                ],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "1": 0
+                                    },
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "右眼_Luzi",
+                                "Name": "眼睛6",
+                                "Color": [
+                                    "#A59090",
+                                    "#FFFFFF",
+                                    "#FF8D00",
+                                    "#995400",
+                                    "#050505",
+                                    "#050505"
+                                ],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "1": 0
+                                    },
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "新前发_Luzi",
+                                "Name": "前发15",
+                                "Color": ["#943602"],
+                                "Property": {
+                                    "OverridePriority": 53
+                                }
+                            },
+                            {
+                                "Group": "新后发_Luzi",
+                                "Name": "侧马尾2",
+                                "Color": ["#943602", "#943602"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "OverridePriority": 5
+                                }
+                            },
+                            {
+                                "Group": "额外头发_Luzi",
+                                "Name": "渐变叠加",
+                                "Color": ["#FF5900", "#FF5900"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "f": 0,
+                                        "b": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "upperBound": 209,
+                                    "gradientSize": 500,
+                                    "rotation": 180
+                                }
+                            },
+                            {
+                                "Group": "外观工具",
+                                "Name": "兼容工具",
+                                "Color": [],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "h": 0,
+                                        "hn": 0,
+                                        "c": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "新前发_Luzi_stack",
+                                "Name": "前发25",
+                                "Color": ["#943501", "#943501"]
+                            },
+                            {
+                                "Group": "新后发_Luzi_stack",
+                                "Name": "蓬松卷发1",
+                                "Color": ["#FF5A00", "#FF5A00"],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "A": 26,
+                                        "B": 26
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "BodyMarkings2_Luzi",
+                                "Name": "大纹身",
+                                "Color": [
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "Ta": 0,
+                                        "UBa": 0,
+                                        "UBb": 0,
+                                        "SFSa": 0,
+                                        "SFSb": 0,
+                                        "SFSc": 1,
+                                        "LaL": 0,
+                                        "LaR": 0,
+                                        "Td": 0,
+                                        "Tf": 0,
+                                        "Tc": 1,
+                                        "W": 1,
+                                        "Te": 0,
+                                        "Ca": 0,
+                                        "Cb": 0,
+                                        "SSa": 0,
+                                        "Fa": 1
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "OverridePriority": 9
+                                }
+                            },
+                            {
+                                "Group": "ClothAccessory_笨笨蛋Luzi",
+                                "Name": "Glitter",
+                                "Color": ["#860202", "#860202"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 6
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "ClothAccessory_笨笨笨蛋Luzi2",
+                                "Name": "Glitter",
+                                "Color": ["#C39686", "#C39686"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "Shoes_笨笨蛋Luzi",
+                                "Name": "脚趾甲",
+                                "Color": ["#570000", "#570000"],
+                                "Property": {
+                                    "OverridePriority": {
+                                        "左": 9,
+                                        "右": 9
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "HairAccessory3_笨笨蛋Luzi",
+                                "Name": "心型发卡",
+                                "Color": [
+                                    "#A00303",
+                                    "#630101",
+                                    "#A00303",
+                                    "#630101"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "LayerOverrides": [
+                                        {
+                                            "DrawingLeft": {
+                                                "": 100
+                                            },
+                                            "DrawingTop": {
+                                                "": 0
+                                            }
+                                        },
+                                        {
+                                            "DrawingLeft": {
+                                                "": 100
+                                            },
+                                            "DrawingTop": {
+                                                "": 0
+                                            }
+                                        },
+                                        {
+                                            "DrawingLeft": {
+                                                "": 100
+                                            },
+                                            "DrawingTop": {
+                                                "": 0
+                                            }
+                                        },
+                                        {
+                                            "DrawingLeft": {
+                                                "": 100
+                                            },
+                                            "DrawingTop": {
+                                                "": 0
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "Group": "Mask_笨笨蛋Luzi",
+                                "Name": "Glitter",
+                                "Color": ["#C39686", "#C39686"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 2
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "BodyStyle",
+                                "Name": "Original",
+                                "Color": []
+                            },
+                            {
+                                "Group": "Suit_笨笨蛋Luzi",
+                                "Name": "马油袜",
+                                "Color": [
+                                    "#111111",
+                                    "#111111",
+                                    "#251515",
+                                    "#251515",
+                                    "#251515",
+                                    "#000000",
+                                    "#111111",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "h": 0,
+                                        "m": 0,
+                                        "b": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Opacity": [
+                                        0, 0, 0, 0, 0, 0, 0, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                                    ],
+                                    "OverridePriority": 25
+                                }
+                            },
+                            {
+                                "Group": "SuitLower_笨笨蛋Luzi",
+                                "Name": "马油袜下",
+                                "Color": [
+                                    "#111111",
+                                    "#111111",
+                                    "#251515",
+                                    "#251515",
+                                    "#111111",
+                                    "#111111",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF",
+                                    "#FFFFFF"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "t": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Opacity": [
+                                        0, 0, 0, 0, 0, 0, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0.403921568627451,
+                                        0.403921568627451, 0, 0, 0, 0, 0, 0
+                                    ],
+                                    "OverridePriority": 25
+                                }
+                            }
+                        ],
+                        [
+                            {
+                                "Group": "ArmsLeft",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "ArmsRight",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "HandsLeft",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "HandsRight",
+                                "Name": ""
+                            },
+                            {
+                                "Group": "Nipples",
+                                "Name": "Nipples1"
+                            },
+                            {
+                                "Group": "Pussy",
+                                "Name": "Pussy1",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Blush",
+                                "Name": "Blush",
+                                "Property": {
+                                    "Expression": "Low"
+                                }
+                            },
+                            {
+                                "Group": "Fluids",
+                                "Name": "Fluids",
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Emoticon",
+                                "Name": "Emoticon",
+                                "Color": ["#FF0000"],
+                                "Property": {
+                                    "Expression": null
+                                }
+                            },
+                            {
+                                "Group": "Height",
+                                "Name": "H0900",
+                                "Color": []
+                            },
+                            {
+                                "Group": "BodyUpper",
+                                "Name": "Normal",
+                                "Color": ["#9A6E59"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "BodyLower",
+                                "Name": "Normal",
+                                "Color": ["#9A6E59"]
+                            },
+                            {
+                                "Group": "HairFront",
+                                "Name": "HairFront9b",
+                                "Color": ["#353535"]
+                            },
+                            {
+                                "Group": "HairBack",
+                                "Name": "HairBack1",
+                                "Color": ["#353535"]
+                            },
+                            {
+                                "Group": "Eyebrows",
+                                "Name": "Eyebrows1",
+                                "Property": {
+                                    "Expression": "Raised"
+                                }
+                            },
+                            {
+                                "Group": "Mouth",
+                                "Name": "Regular",
+                                "Color": ["#585858", "Default"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "l": 0,
+                                        "t": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "Expression": "Happy"
+                                }
+                            },
+                            {
+                                "Group": "Pronouns",
+                                "Name": "SheHer"
+                            },
+                            {
+                                "Group": "Head",
+                                "Name": "SmallEars"
+                            },
+                            {
+                                "Group": "BodyStyle",
+                                "Name": "Original",
+                                "Color": []
+                            },
+                            {
+                                "Group": "BodyMarkings",
+                                "Name": "大纹身",
+                                "Color": [
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "Default",
+                                    "Default",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "#000000",
+                                    "Default",
+                                    "Default",
+                                    "#000000",
+                                    "#000000",
+                                    "Default"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "Ta": 0,
+                                        "UBa": 0,
+                                        "UBb": 0,
+                                        "SFSa": 0,
+                                        "SFSb": 0,
+                                        "SFSc": 0,
+                                        "LaL": 0,
+                                        "LaR": 0,
+                                        "Td": 0,
+                                        "Tf": 1,
+                                        "Tc": 1,
+                                        "W": 1,
+                                        "Te": 1,
+                                        "Ca": 0,
+                                        "Cb": 0,
+                                        "SSa": 0,
+                                        "Fa": 1
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "EyeShadow",
+                                "Name": "SmallSolid",
+                                "Color": ["#131313"]
+                            },
+                            {
+                                "Group": "新后发_Luzi",
+                                "Name": "卷发后4",
+                                "Color": ["#860000"]
+                            },
+                            {
+                                "Group": "新前发_Luzi",
+                                "Name": "前发47",
+                                "Color": ["#6D0000", "#3A1515"]
+                            },
+                            {
+                                "Group": "额外头发_Luzi",
+                                "Name": "渐变叠加",
+                                "Color": ["#494949", "#494949"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "f": 0,
+                                        "b": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": [],
+                                    "upperBound": 42,
+                                    "gradientSize": 250,
+                                    "rotation": 180
+                                }
+                            },
+                            {
+                                "Group": "Eyes",
+                                "Name": "Eyes15",
+                                "Color": ["#0010FF"],
+                                "Property": {
+                                    "Expression": "ShylyHappy"
+                                }
+                            },
+                            {
+                                "Group": "Eyes2",
+                                "Name": "Eyes15",
+                                "Color": ["#FF0000"],
+                                "Property": {
+                                    "Expression": "ShylyHappy"
+                                }
+                            },
+                            {
+                                "Group": "FaceMarkings",
+                                "Name": "Splatters",
+                                "Color": [
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "Default",
+                                    "#888888",
+                                    "#888888",
+                                    "#888888",
+                                    "Default",
+                                    "Default",
+                                    "#888888",
+                                    "#888888"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "a": 0,
+                                        "b": 0,
+                                        "c": 0,
+                                        "d": 0,
+                                        "e": 0,
+                                        "f": 0,
+                                        "g": 0,
+                                        "h": 0,
+                                        "i": 0,
+                                        "j": 0,
+                                        "k": 0,
+                                        "l": 0,
+                                        "m": 0,
+                                        "n": 0,
+                                        "o": 0,
+                                        "p": 0,
+                                        "q": 0,
+                                        "r": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Opacity": [
+                                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 1, 1,
+                                        1, 0.7, 0.7, 1, 1
+                                    ],
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "Wings",
+                                "Name": "SuccubusWings"
+                            },
+                            {
+                                "Group": "ItemEars",
+                                "Name": "BluetoothEarbuds",
+                                "Difficulty": 260,
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "Effect": []
+                                },
+                                "Craft": {
+                                    "Item": "BluetoothEarbuds",
+                                    "Name": "EN translator",
+                                    "Description": "[en]",
+                                    "Color": "Default",
+                                    "Lock": "",
+                                    "Private": false,
+                                    "ItemProperty": {},
+                                    "TypeRecord": null,
+                                    "Effects": {},
+                                    "MemberNumber": 230609,
+                                    "MemberName": "Sianna"
+                                }
+                            },
+                            {
+                                "Group": "HandAccessoryRight",
+                                "Name": "Rings",
+                                "Color": [
+                                    "Default",
+                                    "Default",
+                                    "Default",
+                                    "Default",
+                                    "#A48537",
+                                    "Default",
+                                    "#707070",
+                                    "#00D307",
+                                    "#222222",
+                                    "#CC3333",
+                                    "#222222",
+                                    "#CC3333",
+                                    "#737373",
+                                    "#C2C2C2"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "t": 0,
+                                        "i": 0,
+                                        "m": 0,
+                                        "r": 2,
+                                        "g": 0,
+                                        "p": 0,
+                                        "f": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "TailStraps",
+                                "Name": "尾巴1",
+                                "Color": ["#1e1e1e"]
+                            },
+                            {
+                                "Group": "ClothAccessory",
+                                "Name": "Bouquet"
+                            },
+                            {
+                                "Group": "Socks",
+                                "Name": "Pantyhose2",
+                                "Color": ["#FFFFFF"]
+                            },
+                            {
+                                "Group": "Mask",
+                                "Name": "Glitter",
+                                "Color": ["#909090", "#383838"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "Shoes",
+                                "Name": "StilettoHeels",
+                                "Color": ["#BEB5B5", "#A80000", "#800000"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "t": 0,
+                                        "c": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "Gloves",
+                                "Name": "MistressGloves",
+                                "Color": ["#FF9191"]
+                            },
+                            {
+                                "Group": "Cloth",
+                                "Name": "LongQipaoDress",
+                                "Color": [
+                                    "#FFFFFF",
+                                    "#757575",
+                                    "#6D6D6D",
+                                    "#FF0000",
+                                    "#FF0000",
+                                    "#FFFFFF",
+                                    "#757575",
+                                    "#6D6D6D",
+                                    "#FF0000",
+                                    "#FF0000",
+                                    "#770000",
+                                    "#770000",
+                                    "#770000"
+                                ],
+                                "Property": {
+                                    "OverridePriority": 23
+                                }
+                            },
+                            {
+                                "Group": "HairAccessory2",
+                                "Name": "CustomizableFluffyEars2",
+                                "Color": [
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535",
+                                    "#353535"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "s1": 0,
+                                        "s2": 0,
+                                        "s3": 0,
+                                        "s4": 0,
+                                        "b1": 0,
+                                        "b2": 0,
+                                        "r1": 0,
+                                        "r2": 0,
+                                        "r3": 0,
+                                        "r4": 0,
+                                        "br1": 0,
+                                        "br2": 0,
+                                        "t1": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": [],
+                                    "Attribute": []
+                                }
+                            },
+                            {
+                                "Group": "Suit",
+                                "Name": "LatexCatsuit",
+                                "Color": [
+                                    "Default",
+                                    "Default",
+                                    "#FFFFFF",
+                                    "Default"
+                                ],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "Text": "",
+                                    "Text2": "",
+                                    "Text3": "",
+                                    "OverridePriority": {
+                                        "Base": 0,
+                                        "Zip": 25,
+                                        "Shine": 25,
+                                        "Sleeves": 0,
+                                        "Text": 0
+                                    },
+                                    "LSCGOpacity": [
+                                        0, 0, 0, 1, 1, 1, 1, 1, 1, 1
+                                    ]
+                                }
+                            },
+                            {
+                                "Group": "SuitLower",
+                                "Name": "LatexCatsuit",
+                                "Color": ["Default", "Default", "#FFFFFF"],
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0
+                                    },
+                                    "OverridePriority": {
+                                        "Base": 0,
+                                        "Zip": 24
+                                    }
+                                }
+                            },
+                            {
+                                "Group": "SocksRight",
+                                "Name": "Socks5",
+                                "Color": ["#FF6161"]
+                            },
+                            {
+                                "Group": "SocksLeft",
+                                "Name": "Socks5",
+                                "Color": ["#FF6161"]
+                            },
+                            {
+                                "Group": "Hat",
+                                "Name": "Veil2"
+                            },
+                            {
+                                "Target": 245109,
+                                "Group": "ItemHandheld",
+                                "Name": "杯饮",
+                                "Color": [
+                                    "Default",
+                                    "Default",
+                                    "Default",
+                                    "Default"
+                                ],
+                                "Difficulty": 17,
+                                "Property": {
+                                    "TypeRecord": {
+                                        "typed": 0,
+                                        "v": 0
+                                    },
+                                    "Difficulty": 0,
+                                    "OverridePriority": 33,
+                                    "Block": [],
+                                    "Effect": [],
+                                    "Hide": [],
+                                    "HideItem": [],
+                                    "AllowActivity": ["RubItem"],
+                                    "Attribute": []
+                                },
+                                "Craft": {
+                                    "Item": "杯饮",
+                                    "Name": "Glass of Cosmopolitan",
+                                    "Description": "",
+                                    "Color": "Default,Default,Default,Default",
+                                    "Lock": "",
+                                    "Private": false,
+                                    "ItemProperty": {
+                                        "OverridePriority": 33
+                                    },
+                                    "TypeRecord": {
+                                        "typed": 1,
+                                        "v": 0
+                                    },
+                                    "Effects": {},
+                                    "MemberNumber": 245109,
+                                    "MemberName": "Miss Valy"
+                                }
+                            }
+                        ]
+                    ]
+                },
+                {
+                    "fieldPath": "savedAt",
+                    "mongoType": "double",
+                    "documentCount": 18,
+                    "exampleValues": [
+                        1785758416839, 1785763005796, 1785783933655
+                    ]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "savedAt",
+                    "expectedType": "unknown",
+                    "actualType": "double",
+                    "affectedDocuments": 18,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [1785758416839, 1785763005796, 1785783933655]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "players_DEPRECATED",
+            "documentCount": 1684,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "objectId",
+                    "documentCount": 1684,
+                    "exampleValues": [
+                        "6a6da2f8880c45199f8d2d4f",
+                        "6a6daadd880c45199f8d2f2d",
+                        "6a6dba52880c45199f8d32b1"
+                    ]
+                },
+                {
+                    "fieldPath": "cheatStrikes",
+                    "mongoType": "int",
+                    "documentCount": 190,
+                    "exampleValues": [0, 0, 0]
+                },
+                {
+                    "fieldPath": "credits",
+                    "mongoType": "int",
+                    "documentCount": 1676,
+                    "exampleValues": [14811, 20, 60]
+                },
+                {
+                    "fieldPath": "lastFreeCredits",
+                    "mongoType": "long",
+                    "documentCount": 1656,
+                    "exampleValues": [
+                        1787828145483, 1785572061572, 1786557649277
+                    ]
+                },
+                {
+                    "fieldPath": "memberNumber",
+                    "mongoType": "int",
+                    "documentCount": 1684,
+                    "exampleValues": [250927, 5631, 76691]
+                },
+                {
+                    "fieldPath": "name",
+                    "mongoType": "string",
+                    "documentCount": 1684,
+                    "exampleValues": ["Miss Vera", "Bunny", "Rivy"]
+                },
+                {
+                    "fieldPath": "score",
+                    "mongoType": "int",
+                    "documentCount": 190,
+                    "exampleValues": [9798, 0, 954]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "_id",
+                    "expectedType": "string",
+                    "actualType": "objectId",
+                    "affectedDocuments": 1684,
+                    "violationType": "type_mismatch",
+                    "severity": "info",
+                    "examples": [
+                        "6a6da2f8880c45199f8d2d4f",
+                        "6a6daadd880c45199f8d2f2d",
+                        "6a6dba52880c45199f8d32b1"
+                    ]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "veratownMapBackups",
+            "documentCount": 10,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "string",
+                    "documentCount": 10,
+                    "exampleValues": [
+                        "backup_1787172784263",
+                        "backup_1787214948499",
+                        "backup_1787215496814"
+                    ]
+                },
+                {
+                    "fieldPath": "backedUpAt",
+                    "mongoType": "long",
+                    "documentCount": 10,
+                    "exampleValues": [
+                        1787172784263, 1787214948499, 1787215496814
+                    ]
+                },
+                {
+                    "fieldPath": "backedUpBy",
+                    "mongoType": "int",
+                    "documentCount": 10,
+                    "exampleValues": [250927, 250927, 250927]
+                },
+                {
+                    "fieldPath": "backedUpFrom",
+                    "mongoType": "long",
+                    "documentCount": 10,
+                    "exampleValues": [
+                        1787171805689, 1787172784302, 1787214948537
+                    ]
+                },
+                {
+                    "fieldPath": "mapData",
+                    "mongoType": "object",
+                    "documentCount": 10,
+                    "exampleValues": [
+                        {
+                            "Type": "Always",
+                            "Tiles": "ААААААААААААААААААúúúúААААААААААААААААААúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúттьььььььььььььььϲúúúú××××××××××××××××ÒÒxтdÒÒÒÒÒ×Ò×ÒÒÒ××Òϲúúúú×××××ÒÒ××××××××Ò××xтddÒÒÒÒÒÒÒÒ¬¬ÒÒАúúúú×××××××Ò××ࠌࠌࠌࠌࠌ×××тттdÒÒÒÒÒÒÒÒÒÒÒÒÒϲúúúú×××××××ÒࠌࠌࠌࠌࠌࠌࠌࠌࠌࠌxxxdÒÒÒÒÒÒÒÒÒÒÒÒÒϲúúúú××××××××ࠌࠌߤߤߤߤߤߤߤࠌxxxdÒÒÒÒ         ϲúúúúÒ××××Ò×ࠌࠌࠌߤࠂࠂࠂࠂࠂߤࠌxxxdÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú×ÒÒ×ÒÒ×ࠌࠌߤߤࠂࠂࠂࠂࠂߤࠌттьdÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú××Ò××××ࠌࠌߤࠂࠂࠂࠂߤߤߤࠌxтddÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú×××××××ࠌࠌߤߤࠂߤߤߤࠌࠌ×xтdÒÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú××××××Ò×ࠌࠌߤߤߤࠌࠌࠌ××ААААААААААААААААААúúúú×××××Ò×××ࠌࠌࠌࠌࠌ××ÒÒúúúúúúúúúúúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúФФФФФьииииииҵФФФФАúúúúІІІІІІІІІІІІІІІІІІА    ьnиҵxx  АúúúúА  І  І  А    ьnÇҵxx  АúúúúА  І  І  А    ьҵҵииииьxxxxАúúúúАІІҵҵҵҵҵьnҵҵҵҵҵҵьúúúúАxxxІxxxІxxxyyyyьnÇҵyyyАúúúúАxxxІxxxІxxxyyyyҵҵҵҵyyyАúúúúАxxxІxxxІxxxyyyyҵyyyyyyҵyyyАúúúúАІІІІІІІІААААІІІІІyyyҵҵyyАúúúúАdddddddІúúúАdddddyyyyyÇyyyyyÇyyyyАúúúúАdddddddІúúúАdddddААААААААААААААААААúúúúАААААААААúúúААААААúúúúúúúúúëúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúАКККККККККККККККККúúúúϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼА¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬КҲҲҲҲϼddddddddϼddddddddАииииККККККК¬¬¬¬¬КªªªªϼddddddddϼdddАК¬¬¬¬¬КККККККªªªªÇddddddddÇddААК¬¬¬¬¬К¬К¬К¬КªªªªϼddddddddϼddА",
+                            "Objects": "dddddddddddddddddd߯߯߯߯dddddddddd࿂࿂ddddddࠥdddʀߕddddddddddddтddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddࠪddddddࠪddddddࠪdddтࠪddddddࠪddddddࠪddࠥ೐dྴ೥ಀddd௠d௠dddಀ೥dddddd߳߳߳߰߰߰߰߰߰߰߰߰߰߸߰߰߰߰ddªdˆˆdddddddddddddddd߳ߗ߸ߗߗdd̾ߚd߸dddddɶddddddddȺȰddd˚˚˚ddddddd߳ddddd̾dddddddddddྴddߚddddddȺddddddddddd߳dʊdʊdddddddddddddddddddȺddddȰdddddddddddddɢdddߗddddddddddКККߚdȰddddddddddddddddddddd̾ddddddddddddddddddddddddddddddࠪddddddʊddddddddddddddྴddߚdddȺdddddddddddddd߽dddddߔddddddddddddddddȺȰddddddddddddddd߳߳ddddddddddddddddddªߚdddddddddddddddddd߽߳߳dߚddߗdddddddd߳߳ఄఄྴఄఃఃఃఄఄdఃԜӀҿҿҼ೦೧dddd߳߳߳߳dddߗddddddd߳߳߳dddࠠdddddddddddddddԜ̪d߰߰߰߰߰dd߰߰߰߰߰߰߰߰߰߰߰dddddddddddddddddddndddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddࠠࠪddтdddddddddddddddddddddరddྐྵdಲ಼dddௌdd೐dࠠdddddరಾௌ೚ddరಽௌ೚ddరூௌ೚dƂúdddd࿂ddϼddŲddddªªªªdddŲddddŲddddŲddddddd¤ddddddddࠖࠖdªªªªd¦ddࠖࠖd¦ddࠖࠖd¦ddࠖࠖddddddྐྵdಲddddddddddddddddddddddddddddddd೦೧௖ྷdddྸddddddྷ௖dddddddddƅƂĄdddƅƂĄdddƅƂĄddddddddddddddddddࠪdddd̪dĎdddddĎ̾dd̴dĎdd ¢ dddྷ௖ࠖࠖࠖࠖdddddddddddddddКdddddКdddddКƅƅƅddddddddddddddddddddྫྷ೥೦೧d೥ྫྷdddddྫྷ೥dұddddddྴddddddྴddddddddddddddddddddȒddddɄddddddddddddddddddddddddddddddȒddddddddddఃఃఃరఃఃఃర࿄೥ఃరఃdఃర೦೧ddddd࿀࿀dӂҿҿҽӃdddddd࿀࿀dࠥddddтddԚԜұӃӉҼӅҽԜdтddтdddƈddddddddddddddࠥdddddddddddddddddddddddddddddddddddddddࠥddԛddԜӃӄҿӂұҷҵԜddddddddԝҳұӃҹҾҿԝdԛdddddddࠥdƇdddddddddddddddтddтdddddddddddƈddddddddd࿄ddddddddd௖d೦೧dddddd௖಼d௖ྫྷ೥௖dd࿀࿀௖೦೧d࿀࿀dиddddddddddddddddྐྵ೦೧೥dĶddĶdƂžſddddddddddd࿂௖dd௠௖࿂dddddddddddddྫྷd¦¦dddddྫྷdd¥¥d¥ddddddϲddϼdϲdd࿂d࿂d࿂dҵҽҼұddddd¤ddddd¥ˤˤˤˤdddІdАddФdddФdшdшdшdҼҿҳһdŀƄƄdƅddddddd¥d¥dd"
+                        },
+                        {
+                            "Type": "Always",
+                            "Tiles": "ААААААААААААААААААúúúúААААААААААААААААААúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúттьььььььььььььььϲúúúú××××××××××××××××ÒÒxтdÒÒÒÒÒ×Ò×ÒÒÒ××Òϲúúúú×××××ÒÒ××××××××Ò××xтddÒÒÒÒÒÒÒÒ¬¬ÒÒАúúúú×××××××Ò××ࠌࠌࠌࠌࠌ×××тттdÒÒÒÒÒÒÒÒÒÒÒÒÒϲúúúú×××××××ÒࠌࠌࠌࠌࠌࠌࠌࠌࠌࠌxxxdÒÒÒÒÒÒÒÒÒÒÒÒÒϲúúúú××××××××ࠌࠌߤߤߤߤߤߤߤࠌxxxdÒÒÒÒ         ϲúúúúÒ××××Ò×ࠌࠌࠌߤࠂࠂࠂࠂࠂߤࠌxxxdÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú×ÒÒ×ÒÒ×ࠌࠌߤߤࠂࠂࠂࠂࠂߤࠌттьdÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú××Ò××××ࠌࠌߤࠂࠂࠂࠂߤߤߤࠌxтddÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú×××××××ࠌࠌߤߤࠂߤߤߤࠌࠌ×xтdÒÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú××××××Ò×ࠌࠌߤߤߤࠌࠌࠌ××ААААААААААААААААААúúúú×××××Ò×××ࠌࠌࠌࠌࠌ××ÒÒúúúúúúúúúúúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúФФФФФьииииииҵФФФФАúúúúІІІІІІІІІІІІІІІІІІА    ьnиҵxx  АúúúúА  І  І  А    ьnÇҵxx  АúúúúА  І  І  А    ьҵҵииииьxxxxАúúúúАІІҵҵҵҵҵьnҵҵҵҵҵҵьúúúúАxxxІxxxІxxxyyyyьnÇҵyyyАúúúúАxxxІxxxІxxxyyyyҵҵҵҵyyyАúúúúАxxxІxxxІxxxyyyyҵyyyyyyҵyyyАúúúúАІІІІІІІІААААІІІІІyyyҵҵyyАúúúúАdddddddІúúúАdddddyyyyyÇyyyyyÇyyyyАúúúúАdddddddІúúúАdddddААААААААААААААААААúúúúАААААААААúúúААААААúúúúúúúúúëúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúАКККККККККККККККККúúúúϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼА¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬КҲҲҲҲϼddddddddϼddddddddАииииККККККК¬¬¬¬¬КªªªªϼddddddddϼdddАК¬¬¬¬¬КККККККªªªªÇddddddddÇddААК¬¬¬¬¬К¬К¬К¬КªªªªϼddddddddϼddА",
+                            "Objects": "dddddddddddddddddd߯߯߯߯dddddddddd࿂࿂ddddddࠥdddʀߕddddddddddddтddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddࠪddddddࠪddddddࠪdddтࠪddddddࠪddddddࠪddࠥ೐dྴ೥ಀddd௠d௠dddಀ೥dddddd߳߳߳߰߰߰߰߰߰߰߰߰߰߸߰߰߰߰ddªdˆˆdddddddddddddddd߳ߗ߸ߗߗdd̾ߚd߸dddddɶddddddddȺȰddd˚˚˚ddddddd߳ddddd̾dddddddddddྴddߚddddddȺddddddddddd߳dʊdʊdddddddddddddddddddȺddddȰdddddddddddddɢdddߗddddddddddКККߚdȰddddddddddddddddddddd̾ddddddddddddddddddddddddddddddࠪddddddʊddddddddddddddྴddߚdddȺdddddddddddddd߽dddddߔddddddddddddddddȺȰddddddddddddddd߳߳ddddddddddddddddddªߚdddddddddddddddddd߽߳߳dߚddߗdddddddd߳߳ఄఄྴఄఃఃఃఄఄdఃԜӀҿҿҼ೦೧dddd߳߳߳߳dddߗddddddd߳߳߳dddࠠdddddddddddddddԜ̪d߰߰߰߰߰dd߰߰߰߰߰߰߰߰߰߰߰dddddddddddddddddddndddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddࠠࠪddтdddddddddddddddddddddరddྐྵdಲ಼dddௌdd೐dࠠdddddరಾௌ೚ddరಽௌ೚ddరூௌ೚dƂúdddd࿂ddϼddŲddddªªªªdddŲddddŲddddŲddddddd¤ddddddddࠖࠖdªªªªd¦ddࠖࠖd¦ddࠖࠖd¦ddࠖࠖddddddྐྵdಲddddddddddddddddddddddddddddddd೦೧௖ྷdddྸddddddྷ௖dddddddddƅƂĄdddƅƂĄdddƅƂĄddddddddddddddddddࠪdddd̪dĎdddddĎ̾dd̴dĎdd ¢ dddྷ௖ࠖࠖࠖࠖdddddddddddddddКdddddКdddddКƅƅƅddddddddddddddddddddྫྷ೥೦೧d೥ྫྷdddddྫྷ೥dұddddddྴddddddྴddddddddddddddddddddȒddddɄddddddddddddddddddddddddddddddȒddddddddddఃఃఃరఃఃఃర࿄೥ఃరఃdఃర೦೧ddddd࿀࿀dӂҿҿҽӃdddddd࿀ddࠥddddтddԚԜұӃӉҼӅҽԜdтddтdddƈddddddddddddddࠥdddddddddddddddddddddddddddddddddddddddࠥddԛddԜӃӄҿӂұҷҵԜddddddddԝҳұӃҹҾҿԝdԛdddddddࠥdƇdddddddddddddddтddтdddddddddddƈddddddddd࿄ddddddddd௖d೦೧dddddd௖಼d௖ྫྷ೥௖dd࿀d௖೦೧d࿀࿀dиddddddddddddddddྐྵ೦೧೥dĶddĶdƂžſddddddddddd࿂௖dd௠௖࿂dddddddddddddྫྷd¦¦dddddྫྷdd¥¥d¥ddddddϲddϼdϲdd࿂d࿂d࿂dҵҽҼұddddd¤ddddd¥ˤˤˤˤdddІdАddФdddФdшdшdшdҼҿҳһdŀƄƄdƅddddddd¥d¥dd"
+                        },
+                        {
+                            "Type": "Always",
+                            "Tiles": "ААААААААААААААААААúúúúААААААААААААААААААúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúттьььььььььььььььϲúúúú××××××××××××××××ÒÒxтdÒÒÒÒÒ×Ò×ÒÒÒ××Òϲúúúú×××××ÒÒ××××××××Ò××xтddÒÒÒÒÒÒÒÒ¬¬ÒÒАúúúú×××××××Ò××ࠌࠌࠌࠌࠌ×××тттdÒÒÒÒÒÒÒÒÒÒÒÒÒϲúúúú×××××××ÒࠌࠌࠌࠌࠌࠌࠌࠌࠌࠌxxxdÒÒÒÒÒÒÒÒÒÒÒÒÒϲúúúú××××××××ࠌࠌߤߤߤߤߤߤߤࠌxxxdÒÒÒÒ         ϲúúúúÒ××××Ò×ࠌࠌࠌߤࠂࠂࠂࠂࠂߤࠌxxxdÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú×ÒÒ×ÒÒ×ࠌࠌߤߤࠂࠂࠂࠂࠂߤࠌттьdÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú××Ò××××ࠌࠌߤࠂࠂࠂࠂߤߤߤࠌxтddÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú×××××××ࠌࠌߤߤࠂߤߤߤࠌࠌ×xтdÒÒÒÒÒ ߐߐߐߐߐߐߐ ϲúúúú××××××Ò×ࠌࠌߤߤߤࠌࠌࠌ××ААААААААААААААААААúúúú×××××Ò×××ࠌࠌࠌࠌࠌ××ÒÒúúúúúúúúúúúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúФФФФФьииииииҵФФФФАúúúúІІІІІІІІІІІІІІІІІІА    ьnиҵxx  АúúúúА  І  І  А    ьnÇҵxx  АúúúúА  І  І  А    ьҵҵииииьxxxxАúúúúАІІҵҵҵҵҵьnҵҵҵҵҵҵьúúúúАxxxІxxxІxxxyyyyьnÇҵyyyАúúúúАxxxІxxxІxxxyyyyҵҵҵҵyyyАúúúúАxxxІxxxІxxxyyyyҵyyyyyyҵyyyАúúúúАІІІІІІІІААААІІІІІyyyҵҵyyАúúúúАdddddddІúúúАdddddyyyyyÇyyyyyÇyyyyАúúúúАdddddddІúúúАdddddААААААААААААААААААúúúúАААААААААúúúААААААúúúúúúúúúëúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúАКККККККККККККККККúúúúϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼА¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬КúúúúϼddddddddϼddddddddАииииККККККК¬¬¬¬¬КІІІІϼddddddddϼdddАК¬¬¬¬¬КККККККúúúúϼddddddddÇddААК¬¬¬¬¬К¬К¬К¬КúúúúϼddddddddϼddА",
+                            "Objects": "dddddddddddddddddd߯߯߯߯dddddddddd࿂࿂ddddddࠥdddʀߕddddddddddddтddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddࠪddddddࠪddddddࠪdddтࠪddddddࠪddddddࠪddࠥ೐dྴ೥ಀddd௠d௠dddಀ೥dddddd߳߳߳߰߰߰߰߰߰߰߰߰߰߸߰߰߰߰ddªdˆˆdddddddddddddddd߳ߗ߸ߗߗdd̾ߚd߸dddddɶddddddddȺȰddd˚˚˚ddddddd߳ddddd̾dddddddddddྴddߚddddddȺddddddddddd߳dʊdʊdddddddddddddddddddȺddddȰdddddddddddddɢdddߗddddddddddКККߚdȰddddddddddddddddddddd̾ddddddddddddddddddddddddddddddࠪddddddʊddddddddddddddྴddߚdddȺdddddddddddddd߽dddddߔddddddddddddddddȺȰddddddddddddddd߳߳ddddddddddddddddddªߚdddddddddddddddddd߽߳߳dߚddߗdddddddd߳߳ఄఄྴఄఃఃఃఄఄdఃԜӀҿҿҼ೦೧dddd߳߳߳߳dddߗddddddd߳߳߳dddࠠdddddddddddddddԜ̪d߰߰߰߰߰dd߰߰߰߰߰߰߰߰߰߰߰dddddddddddddddddddndddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddࠠࠪddтdddddddddddddddddddddరddྐྵdಲ಼dddௌdd೐dࠠdddddరಾௌ೚ddరಽௌ೚ddరூௌ೚dƂúdddd࿂ddϼddŲddddªªªªdddŲddddŲddddŲddddddd¤ddddddddࠖࠖdªªªªd¦ddࠖࠖd¦ddࠖࠖd¦ddࠖࠖddddddྐྵdಲddddddddddddddddddddddddddddddd೦೧௖ྷdddྸddddddྷ௖dddddddddƅƂĄdddƅƂĄdddƅƂĄddddddddddddddddddࠪdddd̪dĎdddddĎ̾dd̴dĎdd ¢ dddྷ௖ࠖࠖࠖࠖdddddddddddddddКdddddКdddddКƅƅƅddddddddddddddddddddྫྷ೥೦೧d೥ྫྷdddddྫྷ೥dұddddddྴddddddྴddddddddddddddddddddȒddddɄddddddddddddddddddddddddddddddȒddddddddddఃఃఃరఃఃఃర࿄೥ఃరఃdఃర೦೧ddddd࿀࿀dӂҿҿҽӃdddddd࿀ddࠥddddтddԚԜұӃӉҼӅҽԜdтddтdddƈddddddddddddddࠥdddddddddddddddddddddddddddddddddddddddࠥddԛddԜӃӄҿӂұҷҵԜddddddddԝҳұӃҹҾҿԝdԛdddddddࠥdƇdddddddddddddddтddтdddddddddddƈddddddddd࿄ddddddddd௖d೦೧dddddd௖಼d௖ྫྷ೥௖dd࿀d௖೦೧d࿀࿀dиdddddddddddddddddddddĶddĶdƂžſddddddddddd࿂௖dd௠௖࿂ddddddddd೦೧೥ྫྷdd¦¦dddddྫྷdd¥¥d¥ddddddϲddϼdϲdd࿂d࿂d࿂dddddddddd¤ddddd¥ˤˤˤˤdddІdАddФdddФdшdшdшdˤˤdddŀƄƄdƅddddddd¥d¥dd"
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "version",
+                    "mongoType": "int",
+                    "documentCount": 10,
+                    "exampleValues": [6, 7, 8]
+                }
+            ],
+            "violations": [],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "veratownLocations",
+            "documentCount": 44,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "objectId",
+                    "documentCount": 38,
+                    "exampleValues": [
+                        "6a70d77af2e0400ff51d1deb",
+                        "6a70d77af2e0400ff51d1dec",
+                        "6a70d77af2e0400ff51d1ded"
+                    ]
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "mongoType": "long",
+                    "documentCount": 44,
+                    "exampleValues": [
+                        1785780087479, 1785780087479, 1785780087479
+                    ]
+                },
+                {
+                    "fieldPath": "data",
+                    "mongoType": "object",
+                    "documentCount": 42,
+                    "exampleValues": [
+                        {
+                            "entryX": 12,
+                            "entryY": 38,
+                            "durationMs": 300000,
+                            "durationDescription": "approximately 5 minutes"
+                        },
+                        {
+                            "entryX": 14,
+                            "entryY": 38,
+                            "durationMs": 900000,
+                            "durationDescription": "approximately 15 minutes"
+                        },
+                        {
+                            "entryX": 16,
+                            "entryY": 38,
+                            "durationMs": 865480,
+                            "durationDescription": "somewhere between 5 and 15 minutes, randomly determined"
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "enabled",
+                    "mongoType": "bool",
+                    "documentCount": 44,
+                    "exampleValues": [true, true, true]
+                },
+                {
+                    "fieldPath": "key",
+                    "mongoType": "string",
+                    "documentCount": 44,
+                    "exampleValues": ["cage_1", "cage_2", "cage_3"]
+                },
+                {
+                    "fieldPath": "name",
+                    "mongoType": "string",
+                    "documentCount": 44,
+                    "exampleValues": ["Cage 1", "Cage 2", "Cage 3"]
+                },
+                {
+                    "fieldPath": "type",
+                    "mongoType": "string",
+                    "documentCount": 44,
+                    "exampleValues": ["cage", "cage", "cage"]
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "mongoType": "long",
+                    "documentCount": 44,
+                    "exampleValues": [
+                        1785780087479, 1785780087479, 1785780087479
+                    ]
+                },
+                {
+                    "fieldPath": "x",
+                    "mongoType": "int",
+                    "documentCount": 44,
+                    "exampleValues": [12, 14, 16]
+                },
+                {
+                    "fieldPath": "y",
+                    "mongoType": "int",
+                    "documentCount": 44,
+                    "exampleValues": [39, 39, 39]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "_id",
+                    "expectedType": "string",
+                    "actualType": "objectId",
+                    "affectedDocuments": 38,
+                    "violationType": "type_mismatch",
+                    "severity": "info",
+                    "examples": [
+                        "6a70d77af2e0400ff51d1deb",
+                        "6a70d77af2e0400ff51d1dec",
+                        "6a70d77af2e0400ff51d1ded"
+                    ]
+                },
+                {
+                    "fieldPath": "data",
+                    "expectedType": "unknown",
+                    "actualType": "object",
+                    "affectedDocuments": 42,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        {
+                            "entryX": 12,
+                            "entryY": 38,
+                            "durationMs": 300000,
+                            "durationDescription": "approximately 5 minutes"
+                        },
+                        {
+                            "entryX": 14,
+                            "entryY": 38,
+                            "durationMs": 900000,
+                            "durationDescription": "approximately 15 minutes"
+                        },
+                        {
+                            "entryX": 16,
+                            "entryY": 38,
+                            "durationMs": 865480,
+                            "durationDescription": "somewhere between 5 and 15 minutes, randomly determined"
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "enabled",
+                    "expectedType": "unknown",
+                    "actualType": "bool",
+                    "affectedDocuments": 44,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [true, true, true]
+                },
+                {
+                    "fieldPath": "key",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 44,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["cage_1", "cage_2", "cage_3"]
+                },
+                {
+                    "fieldPath": "name",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 44,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["Cage 1", "Cage 2", "Cage 3"]
+                },
+                {
+                    "fieldPath": "type",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 44,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["cage", "cage", "cage"]
+                },
+                {
+                    "fieldPath": "x",
+                    "expectedType": "unknown",
+                    "actualType": "int",
+                    "affectedDocuments": 44,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [12, 14, 16]
+                },
+                {
+                    "fieldPath": "y",
+                    "expectedType": "unknown",
+                    "actualType": "int",
+                    "affectedDocuments": 44,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [39, 39, 39]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "keypadGroupDefinitions",
+            "documentCount": 0,
+            "fields": [],
+            "violations": [],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "dares",
+            "documentCount": 88,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "objectId",
+                    "documentCount": 88,
+                    "exampleValues": [
+                        "6a6e45e857884b8e90ec72b4",
+                        "6a6e45e857884b8e90ec72b5",
+                        "6a6e45e857884b8e90ec72b6"
+                    ]
+                },
+                {
+                    "fieldPath": "addedBy",
+                    "mongoType": "int",
+                    "documentCount": 88,
+                    "exampleValues": [0, 0, 0]
+                },
+                {
+                    "fieldPath": "addedByName",
+                    "mongoType": "string",
+                    "documentCount": 88,
+                    "exampleValues": ["Dare Seed", "Dare Seed", "Dare Seed"]
+                },
+                {
+                    "fieldPath": "category",
+                    "mongoType": "string",
+                    "documentCount": 87,
+                    "exampleValues": ["strip", "strip", "strip"]
+                },
+                {
+                    "fieldPath": "chips",
+                    "mongoType": "int",
+                    "documentCount": 22,
+                    "exampleValues": [20, 20, 20]
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "mongoType": "long",
+                    "documentCount": 88,
+                    "exampleValues": [
+                        1785611752016, 1785611752016, 1785611752016
+                    ]
+                },
+                {
+                    "fieldPath": "durationMs",
+                    "mongoType": "int",
+                    "documentCount": 42,
+                    "exampleValues": [600000, 1200000, 1800000]
+                },
+                {
+                    "fieldPath": "forfeitKeys",
+                    "mongoType": "array",
+                    "documentCount": 40,
+                    "exampleValues": [["boots"], ["blindfold"], ["gag"]]
+                },
+                {
+                    "fieldPath": "noRedress",
+                    "mongoType": "bool",
+                    "documentCount": 60,
+                    "exampleValues": [false, false, false]
+                },
+                {
+                    "fieldPath": "stripCount",
+                    "mongoType": "int",
+                    "documentCount": 19,
+                    "exampleValues": [1, 1, 2]
+                },
+                {
+                    "fieldPath": "target",
+                    "mongoType": "string",
+                    "documentCount": 25,
+                    "exampleValues": ["other", "other", "other"]
+                },
+                {
+                    "fieldPath": "text",
+                    "mongoType": "string",
+                    "documentCount": 88,
+                    "exampleValues": [
+                        "Take off 1 item of clothing.",
+                        "Take off 1 item of clothing.",
+                        "Take off 2 items of clothing."
+                    ]
+                },
+                {
+                    "fieldPath": "used",
+                    "mongoType": "bool",
+                    "documentCount": 88,
+                    "exampleValues": [false, false, false]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "_id",
+                    "expectedType": "string",
+                    "actualType": "objectId",
+                    "affectedDocuments": 88,
+                    "violationType": "type_mismatch",
+                    "severity": "info",
+                    "examples": [
+                        "6a6e45e857884b8e90ec72b4",
+                        "6a6e45e857884b8e90ec72b5",
+                        "6a6e45e857884b8e90ec72b6"
+                    ]
+                },
+                {
+                    "fieldPath": "chips",
+                    "expectedType": "unknown",
+                    "actualType": "int",
+                    "affectedDocuments": 22,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [20, 20, 20]
+                },
+                {
+                    "fieldPath": "durationMs",
+                    "expectedType": "unknown",
+                    "actualType": "int",
+                    "affectedDocuments": 42,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [600000, 1200000, 1800000]
+                },
+                {
+                    "fieldPath": "forfeitKeys",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 40,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [["boots"], ["blindfold"], ["gag"]]
+                },
+                {
+                    "fieldPath": "target",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 25,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": ["other", "other", "other"]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "keypadGroupMemberships",
+            "documentCount": 1,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["room1_door:rarsus:254890"]
+                },
+                {
+                    "fieldPath": "doorKey",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["room1_door"]
+                },
+                {
+                    "fieldPath": "grantedAt",
+                    "mongoType": "long",
+                    "documentCount": 1,
+                    "exampleValues": [1788260179480]
+                },
+                {
+                    "fieldPath": "grantedBy",
+                    "mongoType": "int",
+                    "documentCount": 1,
+                    "exampleValues": [0]
+                },
+                {
+                    "fieldPath": "grantedReason",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["Initial setup"]
+                },
+                {
+                    "fieldPath": "groupName",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["rarsus"]
+                },
+                {
+                    "fieldPath": "memberNumber",
+                    "mongoType": "int",
+                    "documentCount": 1,
+                    "exampleValues": [254890]
+                },
+                {
+                    "fieldPath": "syncedFromProfile",
+                    "mongoType": "bool",
+                    "documentCount": 1,
+                    "exampleValues": [false]
+                }
+            ],
+            "violations": [],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "veratownMap",
+            "documentCount": 1,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["current"]
+                },
+                {
+                    "fieldPath": "mapData",
+                    "mongoType": "object",
+                    "documentCount": 1,
+                    "exampleValues": [
+                        {
+                            "Type": "Always",
+                            "Tiles": "ААААААААААААААААААúúúúААААААААААААААААААúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúттььььььььььААААААúúúú××××××××××××××××ÒÒxтdÒÒÒÒÒ×Ò×ÒАddddАúúúú×××××ÒÒ××××××××Ò××xтddÒÒÒÒÒÒÒÒАddddАúúúú×××××××Ò××ࠌࠌࠌࠌࠌ×××тттdÒÒÒÒÒÒÒÒАddddАúúúú×××××××ÒࠌࠌࠌࠌࠌࠌࠌࠌࠌࠌxxxdÒÒÒÒÒÒÒÒААААААúúúú××××××××ࠌࠌߤߤߤߤߤߤߤࠌxxxdÒÒÒÒ    АúúúúúúúúúÒ××××Ò×ࠌࠌࠌߤࠂࠂࠂࠂࠂߤࠌxxxdÒÒÒÒ ߐߐߐАϩϩϩϩϩúúúú×ÒÒ×ÒÒ×ࠌࠌߤߤࠂࠂࠂࠂࠂߤࠌттьdÒÒÒÒ ߐߐߐАnnnnϩúúúú××Ò××××ࠌࠌߤࠂࠂࠂࠂߤߤߤࠌxтddÒÒÒÒ ߐߐߐАnnnnϩúúúú×××××××ࠌࠌߤߤࠂߤߤߤࠌࠌ×xтdÒÒÒÒÒ ߐߐߐАnnnnÇúúúú××××××Ò×ࠌࠌߤߤߤࠌࠌࠌ××ААААААААААААААААААúúúú×××××Ò×××ࠌࠌࠌࠌࠌ××ÒÒúúúúúúúúúúúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúФФФФФьииииииҵФФФФАúúúúІІІІІІІІІІІІІІІІІІА    ьnиҵxx  АúúúúА  І  І  А    ьnÇҵxx  АúúúúА  І  І  А    ьҵҵииииьxxxxАúúúúАІІҵҵҵҵҵьnҵҵҵҵҵҵьúúúúАxxxІxxxІxxxyyyyьnÇҵyyyАúúúúАxxxІxxxІxxxyyyyҵҵҵҵyyyАúúúúАxxxІxxxІxxxyyyyҵyyyyyyҵyyyАúúúúАІІІІІІІІААААІІІІІyyyҵҵyyАúúúúАdddddddІúúúАdddddyyyyyÇyyyyyÇyyyyАúúúúАdddddddІúúúАdddddААААААААААААААААААúúúúАААААААААúúúААААААúúúúúúúúúëúúúúúúëëúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúúАКККККККККККККККККúúúúϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼϼА¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬КúúëúϼddddddddϼddddddddАииииККККККК¬¬¬¬¬КІІІІϼddddddddϼdddАК¬¬¬¬¬КККККККúúúúϼddddddddÇddААК¬¬¬¬¬К¬К¬К¬КúúúúϼddddddddϼddА",
+                            "Objects": "dddddddddddddddddd߯߯߯߯dddddddddd࿂࿂ddddddࠥdddʀߕddddddddddddтddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddddddddddddddddddddddddddddddddddddddࠥࠥddࠪddddddࠪddddddࠪdddтࠪddddddࠪddddddࠪddࠥ೐dྴ೥ಀddd௠d௠dd௖ೆೆ௖ddddd߳߳߳߰߰߰߰߰߰߰߰߰߰߸߰߰߰߰ddªdˆˆddddddddddƅddddd߳ߗ߸ߗߗdd̾ߚd߸dddddɶddddddddȺȰddddƀƁddddddd߳ddddd̾dddddddddddྴdಲߚddddddȺddddddddddd߳dʊdʊdddddddddddddddddddȺddddȰdྫྷӃҸҿӀdddddddɢdddߗddddddddddКККߚdȰddddddddddddddddddddd̾dddddddddddddddddddddddddಾಀ௠೥ddddddddʊddddddddddddddྴddߚdddȺdddddŀdddddddd߽dddddߔddddddddddddddddȺȰdddddddƊddྫྷdddd߳߳ddddddddddddddddddªߚdddddddddddddddddd߽߳߳dߚddߗdddddddd߳߳ఄఄྴఄఃఃఃఄఄdఃԜӀҿҿҼ೦೧dddd߳߳߳߳dddߗddddddd߳߳߳dddࠠdddddddddddddddԜ̪d߰߰߰߰߰dd߰߰߰߰߰߰߰߰߰߰߰dddddddddddddddddddndddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddࠠࠪddтdddddddddddddddddddddరddྐྵdಲ಼dddௌdd೐dࠠdddddరಾௌ೚ddరಽௌ೚ddరூௌ೚dƂúdddd࿂ddϼddŲddddªªªªdddŲddddŲddddŲddddddd¤ddddddddࠖࠖdªªªªd¦ddࠖࠖd¦ddࠖࠖd¦ddࠖࠖddddddྐྵdಲddddddddddddddddddddddddddddddd೦೧௖ྷdddྸddddddྷ௖dddddddddƅƂĄdddƅƂĄdddƅƂĄddddddddddddddddddࠪdddd̪dĎdddddĎ̾dd̴dĎdd ¢ dddྷ௖ࠖࠖࠖࠖdddddddddddddddКdddddКdddddКƅƅƅddddddddddddddddddddྫྷ೥೦೧d೥ྫྷdddddྫྷ೥dұddddddྴddddddྴddddddddddddddddddddȒddddɄddddddddddddddddddddddddddddddȒddddddddddఃఃఃరఃఃఃర࿄೥ఃరఃdఃర೦೧ddddd࿀࿀dӂҿҿҽӃdddddd࿀ddࠥddddтddԚԜұӃӉҼӅҽԜdтddтdddƈddddddddddddddࠥdddddddddddddddddddddddddddddddddddddddࠥddԛddԜӃӄҿӂұҷҵԜddddddddԝҳұӃҹҾҿԝdԛdddddddࠥdƇdddddddddddddddтddтdddddddddddƈddddddddd࿄ddddddddd௖d೦೧dddddd௖಼d௖ྫྷ೥௖dd࿀d௖೦೧d࿀࿀dиdddddddddddddddddddddĶddĶdƂžſddddddddddd࿂௖dd௠௖࿂ddddddddd೦೧೥ྫྷdd¦¦dddddྫྷdd¥¥d¥ddddddϲddϼdϲdd࿂d࿂d࿂dddddddddd¤ddddd¥ˤˤˤˤdddІdАddФdddФdшdшdшdˤˤdddŀƄƄdƅddddddd¥d¥dd",
+                            "Effects": "EAApAIABfwb/e/9//284fg=="
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "mongoType": "long",
+                    "documentCount": 1,
+                    "exampleValues": [1788123853070]
+                },
+                {
+                    "fieldPath": "updatedBy",
+                    "mongoType": "int",
+                    "documentCount": 1,
+                    "exampleValues": [254890]
+                }
+            ],
+            "violations": [],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "gameEvents",
+            "documentCount": 646,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "objectId",
+                    "documentCount": 646,
+                    "exampleValues": [
+                        "6a943ade6e3b6ce361fcf586",
+                        "6a943af86e3b6ce361fcf587",
+                        "6a943b106e3b6ce361fcf588"
+                    ]
+                },
+                {
+                    "fieldPath": "actor",
+                    "mongoType": "int",
+                    "documentCount": 645,
+                    "exampleValues": [251024, 254890, 254890]
+                },
+                {
+                    "fieldPath": "data",
+                    "mongoType": "object",
+                    "documentCount": 646,
+                    "exampleValues": [
+                        {
+                            "previousChips": 0,
+                            "newChips": null,
+                            "delta": null,
+                            "reason": "daily_claim"
+                        },
+                        {
+                            "previousChips": 0,
+                            "newChips": null,
+                            "delta": null,
+                            "reason": "daily_claim"
+                        },
+                        {
+                            "previousChips": null,
+                            "newChips": null,
+                            "delta": null,
+                            "reason": "adapter_sync"
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "processed",
+                    "mongoType": "bool",
+                    "documentCount": 646,
+                    "exampleValues": [false, false, false]
+                },
+                {
+                    "fieldPath": "source",
+                    "mongoType": "string",
+                    "documentCount": 646,
+                    "exampleValues": ["casino", "casino", "casino"]
+                },
+                {
+                    "fieldPath": "target",
+                    "mongoType": "int",
+                    "documentCount": 646,
+                    "exampleValues": [251024, 254890, 254890]
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "mongoType": "long",
+                    "documentCount": 646,
+                    "exampleValues": [
+                        1788099294486, 1788099320465, 1788099344842
+                    ]
+                },
+                {
+                    "fieldPath": "type",
+                    "mongoType": "string",
+                    "documentCount": 646,
+                    "exampleValues": ["chips_lost", "chips_lost", "chips_lost"]
+                }
+            ],
+            "violations": [],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "dareState",
+            "documentCount": 1,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "string",
+                    "documentCount": 1,
+                    "exampleValues": ["state"]
+                },
+                {
+                    "fieldPath": "bindCounts",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[[251163, 1]]]
+                },
+                {
+                    "fieldPath": "disconnected",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "dressingBlocked",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "games",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "lobby",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "nextGameId",
+                    "mongoType": "int",
+                    "documentCount": 1,
+                    "exampleValues": [1]
+                },
+                {
+                    "fieldPath": "passCounts",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "pendingBondage",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "pendingDraws",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "pilloriedUntilNextDraw",
+                    "mongoType": "array",
+                    "documentCount": 1,
+                    "exampleValues": [[]]
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "mongoType": "long",
+                    "documentCount": 1,
+                    "exampleValues": [1788010617040]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "bindCounts",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[[251163, 1]]]
+                },
+                {
+                    "fieldPath": "disconnected",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "dressingBlocked",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "games",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "lobby",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "nextGameId",
+                    "expectedType": "unknown",
+                    "actualType": "int",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [1]
+                },
+                {
+                    "fieldPath": "passCounts",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "pendingBondage",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "pendingDraws",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                },
+                {
+                    "fieldPath": "pilloriedUntilNextDraw",
+                    "expectedType": "unknown",
+                    "actualType": "array",
+                    "affectedDocuments": 1,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [[]]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "unifiedCharacterProfiles",
+            "documentCount": 1685,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "int",
+                    "documentCount": 1685,
+                    "exampleValues": [251024, 254890, 51866]
+                },
+                {
+                    "fieldPath": "casino",
+                    "mongoType": "object",
+                    "documentCount": 1685,
+                    "exampleValues": [
+                        {
+                            "chips": 2000,
+                            "score": 0,
+                            "winStreak": 0,
+                            "lossStreak": 0,
+                            "cheatStrikes": 0,
+                            "totalWins": 0,
+                            "totalLosses": 0,
+                            "lockedChips": 0,
+                            "recentWinnings": 0,
+                            "version": 24,
+                            "updatedAt": 1788260565307,
+                            "lastDailyClaimAt": 1788160176293
+                        },
+                        {
+                            "chips": 0,
+                            "score": 0,
+                            "winStreak": 0,
+                            "lossStreak": 0,
+                            "cheatStrikes": 0,
+                            "totalWins": 0,
+                            "totalLosses": 0,
+                            "lockedChips": 0,
+                            "recentWinnings": 0,
+                            "version": 44,
+                            "updatedAt": 1788438986347,
+                            "lastDailyClaimAt": 1788160233585
+                        },
+                        {
+                            "chips": 60,
+                            "score": 0,
+                            "winStreak": 0,
+                            "lossStreak": 0,
+                            "cheatStrikes": 0,
+                            "totalWins": 0,
+                            "totalLosses": 0,
+                            "lockedChips": 0,
+                            "recentWinnings": 0,
+                            "version": 2,
+                            "updatedAt": 1788099371203,
+                            "lastDailyClaimAt": 1787329237559
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "mongoType": "long",
+                    "documentCount": 1685,
+                    "exampleValues": [
+                        1788099294448, 1788099320428, 1788099371142
+                    ]
+                },
+                {
+                    "fieldPath": "crossSystem",
+                    "mongoType": "object",
+                    "documentCount": 35,
+                    "exampleValues": [
+                        {
+                            "recentEvents": [],
+                            "features": {},
+                            "relationships": {},
+                            "updatedAt": 1788099294448
+                        },
+                        {
+                            "recentEvents": [],
+                            "features": {},
+                            "relationships": {},
+                            "updatedAt": 1788099320428
+                        },
+                        {
+                            "recentEvents": [],
+                            "features": {},
+                            "relationships": {},
+                            "updatedAt": 1788099371142
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "dare",
+                    "mongoType": "object",
+                    "documentCount": 1685,
+                    "exampleValues": [
+                        {
+                            "gameIds": [],
+                            "participationHistory": [],
+                            "activeBondage": [],
+                            "suspendedGames": [],
+                            "totalGamesPlayed": 0,
+                            "totalDaresCompleted": 0,
+                            "version": 0,
+                            "updatedAt": 1788099294448
+                        },
+                        {
+                            "gameIds": [],
+                            "participationHistory": [],
+                            "activeBondage": [],
+                            "suspendedGames": [],
+                            "totalGamesPlayed": 0,
+                            "totalDaresCompleted": 0,
+                            "version": 0,
+                            "updatedAt": 1788099320428
+                        },
+                        {
+                            "gameIds": [],
+                            "participationHistory": [],
+                            "activeBondage": [],
+                            "suspendedGames": [],
+                            "totalGamesPlayed": 0,
+                            "totalDaresCompleted": 0,
+                            "version": 0,
+                            "updatedAt": 1788099371142
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "lastAccessedAt",
+                    "mongoType": "long",
+                    "documentCount": 1685,
+                    "exampleValues": [
+                        1788260565307, 1788438986347, 1788099371203
+                    ]
+                },
+                {
+                    "fieldPath": "lastAccessedBy",
+                    "mongoType": "string",
+                    "documentCount": 72,
+                    "exampleValues": ["casino", "casino", "casino"]
+                },
+                {
+                    "fieldPath": "name",
+                    "mongoType": "string",
+                    "documentCount": 1685,
+                    "exampleValues": ["Emcha", "Rarsus", "Marie"]
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "mongoType": "long",
+                    "documentCount": 1685,
+                    "exampleValues": [
+                        1788260565307, 1788438986347, 1788100427637
+                    ]
+                },
+                {
+                    "fieldPath": "veratown",
+                    "mongoType": "object",
+                    "documentCount": 1685,
+                    "exampleValues": [
+                        {
+                            "lastPositionAt": 1788099294448,
+                            "lastAppearanceAt": 1788099294448,
+                            "cageIncarcerations": [],
+                            "totalTimeInCages": 0,
+                            "kennelSessions": [],
+                            "totalTimeInKennels": 0,
+                            "currentRestraints": [],
+                            "roleplayFlags": {
+                                "lastFlagChange": 1788099294448
+                            },
+                            "auditLog": [],
+                            "roles": [],
+                            "version": 4,
+                            "updatedAt": 1788175959583,
+                            "keypadAccess": [
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_a",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175736398,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                                },
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_b",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175736628,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                                },
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_a",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175959077,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                                },
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_b",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175959522,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                                }
+                            ]
+                        },
+                        {
+                            "lastPositionAt": 1788099320428,
+                            "lastAppearanceAt": 1788099320428,
+                            "cageIncarcerations": [],
+                            "totalTimeInCages": 0,
+                            "kennelSessions": [],
+                            "totalTimeInKennels": 0,
+                            "currentRestraints": [],
+                            "roleplayFlags": {
+                                "lastFlagChange": 1788099320428
+                            },
+                            "auditLog": [],
+                            "roles": [],
+                            "version": 0,
+                            "updatedAt": 1788099320428,
+                            "keypadAccess": [
+                                {
+                                    "doorKey": "room1_door",
+                                    "groupName": "rarsus",
+                                    "grantedAt": 1788261182051,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Initial setup"
+                                }
+                            ]
+                        },
+                        {
+                            "lastPositionAt": 1788099371142,
+                            "lastAppearanceAt": 1788099371142,
+                            "cageIncarcerations": [],
+                            "totalTimeInCages": 0,
+                            "kennelSessions": [],
+                            "totalTimeInKennels": 0,
+                            "currentRestraints": [],
+                            "roleplayFlags": {
+                                "lastFlagChange": 1788099371142
+                            },
+                            "auditLog": [],
+                            "roles": [],
+                            "version": 0,
+                            "updatedAt": 1788099371142
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "version",
+                    "mongoType": "int",
+                    "documentCount": 72,
+                    "exampleValues": [28, 44, 2]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "casino",
+                    "expectedType": "unknown",
+                    "actualType": "object",
+                    "affectedDocuments": 1685,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        {
+                            "chips": 2000,
+                            "score": 0,
+                            "winStreak": 0,
+                            "lossStreak": 0,
+                            "cheatStrikes": 0,
+                            "totalWins": 0,
+                            "totalLosses": 0,
+                            "lockedChips": 0,
+                            "recentWinnings": 0,
+                            "version": 24,
+                            "updatedAt": 1788260565307,
+                            "lastDailyClaimAt": 1788160176293
+                        },
+                        {
+                            "chips": 0,
+                            "score": 0,
+                            "winStreak": 0,
+                            "lossStreak": 0,
+                            "cheatStrikes": 0,
+                            "totalWins": 0,
+                            "totalLosses": 0,
+                            "lockedChips": 0,
+                            "recentWinnings": 0,
+                            "version": 44,
+                            "updatedAt": 1788438986347,
+                            "lastDailyClaimAt": 1788160233585
+                        },
+                        {
+                            "chips": 60,
+                            "score": 0,
+                            "winStreak": 0,
+                            "lossStreak": 0,
+                            "cheatStrikes": 0,
+                            "totalWins": 0,
+                            "totalLosses": 0,
+                            "lockedChips": 0,
+                            "recentWinnings": 0,
+                            "version": 2,
+                            "updatedAt": 1788099371203,
+                            "lastDailyClaimAt": 1787329237559
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "crossSystem",
+                    "expectedType": "unknown",
+                    "actualType": "object",
+                    "affectedDocuments": 35,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        {
+                            "recentEvents": [],
+                            "features": {},
+                            "relationships": {},
+                            "updatedAt": 1788099294448
+                        },
+                        {
+                            "recentEvents": [],
+                            "features": {},
+                            "relationships": {},
+                            "updatedAt": 1788099320428
+                        },
+                        {
+                            "recentEvents": [],
+                            "features": {},
+                            "relationships": {},
+                            "updatedAt": 1788099371142
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "dare",
+                    "expectedType": "unknown",
+                    "actualType": "object",
+                    "affectedDocuments": 1685,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        {
+                            "gameIds": [],
+                            "participationHistory": [],
+                            "activeBondage": [],
+                            "suspendedGames": [],
+                            "totalGamesPlayed": 0,
+                            "totalDaresCompleted": 0,
+                            "version": 0,
+                            "updatedAt": 1788099294448
+                        },
+                        {
+                            "gameIds": [],
+                            "participationHistory": [],
+                            "activeBondage": [],
+                            "suspendedGames": [],
+                            "totalGamesPlayed": 0,
+                            "totalDaresCompleted": 0,
+                            "version": 0,
+                            "updatedAt": 1788099320428
+                        },
+                        {
+                            "gameIds": [],
+                            "participationHistory": [],
+                            "activeBondage": [],
+                            "suspendedGames": [],
+                            "totalGamesPlayed": 0,
+                            "totalDaresCompleted": 0,
+                            "version": 0,
+                            "updatedAt": 1788099371142
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "veratown",
+                    "expectedType": "unknown",
+                    "actualType": "object",
+                    "affectedDocuments": 1685,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        {
+                            "lastPositionAt": 1788099294448,
+                            "lastAppearanceAt": 1788099294448,
+                            "cageIncarcerations": [],
+                            "totalTimeInCages": 0,
+                            "kennelSessions": [],
+                            "totalTimeInKennels": 0,
+                            "currentRestraints": [],
+                            "roleplayFlags": {
+                                "lastFlagChange": 1788099294448
+                            },
+                            "auditLog": [],
+                            "roles": [],
+                            "version": 4,
+                            "updatedAt": 1788175959583,
+                            "keypadAccess": [
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_a",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175736398,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                                },
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_b",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175736628,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                                },
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_a",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175959077,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_a"
+                                },
+                                {
+                                    "doorKey": "auto_location_admin_room_keypad_b",
+                                    "groupName": "auto_whitelist",
+                                    "grantedAt": 1788175959522,
+                                    "expiresAt": null,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Auto-migrated from legacy location auto_location_admin_room_keypad_b"
+                                }
+                            ]
+                        },
+                        {
+                            "lastPositionAt": 1788099320428,
+                            "lastAppearanceAt": 1788099320428,
+                            "cageIncarcerations": [],
+                            "totalTimeInCages": 0,
+                            "kennelSessions": [],
+                            "totalTimeInKennels": 0,
+                            "currentRestraints": [],
+                            "roleplayFlags": {
+                                "lastFlagChange": 1788099320428
+                            },
+                            "auditLog": [],
+                            "roles": [],
+                            "version": 0,
+                            "updatedAt": 1788099320428,
+                            "keypadAccess": [
+                                {
+                                    "doorKey": "room1_door",
+                                    "groupName": "rarsus",
+                                    "grantedAt": 1788261182051,
+                                    "grantedBy": 0,
+                                    "grantedReason": "Initial setup"
+                                }
+                            ]
+                        },
+                        {
+                            "lastPositionAt": 1788099371142,
+                            "lastAppearanceAt": 1788099371142,
+                            "cageIncarcerations": [],
+                            "totalTimeInCages": 0,
+                            "kennelSessions": [],
+                            "totalTimeInKennels": 0,
+                            "currentRestraints": [],
+                            "roleplayFlags": {
+                                "lastFlagChange": 1788099371142
+                            },
+                            "auditLog": [],
+                            "roles": [],
+                            "version": 0,
+                            "updatedAt": 1788099371142
+                        }
+                    ]
+                }
+            ],
+            "isDocumented": true
+        },
+        {
+            "collectionName": "keypadAccessGroups_DEPRICATED",
+            "documentCount": 6,
+            "fields": [
+                {
+                    "fieldPath": "_id",
+                    "mongoType": "objectId",
+                    "documentCount": 6,
+                    "exampleValues": [
+                        "6a92e19544ad2a0ddff9f943",
+                        "6a92e3de44ad2a0ddff9f944",
+                        "6a93bafa215b30980885565e"
+                    ]
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "mongoType": "long",
+                    "documentCount": 6,
+                    "exampleValues": [
+                        1788010901162, 1788011486025, 1788066554278
+                    ]
+                },
+                {
+                    "fieldPath": "doorKey",
+                    "mongoType": "string",
+                    "documentCount": 6,
+                    "exampleValues": [
+                        "room1_keypad",
+                        "room2_keypad_a",
+                        "admin_room_keypad_a"
+                    ]
+                },
+                {
+                    "fieldPath": "groups",
+                    "mongoType": "object",
+                    "documentCount": 6,
+                    "exampleValues": [
+                        {
+                            "admin": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "admin",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788010901162,
+                                "updatedAt": 1788010901162
+                            },
+                            "whitelist": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "whitelist",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788010901162,
+                                "updatedAt": 1788010901162
+                            },
+                            "guest": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "guest",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788010901162,
+                                "updatedAt": 1788010901162
+                            },
+                            "rarsus": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "rarsus",
+                                "code": "MyPersonalCode",
+                                "description": null,
+                                "memberNumbers": [254890],
+                                "createdAt": 1788010943715,
+                                "updatedAt": 1788010977672
+                            }
+                        },
+                        {
+                            "admin": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "admin",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788011486025,
+                                "updatedAt": 1788011486025
+                            },
+                            "whitelist": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "whitelist",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788011486025,
+                                "updatedAt": 1788011486025
+                            },
+                            "guest": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "guest",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788011486025,
+                                "updatedAt": 1788011486025
+                            },
+                            "sillyidea": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "sillyidea",
+                                "code": "250997",
+                                "description": null,
+                                "memberNumbers": [250997, 251163],
+                                "createdAt": 1788011486037,
+                                "updatedAt": 1788011541332
+                            }
+                        },
+                        {
+                            "admin": {
+                                "doorKey": "admin_room_keypad_a",
+                                "groupName": "admin",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788066554278,
+                                "updatedAt": 1788066554278
+                            },
+                            "whitelist": {
+                                "doorKey": "admin_room_keypad_a",
+                                "groupName": "whitelist",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788066554278,
+                                "updatedAt": 1788066554278
+                            },
+                            "guest": {
+                                "doorKey": "admin_room_keypad_a",
+                                "groupName": "guest",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788066554278,
+                                "updatedAt": 1788066554278
+                            }
+                        }
+                    ]
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "mongoType": "long",
+                    "documentCount": 6,
+                    "exampleValues": [
+                        1788010977672, 1788011541332, 1788066554278
+                    ]
+                }
+            ],
+            "violations": [
+                {
+                    "fieldPath": "_id",
+                    "expectedType": "string",
+                    "actualType": "objectId",
+                    "affectedDocuments": 6,
+                    "violationType": "type_mismatch",
+                    "severity": "info",
+                    "examples": [
+                        "6a92e19544ad2a0ddff9f943",
+                        "6a92e3de44ad2a0ddff9f944",
+                        "6a93bafa215b30980885565e"
+                    ]
+                },
+                {
+                    "fieldPath": "doorKey",
+                    "expectedType": "unknown",
+                    "actualType": "string",
+                    "affectedDocuments": 6,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        "room1_keypad",
+                        "room2_keypad_a",
+                        "admin_room_keypad_a"
+                    ]
+                },
+                {
+                    "fieldPath": "groups",
+                    "expectedType": "unknown",
+                    "actualType": "object",
+                    "affectedDocuments": 6,
+                    "violationType": "undocumented_field",
+                    "severity": "info",
+                    "examples": [
+                        {
+                            "admin": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "admin",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788010901162,
+                                "updatedAt": 1788010901162
+                            },
+                            "whitelist": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "whitelist",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788010901162,
+                                "updatedAt": 1788010901162
+                            },
+                            "guest": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "guest",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788010901162,
+                                "updatedAt": 1788010901162
+                            },
+                            "rarsus": {
+                                "doorKey": "room1_keypad",
+                                "groupName": "rarsus",
+                                "code": "MyPersonalCode",
+                                "description": null,
+                                "memberNumbers": [254890],
+                                "createdAt": 1788010943715,
+                                "updatedAt": 1788010977672
+                            }
+                        },
+                        {
+                            "admin": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "admin",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788011486025,
+                                "updatedAt": 1788011486025
+                            },
+                            "whitelist": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "whitelist",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788011486025,
+                                "updatedAt": 1788011486025
+                            },
+                            "guest": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "guest",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788011486025,
+                                "updatedAt": 1788011486025
+                            },
+                            "sillyidea": {
+                                "doorKey": "room2_keypad_a",
+                                "groupName": "sillyidea",
+                                "code": "250997",
+                                "description": null,
+                                "memberNumbers": [250997, 251163],
+                                "createdAt": 1788011486037,
+                                "updatedAt": 1788011541332
+                            }
+                        },
+                        {
+                            "admin": {
+                                "doorKey": "admin_room_keypad_a",
+                                "groupName": "admin",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788066554278,
+                                "updatedAt": 1788066554278
+                            },
+                            "whitelist": {
+                                "doorKey": "admin_room_keypad_a",
+                                "groupName": "whitelist",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788066554278,
+                                "updatedAt": 1788066554278
+                            },
+                            "guest": {
+                                "doorKey": "admin_room_keypad_a",
+                                "groupName": "guest",
+                                "code": "",
+                                "memberNumbers": [],
+                                "createdAt": 1788066554278,
+                                "updatedAt": 1788066554278
+                            }
+                        }
+                    ]
+                }
+            ],
+            "isDocumented": true
+        }
+    ],
+    "totalViolations": 35,
+    "violationsBySeverity": {
+        "critical": 0,
+        "warning": 0,
+        "info": 35
+    },
+    "recommendations": [
+        "📝 INFO: 31 undocumented fields found in known collections"
+    ]
+}
