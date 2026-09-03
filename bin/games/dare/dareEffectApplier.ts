@@ -13,7 +13,7 @@
  */
 
 import { API_Character } from "bc-bot";
-import { DareDoc } from "../dareStore";
+import { DareDoc } from "./dareDataService";
 
 /**
  * Strategy interface for dare effect application.
@@ -76,19 +76,19 @@ export class DareEffectApplier {
         success: boolean;
         message: string;
     }> {
-        const effect = this.effects.get(dare.type);
+        const effect = this.effects.get(dare.category);
 
         if (!effect) {
             return {
                 success: false,
-                message: `Unknown dare type: ${dare.type}`,
+                message: `Unknown dare type: ${dare.category}`,
             };
         }
 
         if (!effect.canApply(target)) {
             return {
                 success: false,
-                message: `Cannot apply ${dare.type} dare to ${target.name}`,
+                message: `Cannot apply ${dare.category} dare to ${target.Name}`,
             };
         }
 
@@ -101,7 +101,7 @@ export class DareEffectApplier {
         } catch (error) {
             return {
                 success: false,
-                message: `Failed to apply ${dare.type} dare: ${error instanceof Error ? error.message : "unknown error"}`,
+                message: `Failed to apply ${dare.category} dare: ${error instanceof Error ? error.message : "unknown error"}`,
             };
         }
     }
@@ -135,12 +135,12 @@ export class StripEffect implements DareEffect {
 
     public canApply(target: API_Character): boolean {
         // Can always strip someone
-        this.targetName = target.name;
+        this.targetName = target.Name;
         return true;
     }
 
     public async apply(target: API_Character): Promise<void> {
-        this.targetName = target.name;
+        this.targetName = target.Name;
         // NOTE: Actual implementation would call BC API to undress
         // This is a placeholder for the strategy pattern
         // In real implementation, would use ServerSend or similar
@@ -173,12 +173,12 @@ export class BondageEffect implements DareEffect {
     public canApply(target: API_Character): boolean {
         // Can always apply bondage (assumes item exists)
         // Real implementation would check inventory
-        this.targetName = target.name;
+        this.targetName = target.Name;
         return true;
     }
 
     public async apply(target: API_Character): Promise<void> {
-        this.targetName = target.name;
+        this.targetName = target.Name;
         // NOTE: Actual implementation would call BC API to equip item
         // Example: await serverSend("EquipCharacter", [target.MemberNumber, itemAsset, ...])
     }
@@ -202,12 +202,12 @@ export class RewardEffect implements DareEffect {
 
     public canApply(target: API_Character): boolean {
         // Can always grant reward
-        this.targetName = target.name;
+        this.targetName = target.Name;
         return true;
     }
 
     public async apply(target: API_Character): Promise<void> {
-        this.targetName = target.name;
+        this.targetName = target.Name;
         // NOTE: Actual implementation would grant reward
         // Example: add chips to character account, free them, give item, etc.
     }
