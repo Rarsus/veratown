@@ -946,7 +946,7 @@ If you would like to make a bot room similar to this one, you can find all neces
                 this.active_players.includes(character) &&
                 this.players.size > 1
             ) {
-                if (!this.conn.chatRoom.characters.includes(character)) {
+                if (!this.conn.chatRoom!.characters.includes(character)) {
                     await this.waitForNextRoundAsPlayerLeft();
                 }
             }
@@ -966,7 +966,7 @@ If you would like to make a bot room similar to this one, you can find all neces
     public roomCanShutDown(): boolean {
         if (
             this.players.size === 0 &&
-            this.conn.chatRoom.characters.length === 1
+            this.conn.chatRoom!.characters.length === 1
         ) {
             return true;
         }
@@ -1258,7 +1258,7 @@ If you would like to make a bot room similar to this one, you can find all neces
             this.conn.Player.SetHeightOverride(50);
             this.conn.Player.SetActivePose(["OverTheHead", "Kneel"]);
             await wait(600);
-            this.conn.Player.SetHeightOverride(null);
+            this.conn.Player.SetHeightOverride(undefined);
         }
         this.conn.Player.SetActivePose(["Yoked"]);
         await wait(400);
