@@ -48,6 +48,7 @@ import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
 import { KeypadAccessGroupManager } from "./veratown/keypadAccessGroupManager";
 import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSystem";
 import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
+import { DIContainer, DIServiceKeys } from "../di/container";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import {
@@ -152,6 +153,7 @@ export class Veratown {
 
     private commandParser: CommandParser;
     private regionManager: RegionManager;
+    private container: DIContainer;
 
     private conn: API_Connector;
     private conn2?: API_Connector;
@@ -202,10 +204,12 @@ export class Veratown {
         db?: Db,
         dareConfig?: DareConfig,
         private casinoConfig?: CasinoConfig,
+        container?: DIContainer,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
         this.conn3 = connections.casino;
+        this.container = container || new DIContainer();
 
         this.commandParser = new CommandParser(this.conn, undefined, [
             GAME_LOCATION,
@@ -219,10 +223,10 @@ export class Veratown {
             this.locationStore = new VeratownLocationStore(db);
             this.dare = this.initFeature(() => {
                 // Phase 5: Direct UnifiedCharacterStore access (no adapters)
-                // Use global unified store or create new instance
-                const unifiedStore =
-                    global.unifiedCharacterStore ||
-                    new UnifiedCharacterStore(db);
+                // Use DI container to get unified store
+                const unifiedStore = this.container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                    ? this.container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                    : new UnifiedCharacterStore(db);
                 return new Dare(
                     this.conn,
                     this.commandParser,
@@ -294,8 +298,9 @@ export class Veratown {
                     this.conn,
                     this.locationStore,
                     undefined,
-                    global.unifiedCharacterStore ||
-                        new UnifiedCharacterStore(db!),
+                    this.container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                        ? this.container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                        : new UnifiedCharacterStore(db!),
                 ),
         );
 
@@ -319,6 +324,8 @@ export class Veratown {
                             fallbackLocations: VERATOWN_LOCATIONS_FALLBACK,
                         },
                         // Don't pass commandParser - let Casino create its own bound to conn3
+                        undefined,
+                        this.container,
                     ),
             );
         }

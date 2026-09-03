@@ -48,6 +48,7 @@ import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 import { createLogger } from "../logging";
+import { DIContainer, DIServiceKeys } from "../di/container";
 
 const logger = createLogger("Casino");
 
@@ -114,9 +115,13 @@ export class Casino implements GamePlugin {
         db: Db,
         config?: CasinoConfig,
         commandParser?: CommandParser,
+        container?: DIContainer,
     ) {
-        this.unifiedStore =
-            global.unifiedCharacterStore || new UnifiedCharacterStore(db);
+        this.unifiedStore = container
+            ? (container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                  ? container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE)
+                  : new UnifiedCharacterStore(db))
+            : global.unifiedCharacterStore || new UnifiedCharacterStore(db);
 
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
