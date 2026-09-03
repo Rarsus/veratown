@@ -708,7 +708,7 @@ https://github.com/FriendsOfBC/ropeybot
     public roomCanShutDown(): boolean {
         if (
             this.players.length === 0 &&
-            this.conn.chatRoom.characters.length === 1
+            this.conn.chatRoom!.characters.length === 1
         ) {
             return true;
         }
@@ -2306,10 +2306,14 @@ https://github.com/FriendsOfBC/ropeybot
             AssetGet("ItemMouth3", "ClothGag"),
         );
         gag3?.Extended?.SetType("OTM");
-        gag3?.SetColor(
-            character.Appearance.InventoryGet("HairFront").GetColor(),
-        );
-        gag3.SetDifficulty(20);
+        const hairFront = character.Appearance.InventoryGet("HairFront");
+        if (gag3 && hairFront) {
+            const hairColor = hairFront.GetColor();
+            if (hairColor) {
+                gag3.SetColor(hairColor);
+            }
+            gag3.SetDifficulty(20);
+        }
 
         for (const g of [gag1, gag2, gag3]) {
             if (who === "kidnapper") {
@@ -2390,7 +2394,7 @@ https://github.com/FriendsOfBC/ropeybot
                 p.MemberNumber !== this.fan?.MemberNumber &&
                 this.persistent_copy_of_kidnappers.has(p)
             ) {
-                this.logger?.info(`Freeing ${p}`);
+                logger.info(`Freeing ${p}`);
                 this.freePlayerInItemSlots(p, listOfUsedItemGroups);
             }
         }
@@ -2442,7 +2446,7 @@ https://github.com/FriendsOfBC/ropeybot
             this.conn.Player.SetHeightOverride(50);
             this.conn.Player.SetActivePose(["OverTheHead", "Kneel"]);
             await wait(600);
-            this.conn.Player.SetHeightOverride(null);
+            this.conn.Player.SetHeightOverride(undefined);
         }
         this.conn.Player.SetActivePose(["Yoked"]);
         await wait(400);
