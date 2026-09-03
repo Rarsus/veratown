@@ -6,6 +6,7 @@
  * @file bin/games/shared/effectValidator.ts
  */
 
+import { API_Character } from "bc-bot";
 import type {
     EffectValidation,
     IEffect,
@@ -33,7 +34,7 @@ export class EffectValidator {
             };
         }
 
-        if (!character.name) {
+        if (!character.Name) {
             return {
                 valid: false,
                 reason: "Character has no name",
@@ -72,15 +73,15 @@ export class EffectValidator {
     public static validateCharacterStatus(
         character: API_Character,
     ): EffectValidation {
-        if (character.IsRestrained?.includes("Unconscious")) {
+        if (character.IsRestrained?.()) {
             return {
                 valid: false,
-                reason: "Character is unconscious",
+                reason: "Character is restrained",
             };
         }
 
         // Check if character is in a valid chat room
-        if (!character.Incha && character.MemberNumber < 0) {
+        if (character.MemberNumber < 0) {
             return {
                 valid: false,
                 reason: "Character is offline",
@@ -106,7 +107,7 @@ export class EffectValidator {
         }
 
         const slotItems = character.Appearance.Appearance.filter(
-            (item) => item.Group === slot,
+            (item: any) => item.Group === slot,
         );
 
         if (slotItems.length === 0) {
@@ -137,7 +138,7 @@ export class EffectValidator {
         const unavailableSlots: string[] = [];
         for (const slot of slots) {
             const slotItems = character.Appearance.Appearance.filter(
-                (item) => item.Group === slot,
+                (item: any) => item.Group === slot,
             );
             if (slotItems.length === 0) {
                 unavailableSlots.push(slot);
