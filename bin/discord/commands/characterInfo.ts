@@ -59,10 +59,10 @@ export async function handleCharacterInfoCommand(
         });
 
         // Try to find character in the unified character store
-        const collection = context.db.collection("characters");
+        const collection = context.db.collection("unifiedCharacterProfiles");
 
         const character = await collection.findOne({
-            $or: [{ name: characterName }, { displayName: characterName }],
+            name: { $regex: characterName, $options: "i" },
         });
 
         if (!character) {
@@ -80,21 +80,18 @@ export async function handleCharacterInfoCommand(
                     ? charRecord.name
                     : "unknown",
             playerId:
-                typeof charRecord.playerId === "string"
-                    ? charRecord.playerId
+                typeof charRecord._id === "number"
+                    ? charRecord._id.toString()
                     : undefined,
-            currentRoom:
-                typeof charRecord.currentRoom === "string"
-                    ? charRecord.currentRoom
-                    : undefined,
+            currentRoom: undefined,
             state:
-                typeof charRecord.state === "object" &&
-                charRecord.state !== null
-                    ? (charRecord.state as Record<string, unknown>)
+                typeof charRecord.casino === "object" &&
+                charRecord.casino !== null
+                    ? (charRecord.casino as Record<string, unknown>)
                     : undefined,
             lastUpdated:
-                charRecord.lastUpdated instanceof Date
-                    ? charRecord.lastUpdated
+                typeof charRecord.lastAccessedAt === "number"
+                    ? new Date(charRecord.lastAccessedAt)
                     : undefined,
         };
 
@@ -140,30 +137,35 @@ export async function handleActivePlayersCommand(
             requested_by: context.userId,
         });
 
-        const collection = context.db.collection("players");
+        const collection = context.db.collection("unifiedCharacterProfiles");
 
-        // Get active players (who were seen recently)
+        // Get active players (who were accessed recently - last hour)
+        const oneDayAgo = Date.now() - 1000 * 60 * 60;
         const activePlayers = await collection
             .find({
-                lastSeen: {
-                    $gt: new Date(Date.now() - 1000 * 60 * 60), // Last hour
+                lastAccessedAt: {
+                    $gt: oneDayAgo,
                 },
             })
-            .sort({ lastSeen: -1 })
+            .sort({ lastAccessedAt: -1 })
             .limit(20)
             .toArray();
 
         const playerList = activePlayers.map(
-            (p): { name: string; lastSeen?: string } => {
+            (p): { name: string; lastSeen?: string; memberId?: string } => {
                 const player = p as unknown as Record<string, unknown>;
                 return {
                     name:
                         typeof player.name === "string"
                             ? player.name
                             : "unknown",
+                    memberId:
+                        typeof player._id === "number"
+                            ? player._id.toString()
+                            : undefined,
                     lastSeen:
-                        player.lastSeen instanceof Date
-                            ? player.lastSeen.toISOString()
+                        typeof player.lastAccessedAt === "number"
+                            ? new Date(player.lastAccessedAt).toISOString()
                             : undefined,
                 };
             },

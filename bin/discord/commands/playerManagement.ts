@@ -19,7 +19,6 @@
 
 import type { CommandInteraction } from "discord.js";
 import type { Db } from "mongodb";
-import { ObjectId } from "mongodb";
 import type { PlayerInfo, CommandResult, CommandContext } from "../types";
 import { createLogger } from "../../logging";
 
@@ -67,12 +66,12 @@ export async function handlePlayerListCommand(
             requested_by: context.userId,
         });
 
-        // Query players from MongoDB
-        const collection = context.db.collection("players");
+        // Query players from unified character store
+        const collection = context.db.collection("unifiedCharacterProfiles");
         const players = await collection
             .find({})
             .limit(limit)
-            .sort({ createdAt: -1 })
+            .sort({ lastAccessedAt: -1 })
             .toArray();
 
         if (!Array.isArray(players) || players.length === 0) {
@@ -92,20 +91,17 @@ export async function handlePlayerListCommand(
                         ? playerRecord.name
                         : "unknown",
                 id:
-                    typeof playerRecord._id === "string"
-                        ? playerRecord._id
+                    typeof playerRecord._id === "number"
+                        ? playerRecord._id.toString()
                         : "unknown",
-                isBlacklisted:
-                    typeof playerRecord.isBlacklisted === "boolean"
-                        ? playerRecord.isBlacklisted
-                        : false,
+                isBlacklisted: false,
                 lastSeen:
-                    playerRecord.lastSeen instanceof Date
-                        ? playerRecord.lastSeen
+                    typeof playerRecord.lastAccessedAt === "number"
+                        ? new Date(playerRecord.lastAccessedAt)
                         : undefined,
                 characterName:
-                    typeof playerRecord.characterName === "string"
-                        ? playerRecord.characterName
+                    typeof playerRecord.name === "string"
+                        ? playerRecord.name
                         : undefined,
             };
         });
@@ -169,20 +165,20 @@ export async function handlePlayerInfoCommand(
             requested_by: context.userId,
         });
 
-        const collection = context.db.collection("players");
+        const collection = context.db.collection("unifiedCharacterProfiles");
 
-        // Try to find by name or ID
+        // Try to find by ID (member number) or by name (case-insensitive)
         let player;
-        try {
+        const parsedId = parseInt(playerQuery, 10);
+        if (!isNaN(parsedId)) {
+            // Try by member number first
+            player = await collection.findOne({ _id: parsedId });
+        }
+        if (!player) {
+            // Try by name (case-insensitive regex)
             player = await collection.findOne({
-                $or: [
-                    { name: playerQuery },
-                    { _id: new ObjectId(playerQuery) },
-                ],
+                name: { $regex: playerQuery, $options: "i" },
             });
-        } catch {
-            // playerQuery is not a valid ObjectId, try just by name
-            player = await collection.findOne({ name: playerQuery });
         }
 
         if (!player) {
@@ -200,25 +196,22 @@ export async function handlePlayerInfoCommand(
                     ? playerRecord.name
                     : "unknown",
             id:
-                typeof playerRecord._id === "string"
-                    ? playerRecord._id
+                typeof playerRecord._id === "number"
+                    ? playerRecord._id.toString()
                     : "unknown",
-            isBlacklisted:
-                typeof playerRecord.isBlacklisted === "boolean"
-                    ? playerRecord.isBlacklisted
-                    : false,
+            isBlacklisted: false,
             lastSeen:
-                playerRecord.lastSeen instanceof Date
-                    ? playerRecord.lastSeen
+                typeof playerRecord.lastAccessedAt === "number"
+                    ? new Date(playerRecord.lastAccessedAt)
                     : undefined,
             characterName:
-                typeof playerRecord.characterName === "string"
-                    ? playerRecord.characterName
+                typeof playerRecord.name === "string"
+                    ? playerRecord.name
                     : undefined,
             state:
-                typeof playerRecord.state === "object" &&
-                playerRecord.state !== null
-                    ? (playerRecord.state as Record<string, unknown>)
+                typeof playerRecord.casino === "object" &&
+                playerRecord.casino !== null
+                    ? (playerRecord.casino as Record<string, unknown>)
                     : undefined,
         };
 
@@ -301,20 +294,20 @@ export async function handlePlayerBlacklistCommand(
             admin: context.userId,
         });
 
-        const collection = context.db.collection("players");
+        const collection = context.db.collection("unifiedCharacterProfiles");
 
-        // Find player
+        // Find player by ID (member number) or name
         let player;
-        try {
+        const parsedId = parseInt(playerQuery, 10);
+        if (!isNaN(parsedId)) {
+            // Try by member number first
+            player = await collection.findOne({ _id: parsedId });
+        }
+        if (!player) {
+            // Try by name (case-insensitive regex)
             player = await collection.findOne({
-                $or: [
-                    { name: playerQuery },
-                    { _id: new ObjectId(playerQuery) },
-                ],
+                name: { $regex: playerQuery, $options: "i" },
             });
-        } catch {
-            // playerQuery is not a valid ObjectId, try just by name
-            player = await collection.findOne({ name: playerQuery });
         }
 
         if (!player) {
