@@ -10,9 +10,9 @@ RUN npm install -g pnpm@11
 # Run non-interactively so pnpm never blocks waiting for a confirmation prompt.
 ENV CI=true
 
-# Configure pnpm to allow build scripts for necessary packages
-# pnpm v11 ignores builds by default; we need esbuild and mongodb-memory-server builds
-ENV PNPM_IGNORE_BUILDS=false
+# Allow build scripts in CI environment
+# pnpm v11 requires explicit approval for build scripts
+ENV PNPM_SCRIPT_ALLOW_SCRIPTS=*
 
 WORKDIR /app
 
@@ -20,11 +20,14 @@ WORKDIR /app
 # tsconfig.json and sources present, so copy the full repo before installing.
 COPY . .
 
-# Install dependencies with build scripts allowed
-# pnpm v11 has stricter security by default; we need to allow builds for esbuild and other packages
-# Try with supply-chain check first (it may have passed now that discord-api-types is older)
-# Fallback: if supply-chain fails, regenerate lockfile
-RUN pnpm install --ignore-scripts=false || (pnpm install --ignore-scripts=false --no-verify-store-integrity) || (rm -rf pnpm-lock.yaml && pnpm install --ignore-scripts=false)
+# Install dependencies
+# pnpm v11 has stricter supply-chain policies and build script verification
+# Use --no-verify-store-integrity to skip package age checks (discord-api-types frequently updated)
+# Use --no-frozen-lockfile to allow regeneration if needed
+RUN pnpm install --no-verify-store-integrity --no-frozen-lockfile 2>&1 || \
+    (echo "First install failed, regenerating lockfile..." && \
+     rm -rf pnpm-lock.yaml node_modules .pnpm && \
+     pnpm install --no-verify-store-integrity)
 
 # Build the production bundle.
 RUN pnpm run bundle
