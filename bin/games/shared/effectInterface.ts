@@ -9,6 +9,8 @@
  * @file bin/games/shared/effectInterface.ts
  */
 
+import { API_Character } from "bc-bot";
+
 export enum EffectType {
     FORFEIT = "forfeit",
     DARE = "dare",
