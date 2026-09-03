@@ -86,7 +86,9 @@ export class KeypadSystemInitializer {
             result.services = servicesStep.services;
 
             // Step 4: Create and initialize system
-            const systemStep = await this.step4_createSystem(result.services);
+            const systemStep = await this.step4_createSystem(
+                result.services as any,
+            );
             result.steps.push(systemStep);
             if (!systemStep.success) {
                 throw new Error("Failed to create system");
@@ -94,7 +96,9 @@ export class KeypadSystemInitializer {
             result.system = systemStep.system;
 
             // Step 5: Warm up caches
-            result.steps.push(await this.step5_warmupCaches(result.services));
+            result.steps.push(
+                await this.step5_warmupCaches(result.services as any),
+            );
 
             result.success = true;
             this.logger.info("✓ Keypad system initialized successfully");
@@ -402,10 +406,10 @@ export class KeypadSystemInitializer {
             // Check 2: No orphaned locations
             const locations = await this.locationStore.getAllLocations();
             const legacyLocations =
-                KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
                     locations,
                 );
-            const orphaned = legacyLocations.filter((loc) => {
+            const orphaned = legacyLocations.filter((loc: any) => {
                 const doorKey = (loc.data as any)?.doorKey;
                 return doorKey && !doorKey.startsWith("auto_location_");
             });
