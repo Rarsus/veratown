@@ -9,6 +9,7 @@
  *   const item = getAppearanceItem(character, "ItemDevices");
  */
 
+import { API_Character } from "bc-bot";
 import { createLogger } from "../../../logging";
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
@@ -55,7 +56,7 @@ export async function removeItems(
 ): Promise<void> {
     for (const group of groups) {
         await syncAppearanceMutation(character, () => {
-            character.Appearance.RemoveItem(group);
+            character.Appearance.RemoveItem(group as any);
         });
     }
 }
@@ -69,12 +70,14 @@ export async function addItems(
 ): Promise<void> {
     for (const item of items) {
         await syncAppearanceMutation(character, () => {
-            const added = character.Appearance.AddItem(
-                AssetGet(item.group, item.asset),
-            );
+            const asset = (AssetGet as any)(
+                item.group as any,
+                item.asset,
+            ) as any;
+            const added = (character as any).Appearance.AddItem(asset) as any;
             if (item.properties) {
                 Object.entries(item.properties).forEach(([key, value]) => {
-                    added.setProperty(key, value);
+                    (added as any).setProperty(key as any, value);
                 });
             }
         });
@@ -98,7 +101,7 @@ export function hasAppearanceSlot(
     group: string,
 ): boolean {
     try {
-        return character.Appearance.getItemData(group) !== undefined;
+        return character.Appearance.getItemData(group as any) !== undefined;
     } catch {
         return false;
     }
@@ -111,9 +114,9 @@ export function hasAppearanceSlot(
 export function getAppearanceItem(
     character: API_Character,
     group: string,
-): API_Item | undefined {
+): any | undefined {
     try {
-        return character.Appearance.getItemData(group);
+        return character.Appearance.getItemData(group as any);
     } catch {
         return undefined;
     }
@@ -124,7 +127,7 @@ export function getAppearanceItem(
  */
 export function getAppearanceBundle(
     character: API_Character,
-): API_Item[] | undefined {
+): any[] | undefined {
     try {
         refreshAppearance(character);
         return character.Appearance.MakeAppearanceBundle();
@@ -153,7 +156,7 @@ export function isWearing(
 /**
  * Check if item is owner-locked
  */
-export function isOwnerLocked(item: API_Item): boolean {
+export function isOwnerLocked(item: any): boolean {
     if (!item.Property?.Lock) return false;
     const lock = item.Property.Lock;
     return (
@@ -166,13 +169,13 @@ export function isOwnerLocked(item: API_Item): boolean {
 /**
  * Filter items for unlocked ones only
  */
-export function filterUnlocked(items: API_Item[]): API_Item[] {
+export function filterUnlocked(items: any[]): any[] {
     return items.filter((item) => !isOwnerLocked(item));
 }
 
 /**
  * Filter items for owner-locked ones only
  */
-export function filterOwnerLocked(items: API_Item[]): API_Item[] {
+export function filterOwnerLocked(items: any[]): any[] {
     return items.filter((item) => isOwnerLocked(item));
 }
