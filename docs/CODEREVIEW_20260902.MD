@@ -350,15 +350,15 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 ### **HIGH-PRIORITY ACTIONS**
 
-| Priority    | Issue                           | Impact                       | Effort            | Status                         |
-| ----------- | ------------------------------- | ---------------------------- | ----------------- | ------------------------------ |
+| Priority    | Issue                           | Impact                       | Effort            | Status      |
+| ----------- | ------------------------------- | ---------------------------- | ----------------- | ----------- |
 | **P0**      | Enable TypeScript strict mode   | Prevents runtime errors      | Medium (refactor) | 🔄 In Progress (195/651 fixed) |
-| **P0**      | Remove global state, use DI     | Testability, maintainability | High              | ⏳ Pending                     |
-| **P1**      | Add config validation (Zod)     | Fail fast on bad config      | Low               | ⏳ Pending                     |
-| **P1**      | Add integration tests           | Prevent cross-system bugs    | Medium            | ⏳ Pending                     |
-| **P2**      | Refactor polling to event-based | Reliability                  | Medium            | ⏳ Pending                     |
-| **P2**      | Create custom error types       | Better error handling        | Low               | ⏳ Pending                     |
-| **✅ DONE** | Standardize logging             | Production debugging         | Low               | ✅ Complete                    |
+| **P0**      | Remove global state, use DI     | Testability, maintainability | High              | ⏳ Pending  |
+| **P1**      | Add config validation (Zod)     | Fail fast on bad config      | Low               | ⏳ Pending  |
+| **P1**      | Add integration tests           | Prevent cross-system bugs    | Medium            | ⏳ Pending  |
+| **P2**      | Refactor polling to event-based | Reliability                  | Medium            | ⏳ Pending  |
+| **P2**      | Create custom error types       | Better error handling        | Low               | ⏳ Pending  |
+| **✅ DONE** | Standardize logging             | Production debugging         | Low               | ✅ Complete |
 
 ---
 
@@ -370,16 +370,16 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 ### **Progress Overview**
 
-| Phase | Component                | Status      | Errors Fixed | Files | Commits                   |
-| ----- | ------------------------ | ----------- | ------------ | ----- | ------------------------- |
-| 1A    | Basic type fixes         | ✅ DONE     | 42           | 5+    | c433b98, b46d60c          |
-| 1B.1  | Blackjack system         | ✅ DONE     | 69           | 1     | 6101699                   |
-| 1B.2  | Casino/Roulette/Forfeits | ✅ DONE     | 51           | 3     | 477cc28, b6c8f92, f6d6cd8 |
-| 1B.3  | Bio/Engine systems       | ✅ DONE     | 6            | 2     | 988f34c                   |
-| 1B.4  | Keypad system            | ✅ DONE     | 9            | 4     | a0718d3                   |
-| 1B.5  | **Hub Logic (NEXT)**     | ⏳ TODO     | ~106         | 3+    | pending                   |
-| 1C    | Veratown systems         | ⏳ TODO     | ~150         | 20+   | pending                   |
-| 1D    | Test infrastructure      | ⏳ DEFERRED | ~93          | 15+   | pending                   |
+| Phase | Component | Status | Errors Fixed | Files | Commits |
+|-------|-----------|--------|--------------|-------|---------|
+| 1A | Basic type fixes | ✅ DONE | 42 | 5+ | c433b98, b46d60c |
+| 1B.1 | Blackjack system | ✅ DONE | 69 | 1 | 6101699 |
+| 1B.2 | Casino/Roulette/Forfeits | ✅ DONE | 51 | 3 | 477cc28, b6c8f92, f6d6cd8 |
+| 1B.3 | Bio/Engine systems | ✅ DONE | 6 | 2 | 988f34c |
+| 1B.4 | Keypad system | ✅ DONE | 9 | 4 | a0718d3 |
+| 1B.5 | **Hub Logic (NEXT)** | ⏳ TODO | ~106 | 3+ | pending |
+| 1C | Veratown systems | ⏳ TODO | ~150 | 20+ | pending |
+| 1D | Test infrastructure | ⏳ DEFERRED | ~93 | 15+ | pending |
 
 ### **Key Discoveries** (10 error patterns documented)
 
@@ -397,7 +397,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 ### **Immediate Next Session** (Phase 1B.5)
 
 **Priority Files**:
-
 1. administrationLogic.ts (51 errors) - CRITICAL, largest file
 2. maidsPartyNightSinglePlayerAdventure.ts (34 errors)
 3. loggingLogic.ts (16 errors)
@@ -405,7 +404,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 **Estimated Time**: 2-3 hours to reduce 460 → 354 errors
 
 **Related Documentation**:
-
 - Detailed progress: [TYPESCRIPT_STRICT_MIGRATION_PROGRESS.md](TYPESCRIPT_STRICT_MIGRATION_PROGRESS.md)
 - Continuation notes: `/memories/repo/typescript-strict-migration-phase1b-state.md`
 - Session schedule: `/memories/session/ts-strict-comprehensive-review-scope.md`

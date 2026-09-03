@@ -271,7 +271,7 @@ export class AdministrationLogic extends LogicBase {
                 return respond(`Target expected.`);
             }
             const target = this.identifyPlayerInRoom(
-                connection.chatRoom,
+                connection.chatRoom!,
                 argv[0],
             );
             if (typeof target === "string") {
@@ -292,18 +292,18 @@ export class AdministrationLogic extends LogicBase {
                 return respond(`Target expected.`);
             }
             const target = this.identifyPlayerInRoom(
-                connection.chatRoom,
+                connection.chatRoom!,
                 argv[0],
             );
             if (typeof target === "string") {
                 if (/^[0-9]+$/.test(argv[0])) {
                     const MemberNumber = Number.parseInt(argv[0], 10);
-                    if (connection.chatRoom.Ban.includes(MemberNumber)) {
+                    if (connection.chatRoom!.Ban.includes(MemberNumber)) {
                         respond(`Target already banned.`);
                     } else {
                         respond(`Ok, target not in room.`);
                         return connection.ChatRoomUpdate({
-                            Ban: _(connection.chatRoom.Ban.concat(MemberNumber))
+                            Ban: _(connection.chatRoom!.Ban.concat(MemberNumber))
                                 .uniq()
                                 .sort()
                                 .value(),
@@ -365,7 +365,7 @@ export class AdministrationLogic extends LogicBase {
         this.registerSUCommand("list", (connection, argv, sender, respond) => {
             respond(
                 `List of players in room:\n` +
-                    connection.chatRoom.characters
+                    connection.chatRoom!.characters
                         .map(
                             (c) =>
                                 `${c}${c === connection.Player ? " - Me" : ""}`,
@@ -376,7 +376,7 @@ export class AdministrationLogic extends LogicBase {
 
         this.registerSUCommand("promoteme", (connection, argv, sender) => {
             return connection.ChatRoomUpdate({
-                Admin: _.uniq(connection.chatRoom.Admin.concat(sender)),
+                Admin: _.uniq(connection.chatRoom!.Admin.concat(sender)),
             });
         });
 
@@ -770,7 +770,7 @@ export class AdministrationLogic extends LogicBase {
             return;
         }
         const target = this.identifyPlayerInRoom(
-            sender.chatRoom,
+            sender.chatRoom!,
             targetMatch[1],
         );
         if (typeof target === "string") {
@@ -858,7 +858,7 @@ export class AdministrationLogic extends LogicBase {
             target,
             Date.now() + KICKVOTE_PROTECTION_DURATION * 1000,
         );
-        this.startVote(voteName, target.chatRoom, KICKVOTE_DURATION, {
+        this.startVote(voteName, target.chatRoom!, KICKVOTE_DURATION, {
             description: `Vote to ${ban ? "ban" : "kick"} ${target}`,
             announcmentMessage:
                 `${sender} started vote to ${ban ? "ban" : "kick"} ${target}!\n` +
@@ -897,7 +897,7 @@ export class AdministrationLogic extends LogicBase {
                         Date.now() + KICKVOTE_BAN_AVAILABILITY * 1000,
                     );
                 }
-                const target2 = connection.chatRoom.characters.find(
+                const target2 = connection.chatRoom!.characters.find(
                     (c) => c.MemberNumber === target.MemberNumber,
                 );
                 if (target2) {
@@ -909,7 +909,7 @@ export class AdministrationLogic extends LogicBase {
                 } else if (ban) {
                     void connection.ChatRoomUpdate({
                         Ban: _(
-                            connection.chatRoom.Ban.concat(target.MemberNumber),
+                            connection.chatRoom!.Ban.concat(target.MemberNumber),
                         )
                             .uniq()
                             .sort()
@@ -1091,12 +1091,12 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
             ] of this.a_lastActivity.entries()) {
                 if (
                     character.IsRoomAdmin() ||
-                    character.chatRoom.Private ||
+                    character.chatRoom!.Private ||
                     (this.a_settings
                         .inactivityKickEnabledOnlyBelowFreeSlotsCount !==
                         null &&
-                        character.chatRoom.Limit -
-                            character.chatRoom.charactersCount >=
+                        character.chatRoom!.Limit -
+                            character.chatRoom!.charactersCount >=
                             this.a_settings
                                 .inactivityKickEnabledOnlyBelowFreeSlotsCount)
                 )
@@ -1138,7 +1138,7 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
 
     private a_LogHeader(connection: API_Connector): string {
         return (
-            `[A] [${connection.chatRoom.Name}]` +
+            `[A] [${connection.chatRoom!.Name}]` +
             (this.a_settings.logConnectionMemberNumber
                 ? ` [${connection.Player.MemberNumber}]`
                 : "") +
@@ -1226,7 +1226,7 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
                     metric_commands
                         .labels({
                             command,
-                            roomName: event.Sender.chatRoom.Name,
+                            roomName: event.Sender.chatRoom!.Name,
                         })
                         .inc();
                 }
@@ -1315,7 +1315,7 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
         if (this.a_settings.log) {
             const resolvedCharacter =
                 event.sourceMemberNumber !== undefined
-                    ? event.connection.chatRoom.characters.find(
+                    ? event.connection.chatRoom!.characters.find(
                           (c) => c.MemberNumber === event.sourceMemberNumber,
                       )
                     : undefined;
@@ -1341,9 +1341,9 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
         }
 
         metric_players
-            .labels({ roomName: event.character.chatRoom.Name })
+            .labels({ roomName: event.character.chatRoom!.Name })
             .set(
-                event.character.chatRoom.characters.filter((c) => !c.IsBot())
+                event.character.chatRoom!.characters.filter((c) => !c.IsBot())
                     .length,
             );
 
@@ -1381,9 +1381,9 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
         this.a_guard_givePoints(event.character, 10, "entered room");
 
         metric_players
-            .labels({ roomName: event.character.chatRoom.Name })
+            .labels({ roomName: event.character.chatRoom!.Name })
             .set(
-                event.character.chatRoom.characters.filter((c) => !c.IsBot())
+                event.character.chatRoom!.characters.filter((c) => !c.IsBot())
                     .length,
             );
 
@@ -1395,7 +1395,7 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
             const player = event.connection.Player;
             logger.alert(
                 `${this.a_LogHeader(event.connection)} Bot ${player.Name} (${player.MemberNumber}) was ${event.type.toLowerCase()} from room\n` +
-                    `Present room admins: ${event.connection.chatRoom.characters
+                    `Present room admins: ${event.connection.chatRoom!.characters
                         .filter((c) => c.IsRoomAdmin())
                         .map((c) => `${c.Name} (${c.MemberNumber})`)
                         .join(", ")}`,
@@ -1405,12 +1405,12 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
     }
 
     private a_onRoomUpdate(event: LogicEvent_RoomUpdate): boolean {
-        const newInfo = event.connection.chatRoom.ToInfo() as Record<
+        const newInfo = event.connection.chatRoom!.ToInfo() as Record<
             string,
             any
         >;
         const oldInfo = event.oldInfo as Record<string, any>;
-        const resolvedCharacter = event.connection.chatRoom.characters.find(
+        const resolvedCharacter = event.connection.chatRoom!.characters.find(
             (c) => c.MemberNumber === event.sourceMemberNumber,
         );
         const byStr =
@@ -1435,38 +1435,38 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
         let fromBot = false;
         if (event.name === "ItemAdd" && !event.initial) {
             const target =
-                event.character === event.source
+                event.character === event.source!
                     ? "herself"
                     : `${event.character.Name} (${event.character.MemberNumber})`;
-            fromBot = event.source.IsBot();
-            const itemName = `${event.item.Group}:${event.item.Name}`;
-            msg = `${this.a_LogHeader(connection)} ItemAdd ${event.source.Name} (${event.source.MemberNumber}) on ${target}: ${itemName}`;
+            fromBot = event.source!.IsBot();
+            const itemName = `${event.item!.Group}:${event.item!.Name}`;
+            msg = `${this.a_LogHeader(connection)} ItemAdd ${event.source!.Name} (${event.source!.MemberNumber}) on ${target}: ${itemName}`;
         } else if (event.name === "ItemRemove") {
             const target =
-                event.character === event.source
+                event.character === event.source!
                     ? "herself"
                     : `${event.character.Name} (${event.character.MemberNumber})`;
-            fromBot = event.source.IsBot();
-            const itemName = `${event.item.Group}:${event.item.Name}`;
-            msg = `${this.a_LogHeader(connection)} ItemRemove ${event.source.Name} (${event.source.MemberNumber}) from ${target}: ${itemName}`;
+            fromBot = event.source!.IsBot();
+            const itemName = `${event.item!.Group}:${event.item!.Name}`;
+            msg = `${this.a_LogHeader(connection)} ItemRemove ${event.source!.Name} (${event.source!.MemberNumber}) from ${target}: ${itemName}`;
         } else if (event.name === "ItemChange" && !event.initial) {
             const target =
-                event.character === event.source
+                event.character === event.source!
                     ? "herself"
                     : `${event.character.Name} (${event.character.MemberNumber})`;
-            fromBot = event.source.IsBot();
+            fromBot = event.source!.IsBot();
             let itemName =
-                `${event.item.Group}:${event.item.Name}` +
-                (event.item.Extended?.Type != null
-                    ? `:${event.item.Extended.Type}`
+                `${event.item!.Group}:${event.item!.Name}` +
+                (event.item!.Extended?.Type != null
+                    ? `:${event.item!.Extended.Type}`
                     : "");
             if (
-                event.item.Asset.AllowExpression ||
-                event.item.AssetGroup.AllowExpression
+                event.item!.Asset.AllowExpression ||
+                event.item!.AssetGroup.AllowExpression
             ) {
-                itemName += ":" + (event.item.GetExpression() ?? "null");
+                itemName += ":" + (event.item!.GetExpression() ?? "null");
             }
-            msg = `${this.a_LogHeader(connection)} ItemChange ${event.source.Name} (${event.source.MemberNumber}) on ${target}: ${itemName}`;
+            msg = `${this.a_LogHeader(connection)} ItemChange ${event.source!.Name} (${event.source!.MemberNumber}) on ${target}: ${itemName}`;
         } else if (event.name === "PoseChanged" && !event.character.IsBot()) {
             logger.debug(
                 `${this.a_LogHeader(connection)} PoseChange ${event.character.Name} (${event.character.MemberNumber}): ` +
@@ -1489,18 +1489,18 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
         //#region Room guard
         if (event.name === "ItemAdd" || event.name === "ItemRemove") {
             if (
-                event.character !== event.source &&
-                !event.character.IsLoverOf(event.source) &&
-                !event.character.IsOwnedBy(event.source) &&
-                !event.source.IsOwnedBy(event.character) &&
-                !event.character.WhiteList.includes(event.source.MemberNumber)
+                event.character !== event.source! &&
+                !event.character.IsLoverOf(event.source!) &&
+                !event.character.IsOwnedBy(event.source!) &&
+                !event.source!.IsOwnedBy(event.character) &&
+                !event.character.WhiteList.includes(event.source!.MemberNumber)
             ) {
                 let points = 1;
-                if (event.item.AssetGroup.Category === "Item") {
+                if (event.item!.AssetGroup.Category === "Item") {
                     points = event.name === "ItemAdd" ? 3 : 2;
                 }
                 this.a_guard_givePoints(
-                    event.source,
+                    event.source!,
                     points,
                     _.snakeCase(event.name),
                 );
@@ -1559,7 +1559,7 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
                         (response) =>
                             event.connection.AccountBeep(
                                 event.beep.MemberNumber,
-                                null,
+                                "",
                                 response,
                             ),
                     );
@@ -1581,7 +1581,7 @@ Please be nice to other people that want to just enjoy themselves. Thank you!
                     : `; dict: ${JSON.stringify(event.Dictionary)}`;
             const tc =
                 event.Target !== null &&
-                connection.chatRoom.characters.find(
+                connection.chatRoom!.characters.find(
                     (c) => c.MemberNumber === event.Target,
                 );
             const target =
