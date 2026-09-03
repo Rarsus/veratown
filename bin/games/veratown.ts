@@ -227,7 +227,7 @@ export class Veratown {
                     this.conn,
                     this.commandParser,
                     unifiedStore,
-                    effectiveDareConfig,
+                    effectiveDareConfig as any,
                 );
             });
             this.mapStore = new VeratownMapStore(db);
@@ -295,7 +295,7 @@ export class Veratown {
                     this.locationStore,
                     undefined,
                     global.unifiedCharacterStore ||
-                        new UnifiedCharacterStore(db),
+                        new UnifiedCharacterStore(db!),
                 ),
         );
 
@@ -347,10 +347,9 @@ export class Veratown {
         });
         // Keep freeandleave as backward compat alias
         this.commandParser.register("freeandleave", (sender, msg, args) =>
-            this.commandParser.handle(this.conn, sender, {
-                Type: "chat",
-                Content: "/bot release",
-            } as any),
+            (async () => {
+                await this.releaseSystem?.executeRelease(sender);
+            })(),
         );
         this.commandParser.register("changelog", this.onCommandChangelog);
 
@@ -503,7 +502,7 @@ export class Veratown {
             const storedMapData = await this.mapStore?.load();
             const mapData =
                 storedMapData ?? JSON.parse(decompressFromBase64(MAP));
-            this.conn.chatRoom.map.setMapFromData(mapData);
+            this.conn.chatRoom!.map.setMapFromData(mapData);
         } catch (e) {
             logger.warn("Map data not loaded, using fallback", {
                 error: String(e),
@@ -595,8 +594,7 @@ export class Veratown {
     }
 
     public getFurnitureInteractionSystem():
-        | FurnitureInteractionSystem
-        | undefined {
+        FurnitureInteractionSystem | undefined {
         return this.furnitureInteractionSystem;
     }
 
