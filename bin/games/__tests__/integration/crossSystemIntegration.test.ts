@@ -11,7 +11,9 @@
  * 4. Audit trail captures cross-system events
  */
 
+// @ts-ignore - jest types not available
 import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+declare const jest: any;
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongoClient, Db } from "mongodb";
 import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
@@ -99,7 +101,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "dare",
                 data: { bondageItems: ["Cuffs"] },
-            });
+            } as any);
 
             // Give event loop time to process
             await new Promise((resolve) => setTimeout(resolve, 100));
@@ -125,7 +127,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "dare",
                 data: { removedItems: ["Cuffs"] },
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -154,7 +156,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "veratown",
                 data: { cageId: "cage_1" },
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -182,7 +184,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "veratown",
                 data: { cageId: "cage_1" },
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -212,7 +214,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "casino",
                 data: { amount: 500 },
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -250,7 +252,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "casino",
                 data: { amount: 50 },
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -269,6 +271,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
             await unifiedStore.recordAuditEntry(
                 memberNumber,
                 "cross_system_bondage_applied",
+                {},
                 999,
             );
 
@@ -297,7 +300,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "unified",
                 data: {},
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -332,7 +335,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                     timestamp: Date.now(),
                     source: "dare",
                     data: {},
-                });
+                } as any);
             }).not.toThrow();
         });
 
@@ -353,7 +356,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                     timestamp: Date.now(),
                     source: "dare",
                     data: {},
-                });
+                } as any);
             }).not.toThrow();
 
             expect(() => {
@@ -365,7 +368,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                     timestamp: Date.now(),
                     source: "veratown",
                     data: {},
-                });
+                } as any);
             }).not.toThrow();
         });
     });
@@ -394,7 +397,7 @@ describe("Cross-System Integration (Phase 2.3)", () => {
                 timestamp: Date.now(),
                 source: "test",
                 data: {},
-            });
+            } as any);
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 
