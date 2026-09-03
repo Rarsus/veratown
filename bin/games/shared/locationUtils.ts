@@ -70,7 +70,7 @@ export async function loadRegionFromDatabase(
             typeof doc.data.bottomRightY === "number"
         ) {
             return {
-                TopLeft: { X: doc.x, Y: doc.y },
+                TopLeft: { X: doc.x!, Y: doc.y! },
                 BottomRight: {
                     X: doc.data.bottomRightX,
                     Y: doc.data.bottomRightY,

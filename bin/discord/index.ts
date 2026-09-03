@@ -66,8 +66,6 @@ export {
 export {
     handleBotRestartCommand,
     handleBotStopCommand,
-    triggerBotRestart,
-    triggerBotShutdown,
 } from "./commands/botControl";
 
 // Helpers
