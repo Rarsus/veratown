@@ -49,9 +49,7 @@ interface CatDogVibratorAction extends CatDogAction {
 }
 
 type CatDogActionUnion =
-    | CatDogEmoteAction
-    | CatDogBondageAction
-    | CatDogVibratorAction;
+    CatDogEmoteAction | CatDogBondageAction | CatDogVibratorAction;
 
 interface CatDogTileConfig {
     actions: CatDogActionUnion[];
@@ -82,10 +80,13 @@ export class CatDogSystem implements VeratownFeatureSystem {
         private botConn?: API_Connector,
     ) {
         this.logger?.info("[CatDogSystem] Initializing CatDogSystem");
-        this.petTrigger = guardHandler(this.key, this.onCharacterStepOnPet);
+        this.petTrigger = guardHandler(
+            this.key,
+            this.onCharacterStepOnPet as any,
+        );
         this.logger?.info(
             "[CatDogSystem] Trigger handler created:",
-            typeof this.petTrigger,
+            typeof this.petTrigger as any,
         );
         // Store bot's initial position if bot connector is provided
         if (this.botConn) {
@@ -104,7 +105,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
         } catch (e) {
             this.logger?.warn(
                 "[CatDogSystem] Could not store bot initial position",
-                e,
+                e as any,
             );
         }
     }
@@ -126,11 +127,11 @@ export class CatDogSystem implements VeratownFeatureSystem {
             );
             for (const tile of this.tiles) {
                 this.logger?.info(
-                    `[CatDogSystem] Removing trigger at (${tile.location.x}, ${tile.location.y})`,
+                    `[CatDogSystem] Removing trigger at (${tile.location.x!}, ${tile.location.y!})`,
                 );
-                this.conn.chatRoom.map.removeTileTrigger(
-                    tile.location.x,
-                    tile.location.y,
+                this.conn.chatRoom!.map.removeTileTrigger(
+                    tile.location.x!,
+                    tile.location.y!,
                     this.petTrigger,
                 );
             }
@@ -169,10 +170,10 @@ export class CatDogSystem implements VeratownFeatureSystem {
             );
             for (const tile of this.tiles) {
                 this.logger?.info(
-                    `[CatDogSystem] Adding tile trigger at (${tile.location.x}, ${tile.location.y})`,
+                    `[CatDogSystem] Adding tile trigger at (${tile.location.x!}, ${tile.location.y!})`,
                 );
-                this.conn.chatRoom.map.addTileTrigger(
-                    { X: tile.location.x, Y: tile.location.y },
+                this.conn.chatRoom!.map.addTileTrigger(
+                    { X: tile.location.x!, Y: tile.location.y! },
                     this.petTrigger,
                 );
             }
@@ -183,7 +184,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
         } catch (e) {
             this.logger?.error(
                 "[CatDogSystem] Unexpected error during initialization",
-                e,
+                e as any,
             );
         }
     }
@@ -209,7 +210,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     } catch (e) {
                         this.logger?.error(
                             `[CatDogSystem] Failed to parse action for ${location.key}:`,
-                            e,
+                            e as any,
                         );
                     }
                 }
@@ -463,7 +464,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
         } catch (e) {
             this.logger?.error(
                 "[CatDogSystem] Failed to perform emote action",
-                e,
+                e as any,
             );
             // Fallback: try sending emote anyway
             try {
@@ -517,7 +518,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
         } catch (e) {
             this.logger?.warn(
                 `[CatDogSystem] Failed to teleport bot to (${x}, ${y})`,
-                e,
+                e as any,
             );
         }
     }
@@ -552,14 +553,14 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 } catch (e) {
                     this.logger?.error(
                         `[CatDogSystem] Failed to add bondage piece ${piece.group}/${piece.asset}`,
-                        e,
+                        e as any,
                     );
                 }
             }
         } catch (e) {
             this.logger?.error(
                 "[CatDogSystem] Failed to perform bondage action",
-                e,
+                e as any,
             );
         }
     }
@@ -586,8 +587,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 try {
                     const assetName = (item as any)?.Name as string | undefined;
                     const groupName = (item as any)?.Group as
-                        | string
-                        | undefined;
+                        string | undefined;
 
                     // Only check items in these intimate groups
                     if (
@@ -658,7 +658,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     // Skip items that cause errors during inspection
                     this.logger?.debug(
                         "[CatDogSystem] Skipped item during vibrator detection",
-                        e,
+                        e as any,
                     );
                 }
             }
@@ -685,7 +685,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                     } catch (e) {
                         this.logger?.error(
                             "[CatDogSystem] Failed to escalate vibrator:",
-                            e,
+                            e as any,
                         );
                     }
                 }
@@ -697,7 +697,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
         } catch (e) {
             this.logger?.error(
                 "[CatDogSystem] Failed to perform vibrator action",
-                e,
+                e as any,
             );
         }
     }
@@ -711,8 +711,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
             if (!vibratorItem) return;
 
             const assetName = (vibratorItem as any)?.Asset?.Name as
-                | string
-                | undefined;
+                string | undefined;
             this.logger?.info(
                 `[CatDogSystem] Escalating vibrator: ${assetName}`,
             );
@@ -826,7 +825,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 } catch (e) {
                     this.logger?.warn(
                         `[CatDogSystem] Extended.SetType failed:`,
-                        e,
+                        e as any,
                     );
                 }
             }
@@ -853,7 +852,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 } catch (e) {
                     this.logger?.warn(
                         `[CatDogSystem] TypeRecord setProperty failed:`,
-                        e,
+                        e as any,
                     );
                 }
             }
@@ -869,7 +868,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 } catch (e) {
                     this.logger?.warn(
                         `[CatDogSystem] Mode assignment failed:`,
-                        e,
+                        e as any,
                     );
                 }
             }
@@ -885,7 +884,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 } catch (e) {
                     this.logger?.warn(
                         `[CatDogSystem] Intensity assignment failed:`,
-                        e,
+                        e as any,
                     );
                 }
             }
@@ -901,7 +900,7 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 } catch (e) {
                     this.logger?.warn(
                         `[CatDogSystem] Direct Property assignment failed:`,
-                        e,
+                        e as any,
                     );
                 }
             }
@@ -912,7 +911,10 @@ export class CatDogSystem implements VeratownFeatureSystem {
                 );
             }
         } catch (e) {
-            this.logger?.error("[CatDogSystem] Error in escalateVibrator:", e);
+            this.logger?.info(
+                "[CatDogSystem] Error in escalateVibrator:",
+                e as any,
+            );
         }
     }
 }
