@@ -187,9 +187,9 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
         if (character !== null) {
             // when there is a player, position the bot next to her
             await this.conn.Player.MoveToPos(
-                this.conn.Player.ChatRoomPosition < character.ChatRoomPosition
-                    ? character.ChatRoomPosition - 1
-                    : character.ChatRoomPosition,
+                this.conn.Player.ChatRoomPosition! < character.ChatRoomPosition!
+                    ? character.ChatRoomPosition! - 1
+                    : character.ChatRoomPosition!,
             );
         } else {
             // when there is no player, reset her stored outfit
@@ -422,7 +422,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
 
         if (
             this.player === null &&
-            !connection.chatRoom.Admin.includes(character.MemberNumber)
+            !connection.chatRoom!.Admin.includes(character.MemberNumber)
         ) {
             await this.conn.ChatRoomUpdate({
                 Limit: 10,
@@ -446,7 +446,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
             this.player = character;
             await this.player.Demote();
             this.resetTimeoutTimer("afkwarn");
-        } else if (connection.chatRoom.Admin.includes(character.MemberNumber)) {
+        } else if (connection.chatRoom!.Admin.includes(character.MemberNumber)) {
             // just a little easter egg - could be removed
             if (SUPERUSERS.includes(character.MemberNumber)) {
                 this.conn.SendMessage(
@@ -725,7 +725,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     );
                     this.changeBotAppearanceTo("trixie", this.conn2);
                     this.conn2.Player.SetExpression("Mouth", "Smirk");
-                    await this.conn2.ChatRoomJoin(this.conn.chatRoom.Name);
+                    await this.conn2.ChatRoomJoin(this.conn.chatRoom!.Name);
                     this.conn.SendMessage(
                         "Chat",
                         `Head Maid Karina: Trixie, get ${sender.Name} ready for the party! You know the expected outfit.`,
@@ -792,10 +792,10 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     );
                     await wait(4000);
                     await this.conn2.Player.MoveToPos(
-                        this.conn2.Player.ChatRoomPosition <
-                            sender.ChatRoomPosition
-                            ? sender.ChatRoomPosition
-                            : sender.ChatRoomPosition + 1,
+                        this.conn2.Player.ChatRoomPosition! <
+                            sender.ChatRoomPosition!
+                            ? sender.ChatRoomPosition!
+                            : sender.ChatRoomPosition! + 1,
                     );
                     await wait(1000);
                     // Note: Assets.find will be replaced soon
@@ -834,10 +834,10 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                 } else if (msg.includes("shake")) {
                     this.printChatSeparator();
                     await this.conn2.Player.MoveToPos(
-                        this.conn2.Player.ChatRoomPosition <
-                            sender.ChatRoomPosition
-                            ? sender.ChatRoomPosition
-                            : sender.ChatRoomPosition + 1,
+                        this.conn2.Player.ChatRoomPosition! <
+                            sender.ChatRoomPosition!
+                            ? sender.ChatRoomPosition!
+                            : sender.ChatRoomPosition! + 1,
                     );
                     this.conn.SendMessage(
                         "Emote",
@@ -885,7 +885,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     this.conn.SendMessage(
                         "Activity",
                         "ChatOther-ItemButt-SpankItem",
-                        null,
+                        undefined,
                         [
                             {
                                 Tag: "SourceCharacter",
@@ -969,7 +969,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     return;
                 } else if (msg.includes("go") && msg.includes("and clean")) {
                     /* trigger a spank action - no sound for now and not deemed worth using due to that
-					this.conn.SendMessage("Activity", "ChatOther-ItemButt-Spank", null, [
+					this.conn.SendMessage("Activity", "ChatOther-ItemButt-Spank", undefined, [
 						{ Tag: "SourceCharacter", Text: "Head Maid Karina", MemberNumber: this.conn.Player.MemberNumber },
 						{ Tag: "TargetCharacter", Text: sender.Name, MemberNumber: sender.MemberNumber },
 						{ Tag: "ActivityGroup", Text: "ItemButt" },
@@ -1028,7 +1028,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                         `*Over the course of the next minutes, Trixie arranges a careful selection of various kinky items ` +
                             `on ${sender.Name}'s tray. Most notably, a few dildos and plugs of various sizes, as well as vibrating toys, a flogger and even some clamps.`,
                     );
-                    if (tray !== null && tray.Extended !== null) {
+                    if (tray !== null && tray.Extended !== null && tray.Extended !== undefined) {
                         tray.Extended.SetType("Toys");
                     }
                     this.conn.SendMessage(
@@ -1108,7 +1108,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     this.conn.SendMessage(
                         "Activity",
                         "ChatOther-ItemButt-SpankItem",
-                        null,
+                        undefined,
                         [
                             {
                                 Tag: "SourceCharacter",
@@ -1152,7 +1152,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     this.conn.SendMessage(
                         "Activity",
                         "ChatOther-ItemButt-SpankItem",
-                        null,
+                        undefined,
                         [
                             {
                                 Tag: "SourceCharacter",
@@ -1207,7 +1207,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                         this.conn2,
                     );
                     await this.toggleBotVisibility(false);
-                    await this.conn2.ChatRoomJoin(this.conn.chatRoom.Name);
+                    await this.conn2.ChatRoomJoin(this.conn.chatRoom!.Name);
                     this.conn2.Player.SetExpression("Blush", "Medium");
                     this.conn2.Player.SetExpression("Eyebrows", "Soft");
                     this.conn2.Player.Appearance.AddItem(
@@ -1215,7 +1215,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                     );
                     this.changeBotAppearanceTo("mistressEntrance", this.conn);
                     await this.conn2.Player.MoveToPos(
-                        this.conn.Player.ChatRoomPosition + 1,
+                        this.conn.Player.ChatRoomPosition! + 1,
                     );
                     this.printChatSeparator();
                     this.conn.SendMessage(
@@ -1547,7 +1547,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                 `You can whisper any feedback (including bug reports) for us to the main bot, by starting your message with '!' (eg. !I would like...)\n` +
                 `This bot was created using Jomshir's BotAPI. If you would like to make a bot room similar to this one, you can find` +
                 `all necessary info on the Bondage Club Scripting Community Discord: https://discord.gg/SHJMjEh9VH`;
-            const admins = this.conn.chatRoom.characters.filter(
+            const admins = this.conn.chatRoom!.characters.filter(
                 (c) => c.IsRoomAdmin() && !c.IsBot(),
             );
             if (admins.length > 0) {
@@ -1694,11 +1694,11 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
         } else if (
             event.name === "ItemChange" &&
             event.character === this.player &&
-            event.item.Group === "Mouth"
+            event.item!.Group === "Mouth"
         ) {
             if (
                 ["HalfOpen", "Open", "Ahegao", "Moan"].includes(
-                    event.item.GetExpression(),
+                    event.item!.GetExpression() ?? "",
                 ) &&
                 this.storyProgress === StoryProgress.introduction &&
                 event.character.Appearance.InventoryGet("ItemMouth") === null
@@ -1835,7 +1835,7 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
                 ...SUPERUSERS,
             ],
             Limit: _.clamp(
-                this.conn.chatRoom.characters.filter((c) => c.IsRoomAdmin())
+                this.conn.chatRoom!.characters.filter((c) => c.IsRoomAdmin())
                     .length + 1,
                 2,
                 10,
@@ -2036,20 +2036,20 @@ export class MaidsPartyNightSinglePlayerAdventure extends LoggingLogic {
             this.conn.Player.SetInvisible(true);
             if (this.player !== null) {
                 await this.conn.Player.MoveToPos(
-                    this.conn.Player.ChatRoomPosition <
-                        this.player.ChatRoomPosition
-                        ? this.player.ChatRoomPosition
-                        : this.player.ChatRoomPosition + 1,
+                    this.conn.Player.ChatRoomPosition! <
+                        this.player.ChatRoomPosition!
+                        ? this.player.ChatRoomPosition!
+                        : this.player.ChatRoomPosition! + 1,
                 );
             }
         } else {
             this.conn.Player.SetInvisible(false);
             if (this.player !== null) {
                 await this.conn.Player.MoveToPos(
-                    this.conn.Player.ChatRoomPosition <
-                        this.player.ChatRoomPosition
-                        ? this.player.ChatRoomPosition - 1
-                        : this.player.ChatRoomPosition,
+                    this.conn.Player.ChatRoomPosition! <
+                        this.player.ChatRoomPosition!
+                        ? this.player.ChatRoomPosition! - 1
+                        : this.player.ChatRoomPosition!,
                 );
             }
         }
