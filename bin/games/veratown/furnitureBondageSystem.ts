@@ -18,7 +18,6 @@ import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { createLogger } from "../../logging";
-import { createLogger } from "../../logging";
 
 interface BondageRestraint {
     group: string;
@@ -101,7 +100,7 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
     public constructor(private conn: API_Connector) {
         this.furnitureTrigger = guardHandler(
             this.key,
-            this.onCharacterEnterFurniture,
+            this.onCharacterEnterFurniture as any,
         );
     }
 
@@ -119,7 +118,7 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
 
         // Check for !bindme command
         if (content.toLowerCase() === "!bindme") {
-            const character = this.conn.chatRoom.getCharacter(sender);
+            const character = this.conn.chatRoom!.getCharacter(sender);
             if (!character) return;
 
             // Find if character is on a furniture tile
@@ -157,9 +156,9 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
         try {
             // Clean up old triggers
             for (const tile of this.tiles) {
-                this.conn.chatRoom.map.removeTileTrigger(
-                    tile.location.x,
-                    tile.location.y,
+                this.conn.chatRoom!.map.removeTileTrigger(
+                    tile.location.x!,
+                    tile.location.y!,
                     this.furnitureTrigger,
                 );
             }
@@ -186,8 +185,8 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
 
             // Register new triggers
             for (const tile of this.tiles) {
-                this.conn.chatRoom.map.addTileTrigger(
-                    { X: tile.location.x, Y: tile.location.y },
+                this.conn.chatRoom!.map.addTileTrigger(
+                    { X: tile.location.x!, Y: tile.location.y! },
                     this.furnitureTrigger,
                 );
             }
@@ -348,7 +347,7 @@ export class FurnitureBondageSystem implements VeratownFeatureSystem {
 
             furniture?.SetCraft({
                 Name: tile.config.furnitureAsset,
-                Description: tile.config.craftDescription,
+                Description: tile.config.craftDescription ?? "",
             });
 
             // Apply furniture-specific properties
