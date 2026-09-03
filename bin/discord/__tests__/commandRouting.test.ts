@@ -115,7 +115,7 @@ function createMockInteraction(
                 name === "action" ? "add" : `test-${name}`,
         } as any,
         ...overrides,
-    } as CommandInteraction<CacheType>;
+    } as any as CommandInteraction<CacheType>;
 }
 
 /**
@@ -138,7 +138,7 @@ function createMockDb(): Partial<Db> {
         admin: () => ({
             ping: async () => ({}),
         }),
-    };
+    } as any as Partial<Db>;
 }
 
 /**
@@ -175,7 +175,7 @@ test("Command handlers return CommandResult with success flag", async () => {
     ];
 
     for (const handler of handlers) {
-        const result = await handler(interaction, context);
+        const result = await (handler as any)(interaction, context);
         assert(
             typeof result === "object",
             `${handler.name} should return an object`,
@@ -246,7 +246,7 @@ test("Public commands work without admin privileges", async () => {
     ];
 
     for (const handler of publicHandlers) {
-        const result = await handler(interaction, context);
+        const result = await (handler as any)(interaction, context);
         // Should not deny permission
         assert(
             !result.message.includes("permission"),
@@ -261,7 +261,7 @@ test("Commands handle missing interaction options gracefully", async () => {
             getInteger: () => null,
             getString: () => null,
         } as any,
-    });
+    } as any);
     const context = createCommandContext();
 
     // Commands with required parameters should fail gracefully
@@ -282,7 +282,7 @@ test("Command context includes correct user and guild info", () => {
 });
 
 test("formatResultAsEmbed handles success and error results", async () => {
-    const { formatResultAsEmbed } = await import("../utils/discordHelpers");
+    const { formatResultAsEmbed } = await import("../utils/discordHelpers.js");
 
     const successResult: CommandResult = {
         success: true,
