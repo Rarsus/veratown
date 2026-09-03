@@ -99,7 +99,12 @@ describe("Phase 5: Full Migration to UnifiedCharacterStore", () => {
             await store.updateChips(3001, -100, "bet");
 
             // Dare operation
-            await store.applyBondage(3001, "forfeit_strip", undefined, 1);
+            await store.applyBondage(
+                3001,
+                "forfeit_strip",
+                Date.now() + 3600000,
+                1,
+            );
 
             // Verify both systems' states
             const casinoView = await store.getCasinoView(3001);
@@ -210,7 +215,12 @@ describe("Phase 5: Full Migration to UnifiedCharacterStore", () => {
             await store.updateChips(4001, 150, "win");
 
             // Dare operations
-            await store.applyBondage(4001, "forfeit_strip", undefined, 1);
+            await store.applyBondage(
+                4001,
+                "forfeit_strip",
+                Date.now() + 3600000,
+                1,
+            );
 
             // Verify state
             const casinoView = await store.getCasinoView(4001);
@@ -243,7 +253,7 @@ describe("Phase 5: Full Migration to UnifiedCharacterStore", () => {
             await store.getProfile(4003);
 
             // Record cage entry
-            await store.recordCageEntry(4003, "Cell_A1");
+            await store.recordCageEntry(4003, "Cell_A1", 3600000);
 
             // Get view to verify entry recorded
             const veratownView = await store.getVeratownView(4003);
@@ -302,8 +312,8 @@ describe("Phase 5: Full Migration to UnifiedCharacterStore", () => {
             await store.getProfile(6001);
 
             await store.updateChips(6001, 100, "bonus");
-            await store.applyBondage(6001, "test", undefined, 1);
-            await store.recordCageEntry(6001, "Cell_A");
+            await store.applyBondage(6001, "test", Date.now() + 3600000, 1);
+            await store.recordCageEntry(6001, "Cell_A", 3600000);
 
             const profile = await store.getProfile(6001);
             assert(profile.updatedAt);
@@ -314,7 +324,7 @@ describe("Phase 5: Full Migration to UnifiedCharacterStore", () => {
             await store.getProfile(6002);
 
             await store.updateChips(6002, 100, "bonus");
-            await store.applyBondage(6002, "forfeit", undefined, 1);
+            await store.applyBondage(6002, "forfeit", Date.now() + 3600000, 1);
             await store.removeBondage(6002, "forfeit");
 
             const profile = await store.getProfile(6002);
