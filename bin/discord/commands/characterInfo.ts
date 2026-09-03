@@ -36,6 +36,14 @@ export async function handleCharacterInfoCommand(
     context: CommandContext,
 ): Promise<CommandResult> {
     try {
+        // Type guard for ChatInputCommandInteraction
+        if (!interaction.isChatInputCommand()) {
+            return {
+                success: false,
+                message: "Invalid interaction type",
+            };
+        }
+
         const characterName = interaction.options.getString("character");
 
         if (!characterName) {

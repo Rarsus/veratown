@@ -17,9 +17,9 @@
  * Handle player queries, blacklist management, and state updates via Discord
  */
 
-import type { CommandInteraction, EmbedBuilder } from "discord.js";
-import { EmbedAssets } from "discord.js";
+import type { CommandInteraction } from "discord.js";
 import type { Db } from "mongodb";
+import { ObjectId } from "mongodb";
 import type { PlayerInfo, CommandResult, CommandContext } from "../types";
 import { createLogger } from "../../logging";
 
@@ -37,6 +37,14 @@ export async function handlePlayerListCommand(
     context: CommandContext,
 ): Promise<CommandResult> {
     try {
+        // Type guard for ChatInputCommandInteraction
+        if (!interaction.isChatInputCommand()) {
+            return {
+                success: false,
+                message: "Invalid interaction type",
+            };
+        }
+
         // Check admin permission
         if (!context.isAdmin) {
             return {
@@ -139,6 +147,14 @@ export async function handlePlayerInfoCommand(
     context: CommandContext,
 ): Promise<CommandResult> {
     try {
+        // Type guard for ChatInputCommandInteraction
+        if (!interaction.isChatInputCommand()) {
+            return {
+                success: false,
+                message: "Invalid interaction type",
+            };
+        }
+
         const playerQuery = interaction.options.getString("player");
 
         if (!playerQuery) {
@@ -156,9 +172,18 @@ export async function handlePlayerInfoCommand(
         const collection = context.db.collection("players");
 
         // Try to find by name or ID
-        const player = await collection.findOne({
-            $or: [{ name: playerQuery }, { _id: playerQuery }],
-        });
+        let player;
+        try {
+            player = await collection.findOne({
+                $or: [
+                    { name: playerQuery },
+                    { _id: new ObjectId(playerQuery) },
+                ],
+            });
+        } catch {
+            // playerQuery is not a valid ObjectId, try just by name
+            player = await collection.findOne({ name: playerQuery });
+        }
 
         if (!player) {
             return {
@@ -234,6 +259,14 @@ export async function handlePlayerBlacklistCommand(
     context: CommandContext,
 ): Promise<CommandResult> {
     try {
+        // Type guard for ChatInputCommandInteraction
+        if (!interaction.isChatInputCommand()) {
+            return {
+                success: false,
+                message: "Invalid interaction type",
+            };
+        }
+
         // Check admin permission
         if (!context.isAdmin) {
             return {
@@ -271,9 +304,18 @@ export async function handlePlayerBlacklistCommand(
         const collection = context.db.collection("players");
 
         // Find player
-        const player = await collection.findOne({
-            $or: [{ name: playerQuery }, { _id: playerQuery }],
-        });
+        let player;
+        try {
+            player = await collection.findOne({
+                $or: [
+                    { name: playerQuery },
+                    { _id: new ObjectId(playerQuery) },
+                ],
+            });
+        } catch {
+            // playerQuery is not a valid ObjectId, try just by name
+            player = await collection.findOne({ name: playerQuery });
+        }
 
         if (!player) {
             return {

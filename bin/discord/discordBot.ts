@@ -23,10 +23,23 @@ import {
     REST,
     Routes,
     CommandInteraction,
+    Guild,
 } from "discord.js";
 import type { Db } from "mongodb";
-import type { DiscordBotConfig } from "./types";
+import type { DiscordBotConfig, CommandContext } from "./types";
 import { createLogger } from "../logging";
+import { formatResultAsEmbed } from "./utils/discordHelpers";
+import { handlePlayerListCommand } from "./commands/playerManagement";
+import { handlePlayerInfoCommand } from "./commands/playerManagement";
+import { handlePlayerBlacklistCommand } from "./commands/playerManagement";
+import { handleBotStatusCommand } from "./commands/diagnostics";
+import { handleDiagnosticsCommand } from "./commands/diagnostics";
+import { handleLogsCommand } from "./commands/diagnostics";
+import { handleCharacterInfoCommand } from "./commands/characterInfo";
+import { handleActivePlayersCommand } from "./commands/characterInfo";
+import { handleCharacterSearchCommand } from "./commands/characterInfo";
+import { handleBotRestartCommand } from "./commands/botControl";
+import { handleBotStopCommand } from "./commands/botControl";
 
 const logger = createLogger("Discord:Bot");
 
@@ -35,6 +48,12 @@ const logger = createLogger("Discord:Bot");
  */
 let discordClient: Client<boolean> | undefined;
 let isInitialized = false;
+
+/**
+ * Global database and config for command handler access
+ */
+let globalDb: Db | undefined;
+let globalConfig: DiscordBotConfig | undefined;
 
 /**
  * Initialize the Discord bot client and register slash commands
@@ -98,6 +117,10 @@ export async function initializeDiscordBot(
             ],
         });
 
+        // Store config and db globally for handler access
+        globalConfig = config;
+        globalDb = db;
+
         // Set up event listeners
         discordClient.once("ready", (): void => {
             const readyClient = discordClient as Client<true>;
@@ -115,6 +138,15 @@ export async function initializeDiscordBot(
 
         discordClient.on("warn", (message: string): void => {
             logger.warn("Discord client warning", { message });
+        });
+
+        // Set up interaction handler for slash commands
+        discordClient.on("interactionCreate", async (interaction) => {
+            if (!interaction.isCommand()) {
+                return;
+            }
+            const cmd = interaction as CommandInteraction;
+            await handleCommandInteraction(cmd, db, config);
         });
 
         // Login to Discord
@@ -261,44 +293,184 @@ async function registerSlashCommands(
 }
 
 /**
+ * Check if user is an admin based on their roles
+ *
+ * @param interaction Discord interaction
+ * @param adminRoles Admin role IDs to check
+ * @returns true if user has an admin role
+ */
+function isUserAdmin(
+    interaction: CommandInteraction,
+    adminRoles: string[],
+): boolean {
+    if (!interaction.inGuild()) {
+        return false;
+    }
+
+    const member = interaction.member;
+    if (!member || typeof member === "string") {
+        return false;
+    }
+
+    // Check if member has any of the admin roles
+    const memberRoles = member.roles;
+    if (!memberRoles || typeof memberRoles === "string") {
+        return false;
+    }
+
+    if ("cache" in memberRoles) {
+        return memberRoles.cache.some((role) => adminRoles.includes(role.id));
+    }
+
+    return false;
+}
+
+/**
  * Handle a slash command interaction
  *
  * @param interaction Command interaction from Discord
  * @param db MongoDB database instance
+ * @param config Discord bot configuration
  */
 export async function handleCommandInteraction(
     interaction: CommandInteraction,
     db: Db,
+    config: DiscordBotConfig,
 ): Promise<void> {
     try {
         if (!interaction.isCommand()) return;
 
         const commandName = interaction.commandName;
+        const userId = interaction.user.id;
+        const guildId = interaction.guildId;
+
+        // Immediately defer reply for longer operations
+        await interaction.deferReply({ ephemeral: true });
+
         logger.info("Handling command", {
             command: commandName,
             user: interaction.user.username,
-            guild: interaction.guildId,
+            userId,
+            guild: guildId,
         });
 
-        // Dispatch to appropriate handler
-        // (Handlers will be implemented in separate command files)
-        // This is a placeholder for the command routing logic
+        // Build command context
+        const isAdmin = isUserAdmin(
+            interaction,
+            config.discord_admin_roles || [],
+        );
+        const context: CommandContext = {
+            db,
+            userId,
+            guildId: guildId || "",
+            isAdmin,
+        };
 
-        await interaction.reply({
-            content: `Command \`${commandName}\` received. Implementation pending.`,
-            ephemeral: true,
+        // Route to command handler
+        let result;
+        switch (commandName) {
+            case "player-list":
+                result = await handlePlayerListCommand(interaction, context);
+                break;
+
+            case "player-info":
+                result = await handlePlayerInfoCommand(interaction, context);
+                break;
+
+            case "player-blacklist":
+                result = await handlePlayerBlacklistCommand(
+                    interaction,
+                    context,
+                );
+                break;
+
+            case "bot-status":
+                result = await handleBotStatusCommand(interaction, context);
+                break;
+
+            case "diagnostics":
+                result = await handleDiagnosticsCommand(interaction, context);
+                break;
+
+            case "logs":
+                result = await handleLogsCommand(interaction, context);
+                break;
+
+            case "character-info":
+                result = await handleCharacterInfoCommand(interaction, context);
+                break;
+
+            case "active-players":
+                result = await handleActivePlayersCommand(interaction, context);
+                break;
+
+            case "character-search":
+                result = await handleCharacterSearchCommand(
+                    interaction,
+                    context,
+                );
+                break;
+
+            case "bot-restart":
+                result = await handleBotRestartCommand(interaction, context);
+                break;
+
+            case "bot-stop":
+                result = await handleBotStopCommand(interaction, context);
+                break;
+
+            default:
+                logger.warn("Unknown command", { command: commandName });
+                result = {
+                    success: false,
+                    message: `Unknown command: \`${commandName}\``,
+                };
+        }
+
+        logger.info("Command execution result", {
+            command: commandName,
+            success: result.success,
+        });
+
+        // Format response as embed
+        const embed = formatResultAsEmbed(result);
+
+        // Edit deferred reply with result
+        await interaction.editReply({
+            embeds: [embed],
         });
     } catch (error) {
         logger.error("Error handling command interaction", error, {
             command: interaction.isCommand()
                 ? interaction.commandName
                 : "unknown",
+            error_type:
+                error instanceof Error ? error.constructor.name : typeof error,
         });
 
         try {
             if (!interaction.replied) {
                 await interaction.reply({
-                    content: "An error occurred while processing the command.",
+                    embeds: [
+                        formatResultAsEmbed({
+                            success: false,
+                            message:
+                                "An error occurred while processing the command.",
+                            error,
+                        }),
+                    ],
+                    ephemeral: true,
+                });
+            } else if (!interaction.deferred) {
+                await interaction.followUp({
+                    embeds: [
+                        formatResultAsEmbed({
+                            success: false,
+                            message:
+                                "An error occurred while processing the command.",
+                            error,
+                        }),
+                    ],
                     ephemeral: true,
                 });
             }
