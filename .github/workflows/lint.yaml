@@ -9,7 +9,7 @@ jobs:
     build:
         runs-on: ubuntu-latest
         permissions:
-            contents: write
+            contents: read
         steps:
             - uses: actions/setup-node@v4
               with:
@@ -26,19 +26,8 @@ jobs:
               run: |
                   pnpm install --no-verify-store-integrity || (rm -rf pnpm-lock.yaml && pnpm install --no-verify-store-integrity)
 
-            - name: Fix Prettier formatting
-              run: "pnpm run prettier:fix"
-
-            - name: Commit formatting changes
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  git config user.name "github-actions[bot]"
-                  git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git add -A
-                  if ! git diff-index --quiet HEAD --; then
-                    git commit -m "style: auto-fix formatting with prettier"
-                    git push origin HEAD:refs/heads/${{ github.head_ref }}
-                  fi
+            - name: Check Prettier formatting
+              run: "pnpm run prettier"
 
             - name: Install library dependencies
               run: |
@@ -49,3 +38,15 @@ jobs:
 
             - name: Check Types
               run: "pnpm run types"
+
+            - name: Run Phase 1 tests with coverage
+              env:
+                  NODE_V8_COVERAGE: coverage
+              run: "pnpm run test:phase1:coverage"
+
+            - name: Upload Phase 1 coverage
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: phase1-coverage
+                  path: coverage/

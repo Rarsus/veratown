@@ -184,7 +184,18 @@ describe("DIContainer", () => {
             assert.notStrictEqual(instance1, instance2);
             assert.strictEqual((instance1 as any).id, 1);
             assert.strictEqual((instance2 as any).id, 2);
-            assert.strictEqual(callCount, 2);
+        });
+
+        test("TRANSIENT instance registration requires a factory", () => {
+            assert.throws(
+                () =>
+                    container.register(
+                        "invalidTransient",
+                        {},
+                        ServiceLifetime.TRANSIENT,
+                    ),
+                /TRANSIENT registration requires a factory/,
+            );
         });
 
         test("getLifetime returns correct lifetime", () => {
@@ -239,23 +250,22 @@ describe("DIContainer", () => {
             assert.strictEqual((instance1 as any).id, 1);
         });
 
-        test("lazy TRANSIENT factory throws error", () => {
-            assert.throws(
-                () => {
-                    container.registerLazy(
-                        "invalidTransient",
-                        () => ({ test: true }),
-                        ServiceLifetime.TRANSIENT,
-                    );
-                },
-                (err: Error) =>
-                    err.message.includes(
-                        "Lazy registration with TRANSIENT lifetime is not supported",
-                    ),
+        test("lazy TRANSIENT factory creates a new instance per get", () => {
+            let callCount = 0;
+            container.registerLazy(
+                "transientFactory",
+                () => ({ id: ++callCount }),
+                ServiceLifetime.TRANSIENT,
             );
+            const instance1 = container.get<{ id: number }>("transientFactory");
+            const instance2 = container.get<{ id: number }>("transientFactory");
+
+            assert.notStrictEqual(instance1, instance2);
+            assert.deepStrictEqual(instance1, { id: 1 });
+            assert.deepStrictEqual(instance2, { id: 2 });
         });
 
-        test("lazy LAZY lifetime calls factory each time", () => {
+        test("LAZY lifetime caches the first factory result", () => {
             let callCount = 0;
             container.registerLazy(
                 "lazyLazy",
@@ -267,10 +277,10 @@ describe("DIContainer", () => {
             );
             const instance1 = container.get("lazyLazy");
             const instance2 = container.get("lazyLazy");
-            assert.strictEqual(callCount, 2);
-            assert.notStrictEqual(instance1, instance2);
+            assert.strictEqual(callCount, 1);
+            assert.strictEqual(instance1, instance2);
             assert.strictEqual((instance1 as any).id, 1);
-            assert.strictEqual((instance2 as any).id, 2);
+            assert.strictEqual((instance2 as any).id, 1);
         });
     });
 

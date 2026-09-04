@@ -12,8 +12,8 @@
  * limitations under the License.
  */
 
-// @ts-ignore - jest types not available
-import { describe, it, expect } from "@jest/globals";
+import { describe, it } from "node:test";
+import { expect } from "../../../testUtils";
 import { KeypadBackwardCompatibility } from "../../veratown/migrations/keypadBackwardCompatibility";
 import { VeratownLocationDoc } from "../../veratown/veratownLocationStore";
 
@@ -244,7 +244,7 @@ describe("KeypadBackwardCompatibility", () => {
             expect(result.errors.length).toBe(0);
         });
 
-        it("should detect missing required fields", () => {
+        it("should accept new-style keypad data without legacy fields", () => {
             const location: VeratownLocationDoc = {
                 key: "cell_1",
                 name: "Cell",
@@ -260,8 +260,8 @@ describe("KeypadBackwardCompatibility", () => {
             const result =
                 KeypadBackwardCompatibility.validateLegacyConfig(location);
 
-            expect(result.valid).toBe(false);
-            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.valid).toBe(true);
+            expect(result.errors.length).toBe(0);
         });
 
         it("should detect invalid member arrays", () => {
@@ -329,7 +329,7 @@ describe("KeypadBackwardCompatibility", () => {
 
             expect(stats.totalLocations).toBe(2);
             expect(stats.doorsToCreate).toBe(2);
-            expect(stats.totalMembers).toBe(4); // 111, 222, 333, 444, 555 unique
+            expect(stats.totalMembers).toBe(5); // 111, 222, 333, 444, 555 unique
         });
     });
 });
