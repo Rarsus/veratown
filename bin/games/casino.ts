@@ -51,6 +51,7 @@ import {
     GameStateMutationServiceImpl,
 } from "./shared/gameStateMutationService";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
+import { GamePluginMessageFeatureSystem } from "./shared/gamePluginMessageFeatureSystem";
 import { createLogger } from "../logging";
 import { DIContainer, DIServiceKeys } from "../di/container";
 import {
@@ -112,6 +113,7 @@ export class Casino implements GamePlugin {
     private gameRegion?: MapRegion;
     private forfeitService: ForfeitService;
     public readonly venueSystem: CasinoVenueSystem;
+    private readonly messageFeatureSystem: GamePluginMessageFeatureSystem;
 
     /**
      * Phase 5: Direct UnifiedCharacterStore access (no adapters)
@@ -176,6 +178,19 @@ export class Casino implements GamePlugin {
             config?.game === "blackjack"
                 ? new BlackjackGame(conn, this)
                 : new RouletteGame(conn, this);
+        this.messageFeatureSystem = new GamePluginMessageFeatureSystem(
+            this.conn,
+            this.key,
+            this.label,
+            () => this.enabled,
+            async (sender, msg, command, args) => {
+                const handler = this.casinoCommandHandlers[command];
+                if (handler) {
+                    await handler(sender, msg, args);
+                }
+            },
+            async () => {},
+        );
 
         // Register game-specific commands (separate from constructor to follow plugin architecture)
         this.game.registerCommands(this.commandParser!);
@@ -357,6 +372,48 @@ export class Casino implements GamePlugin {
      */
     public registerCommands(router: GamePluginCommandRouter): void {
         router.registerGroup("casino", {
+            help: this.routeCasinoCommand("help"),
+            forfeits: this.routeCasinoCommand("forfeits"),
+            commands: this.routeCasinoCommand("commands"),
+            chips: this.routeCasinoCommand("chips"),
+            addfriend: this.routeCasinoCommand("addfriend"),
+            remove: this.routeCasinoCommand("remove"),
+            buy: this.routeCasinoCommand("buy"),
+            vouchers: this.routeCasinoCommand("vouchers"),
+            give: this.routeCasinoCommand("give"),
+            grant: this.routeCasinoCommand("grant"),
+            close: this.routeCasinoCommand("close"),
+            open: this.routeCasinoCommand("open"),
+            bonus: this.routeCasinoCommand("bonus"),
+            game: this.routeCasinoCommand("game"),
+            escape: this.routeCasinoCommand("escape"),
+        });
+    }
+
+    private routeCasinoCommand =
+        (command: string) =>
+        async (
+            sender: API_Character,
+            msg: BC_Server_ChatRoomMessage,
+            args: string[],
+        ): Promise<void> => {
+            await this.messageFeatureSystem.processCommand(
+                sender,
+                msg,
+                command,
+                args,
+            );
+        };
+
+    private get casinoCommandHandlers(): Record<
+        string,
+        (
+            sender: API_Character,
+            msg: BC_Server_ChatRoomMessage,
+            args: string[],
+        ) => void | Promise<void>
+    > {
+        return {
             help: this.onCommandHelp,
             forfeits: this.onCommandForfeits,
             commands: this.onCommandCommands,
@@ -372,7 +429,7 @@ export class Casino implements GamePlugin {
             bonus: this.onCommandBonusRound,
             game: this.onCommandGame,
             escape: this.onCommandEscape,
-        });
+        };
     }
 
     /**

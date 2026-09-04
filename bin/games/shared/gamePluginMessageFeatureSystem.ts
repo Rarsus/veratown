@@ -17,8 +17,14 @@ import {
     AbstractMessageFeatureSystem,
     type ParsedCommand,
 } from "./abstractMessageFeatureSystem";
-import type { GamePlugin } from "./gamePlugin";
 import type { API_Character, BC_Server_ChatRoomMessage } from "bc-bot";
+
+type GamePluginCommandHandler = (
+    sender: API_Character,
+    msg: BC_Server_ChatRoomMessage,
+    command: string,
+    args: string[],
+) => Promise<void>;
 
 /**
  * Adapter that bridges GamePlugin and AbstractMessageFeatureSystem.
@@ -62,30 +68,45 @@ import type { API_Character, BC_Server_ChatRoomMessage } from "bc-bot";
  * ```
  */
 export class GamePluginMessageFeatureSystem extends AbstractMessageFeatureSystem {
-    private enabledGetter: () => boolean;
-
     constructor(
         conn: API_Connector,
         systemKey: string,
         systemLabel: string,
-        enabledGetter: () => boolean,
+        private readonly enabledGetter: () => boolean,
+        private readonly commandHandler: GamePluginCommandHandler,
+        private readonly disabledHandler?: (
+            sender: API_Character,
+            msg: BC_Server_ChatRoomMessage,
+        ) => Promise<void>,
     ) {
         super(conn, systemKey, systemLabel);
-        this.enabledGetter = enabledGetter;
     }
 
     protected isEnabled(): boolean {
         return this.enabledGetter();
     }
 
-    /**
-     * Must be implemented by subclass or set via composition
-     */
-    protected async handleCommand(
-        _sender: API_Character,
-        _parsed: ParsedCommand,
-        _msg: BC_Server_ChatRoomMessage,
+    public async processCommand(
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        command: string,
+        args: string[],
     ): Promise<void> {
-        throw new Error("handleCommand not implemented");
+        if (!this.isEnabled()) {
+            if (this.disabledHandler) {
+                await this.disabledHandler(sender, msg);
+            }
+            return;
+        }
+
+        await this.processMessage(sender, msg, [command, ...args]);
+    }
+
+    protected async handleCommand(
+        sender: API_Character,
+        parsed: ParsedCommand,
+        msg: BC_Server_ChatRoomMessage,
+    ): Promise<void> {
+        await this.commandHandler(sender, msg, parsed.command, parsed.args);
     }
 }

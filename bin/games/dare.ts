@@ -40,6 +40,7 @@ import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
 import { createLogger } from "../logging";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
+import { GamePluginMessageFeatureSystem } from "./shared/gamePluginMessageFeatureSystem";
 
 // Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
 import { TurnOrderManager } from "./dare/turnOrderManager";
@@ -254,6 +255,7 @@ Game Overview
     private commandHandlers: DareCommandHandlers;
     private effectApplier: DareEffectApplier;
     private mutationService: GameStateMutationService;
+    private readonly messageFeatureSystem: GamePluginMessageFeatureSystem;
 
     /**
      * DARE SYSTEM CONSTRUCTOR - Three-Layer Architecture
@@ -309,6 +311,22 @@ Game Overview
         this.commandHandlers = new DareCommandHandlers();
         this.effectApplier = new DareEffectApplier(this.mutationService);
         this.gameManager = new GameManager(); // Phase 3: Game management
+        this.messageFeatureSystem = new GamePluginMessageFeatureSystem(
+            this.conn,
+            this.key,
+            this.label,
+            () => this.enabled,
+            async (sender, msg, command, args) =>
+                command === "pick"
+                    ? this.onPick(sender, msg, args)
+                    : this.onDare(sender, msg, [command, ...args]),
+            async (sender) => {
+                this.whisper(
+                    sender.MemberNumber,
+                    "The dare game is currently disabled in this room.",
+                );
+            },
+        );
 
         this.ready = this.loadState().catch((e) => {
             this.logger.error("Failed to load persisted state", { error: e });
@@ -338,25 +356,53 @@ Game Overview
      */
     public registerCommands(router: GamePluginCommandRouter): void {
         router.registerGroup("dare", {
-            join: this.onDare,
-            leave: this.onDare,
-            start: this.onDare,
-            turn: this.onDare,
-            draw: this.onDare,
-            pass: this.onDare,
-            forfeit: this.onDare,
-            players: this.onDare,
-            remove: this.onDare,
-            stop: this.onDare,
-            add: this.onDare,
-            list: this.onDare,
-            reset: this.onDare,
-            validate: this.onDare,
-            balancerewards: this.onDare,
-            help: this.onDare,
+            join: this.routeDareCommand("join"),
+            leave: this.routeDareCommand("leave"),
+            start: this.routeDareCommand("start"),
+            turn: this.routeDareCommand("turn"),
+            draw: this.routeDareCommand("draw"),
+            pass: this.routeDareCommand("pass"),
+            forfeit: this.routeDareCommand("forfeit"),
+            players: this.routeDareCommand("players"),
+            remove: this.routeDareCommand("remove"),
+            stop: this.routeDareCommand("stop"),
+            add: this.routeDareCommand("add"),
+            list: this.routeDareCommand("list"),
+            reset: this.routeDareCommand("reset"),
+            validate: this.routeDareCommand("validate"),
+            balancerewards: this.routeDareCommand("balancerewards"),
+            help: this.routeDareCommand("help"),
         });
-        router.registerCommand("pick", this.onPick);
+        router.registerCommand("pick", this.routePickCommand);
     }
+
+    private routeDareCommand =
+        (command: string) =>
+        async (
+            sender: API_Character,
+            msg: BC_Server_ChatRoomMessage,
+            args: string[],
+        ): Promise<void> => {
+            await this.messageFeatureSystem.processCommand(
+                sender,
+                msg,
+                command,
+                args,
+            );
+        };
+
+    private routePickCommand = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ): Promise<void> => {
+        await this.messageFeatureSystem.processCommand(
+            sender,
+            msg,
+            "pick",
+            args,
+        );
+    };
 
     /**
      * Get current Dare game status.
