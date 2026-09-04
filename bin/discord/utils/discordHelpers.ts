@@ -36,7 +36,14 @@ export function formatResultAsEmbed(result: CommandResult): EmbedBuilder {
         .setTimestamp();
 
     if (result.data) {
-        const dataStr = JSON.stringify(result.data, null, 2).substring(0, 1024);
+        // Discord embed field value limit is 1024 characters
+        // Account for code block markers: ```json\n...\n``` (~12 chars)
+        // Reserve 20 chars buffer to be safe
+        const maxLength = 1024 - 32;
+        const dataStr = JSON.stringify(result.data, null, 2).substring(
+            0,
+            maxLength,
+        );
         embed.addFields([
             {
                 name: "Data",
