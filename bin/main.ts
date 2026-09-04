@@ -31,6 +31,8 @@ import {
 } from "./botConnections";
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
+import { DeviceFactory } from "./games/shared/deviceFactory";
+import { GameStateMutationServiceImpl } from "./games/shared/gameStateMutationService";
 import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
 import { initializeLoggingFromEnv, LoggerRegistry } from "./logging";
@@ -402,6 +404,14 @@ async function initializeVeratownGame(
     const unifiedStore = new UnifiedCharacterStore(db);
     container.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, unifiedStore);
     logger.info("UnifiedCharacterStore initialized");
+    container.register(DIServiceKeys.DEVICE_FACTORY, new DeviceFactory());
+    container.register(
+        DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        new GameStateMutationServiceImpl(
+            unifiedStore,
+            unifiedStore.getEventBus(),
+        ),
+    );
 
     // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
     const venueSystem = new CasinoVenueSystem();
