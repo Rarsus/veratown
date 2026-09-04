@@ -27,6 +27,11 @@ test("application errors classify, serialize, and redact secrets", () => {
             code: "DATABASE_ERROR",
             message: "database unavailable",
             retryable: true,
+            context: {
+                operation: "save",
+                password: "[REDACTED]",
+                nested: { apiKey: "[REDACTED]" },
+            },
         },
     });
 });

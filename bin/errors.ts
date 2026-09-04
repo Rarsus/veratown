@@ -91,13 +91,19 @@ export class AppError extends Error {
     }
 
     public toResponse(): {
-        error: { code: ErrorCode; message: string; retryable: boolean };
+        error: {
+            code: ErrorCode;
+            message: string;
+            retryable: boolean;
+            context: SafeErrorContext;
+        };
     } {
         return {
             error: {
                 code: this.code,
                 message: this.message,
                 retryable: this.retryable,
+                context: this.context,
             },
         };
     }
