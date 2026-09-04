@@ -4,6 +4,7 @@ import {
     getBotAccountRoles,
     validateBotAccountConfiguration,
 } from "./botConnections";
+import { ValidationError } from "./errors";
 import { ConfigFile } from "./config";
 import { formatWhisperContent, normalizeWhisperContent } from "bc-bot";
 
@@ -56,10 +57,12 @@ test("non-Veratown games do not load Veratown secondary roles", () => {
 });
 
 test("duplicate active bot accounts are rejected", () => {
-    assert.throws(() =>
-        validateBotAccountConfiguration(
-            config({ user2: "MAIN", password2: "password" }),
-        ),
+    assert.throws(
+        () =>
+            validateBotAccountConfiguration(
+                config({ user2: "MAIN", password2: "password" }),
+            ),
+        (error: unknown) => error instanceof ValidationError,
     );
 });
 

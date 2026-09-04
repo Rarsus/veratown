@@ -161,6 +161,7 @@ export class ConfigValidationError extends Error {
                 .join("; ")}`,
         );
         this.name = "ConfigValidationError";
+        Object.setPrototypeOf(this, ConfigValidationError.prototype);
     }
 }
 
@@ -168,4 +169,17 @@ export function validateConfig(config: unknown): ConfigFile {
     const result = configSchema.safeParse(config);
     if (!result.success) throw new ConfigValidationError(result.error.issues);
     return result.data as ConfigFile;
+}
+
+export function configurationIssue(
+    path: string,
+    message: string,
+): ConfigValidationError {
+    return new ConfigValidationError([
+        {
+            code: "custom",
+            path: path ? path.split(".") : [],
+            message,
+        },
+    ]);
 }

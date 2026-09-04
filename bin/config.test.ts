@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ConfigValidationError, validateConfig } from "./config";
+import {
+    ConfigValidationError,
+    configurationIssue,
+    validateConfig,
+} from "./config";
 
 const validConfig = (overrides: Record<string, unknown> = {}) => ({
     user: "main",
@@ -75,4 +79,12 @@ test("environment-specific services require their complete configuration", () =>
             return true;
         },
     );
+});
+
+test("environment parsing failures use the validation error contract", () => {
+    const error = configurationIssue("MONGODB_TLS", "must be a boolean");
+
+    assert.ok(error instanceof ConfigValidationError);
+    assert.deepEqual(error.issues[0]?.path, ["MONGODB_TLS"]);
+    assert.match(error.message, /MONGODB_TLS/);
 });
