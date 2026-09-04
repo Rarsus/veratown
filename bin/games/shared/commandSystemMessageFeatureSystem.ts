@@ -13,7 +13,11 @@
  */
 
 import { API_Connector, CommandParser } from "bc-bot";
-import { AbstractMessageFeatureSystem } from "./abstractMessageFeatureSystem";
+import {
+    AbstractMessageFeatureSystem,
+    type ParsedCommand,
+    type ValidationResult,
+} from "./abstractMessageFeatureSystem";
 import type { API_Character, BC_Server_ChatRoomMessage } from "bc-bot";
 
 /**
@@ -45,6 +49,14 @@ import type { API_Character, BC_Server_ChatRoomMessage } from "bc-bot";
  */
 export abstract class CommandSystemMessageFeatureSystem extends AbstractMessageFeatureSystem {
     protected commandParser: CommandParser;
+    private readonly handlers = new Map<
+        string,
+        (
+            sender: API_Character,
+            msg: BC_Server_ChatRoomMessage,
+            args: string[],
+        ) => Promise<void>
+    >();
 
     constructor(
         conn: API_Connector,
@@ -78,7 +90,8 @@ export abstract class CommandSystemMessageFeatureSystem extends AbstractMessageF
             args: string[],
         ) => Promise<void>,
     ): void {
-        // Wrap handler with processMessage to get all base class functionality
+        const normalizedCommandName = commandName.toLowerCase();
+        this.handlers.set(normalizedCommandName, handler);
         this.commandParser.register(
             commandName,
             async (
@@ -86,17 +99,44 @@ export abstract class CommandSystemMessageFeatureSystem extends AbstractMessageF
                 msg: BC_Server_ChatRoomMessage,
                 args: string[],
             ) => {
-                await this.processMessage(sender, msg, args);
-                // Call the specific handler after validation
-                try {
-                    await handler(sender, msg, args);
-                } catch (error) {
-                    this.logger.error(
-                        `Handler error for ${commandName}`,
-                        error,
-                    );
-                }
+                await this.processMessage(sender, msg, [
+                    normalizedCommandName,
+                    ...args,
+                ]);
             },
         );
+    }
+
+    protected validateCommand(
+        parsed: ParsedCommand,
+        sender: API_Character,
+    ): ValidationResult {
+        const baseValidation = super.validateCommand(parsed, sender);
+        if (!baseValidation.valid) {
+            return baseValidation;
+        }
+
+        if (!this.handlers.has(parsed.command)) {
+            return {
+                valid: false,
+                message: "Unknown command.",
+                errorCode: "UNKNOWN_COMMAND",
+            };
+        }
+
+        return { valid: true };
+    }
+
+    protected async handleCommand(
+        sender: API_Character,
+        parsed: ParsedCommand,
+        msg: BC_Server_ChatRoomMessage,
+    ): Promise<void> {
+        const handler = this.handlers.get(parsed.command);
+        if (!handler) {
+            throw new Error(`Unknown command: ${parsed.command}`);
+        }
+
+        await handler(sender, msg, parsed.args);
     }
 }
