@@ -32,6 +32,9 @@ importers:
       prom-client:
         specifier: ^14.2.0
         version: 14.2.0
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
     devDependencies:
       '@tsconfig/node22':
         specifier: ^22.0.0
@@ -832,6 +835,9 @@ packages:
     resolution: {integrity: sha512-jIH9yLR9wqr0wOS0TpBvo/g/2UgZH5qePVbjgRliiF0BYvOZyaBknKsF+x9Iht0O6sqgnB93rCICdOZFecJuDw==}
     engines: {node: '>=12'}
 
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+
 snapshots:
 
   '@discordjs/builders@1.14.1':
@@ -1489,3 +1495,5 @@ snapshots:
   yauzl@3.4.0:
     dependencies:
       pend: 1.2.0
+
+  zod@4.5.4: {}

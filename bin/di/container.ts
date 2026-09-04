@@ -224,6 +224,7 @@ export class DIContainerError extends Error {
  * These constants prevent typos and provide autocomplete for service names.
  */
 export const DIServiceKeys = {
+    CONFIGURATION: "configuration",
     UNIFIED_CHARACTER_STORE: "unifiedCharacterStore",
     CROSS_SYSTEM_SUBSCRIBERS: "crossSystemSubscribers",
     CASINO_VENUE_SYSTEM: "casinoVenueSystem",
