@@ -142,7 +142,10 @@ export class DIContainer {
         }
 
         // Handle transient lifetime - create new instance each time
-        if (registration.lifetime === ServiceLifetime.TRANSIENT && registration.factory) {
+        if (
+            registration.lifetime === ServiceLifetime.TRANSIENT &&
+            registration.factory
+        ) {
             return registration.factory() as T;
         }
 

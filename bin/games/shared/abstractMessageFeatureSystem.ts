@@ -12,7 +12,11 @@
  * limitations under the License.
  */
 
-import { API_Character, BC_Server_ChatRoomMessage, API_Connector } from "bc-bot";
+import {
+    API_Character,
+    BC_Server_ChatRoomMessage,
+    API_Connector,
+} from "bc-bot";
 import { createLogger } from "../../logging";
 import type { Logger } from "../../logging";
 
@@ -161,8 +165,13 @@ export abstract class AbstractMessageFeatureSystem {
         } catch (error) {
             this.logger.error(`Error processing message from ${sender}`, error);
             const errorMessage =
-                error instanceof Error ? error.message : "An unknown error occurred.";
-            await this.sendMessage(sender.MemberNumber, `Error: ${errorMessage}`);
+                error instanceof Error
+                    ? error.message
+                    : "An unknown error occurred.";
+            await this.sendMessage(
+                sender.MemberNumber,
+                `Error: ${errorMessage}`,
+            );
         }
     }
 
@@ -266,11 +275,15 @@ export abstract class AbstractMessageFeatureSystem {
             this.conn.SendMessage("Whisper", text, targetMemberNumber);
             return { success: true };
         } catch (error) {
-            this.logger.error(`Failed to send message to ${targetMemberNumber}`, error);
+            this.logger.error(
+                `Failed to send message to ${targetMemberNumber}`,
+                error,
+            );
             return {
                 success: false,
                 message: "Failed to send message",
-                error: error instanceof Error ? error : new Error("Unknown error"),
+                error:
+                    error instanceof Error ? error : new Error("Unknown error"),
             };
         }
     }

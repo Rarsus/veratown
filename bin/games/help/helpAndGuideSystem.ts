@@ -13,7 +13,10 @@
  */
 
 import { API_Connector } from "bc-bot";
-import { AbstractMessageFeatureSystem, type ParsedCommand } from "../shared/abstractMessageFeatureSystem";
+import {
+    AbstractMessageFeatureSystem,
+    type ParsedCommand,
+} from "../shared/abstractMessageFeatureSystem";
 import type { API_Character, BC_Server_ChatRoomMessage } from "bc-bot";
 
 /**
@@ -70,7 +73,10 @@ export class HelpAndGuideSystem extends AbstractMessageFeatureSystem {
     ): Promise<void> {
         switch (parsed.command) {
             case "": // No command - show general help
-                await this.sendMessage(sender.MemberNumber, this.getGeneralHelp());
+                await this.sendMessage(
+                    sender.MemberNumber,
+                    this.getGeneralHelp(),
+                );
                 break;
             case "dare":
             case "casino":

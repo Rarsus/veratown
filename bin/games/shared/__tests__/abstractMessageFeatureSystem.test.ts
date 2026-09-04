@@ -14,12 +14,16 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import type { API_Character, BC_Server_ChatRoomMessage, API_Connector } from "bc-bot";
+import type {
+    API_Character,
+    BC_Server_ChatRoomMessage,
+    API_Connector,
+} from "bc-bot";
 import {
     AbstractMessageFeatureSystem,
     type ParsedCommand,
     type PermissionCheckResult,
-} from "./abstractMessageFeatureSystem";
+} from "../abstractMessageFeatureSystem";
 
 /**
  * Mock concrete implementation for testing
@@ -137,7 +141,11 @@ describe("AbstractMessageFeatureSystem", () => {
     beforeEach(() => {
         connector = createMockConnector();
         system = new TestMessageFeatureSystem(connector);
-        adminSystem = new AdminOnlyFeatureSystem(connector);
+        adminSystem = new AdminOnlyFeatureSystem(
+            connector,
+            "admin-test",
+            "Admin Test Feature",
+        );
     });
 
     describe("processMessage", () => {
@@ -171,7 +179,11 @@ describe("AbstractMessageFeatureSystem", () => {
             await adminSystem.processMessage(sender, msg, ["help"]);
 
             const messages = (connector as any).getMessages();
-            assert(messages.some((m) => m.text.includes("permission")));
+            assert(
+                messages.some((m: { text: string }) =>
+                    m.text.includes("admin"),
+                ),
+            );
         });
 
         it("should allow commands when permission check passes", async () => {
@@ -201,7 +213,11 @@ describe("AbstractMessageFeatureSystem", () => {
             await system.processMessage(sender, msg, ["error"]);
 
             const messages = (connector as any).getMessages();
-            assert(messages.some((m) => m.text.includes("Error")));
+            assert(
+                messages.some((m: { text: string }) =>
+                    m.text.includes("Error"),
+                ),
+            );
         });
 
         it("should pass empty args when no arguments provided", async () => {

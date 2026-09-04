@@ -9,7 +9,10 @@ For systems that just need to handle messages with permission checking and comma
 **File:** `HelpAndGuideSystem.ts` (Reference implementation)
 
 ```typescript
-import { AbstractMessageFeatureSystem, type ParsedCommand } from "../shared/abstractMessageFeatureSystem";
+import {
+    AbstractMessageFeatureSystem,
+    type ParsedCommand,
+} from "../shared/abstractMessageFeatureSystem";
 
 export class MySimpleSystem extends AbstractMessageFeatureSystem {
     private _enabled = true;
@@ -39,6 +42,7 @@ export class MySimpleSystem extends AbstractMessageFeatureSystem {
 ```
 
 **Connection to Message Handlers:**
+
 ```typescript
 // In your main game setup
 const helpSystem = new MySimpleSystem(conn);
@@ -89,7 +93,10 @@ export class MyGame implements GamePlugin {
         args: string[],
     ) => {
         // Delegate to message handler
-        await this.messageHandler.processMessage(sender, msg, ["help", ...args]);
+        await this.messageHandler.processMessage(sender, msg, [
+            "help",
+            ...args,
+        ]);
     };
 
     // ... other methods
@@ -140,6 +147,7 @@ export class MyCommandSystem extends CommandSystemMessageFeatureSystem {
 ### Step 1: Identify Message Flow
 
 Analyze your current system:
+
 1. Where do messages enter? (`onMessage`, `onCommand`, etc.)
 2. What permission checks are done?
 3. How is the command parsed?
@@ -151,6 +159,7 @@ Analyze your current system:
 If you have permission checks scattered throughout, consolidate in `validateUserPermission()`:
 
 **Before:**
+
 ```typescript
 private onCommandAdmin = async (sender: API_Character, msg) => {
     if (!sender.IsRoomAdmin()) {
@@ -167,6 +176,7 @@ private onCommandUser = async (sender: API_Character, msg) => {
 ```
 
 **After:**
+
 ```typescript
 protected validateUserPermission(sender: API_Character, args: string[]): PermissionCheckResult {
     // Route-based permission checks
@@ -182,6 +192,7 @@ protected validateUserPermission(sender: API_Character, args: string[]): Permiss
 Move individual command handlers into a single switch statement in `handleCommand()`:
 
 **Before:**
+
 ```typescript
 private onJoin = async (sender, msg, args) => { ... };
 private onLeave = async (sender, msg, args) => { ... };
@@ -189,6 +200,7 @@ private onStart = async (sender, msg, args) => { ... };
 ```
 
 **After:**
+
 ```typescript
 protected async handleCommand(sender, parsed, msg): Promise<void> {
     switch (parsed.command) {
@@ -210,11 +222,13 @@ protected async handleCommand(sender, parsed, msg): Promise<void> {
 Replace direct `sendMessage` calls with the inherited method:
 
 **Before:**
+
 ```typescript
 this.conn.SendMessage("Whisper", "Response text", memberNumber);
 ```
 
 **After:**
+
 ```typescript
 await this.sendMessage(memberNumber, "Response text");
 ```
@@ -224,11 +238,13 @@ await this.sendMessage(memberNumber, "Response text");
 Point all message handlers to `processMessage()`:
 
 **Before:**
+
 ```typescript
 router.registerCommand("help", this.onHelp);
 ```
 
 **After:**
+
 ```typescript
 router.registerCommand("help", async (sender, msg, args) => {
     await this.messageHandler.processMessage(sender, msg, args);
@@ -249,6 +265,7 @@ router.registerCommand("help", async (sender, msg, args) => {
 ### Example 1: Permission Checking
 
 **Before (duplicated in 5 different handlers):** ~50 lines
+
 ```typescript
 private requireAdmin(sender: API_Character, msg): boolean {
     if (!sender.IsRoomAdmin()) {
@@ -260,6 +277,7 @@ private requireAdmin(sender: API_Character, msg): boolean {
 ```
 
 **After:** Uses inherited method from `AbstractMessageFeatureSystem`
+
 ```typescript
 protected validateUserPermission(sender, args) {
     if (this.isAdminCommand(args[0])) {
@@ -274,6 +292,7 @@ protected validateUserPermission(sender, args) {
 ### Example 2: Error Handling
 
 **Before (repeated in every handler):** ~30 lines per handler × 5 handlers = ~150 lines
+
 ```typescript
 private onCommand = async (sender, msg, args) => {
     try {
@@ -290,6 +309,7 @@ private onCommand = async (sender, msg, args) => {
 ```
 
 **After:** Handled by `AbstractMessageFeatureSystem.processMessage()`
+
 ```typescript
 protected async handleCommand(sender, parsed, msg) {
     // Business logic only, error handling inherited
@@ -321,13 +341,13 @@ describe("MySystemMessageFeatureSystem", () => {
         await system.processMessage(sender, msg, ["help"]);
 
         const messages = connector.getMessages();
-        assert(messages.some(m => m.text.includes("help")));
+        assert(messages.some((m) => m.text.includes("help")));
     });
 
     it("should deny admins when permission check fails", async () => {
         system.setPermissionChecker(() => ({
             allowed: false,
-            reason: "Permission denied"
+            reason: "Permission denied",
         }));
 
         const sender = createMockCharacter();
@@ -336,7 +356,7 @@ describe("MySystemMessageFeatureSystem", () => {
         await system.processMessage(sender, msg, ["command"]);
 
         const messages = connector.getMessages();
-        assert(messages.some(m => m.text.includes("Permission denied")));
+        assert(messages.some((m) => m.text.includes("Permission denied")));
     });
 });
 ```
@@ -348,6 +368,7 @@ describe("MySystemMessageFeatureSystem", () => {
 ### Pitfall 1: Forgetting to Call `await`
 
 ❌ **Wrong:**
+
 ```typescript
 protected async handleCommand(sender, parsed, msg) {
     this.sendMessage(sender.MemberNumber, "Hello"); // Missing await
@@ -355,6 +376,7 @@ protected async handleCommand(sender, parsed, msg) {
 ```
 
 ✅ **Right:**
+
 ```typescript
 protected async handleCommand(sender, parsed, msg) {
     await this.sendMessage(sender.MemberNumber, "Hello");
@@ -364,6 +386,7 @@ protected async handleCommand(sender, parsed, msg) {
 ### Pitfall 2: Not Throwing on Errors
 
 ❌ **Wrong:**
+
 ```typescript
 protected async handleCommand(sender, parsed, msg) {
     if (!parsed.command) {
@@ -374,6 +397,7 @@ protected async handleCommand(sender, parsed, msg) {
 ```
 
 ✅ **Right:**
+
 ```typescript
 protected validateCommand(parsed, sender): ValidationResult {
     if (!parsed.command) {
@@ -386,6 +410,7 @@ protected validateCommand(parsed, sender): ValidationResult {
 ### Pitfall 3: Overriding `processMessage` Instead of Extending
 
 ❌ **Wrong:**
+
 ```typescript
 export class MySystem extends AbstractMessageFeatureSystem {
     // Don't override processMessage - override template methods instead
@@ -396,6 +421,7 @@ export class MySystem extends AbstractMessageFeatureSystem {
 ```
 
 ✅ **Right:**
+
 ```typescript
 export class MySystem extends AbstractMessageFeatureSystem {
     // Override specific methods only
@@ -409,15 +435,15 @@ export class MySystem extends AbstractMessageFeatureSystem {
 
 ## Benefits Summary
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Permission Checking | Duplicated in each handler | Centralized in one method |
-| Error Handling | Try-catch in every handler | Handled by base class |
-| Message Sending | Direct API calls | Inherited method |
-| Lines of Code | ~300-400 per system | ~150-200 per system |
-| Testability | Handlers hard to test | Template methods easily testable |
-| Consistency | Different patterns | Uniform approach |
-| New Features | Must be added everywhere | Added once in base class |
+| Aspect              | Before                     | After                            |
+| ------------------- | -------------------------- | -------------------------------- |
+| Permission Checking | Duplicated in each handler | Centralized in one method        |
+| Error Handling      | Try-catch in every handler | Handled by base class            |
+| Message Sending     | Direct API calls           | Inherited method                 |
+| Lines of Code       | ~300-400 per system        | ~150-200 per system              |
+| Testability         | Handlers hard to test      | Template methods easily testable |
+| Consistency         | Different patterns         | Uniform approach                 |
+| New Features        | Must be added everywhere   | Added once in base class         |
 
 ---
 

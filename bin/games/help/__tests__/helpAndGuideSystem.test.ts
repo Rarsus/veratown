@@ -14,7 +14,11 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
-import type { API_Character, BC_Server_ChatRoomMessage, API_Connector } from "bc-bot";
+import type {
+    API_Character,
+    BC_Server_ChatRoomMessage,
+    API_Connector,
+} from "bc-bot";
 import { HelpAndGuideSystem } from "../helpAndGuideSystem";
 
 /**

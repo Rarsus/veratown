@@ -81,13 +81,20 @@ export abstract class CommandSystemMessageFeatureSystem extends AbstractMessageF
         // Wrap handler with processMessage to get all base class functionality
         this.commandParser.register(
             commandName,
-            async (sender: API_Character, msg: BC_Server_ChatRoomMessage, args: string[]) => {
+            async (
+                sender: API_Character,
+                msg: BC_Server_ChatRoomMessage,
+                args: string[],
+            ) => {
                 await this.processMessage(sender, msg, args);
                 // Call the specific handler after validation
                 try {
                     await handler(sender, msg, args);
                 } catch (error) {
-                    this.logger.error(`Handler error for ${commandName}`, error);
+                    this.logger.error(
+                        `Handler error for ${commandName}`,
+                        error,
+                    );
                 }
             },
         );
