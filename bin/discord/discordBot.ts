@@ -271,12 +271,44 @@ async function registerSlashCommands(
             description: "Get system diagnostics (admin only)",
         },
         {
+            name: "logs",
+            description: "View recent bot logs (admin only)",
+            options: [
+                {
+                    name: "limit",
+                    description: "Number of recent log entries to display (default: 10)",
+                    type: 4, // INTEGER
+                    required: false,
+                },
+            ],
+        },
+        {
+            name: "bot-stop",
+            description: "Stop the BC bot (admin only)",
+        },
+        {
             name: "character-info",
             description: "Get information about a character in BC",
             options: [
                 {
                     name: "character",
                     description: "Character name",
+                    type: 3, // STRING
+                    required: true,
+                },
+            ],
+        },
+        {
+            name: "active-players",
+            description: "Get list of currently active players in BC",
+        },
+        {
+            name: "character-search",
+            description: "Search for characters by name or criteria",
+            options: [
+                {
+                    name: "query",
+                    description: "Search query (character name or criteria)",
                     type: 3, // STRING
                     required: true,
                 },
