@@ -195,7 +195,7 @@ export class Casino implements GamePlugin {
         // Register game-specific commands (separate from constructor to follow plugin architecture)
         this.game.registerCommands(this.commandParser!);
 
-        this.forfeitService = new ForfeitService();
+        this.forfeitService = new ForfeitService(this.mutationService);
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
@@ -1153,13 +1153,18 @@ ${forfeitsString()}
         this.setSignColor(["Default", "Default", color]);
     }
 
-    public applyForfeit(bet: Bet): void {
+    public async applyForfeit(bet: Bet): Promise<void> {
         if (!this.conn) return;
         const char = this.conn?.chatRoom?.findMember(bet.memberNumber);
         if (!char) return;
 
         // Use ForfeitService to apply the forfeit
         this.forfeitService.applyForfeit(
+            char,
+            bet.stakeForfeit,
+            this.conn.Player.MemberNumber,
+        );
+        await this.forfeitService.persistForfeit(
             char,
             bet.stakeForfeit,
             this.conn.Player.MemberNumber,

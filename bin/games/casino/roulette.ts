@@ -95,6 +95,33 @@ export interface RouletteBet extends Bet {
 
 export type Color = "Red" | "Black" | "Green";
 
+export type RouletteRole = "player" | "observer" | "administrator";
+
+export interface RouletteRolePermissions {
+    canBet: boolean;
+    canCancel: boolean;
+    canAdminister: boolean;
+}
+
+export const ROULETTE_ROLE_PERMISSIONS: Record<
+    RouletteRole,
+    RouletteRolePermissions
+> = {
+    player: { canBet: true, canCancel: true, canAdminister: false },
+    observer: { canBet: false, canCancel: false, canAdminister: false },
+    administrator: { canBet: true, canCancel: true, canAdminister: true },
+};
+
+export interface RouletteGameState {
+    gameId: string;
+    roundId: string;
+    phase: "betting" | "spinning" | "settled";
+    bets: RouletteBet[];
+    willSpinAt?: number;
+    settled: boolean;
+    updatedAt: number;
+}
+
 export const rouletteColors: Color[] = [
     "Green", // 0
     "Red",
@@ -146,6 +173,10 @@ export class RouletteGame implements Game {
     private bettingOpen = true;
     private betValidator = new BetValidator();
     private commandValidator = new CommandValidator();
+    private currentRoundId = "";
+    private currentPhase: RouletteGameState["phase"] = "betting";
+    private readonly settledRounds = new Set<string>();
+    private readonly roles = new Map<number, RouletteRole>();
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -161,6 +192,7 @@ export class RouletteGame implements Game {
     public registerCommands(commandParser: CommandParser): void {
         commandParser.register("cancel", this.onCommandCancel);
         commandParser.register("bet", this.onCommandBet);
+        commandParser.register("rrole", this.onCommandSetRole);
         commandParser.register(
             "sign",
             (
@@ -361,6 +393,84 @@ export class RouletteGame implements Game {
         }
     }
 
+    public getRole(memberNumber: number): RouletteRole {
+        return this.roles.get(memberNumber) ?? "player";
+    }
+
+    public setRole(memberNumber: number, role: RouletteRole): void {
+        this.roles.set(memberNumber, role);
+    }
+
+    public hasPermission(
+        memberNumber: number,
+        permission: keyof RouletteRolePermissions,
+    ): boolean {
+        return ROULETTE_ROLE_PERMISSIONS[this.getRole(memberNumber)][
+            permission
+        ];
+    }
+
+    private verifyPermission(
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        permission: keyof RouletteRolePermissions,
+        action: string,
+    ): boolean {
+        if (this.hasPermission(sender.MemberNumber, permission)) return true;
+        this.conn.reply(msg, `Permission denied: you cannot ${action}.`);
+        return false;
+    }
+
+    private onCommandSetRole = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!sender.IsRoomAdmin()) {
+            this.conn.reply(msg, "Sorry, you need to be an admin");
+            return;
+        }
+        const memberNumber = Number(args[0]);
+        const role = args[1] as RouletteRole;
+        if (
+            !Number.isInteger(memberNumber) ||
+            !ROULETTE_ROLE_PERMISSIONS[role]
+        ) {
+            this.conn.reply(
+                msg,
+                "Usage: /bot rrole <memberNumber> <player|observer|administrator>",
+            );
+            return;
+        }
+        this.setRole(memberNumber, role);
+        this.conn.reply(
+            msg,
+            `Role '${role}' assigned to member ${memberNumber}.`,
+        );
+    };
+
+    public getGameState(): RouletteGameState {
+        return {
+            gameId: "roulette",
+            roundId: this.currentRoundId,
+            phase: this.currentPhase,
+            bets: [...this.bets],
+            willSpinAt: this.willSpinAt,
+            settled: this.settledRounds.has(this.currentRoundId),
+            updatedAt: Date.now(),
+        };
+    }
+
+    public async persistGameState(): Promise<void> {
+        await this.casino
+            .getMutationService()
+            .updateGameProgress(
+                0,
+                "roulette",
+                this.getGameState() as unknown as Record<string, unknown>,
+            );
+    }
+
     public placeBet(bet: RouletteBet): void {
         this.bets.push(bet);
         if (bet.stakeForfeit) {
@@ -395,6 +505,7 @@ export class RouletteGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyPermission(sender, msg, "canBet", "bet")) return;
         if (!this.bettingOpen) {
             this.conn.reply(
                 msg,
@@ -423,9 +534,16 @@ export class RouletteGame implements Game {
             .getUnifiedStore()
             .getCasinoView(sender.MemberNumber);
 
-        if (bet.stakeForfeit === undefined) {
-            if ((casinoView?.chips || 0) - bet.stake < 0) {
-                this.conn.reply(msg, `You don't have enough chips.`);
+        if (!bet.stakeForfeit) {
+            const totalChips = casinoView?.chips ?? 0;
+            const lockedChips = casinoView?.lockedChips ?? 0;
+            if (totalChips - lockedChips < bet.stake) {
+                this.conn.reply(
+                    msg,
+                    lockedChips > 0 && totalChips >= bet.stake
+                        ? `Your chips are locked (${lockedChips} locked). You don't have enough available chips.`
+                        : `You don't have enough chips.`,
+                );
                 return;
             }
 
@@ -502,7 +620,27 @@ export class RouletteGame implements Game {
             }
         }
 
+        if (!this.currentRoundId) {
+            this.currentRoundId = `roulette_${Date.now()}_${sender.MemberNumber}`;
+        }
         this.placeBet(bet);
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_roulette_bet",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+                stake: bet.stake,
+                stakeForfeit: bet.stakeForfeit,
+                kind: bet.kind,
+                number: bet.number,
+            },
+            processed: true,
+        } as any);
+        await this.persistGameState();
 
         if (this.willSpinAt === undefined) {
             if (this.resetTimer.isActive()) {
@@ -526,6 +664,7 @@ export class RouletteGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyPermission(sender, msg, "canCancel", "cancel")) return;
         if (this.getBetsForPlayer(sender.MemberNumber).length === 0) {
             this.conn.reply(msg, "You don't have a bet in play.");
             return;
@@ -539,22 +678,37 @@ export class RouletteGame implements Game {
             this.conn.reply(msg, "You can't cancel your bet now.");
             return;
         }
-        if (this.getBetsForPlayer(sender.MemberNumber)[0].stakeForfeit) {
-            // Refund forfeit bets using UnifiedCharacterStore
-            const refundAmount = this.getBetsForPlayer(
-                sender.MemberNumber,
-            ).reduce((sum, b) => sum + b.stake, 0);
-            await this.casino
-                .getMutationService()
-                .awardChips(
-                    sender.MemberNumber,
-                    refundAmount,
-                    "roulette_bet_cancel",
-                    0,
-                );
+        const bets = this.getBetsForPlayer(sender.MemberNumber);
+        const chipBets = bets.filter((bet) => !bet.stakeForfeit);
+        const refundAmount = chipBets.reduce((sum, bet) => sum + bet.stake, 0);
+        this.clearBetsForPlayer(sender.MemberNumber);
+
+        if (refundAmount > 0) {
+            try {
+                await this.casino
+                    .getMutationService()
+                    .awardChips(
+                        sender.MemberNumber,
+                        refundAmount,
+                        "roulette_bet_cancel",
+                        sender.MemberNumber,
+                    );
+            } catch (error) {
+                this.bets.push(...bets);
+                throw error;
+            }
         }
 
-        this.clearBetsForPlayer(sender.MemberNumber);
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_roulette_cancel",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: { roundId: this.currentRoundId, refundAmount },
+            processed: true,
+        } as any);
+        await this.persistGameState();
         this.conn.reply(msg, "Bet cancelled.");
     };
 
@@ -664,6 +818,20 @@ export class RouletteGame implements Game {
     }
 
     private async spinWheel(): Promise<void> {
+        if (
+            this.currentRoundId &&
+            this.settledRounds.has(this.currentRoundId)
+        ) {
+            this.logger?.warn(
+                `Round ${this.currentRoundId} is already settled.`,
+            );
+            return;
+        }
+        if (this.currentRoundId) {
+            this.settledRounds.add(this.currentRoundId);
+        }
+        this.currentPhase = "spinning";
+        await this.persistGameState();
         const wheel = this.getWheel();
         const wheelData = wheel.getData();
         const prevAngle = wheelData?.Property?.TargetAngle ?? 0;
@@ -716,19 +884,47 @@ export class RouletteGame implements Game {
 
         await wait(2000);
 
+        const venueMultiplier =
+            this.casino.venueSystem?.getVenueMultiplier() ?? 1;
         for (const bet of this.getBets()) {
-            let winnings = this.getWinnings(winningNumber, bet);
-            if (winnings > 0) {
+            const winnings = this.getWinnings(winningNumber, bet);
+            const effectiveWinnings =
+                winnings > 0
+                    ? (this.casino.venueSystem?.applyVenueBonus(winnings) ??
+                      winnings)
+                    : 0;
+            if (effectiveWinnings > 0) {
                 // Update chips using unified store (Phase 5 direct access)
                 await this.casino
                     .getMutationService()
-                    .awardChips(bet.memberNumber, winnings, "roulette_win", 0);
+                    .awardChips(
+                        bet.memberNumber,
+                        effectiveWinnings,
+                        "roulette_win",
+                        bet.memberNumber,
+                    );
 
-                message += `\n${bet.memberName} wins ${winnings} chips!`;
+                message += `\n${bet.memberName} wins ${effectiveWinnings} chips!`;
             } else if (bet.stakeForfeit) {
-                this.casino.applyForfeit(bet);
+                await this.casino.applyForfeit(bet);
                 message += `\n${bet.memberName} lost and gets: ${FORFEITS[bet.stakeForfeit].name}!`;
             }
+            await this.casino.getMutationService().recordEvent({
+                timestamp: Date.now(),
+                type: "casino_roulette_settlement",
+                source: "casino",
+                actor: bet.memberNumber,
+                target: bet.memberNumber,
+                data: {
+                    roundId: this.currentRoundId,
+                    winningNumber,
+                    rawWinnings: winnings,
+                    effectiveWinnings,
+                    venueMultiplier,
+                    forfeit: effectiveWinnings === 0 ? bet.stakeForfeit : "",
+                },
+                processed: true,
+            } as any);
         }
 
         this.casino.multiplier = 1;
@@ -736,6 +932,8 @@ export class RouletteGame implements Game {
         this.conn.SendMessage("Chat", message);
 
         this.clear();
+        this.currentPhase = "settled";
+        await this.persistGameState();
         await this.casino.setBio();
     }
 
@@ -788,6 +986,7 @@ export class RouletteGame implements Game {
             commandParser.unregister("bet");
             commandParser.unregister("sign");
             commandParser.unregister("wheel");
+            commandParser.unregister("rrole");
         }
         this.clear();
     }
