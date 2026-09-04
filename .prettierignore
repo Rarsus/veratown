@@ -6,5 +6,35 @@ bin/hub/*
 # MongoDB migration scripts use mongosh syntax, not valid JavaScript
 scripts/*.mongodb.js
 
+# Package manager lock and workspace files
 pnpm-lock.yaml
 src/pnpm-lock.yaml
+pnpm-workspace.yaml
+src/pnpm-workspace.yaml
+
+# Docker configuration files
+Dockerfile
+docker-compose*.yml
+docker-compose*.yaml
+
+# Environment configuration files
+.env*
+.env.*.local
+
+# GitHub Actions workflows (have their own formatting conventions)
+.github/workflows/*.yaml
+.github/workflows/*.yml
+
+# Build and distribution outputs
+dist/
+build/
+
+# Node modules and dependencies
+node_modules/
+src/node_modules/
+
+# Development and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
