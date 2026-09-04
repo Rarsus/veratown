@@ -215,9 +215,7 @@ describe("DI Container Integration Tests", () => {
             );
 
             // Simulate Veratown accessing these services
-            const store = container2.get(
-                DIServiceKeys.UNIFIED_CHARACTER_STORE,
-            );
+            const store = container2.get(DIServiceKeys.UNIFIED_CHARACTER_STORE);
             const subscribers = container2.get(
                 DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS,
             );

@@ -90,7 +90,10 @@ describe("DIContainer", () => {
                 typeof DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS,
                 "string",
             );
-            assert.strictEqual(typeof DIServiceKeys.CASINO_VENUE_SYSTEM, "string");
+            assert.strictEqual(
+                typeof DIServiceKeys.CASINO_VENUE_SYSTEM,
+                "string",
+            );
             assert.strictEqual(typeof DIServiceKeys.CASINO_ENGINE, "string");
         });
 
@@ -186,11 +189,7 @@ describe("DIContainer", () => {
 
         test("getLifetime returns correct lifetime", () => {
             const service = { id: 3 };
-            container.register(
-                "lifetime1",
-                service,
-                ServiceLifetime.SINGLETON,
-            );
+            container.register("lifetime1", service, ServiceLifetime.SINGLETON);
             assert.strictEqual(
                 container.getLifetime("lifetime1"),
                 ServiceLifetime.SINGLETON,
@@ -290,7 +289,8 @@ describe("DIContainer", () => {
                 (err: Error) => {
                     assert(err instanceof DIContainerError);
                     assert(
-                        (err as DIContainerError).code === "CIRCULAR_DEPENDENCY",
+                        (err as DIContainerError).code ===
+                            "CIRCULAR_DEPENDENCY",
                     );
                     return err.message.includes("Circular dependency detected");
                 },

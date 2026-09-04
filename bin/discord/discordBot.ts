@@ -276,7 +276,8 @@ async function registerSlashCommands(
             options: [
                 {
                     name: "limit",
-                    description: "Number of recent log entries to display (default: 10)",
+                    description:
+                        "Number of recent log entries to display (default: 10)",
                     type: 4, // INTEGER
                     required: false,
                 },

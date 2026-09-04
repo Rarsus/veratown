@@ -46,8 +46,12 @@ container.register(
 );
 
 // Get the same instance every time
-const store1 = container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE);
-const store2 = container.get<UnifiedCharacterStore>(DIServiceKeys.UNIFIED_CHARACTER_STORE);
+const store1 = container.get<UnifiedCharacterStore>(
+    DIServiceKeys.UNIFIED_CHARACTER_STORE,
+);
+const store2 = container.get<UnifiedCharacterStore>(
+    DIServiceKeys.UNIFIED_CHARACTER_STORE,
+);
 assert.strictEqual(store1, store2); // true
 ```
 
