@@ -18,12 +18,18 @@
 
 import { MapRegion } from "bc-bot";
 import { createLogger } from "../../logging";
+import type { GameStateMutationService } from "./gameStateMutationService";
 
 export interface VenueBonus {
-    region: MapRegion;
+    region: MapRegion | string;
     chipMultiplier: number;
     description: string;
     requiresAddonMissing?: boolean; // Some venues require specific addons
+}
+
+export interface CasinoVenueConfig {
+    venues?: VenueBonus[];
+    fallbackMultiplier?: number;
 }
 
 /**
@@ -31,13 +37,25 @@ export interface VenueBonus {
  */
 export class CasinoVenueSystem {
     private readonly logger = createLogger("CasinoVenueSystem");
-    private venues: Map<MapRegion, VenueBonus> = new Map();
+    private venues: Map<MapRegion | string, VenueBonus> = new Map();
+    private readonly fallbackMultiplier: number;
+    private readonly mutationService?: GameStateMutationService;
 
     /**
      * Initialize with default venues
      */
-    public constructor() {
+    public constructor(
+        config: CasinoVenueConfig = {},
+        mutationService?: GameStateMutationService,
+    ) {
+        this.fallbackMultiplier = Number.isFinite(config.fallbackMultiplier)
+            ? config.fallbackMultiplier!
+            : 1;
+        this.mutationService = mutationService;
         this.initializeDefaultVenues();
+        for (const venue of config.venues ?? []) {
+            this.registerVenue(venue);
+        }
     }
 
     /**
@@ -91,6 +109,15 @@ export class CasinoVenueSystem {
      * Register a new venue with custom multiplier
      */
     public registerVenue(venue: VenueBonus): void {
+        if (
+            !venue ||
+            venue.region === undefined ||
+            !Number.isFinite(venue.chipMultiplier) ||
+            venue.chipMultiplier < 0 ||
+            !venue.description
+        ) {
+            throw new Error("Invalid casino venue configuration");
+        }
         this.venues.set(venue.region, venue);
         this.logger.info("Venue registered", {
             region: venue.region,
@@ -102,19 +129,19 @@ export class CasinoVenueSystem {
     /**
      * Get venue multiplier for a region
      */
-    public getVenueMultiplier(region?: MapRegion): number {
+    public getVenueMultiplier(region?: MapRegion | string): number {
         if (!region) {
-            return 1.0; // Default multiplier if no region
+            return this.fallbackMultiplier;
         }
 
-        const venue = this.venues.get(region);
+        const venue = this.getVenue(region);
         if (!venue) {
             this.logger.warn("Venue not found", {
                 region,
-                usingDefault: "1.0x",
+                usingDefault: `${this.fallbackMultiplier}x`,
                 operation: "getVenueMultiplier",
             });
-            return 1.0;
+            return this.fallbackMultiplier;
         }
 
         return venue.chipMultiplier;
@@ -123,13 +150,87 @@ export class CasinoVenueSystem {
     /**
      * Get venue description
      */
-    public getVenueDescription(region?: MapRegion): string {
+    public getVenueDescription(region?: MapRegion | string): string {
         if (!region) {
             return "Unknown Location";
         }
 
-        const venue = this.venues.get(region);
+        const venue = this.getVenue(region);
         return venue?.description || "Unknown Location";
+    }
+
+    /**
+     * Return the configured venue for a location without applying fallback
+     * behavior. This is useful when callers need to distinguish an invalid
+     * location from the neutral default multiplier.
+     */
+    public getVenue(region?: MapRegion | string): VenueBonus | undefined {
+        if (!region) return undefined;
+
+        const exact = this.venues.get(region);
+        if (exact) return exact;
+
+        if (
+            typeof region === "object" &&
+            region.TopLeft &&
+            region.BottomRight
+        ) {
+            return Array.from(this.venues.values()).find((venue) => {
+                const bounds = venue.region;
+                return (
+                    typeof bounds === "object" &&
+                    region.TopLeft.X >= bounds.TopLeft.X &&
+                    region.TopLeft.Y >= bounds.TopLeft.Y &&
+                    region.TopLeft.X <= bounds.BottomRight.X &&
+                    region.TopLeft.Y <= bounds.BottomRight.Y
+                );
+            });
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Persist a player's location through the approved mutation boundary and
+     * emit an auditable event for cross-system consumers.
+     */
+    public async persistLocation(
+        memberNumber: number,
+        position: { X: number; Y: number },
+        actor = memberNumber,
+    ): Promise<VenueBonus | undefined> {
+        if (
+            !Number.isInteger(memberNumber) ||
+            memberNumber < 0 ||
+            !Number.isFinite(position?.X) ||
+            !Number.isFinite(position?.Y)
+        ) {
+            throw new Error("Invalid casino location");
+        }
+        if (!this.mutationService) {
+            throw new Error("Casino venue mutation service is not configured");
+        }
+
+        await this.mutationService.updateLocation(
+            memberNumber,
+            position,
+            actor,
+        );
+        const venue = this.getVenue(position as unknown as MapRegion);
+        await this.mutationService.recordEvent({
+            timestamp: Date.now(),
+            type: "audit_trail",
+            source: "casino",
+            actor,
+            target: memberNumber,
+            data: {
+                operation: "casino_venue_location_changed",
+                position,
+                venue: venue?.description ?? "Unknown Location",
+            },
+            processed: false,
+        });
+        return venue;
     }
 
     /**

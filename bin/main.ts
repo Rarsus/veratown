@@ -429,7 +429,12 @@ async function initializeVeratownGame(
     );
 
     // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
-    const venueSystem = new CasinoVenueSystem();
+    const venueSystem = new CasinoVenueSystem(
+        { venues: config.casino?.venues },
+        container.get<GameStateMutationService>(
+            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        ),
+    );
     container.register(DIServiceKeys.CASINO_VENUE_SYSTEM, venueSystem);
     logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
 
