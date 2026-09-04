@@ -77,11 +77,100 @@ const SPLIT_TIMEOUT_INCREASE_MS = 10000; // Time added to the auto-stand timeout
 // const AUTO_STAND_TIMEOUT_MS = 10000;
 const RESET_TIMEOUT_MS = 10000; // Time after a game ends before a new game can start
 
+export type BlackjackRole = "player" | "dealer" | "observer" | "administrator";
+
+export interface RolePermissions {
+    canBet: boolean;
+    canHit: boolean;
+    canStand: boolean;
+    canDouble: boolean;
+    canSplit: boolean;
+    canCancel: boolean;
+    canObserve: boolean;
+    canManageDealer: boolean;
+    canAdminister: boolean;
+}
+
+export const BLACKJACK_ROLE_PERMISSIONS: Record<BlackjackRole, RolePermissions> = {
+    player: {
+        canBet: true,
+        canHit: true,
+        canStand: true,
+        canDouble: true,
+        canSplit: true,
+        canCancel: true,
+        canObserve: true,
+        canManageDealer: false,
+        canAdminister: false,
+    },
+    dealer: {
+        canBet: false,
+        canHit: false,
+        canStand: false,
+        canDouble: false,
+        canSplit: false,
+        canCancel: false,
+        canObserve: true,
+        canManageDealer: true,
+        canAdminister: false,
+    },
+    observer: {
+        canBet: false,
+        canHit: false,
+        canStand: false,
+        canDouble: false,
+        canSplit: false,
+        canCancel: false,
+        canObserve: true,
+        canManageDealer: false,
+        canAdminister: false,
+    },
+    administrator: {
+        canBet: true,
+        canHit: true,
+        canStand: true,
+        canDouble: true,
+        canSplit: true,
+        canCancel: true,
+        canObserve: true,
+        canManageDealer: true,
+        canAdminister: true,
+    },
+};
+
+export interface BlackjackPlayerState {
+    memberNumber: number;
+    memberName: string;
+    playingHand: number;
+    role: BlackjackRole;
+    disconnected?: boolean;
+    bets: Array<{
+        stake: number;
+        stakeForfeit: string;
+        standing: boolean;
+    }>;
+    hands: Card[][];
+}
+
+export interface BlackjackGameState {
+    gameId: string;
+    roundId: string;
+    phase: "betting" | "dealt" | "playing" | "resolving" | "settled";
+    players: BlackjackPlayerState[];
+    dealerHand: Card[];
+    willDealAt?: number;
+    willStandAt?: number;
+    settled: boolean;
+    updatedAt: number;
+}
+
 export interface BlackjackPlayer {
     memberNumber: number;
     memberName: string;
     playingHand: number;
     bets: BlackjackBet[];
+    role?: BlackjackRole;
+    disconnected?: boolean;
 }
 
 export interface BlackjackBet extends Bet {
@@ -108,6 +197,12 @@ export class BlackjackGame implements Game {
     private betValidator = new BetValidator();
     private commandValidator = new CommandValidator();
 
+    private roles: Map<number, BlackjackRole> = new Map();
+    private currentRoundId: string = "";
+    private currentPhase: "betting" | "dealt" | "playing" | "resolving" | "settled" = "betting";
+    private settledRounds: Set<string> = new Set();
+    private latestState?: BlackjackGameState;
+
     public HELPMESSAGE = FULLBLACKJACKHELP;
     public EXAMPLES = BLACKJACKEXAMPLES;
     public HELPCOMMANDMESSAGE = BLACKJACKHELPCOMMAND;
@@ -124,6 +219,10 @@ export class BlackjackGame implements Game {
         commandParser.register("stand", this.onCommandStand);
         commandParser.register("double", this.onCommandDouble);
         commandParser.register("split", this.onCommandSplit);
+        commandParser.register("bjrole", this.onCommandSetRole);
+        commandParser.register("bjreset", this.onCommandReset);
+        commandParser.register("bjsettle", this.onCommandSettle);
+        commandParser.register("bjrefund", this.onCommandRefund);
         commandParser.register(
             "sign",
             (
@@ -236,11 +335,248 @@ export class BlackjackGame implements Game {
                 parser.unregister("hit");
                 parser.unregister("stand");
                 parser.unregister("double");
+                parser.unregister("split");
+                parser.unregister("bjrole");
+                parser.unregister("bjreset");
+                parser.unregister("bjsettle");
+                parser.unregister("bjrefund");
                 parser.unregister("sign");
             }
         }
         this.clear();
     }
+
+    public setRole(memberNumber: number, role: BlackjackRole, assignedBy?: number): void {
+        this.roles.set(memberNumber, role);
+        this.logger?.info(`Assigned role ${role} to member ${memberNumber}${assignedBy ? ` by ${assignedBy}` : ""}`);
+    }
+
+    public getRole(memberNumber: number): BlackjackRole {
+        return this.roles.get(memberNumber) || "player";
+    }
+
+    public hasPermission(memberNumber: number, action: keyof RolePermissions): boolean {
+        const role = this.getRole(memberNumber);
+        const perms = BLACKJACK_ROLE_PERMISSIONS[role] || BLACKJACK_ROLE_PERMISSIONS.player;
+        return perms[action] ?? false;
+    }
+
+    private verifyRolePermission(
+        sender: API_Character,
+        action: keyof RolePermissions,
+        actionName: string,
+    ): boolean {
+        const role = this.getRole(sender.MemberNumber);
+        if (!this.hasPermission(sender.MemberNumber, action)) {
+            this.conn.SendMessage(
+                "Whisper",
+                `Permission denied: Role '${role}' is not allowed to perform action '${actionName}'.`,
+                sender.MemberNumber,
+            );
+            return false;
+        }
+        return true;
+    }
+
+    public startNewRound(): void {
+        this.currentRoundId = `bj_round_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+        this.currentPhase = "betting";
+        this.persistGameState().catch((err) => {
+            this.logger?.error("Failed to persist game state on round start", err);
+        });
+    }
+
+    public getGameState(): BlackjackGameState {
+        return {
+            gameId: "blackjack",
+            roundId: this.currentRoundId,
+            phase: this.currentPhase,
+            roles: Object.fromEntries(this.roles.entries()),
+            players: this.players.map((p) => {
+                const playerBets = p.bets || [];
+                return {
+                    memberNumber: p.memberNumber,
+                    memberName: p.memberName,
+                    role: this.getRole(p.memberNumber),
+                    playingHand: p.playingHand,
+                    disconnected: p.disconnected,
+                    bets: playerBets.map((b) => ({
+                        stake: b.stake,
+                        stakeForfeit: b.stakeForfeit,
+                        standing: b.standing,
+                    })),
+                    hands: playerBets.map((b) => this.playerHands.get(b) || []),
+                };
+            }),
+            dealerHand: [...this.dealerHand],
+            willDealAt: this.willDealAt,
+            willStandAt: this.willStandAt,
+            settled: this.settledRounds.has(this.currentRoundId),
+            updatedAt: Date.now(),
+        };
+    }
+
+    public async persistGameState(): Promise<void> {
+        const state = this.getGameState();
+        this.latestState = state;
+        try {
+            const mutationService = this.casino.getMutationService();
+            if (mutationService) {
+                await mutationService.updateGameProgress(0, "blackjack", state as unknown as Record<string, unknown>);
+            }
+        } catch (e) {
+            this.logger?.warn("Error persisting game state to mutation service", e);
+        }
+    }
+
+    public recoverGameState(state: BlackjackGameState): void {
+        this.currentRoundId = state.roundId;
+        this.currentPhase = state.phase;
+        this.willDealAt = state.willDealAt;
+        this.willStandAt = state.willStandAt;
+        this.dealerHand = state.dealerHand || [];
+        if (state.settled && state.roundId) {
+            this.settledRounds.add(state.roundId);
+        }
+        if (state.roles) {
+            this.roles = new Map(Object.entries(state.roles).map(([k, v]) => [Number(k), v as BlackjackRole]));
+        }
+        this.players = [];
+        this.playerHands.clear();
+        for (const p of state.players || []) {
+            this.setRole(p.memberNumber, p.role || "player");
+            const playerBets: BlackjackBet[] = (p.bets || []).map((b) => ({
+                memberNumber: p.memberNumber,
+                memberName: p.memberName,
+                stake: b.stake,
+                stakeForfeit: b.stakeForfeit,
+                standing: b.standing,
+            }));
+            this.players.push({
+                memberNumber: p.memberNumber,
+                memberName: p.memberName,
+                playingHand: p.playingHand,
+                bets: playerBets,
+                role: p.role,
+                disconnected: p.disconnected,
+            });
+            for (let i = 0; i < playerBets.length; i++) {
+                if (p.hands && p.hands[i]) {
+                    this.playerHands.set(playerBets[i], p.hands[i]);
+                }
+            }
+        }
+        this.latestState = state;
+    }
+
+    public handlePlayerDisconnect(memberNumber: number): void {
+        const player = this.players.find((p) => p.memberNumber === memberNumber);
+        if (!player) return;
+
+        player.disconnected = true;
+        for (const bet of player.bets) {
+            bet.standing = true;
+        }
+
+        this.conn.SendMessage(
+            "Chat",
+            `${player.memberName} disconnected. Their hand has been stood automatically.`,
+        );
+
+        this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_disconnect",
+            source: "casino",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                roundId: this.currentRoundId,
+                memberNumber,
+            },
+            processed: true,
+        }).catch((e) => this.logger?.error("Failed to record disconnect event", e));
+
+        this.persistGameState().catch(() => {});
+
+        if (this.allPlayersDone()) {
+            this.resolveGame().catch((e) => this.logger?.error("Error resolving game after disconnect", e));
+        }
+    }
+
+    private onCommandSetRole = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.verifyRolePermission(sender, "canAdminister", "assign_role")) return;
+        if (args.length < 2) {
+            this.conn.SendMessage("Whisper", "Usage: /bot bjrole <memberNumber> <player|dealer|observer|administrator>", sender.MemberNumber);
+            return;
+        }
+        const targetMember = parseInt(args[0], 10);
+        const targetRole = args[1].toLowerCase() as BlackjackRole;
+        if (isNaN(targetMember) || !BLACKJACK_ROLE_PERMISSIONS[targetRole]) {
+            this.conn.SendMessage("Whisper", "Invalid member number or role.", sender.MemberNumber);
+            return;
+        }
+        this.setRole(targetMember, targetRole, sender.MemberNumber);
+        this.conn.SendMessage("Whisper", `Role '${targetRole}' assigned to member ${targetMember}.`, sender.MemberNumber);
+    };
+
+    private onCommandReset = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.verifyRolePermission(sender, "canAdminister", "reset") && !this.verifyRolePermission(sender, "canManageDealer", "reset")) return;
+        this.clear();
+        this.willDealAt = undefined;
+        this.willStandAt = undefined;
+        this.currentRoundId = "";
+        this.currentPhase = "betting";
+        this.dealTimer.clear();
+        this.autoStandTimer.clear();
+        this.resetTimer.clear();
+        this.conn.SendMessage("Chat", `Blackjack table reset by ${sender.toString()}.`);
+    };
+
+    private onCommandSettle = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.verifyRolePermission(sender, "canAdminister", "settle")) return;
+        await this.resolveGame();
+    };
+
+    private onCommandRefund = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.verifyRolePermission(sender, "canAdminister", "refund")) return;
+        if (args.length < 1) {
+            this.conn.SendMessage("Whisper", "Usage: /bot bjrefund <memberNumber>", sender.MemberNumber);
+            return;
+        }
+        const targetMember = parseInt(args[0], 10);
+        if (isNaN(targetMember)) {
+            this.conn.SendMessage("Whisper", "Invalid member number.", sender.MemberNumber);
+            return;
+        }
+        const bets = this.getBetsForPlayer(targetMember);
+        let refundTotal = 0;
+        for (const b of bets) {
+            refundTotal += b.stake;
+        }
+        if (refundTotal > 0) {
+            await this.casino.getMutationService().awardChips(targetMember, refundTotal, "Blackjack admin refund", sender.MemberNumber);
+            this.clearBetsForPlayer(targetMember);
+            this.conn.SendMessage("Whisper", `Refunded ${refundTotal} chips to member ${targetMember}.`, sender.MemberNumber);
+        } else {
+            this.conn.SendMessage("Whisper", `No active bets found for member ${targetMember}.`, sender.MemberNumber);
+        }
+    };
 
     public isBettingOpen(): boolean {
         return this.bettingOpen;
@@ -361,6 +697,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyRolePermission(sender, "canHit", "hit")) return;
         if (!this.autoStandTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
@@ -408,7 +745,22 @@ export class BlackjackGame implements Game {
         }
         const hand = this.playerHands.get(bet)!;
         if (!hand) return;
-        hand.push(this.deck.pop()!);
+        const newCard = this.deck.pop()!;
+        hand.push(newCard);
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_hit",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+                card: newCard,
+            },
+            processed: true,
+        });
+
         const playerValue = this.calculateHandValue(hand);
         if (playerValue > 20) {
             bet.standing = true; // Player automatically stands after busting or on 21
@@ -422,6 +774,7 @@ export class BlackjackGame implements Game {
             `You hit and got a ${getCardString(hand[hand.length - 1])}.\n${handString}`,
             sender.MemberNumber,
         );
+        await this.persistGameState();
         if (this.allPlayersDone()) {
             this.resolveGame();
         }
@@ -432,6 +785,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyRolePermission(sender, "canDouble", "double")) return;
         if (!this.willStandAt || Date.now() > this.willStandAt) {
             this.conn.SendMessage(
                 "Whisper",
@@ -494,12 +848,24 @@ export class BlackjackGame implements Game {
         }
         const unifiedStore = this.casino.getUnifiedStore();
         const profile = await unifiedStore.getProfile(sender.MemberNumber);
-        if (profile.casino.chips < currentBet.stake) {
-            this.conn.SendMessage(
-                "Whisper",
-                "You don't have enough chips to double down.",
-                sender.MemberNumber,
-            );
+        const totalChips = profile.casino?.chips ?? 0;
+        const lockedChips = profile.casino?.lockedChips ?? 0;
+        const availableChips = totalChips - lockedChips;
+
+        if (availableChips < currentBet.stake) {
+            if (lockedChips > 0 && totalChips >= currentBet.stake) {
+                this.conn.SendMessage(
+                    "Whisper",
+                    `Your chips are locked (${lockedChips} locked). You do not have enough available chips.`,
+                    sender.MemberNumber,
+                );
+            } else {
+                this.conn.SendMessage(
+                    "Whisper",
+                    "You don't have enough chips to double down.",
+                    sender.MemberNumber,
+                );
+            }
             return;
         }
 
@@ -509,10 +875,27 @@ export class BlackjackGame implements Game {
                 sender.MemberNumber,
                 currentBet.stake,
                 "Blackjack double down",
+                sender.MemberNumber,
             );
         currentBet.stake *= 2; // Double the stake
-        hand.push(this.deck.pop()!);
+        const newCard = this.deck.pop()!;
+        hand.push(newCard);
         currentBet.standing = true;
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_double",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+                newStake: currentBet.stake,
+                card: newCard,
+            },
+            processed: true,
+        });
+
         if (player.bets.length > player.playingHand + 1) {
             player.playingHand++;
             const handString = await this.buildHandString(true, player);
@@ -529,6 +912,7 @@ export class BlackjackGame implements Game {
                 sender.MemberNumber,
             );
         }
+        await this.persistGameState();
         if (this.allPlayersDone()) {
             this.resolveGame();
         }
@@ -539,6 +923,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyRolePermission(sender, "canSplit", "split")) return;
         if (!this.willStandAt || Date.now() > this.willStandAt) {
             this.conn.SendMessage(
                 "Whisper",
@@ -616,12 +1001,24 @@ export class BlackjackGame implements Game {
         }
         const unifiedStore = this.casino.getUnifiedStore();
         const profile = await unifiedStore.getProfile(sender.MemberNumber);
-        if (profile.casino.chips < currentBet.stake) {
-            this.conn.SendMessage(
-                "Whisper",
-                "You don't have enough chips to split.",
-                sender.MemberNumber,
-            );
+        const totalChips = profile.casino?.chips ?? 0;
+        const lockedChips = profile.casino?.lockedChips ?? 0;
+        const availableChips = totalChips - lockedChips;
+
+        if (availableChips < currentBet.stake) {
+            if (lockedChips > 0 && totalChips >= currentBet.stake) {
+                this.conn.SendMessage(
+                    "Whisper",
+                    `Your chips are locked (${lockedChips} locked). You do not have enough available chips.`,
+                    sender.MemberNumber,
+                );
+            } else {
+                this.conn.SendMessage(
+                    "Whisper",
+                    "You don't have enough chips to split.",
+                    sender.MemberNumber,
+                );
+            }
             return;
         }
         await this.casino
@@ -630,6 +1027,7 @@ export class BlackjackGame implements Game {
                 sender.MemberNumber,
                 currentBet.stake,
                 "Blackjack split",
+                sender.MemberNumber,
             );
         player.bets.push({
             memberNumber: sender.MemberNumber,
@@ -650,6 +1048,20 @@ export class BlackjackGame implements Game {
         if (newBetHand && this.calculateHandValue(newBetHand) > 20) {
             newBet.standing = true; // Player automatically stands on 21
         }
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_split",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+                stake: currentBet.stake,
+            },
+            processed: true,
+        });
+
         const newHandString = newBetHand
             ? getCardString(newBetHand[1])
             : "unknown";
@@ -663,6 +1075,7 @@ export class BlackjackGame implements Game {
             "Chat",
             `${sender.toString()} has split their hand! Remaining time has been increased.`,
         );
+        await this.persistGameState();
         if (this.allPlayersDone()) {
             this.resolveGame();
         }
@@ -670,7 +1083,24 @@ export class BlackjackGame implements Game {
 
     private async resolveGame(): Promise<void> {
         this.autoStandTimer.clear();
+        if (this.currentRoundId && this.settledRounds.has(this.currentRoundId)) {
+            this.logger?.warn(`Round ${this.currentRoundId} is already settled.`);
+            return;
+        }
+        if (this.currentRoundId) {
+            this.settledRounds.add(this.currentRoundId);
+        }
+        this.phase = "idle";
+        if (this.dealerHand.length < 2) {
+            if (this.deck.length < 2) {
+                this.createShoe(1);
+            }
+            this.dealerHand = [this.deck.pop()!, this.deck.pop()!];
+        }
         while (this.calculateHandValue(this.dealerHand) < 17) {
+            if (this.deck.length === 0) {
+                this.createShoe(1);
+            }
             this.dealerHand.push(this.deck.pop()!);
         }
         await this.showHands(false);
@@ -683,35 +1113,59 @@ export class BlackjackGame implements Game {
         );
         this.casino.setTextColor("#ffffff");
 
+        const venueMultiplier = this.casino.venueSystem?.getVenueMultiplier() ?? 1;
+
         for (const player of this.players) {
             let totalWinnings = 0;
             for (const bet of player.bets) {
                 const playerHand = this.playerHands.get(bet);
                 if (!playerHand) {
-                    this.logger?.error(
-                        `No hand found for player ${player.memberName} (${player.memberNumber})`,
+                    this.logger?.info(
+                        `No hand found for player ${player.memberName} (${player.memberNumber}) during resolution`,
                     );
                     continue;
                 }
                 const winnings = this.getWinnings(playerHand, bet);
                 totalWinnings += winnings;
             }
-            if (totalWinnings > 0) {
-                // Update chips using unified store (Phase 5 direct access)
+
+            const effectiveWinnings =
+                totalWinnings > 0
+                    ? (this.casino.venueSystem?.applyVenueBonus(totalWinnings) ?? totalWinnings)
+                    : totalWinnings;
+
+            if (effectiveWinnings > 0) {
+                // Update chips using unified store via mutation service
                 await this.casino
                     .getMutationService()
                     .awardChips(
                         player.memberNumber,
-                        totalWinnings,
+                        effectiveWinnings,
                         "blackjack_win",
-                        0,
+                        player.memberNumber,
                     );
-                message += `${player.memberName} wins ${totalWinnings} chips! \n`;
+                message += `${player.memberName} wins ${effectiveWinnings} chips! \n`;
             } else if (player.bets[0].stakeForfeit && totalWinnings !== -100) {
                 this.casino.applyForfeit(player.bets[0]);
                 message += `${player.memberName} lost and gets ${FORFEITS[player.bets[0].stakeForfeit].name}! \n`;
             }
+
+            await this.casino.getMutationService().recordEvent({
+                timestamp: Date.now(),
+                type: "casino_blackjack_settlement",
+                source: "casino",
+                actor: player.memberNumber,
+                target: player.memberNumber,
+                data: {
+                    roundId: this.currentRoundId,
+                    rawWinnings: totalWinnings,
+                    effectiveWinnings,
+                    venueMultiplier,
+                },
+                processed: true,
+            });
         }
+        await this.persistGameState();
         this.clear();
         this.willDealAt = undefined;
         this.casino.multiplier = 1;
@@ -732,6 +1186,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyRolePermission(sender, "canStand", "stand")) return;
         if (!this.autoStandTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
@@ -770,6 +1225,19 @@ export class BlackjackGame implements Game {
             return;
         }
         bet.standing = true;
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_stand",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+            },
+            processed: true,
+        });
+
         if (player.bets.length > player.playingHand + 1) {
             player.playingHand++;
             const handString = await this.buildHandString(true, player);
@@ -786,6 +1254,7 @@ export class BlackjackGame implements Game {
                 sender.MemberNumber,
             );
         }
+        await this.persistGameState();
         if (this.allPlayersDone()) {
             this.resolveGame();
         }
@@ -832,6 +1301,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyRolePermission(sender, "canBet", "bet")) return;
         if (this.resetTimer.isActive()) {
             this.conn.SendMessage(
                 "Whisper",
@@ -870,18 +1340,35 @@ export class BlackjackGame implements Game {
         const profile = await unifiedStore.getProfile(sender.MemberNumber);
 
         if (!bet.stakeForfeit || bet.stakeForfeit === "") {
-            if (profile.casino.chips - bet.stake < 0) {
-                this.conn.SendMessage(
-                    "Whisper",
-                    `You don't have enough chips.`,
-                    sender.MemberNumber,
-                );
+            const totalChips = profile.casino?.chips ?? 0;
+            const lockedChips = profile.casino?.lockedChips ?? 0;
+            const availableChips = totalChips - lockedChips;
+
+            if (availableChips < bet.stake) {
+                if (lockedChips > 0 && totalChips >= bet.stake) {
+                    this.conn.SendMessage(
+                        "Whisper",
+                        `Your chips are locked (${lockedChips} locked). You do not have enough available chips.`,
+                        sender.MemberNumber,
+                    );
+                } else {
+                    this.conn.SendMessage(
+                        "Whisper",
+                        `You don't have enough chips.`,
+                        sender.MemberNumber,
+                    );
+                }
                 return;
             }
 
             await this.casino
                 .getMutationService()
-                .deductChips(sender.MemberNumber, bet.stake, "Blackjack bet");
+                .deductChips(
+                    sender.MemberNumber,
+                    bet.stake,
+                    "Blackjack bet",
+                    sender.MemberNumber,
+                );
         } else {
             const blockers = getItemsBlockingForfeit(
                 sender,
@@ -952,7 +1439,27 @@ export class BlackjackGame implements Game {
             }
         }
 
+        if (this.players.length === 0 || !this.currentRoundId) {
+            this.currentRoundId = `bj_${Date.now()}_${sender.MemberNumber}`;
+        }
+
         this.placeBet(bet);
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_bet",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+                stake: bet.stake,
+                stakeForfeit: bet.stakeForfeit,
+            },
+            processed: true,
+        });
+
+        await this.persistGameState();
 
         if (this.willDealAt === undefined) {
             if (this.resetTimer.isActive()) {
@@ -1024,6 +1531,7 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
+        if (!this.verifyRolePermission(sender, "canCancel", "cancel")) return;
         if (this.getBetsForPlayer(sender.MemberNumber).length === 0) {
             this.conn.SendMessage(
                 "Whisper",
@@ -1056,11 +1564,26 @@ export class BlackjackGame implements Game {
                         sender.MemberNumber,
                         totalRefund,
                         "Blackjack bet cancellation",
+                        sender.MemberNumber,
                     );
             }
         }
 
         this.clearBetsForPlayer(sender.MemberNumber);
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_cancel",
+            source: "casino",
+            actor: sender.MemberNumber,
+            target: sender.MemberNumber,
+            data: {
+                roundId: this.currentRoundId,
+            },
+            processed: true,
+        });
+
+        await this.persistGameState();
         this.conn.SendMessage("Whisper", "Bet cancelled.", sender.MemberNumber);
     };
 
@@ -1121,7 +1644,8 @@ export class BlackjackGame implements Game {
         shuffleDeck(this.deck);
     }
 
-    private initialDeal(): void {
+    private async initialDeal(): Promise<void> {
+        this.phase = "playing";
         this.autoStandTimer.start(
             1000,
             () => {
@@ -1158,6 +1682,21 @@ export class BlackjackGame implements Game {
                 );
             }
         }
+
+        await this.casino.getMutationService().recordEvent({
+            timestamp: Date.now(),
+            type: "casino_blackjack_deal",
+            source: "casino",
+            actor: 0,
+            target: 0,
+            data: {
+                roundId: this.currentRoundId,
+                playerCount: this.players.length,
+            },
+            processed: true,
+        });
+
+        await this.persistGameState();
 
         if (this.calculateHandValue(this.dealerHand) === 21) {
             this.conn.SendMessage(

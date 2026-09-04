@@ -298,6 +298,277 @@ test("Blackjack: Argument count validation differences from Roulette", async () 
 test("Blackjack: Summary - CommandValidator standardizes casino validation", async () => {
     // This test documents how CommandValidator improves both Blackjack and Roulette
     // by providing a standardized validation interface
+});
+
+function createMockConnector() {
+    const sentMessages: Array<{ type: string; msg: string; target?: number }> = [];
+    return {
+        sentMessages,
+        SendMessage: (type: string, msg: string, target?: number) => {
+            sentMessages.push({ type, msg, target });
+        },
+    };
+}
+
+function createMockCharacter(memberNumber: number, name: string = `Player_${memberNumber}`) {
+    return {
+        MemberNumber: memberNumber,
+        toString: () => name,
+        GetAllowItem: async () => true,
+        IsItemPermissionAccessible: () => true,
+        Appearance: { Appearance: [] },
+    } as unknown as any;
+}
+
+function createMockCasino(options: {
+    chips?: number;
+    lockedChips?: number;
+    multiplier?: number;
+    venueMultiplier?: number;
+} = {}) {
+    const profiles = new Map<number, any>();
+    const events: any[] = [];
+    const deductCalls: any[] = [];
+    const awardChipsCalls: any[] = [];
+    const gameProgressUpdates: any[] = [];
+
+    const unifiedStore = {
+        getProfile: async (memberNumber: number) => {
+            if (!profiles.has(memberNumber)) {
+                profiles.set(memberNumber, {
+                    casino: {
+                        chips: options.chips ?? 1000,
+                        lockedChips: options.lockedChips ?? 0,
+                    },
+                });
+            }
+            return profiles.get(memberNumber);
+        },
+    };
+
+    const mutationService = {
+        deductChips: async (memberNumber: number, amount: number, reason: string, actor?: number) => {
+            deductCalls.push({ memberNumber, amount, reason, actor });
+            const prof = await unifiedStore.getProfile(memberNumber);
+            prof.casino.chips -= amount;
+        },
+        awardChips: async (memberNumber: number, amount: number, reason: string, actor?: number) => {
+            awardChipsCalls.push({ memberNumber, amount, reason, actor });
+            const prof = await unifiedStore.getProfile(memberNumber);
+            prof.casino.chips += amount;
+        },
+        recordEvent: async (evt: any) => {
+            events.push(evt);
+        },
+        updateGameProgress: async (update: any) => {
+            gameProgressUpdates.push(update);
+        },
+    };
+
+    const venueSystem = {
+        getVenueMultiplier: () => options.venueMultiplier ?? 1.5,
+        applyVenueBonus: (chips: number) => Math.floor(chips * (options.venueMultiplier ?? 1.5)),
+    };
+
+    const sign = {
+        Extended: { SetText: () => {} },
+        setProperty: () => {},
+    };
+
+    return {
+        profiles,
+        events,
+        deductCalls,
+        awardChipsCalls,
+        gameProgressUpdates,
+        getUnifiedStore: () => unifiedStore,
+        getMutationService: () => mutationService,
+        venueSystem,
+        getSign: () => sign,
+        setTextColor: () => {},
+        applyForfeit: () => {},
+        cheatPunishment: () => {},
+        multiplier: options.multiplier ?? 1,
+        lockedItems: new Map(),
+    };
+}
+
+test("Blackjack Phase 2A.2: Role permission matrix and assignment", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino();
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    const admin = createMockCharacter(100, "AdminUser");
+    const observer = createMockCharacter(200, "ObserverUser");
+
+    // Assign administrator role to member 100
+    game.setRole(100, "administrator");
+
+    // Admin sets observer role for member 200
+    await (game as any).onCommandSetRole(
+        admin,
+        {} as any,
+        ["200", "observer"],
+    );
+
+    assert.strictEqual(game.getRole(200), "observer");
+
+    // Observer tries to bet
+    await game.onCommandBet(
+        observer,
+        {} as any,
+        ["50"],
+    );
+
+    const whisper = conn.sentMessages.find(
+        (m) => m.msg.includes("Permission denied"),
+    );
+    assert.ok(whisper, "Observer should be denied bet action");
+
+    // Admin tries to assign invalid role
+    await (game as any).onCommandSetRole(
+        admin,
+        {} as any,
+        ["200", "supergod"],
+    );
+
+    const invalidRoleWhisper = conn.sentMessages.find(
+        (m) => m.msg.includes("Invalid member number or role"),
+    );
+    assert.ok(invalidRoleWhisper, "Invalid role should produce error whisper");
+});
+
+test("Blackjack Phase 2A.2: Locked chips enforcement", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ chips: 100, lockedChips: 80 });
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    const player = createMockCharacter(300, "LockedPlayer");
+
+    // Try to bet 50 chips when 80 of 100 total chips are locked (only 20 available)
+    await game.onCommandBet(player, {} as any, ["50"]);
+
+    const lockedWhisper = conn.sentMessages.find(
+        (m) => m.target === 300 && m.msg.includes("chips are locked"),
+    );
+    assert.ok(lockedWhisper, "Bet should be rejected due to locked chips");
+    assert.strictEqual(casino.deductCalls.length, 0, "No chips should be deducted");
+});
+
+test("Blackjack Phase 2A.2: Balance mutation service routing and event audit", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ chips: 1000 });
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    const player = createMockCharacter(400, "P400");
+
+    await game.onCommandBet(player, {} as any, ["100"]);
+
+    assert.strictEqual(casino.deductCalls.length, 1);
+    assert.strictEqual(casino.deductCalls[0].memberNumber, 400);
+    assert.strictEqual(casino.deductCalls[0].amount, 100);
+    assert.strictEqual(casino.deductCalls[0].actor, 400);
+
+    const betEvent = casino.events.find((e) => e.type === "casino_blackjack_bet");
+    assert.ok(betEvent, "casino_blackjack_bet event should be recorded");
+    assert.strictEqual(betEvent.actor, 400);
+});
+
+test("Blackjack Phase 2A.2: Idempotent settlement and venue modifier application", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ chips: 1000, venueMultiplier: 2.0 });
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    const player = createMockCharacter(500, "WinnerPlayer");
+
+    await game.onCommandBet(player, {} as any, ["100"]);
+
+    // Force dealer and player hands so player wins
+    (game as any).dealerHand = [{ suit: "Hearts", value: "10" }, { suit: "Clubs", value: "7" }]; // 17
+    const bets = game.getBetsForPlayer(500);
+    (game as any).playerHands.set(bets[0], [{ suit: "Spades", value: "10" }, { suit: "Hearts", value: "K" }]); // 20
+
+    // Resolve game first time
+    await (game as any).resolveGame();
+
+    assert.strictEqual(casino.awardChipsCalls.length, 1, "Should award chips once");
+    // Winnings: 100 * 2 = 200 base, with 2.0x venue multiplier = 400
+    assert.strictEqual(casino.awardChipsCalls[0].amount, 400);
+
+    // Call resolveGame second time on same round
+    await (game as any).resolveGame();
+
+    assert.strictEqual(
+        casino.awardChipsCalls.length,
+        1,
+        "Settlement must be idempotent and not pay out twice",
+    );
+});
+
+test("Blackjack Phase 2A.2: Recoverable game state persistence and recovery", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino();
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    game.setRole(600, "player");
+    (game as any).currentRoundId = "round_test_123";
+    (game as any).currentPhase = "playing";
+
+    const savedState = game.getGameState();
+    assert.strictEqual(savedState.roundId, "round_test_123");
+    assert.strictEqual(savedState.phase, "playing");
+    assert.strictEqual(savedState.roles?.["600"], "player");
+
+    // Recover into fresh instance
+    const newGame = new BlackjackGame(conn as any, casino as any);
+    newGame.recoverGameState(savedState);
+
+    assert.strictEqual(newGame.getRole(600), "player");
+    const recoveredState = newGame.getGameState();
+    assert.strictEqual(recoveredState.roundId, "round_test_123");
+    assert.strictEqual(recoveredState.phase, "playing");
+});
+
+test("Blackjack Phase 2A.2: Player disconnect handling", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ chips: 1000 });
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    const player = createMockCharacter(700, "DisconnectPlayer");
+
+    await game.onCommandBet(player, {} as any, ["50"]);
+
+    // Disconnect player
+    await game.handlePlayerDisconnect(700);
+
+    const bets = game.getBetsForPlayer(700);
+    assert.ok(bets.length > 0 && bets[0].standing, "Disconnected player's bet should be stood");
+});
+
+test("Blackjack Phase 2A.2: Admin commands (!bjreset, !bjsettle, !bjrefund)", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ chips: 1000 });
+    const game = new BlackjackGame(conn as any, casino as any);
+
+    const admin = createMockCharacter(800, "AdminMaster");
+    game.setRole(800, "administrator");
+
+    const player = createMockCharacter(801, "BetPlayer");
+    await game.onCommandBet(player, {} as any, ["100"]);
+
+    // Admin forces refund
+    await (game as any).onCommandRefund(admin, {} as any, ["801"]);
+
+    const refundWhisper = conn.sentMessages.find(
+        (m) => m.target === 800 && m.msg.includes("Refunded"),
+    );
+    assert.ok(refundWhisper, "Admin should be notified of refund completion");
+    assert.strictEqual(casino.awardChipsCalls.length, 1);
+    assert.strictEqual(casino.awardChipsCalls[0].amount, 100);
+
+    // Admin resets game
+    await (game as any).onCommandReset(admin, {} as any, []);
+    assert.strictEqual((game as any).players.length, 0, "Game should be cleared on reset");
 
     const validator = new CommandValidator();
 
