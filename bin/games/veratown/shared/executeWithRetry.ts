@@ -12,6 +12,7 @@
  */
 
 import { createLogger } from "../../../logging";
+import { asAppError, isRetryableError, AppError } from "../../../errors";
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
 
@@ -52,13 +53,20 @@ export async function executeWithRetry<T>(
     options: RetryOptions = {},
 ): Promise<T> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    let lastError: Error | undefined;
+    let lastError: AppError | undefined;
 
     for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
         try {
             return await operation();
         } catch (error) {
-            lastError = error as Error;
+            lastError = asAppError(error, "DATABASE", {
+                operation: operationName,
+                attempt,
+            });
+
+            if (!isRetryableError(lastError)) {
+                throw lastError;
+            }
 
             if (attempt < opts.maxRetries + 1) {
                 // Not the last attempt, so retry

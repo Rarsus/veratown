@@ -13,6 +13,7 @@
  */
 
 import { GameEvent } from "./unifiedCharacterTypes";
+import { asAppError } from "../../errors";
 
 /**
  * Callback function type for event listeners.
@@ -95,7 +96,18 @@ export class EventBus {
         listeners.push(...this.wildcardListeners);
 
         // Execute all listeners in parallel
-        await Promise.all(listeners.map((listener) => listener(event)));
+        await Promise.all(
+            listeners.map(async (listener) => {
+                try {
+                    await listener(event);
+                } catch (error) {
+                    throw asAppError(error, "BUSINESS_LOGIC", {
+                        eventType: event.type,
+                        source: event.source,
+                    });
+                }
+            }),
+        );
     }
 
     /**
