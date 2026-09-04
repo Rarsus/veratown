@@ -318,6 +318,9 @@ export function createCrossSystemState(
 ): CrossSystemState {
     return {
         recentEvents: [],
+        inventory: [],
+        effects: [],
+        bondageLevel: 0,
         features: {},
         relationships: {},
         updatedAt: asTimestamp(Date.now()),

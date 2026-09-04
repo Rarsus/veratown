@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { Collection, Db, ObjectId } from "mongodb";
+import { ClientSession, Collection, Db, ObjectId } from "mongodb";
 import {
     UnifiedCharacterProfile,
     GameEvent,
@@ -124,6 +124,17 @@ export class UnifiedCharacterStore {
      */
     public getEventBus(): EventBus {
         return this.eventBus;
+    }
+
+    public async withTransaction<T>(
+        operation: (session: ClientSession) => Promise<T>,
+    ): Promise<T> {
+        const session = this.db.client.startSession();
+        try {
+            return await session.withTransaction(() => operation(session));
+        } finally {
+            await session.endSession();
+        }
     }
 
     /**
@@ -1247,6 +1258,29 @@ export class UnifiedCharacterStore {
                     lastAccessedBy: "veratown",
                     updatedAt: now,
                     version: profile.version + 1,
+                },
+            },
+        );
+    }
+
+    public async updateCrossSystemStats(
+        memberNumber: number,
+        updates: Partial<CrossSystemState>,
+    ): Promise<void> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        const now = asTimestamp(Date.now());
+        const updateDoc: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(updates)) {
+            if (value !== undefined) updateDoc[`crossSystem.${key}`] = value;
+        }
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    ...updateDoc,
+                    updatedAt: now,
+                    version: asVersion(profile.version + 1),
                 },
             },
         );

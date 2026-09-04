@@ -3,14 +3,69 @@
  */
 
 import { BC_AppearanceItem } from "bc-bot";
+import { ClientSession } from "mongodb";
 import { createLogger, Logger } from "../../logging";
 import { EventBus } from "./eventBus";
 import { UnifiedCharacterStore } from "./unifiedCharacterStore";
-import { DareState, VeratownState } from "./unifiedCharacterTypes";
+import {
+    AppliedEffect,
+    CrossSystemState,
+    DareState,
+    GameEvent,
+    MutationInventoryItem,
+    VeratownState,
+} from "./unifiedCharacterTypes";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
 
 export interface GameStateMutationService {
+    updateCharacterProperty(
+        memberNumber: number,
+        property: string,
+        value: unknown,
+        actor?: number,
+    ): Promise<void>;
+    addToInventory(
+        memberNumber: number,
+        item: MutationInventoryItem,
+        actor?: number,
+    ): Promise<void>;
+    removeFromInventory(
+        memberNumber: number,
+        itemKey: string,
+        actor?: number,
+    ): Promise<void>;
+    applyEffect(
+        memberNumber: number,
+        effect: AppliedEffect,
+        actor?: number,
+    ): Promise<void>;
+    recordEvent(event: GameEvent): Promise<void>;
+    awardChips(
+        memberNumber: number,
+        amount: number,
+        reason: string,
+        actor?: number,
+    ): Promise<void>;
+    deductChips(
+        memberNumber: number,
+        amount: number,
+        reason: string,
+        actor?: number,
+    ): Promise<void>;
+    updateLocation(
+        memberNumber: number,
+        position: { X: number; Y: number },
+        actor?: number,
+    ): Promise<void>;
+    updateBondageLevel(
+        memberNumber: number,
+        level: number,
+        actor?: number,
+    ): Promise<void>;
+    withTransaction<T>(
+        operation: (session: ClientSession) => Promise<T>,
+    ): Promise<T>;
     transferChips(
         from: number,
         to: number,
@@ -59,9 +114,12 @@ type MutationStore = Pick<
     | "getProfile"
     | "updateDareStats"
     | "updateVeratownStats"
+    | "updateCrossSystemStats"
     | "suspendAllGames"
     | "resumeSuspendedGames"
     | "recordAuditEntry"
+    | "recordEvent"
+    | "withTransaction"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -73,6 +131,183 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         logger?: Logger,
     ) {
         this.logger = logger ?? createLogger("GameStateMutationService");
+    }
+
+    public async updateCharacterProperty(
+        memberNumber: number,
+        property: string,
+        value: unknown,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (!property || property.includes("$"))
+            throw new Error("property is invalid");
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateVeratownStats(memberNumber, {
+                [property]: value,
+            } as Partial<VeratownState>);
+            await this.audit(
+                memberNumber,
+                "updateCharacterProperty",
+                { property, value },
+                actor,
+            );
+        }, "updateCharacterProperty");
+    }
+
+    public async addToInventory(
+        memberNumber: number,
+        item: MutationInventoryItem,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (
+            !item?.itemKey ||
+            !Number.isInteger(item.quantity) ||
+            item.quantity <= 0
+        )
+            throw new Error("valid inventory item is required");
+        await this.withRetry(async () => {
+            const profile = await this.unifiedStore.getProfile(memberNumber);
+            const inventory = [...(profile.crossSystem.inventory ?? []), item];
+            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
+                inventory,
+            });
+            await this.audit(memberNumber, "addToInventory", { item }, actor);
+        }, "addToInventory");
+    }
+
+    public async removeFromInventory(
+        memberNumber: number,
+        itemKey: string,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (!itemKey) throw new Error("itemKey is required");
+        await this.withRetry(async () => {
+            const profile = await this.unifiedStore.getProfile(memberNumber);
+            const inventory = (profile.crossSystem.inventory ?? []).filter(
+                (item) => item.itemKey !== itemKey,
+            );
+            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
+                inventory,
+            });
+            await this.audit(
+                memberNumber,
+                "removeFromInventory",
+                { itemKey },
+                actor,
+            );
+        }, "removeFromInventory");
+    }
+
+    public async applyEffect(
+        memberNumber: number,
+        effect: AppliedEffect,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (!effect?.effectKey) throw new Error("effect is required");
+        await this.withRetry(async () => {
+            const profile = await this.unifiedStore.getProfile(memberNumber);
+            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
+                effects: [...(profile.crossSystem.effects ?? []), effect],
+            });
+            await this.audit(memberNumber, "applyEffect", { effect }, actor);
+        }, "applyEffect");
+    }
+
+    public recordEvent(event: GameEvent): Promise<void> {
+        return this.unifiedStore
+            .recordEvent(event)
+            .then(() => this.eventBus.publish(event));
+    }
+
+    public withTransaction<T>(
+        operation: (session: ClientSession) => Promise<T>,
+    ): Promise<T> {
+        return this.unifiedStore.withTransaction(operation);
+    }
+
+    public awardChips(
+        memberNumber: number,
+        amount: number,
+        reason: string,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        this.validateAmount(amount);
+        return this.withRetry(
+            () =>
+                this.unifiedStore.updateChips(
+                    memberNumber,
+                    Math.abs(amount),
+                    reason,
+                    actor,
+                ),
+            "awardChips",
+        );
+    }
+
+    public deductChips(
+        memberNumber: number,
+        amount: number,
+        reason: string,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        this.validateAmount(amount);
+        return this.withRetry(
+            () =>
+                this.unifiedStore.updateChips(
+                    memberNumber,
+                    -Math.abs(amount),
+                    reason,
+                    actor,
+                ),
+            "deductChips",
+        );
+    }
+
+    public async updateLocation(
+        memberNumber: number,
+        position: { X: number; Y: number },
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateVeratownStats(memberNumber, {
+                lastPosition: position,
+                lastPositionAt: Date.now(),
+            });
+            await this.audit(
+                memberNumber,
+                "updateLocation",
+                { position },
+                actor,
+            );
+        }, "updateLocation");
+    }
+
+    public async updateBondageLevel(
+        memberNumber: number,
+        level: number,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (!Number.isInteger(level) || level < 0)
+            throw new Error("bondage level must be a non-negative integer");
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
+                bondageLevel: level,
+            });
+            await this.audit(
+                memberNumber,
+                "updateBondageLevel",
+                { level },
+                actor,
+            );
+        }, "updateBondageLevel");
     }
 
     public async transferChips(

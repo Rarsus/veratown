@@ -29,6 +29,10 @@ function createStore() {
         },
         recordAuditEntry: async (...args: unknown[]) =>
             calls.push(`audit:${args[1]}`),
+        recordEvent: async () => calls.push("event"),
+        withTransaction: async (
+            operation: (session: unknown) => Promise<unknown>,
+        ) => operation({}),
     };
 }
 

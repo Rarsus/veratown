@@ -162,6 +162,9 @@ export interface VeratownState {
 // ===== CROSS-SYSTEM STATE
 export interface CrossSystemState {
     recentEvents: GameEvent[];
+    inventory: MutationInventoryItem[];
+    effects: AppliedEffect[];
+    bondageLevel: number;
     features: {
         canBetChipsToEscape?: boolean;
         autoLockWinnings?: boolean;
@@ -172,6 +175,19 @@ export interface CrossSystemState {
         cageFriends?: number[];
     };
     updatedAt: number;
+}
+
+export interface MutationInventoryItem {
+    itemKey: string;
+    quantity: number;
+    metadata?: Record<string, unknown>;
+}
+
+export interface AppliedEffect {
+    effectKey: string;
+    appliedAt: number;
+    expiresAt?: number;
+    metadata?: Record<string, unknown>;
 }
 
 // ===== UNIFIED CHARACTER PROFILE (Main MongoDB document)
