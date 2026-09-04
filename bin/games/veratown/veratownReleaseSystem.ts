@@ -19,6 +19,10 @@ import { VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationStore } from "./veratownLocationStore";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "../shared/gameStateMutationService";
+import {
     RELEASE_NUDITY_CHECK_INTERVAL_MS,
     RELEASE_NUDITY_TIMEOUT_MS,
     RELEASE_PUNISHMENT_ROOM_KEY,
@@ -148,7 +152,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         private locationStore?: VeratownLocationStore,
         private characterProfileStore?: any,
         private unifiedStore?: UnifiedCharacterStore,
-    ) {}
+        private mutationService?: GameStateMutationService,
+    ) {
+        if (unifiedStore) {
+            this.mutationService ??= new GameStateMutationServiceImpl(
+                unifiedStore,
+                unifiedStore.getEventBus(),
+            );
+        }
+    }
 
     private readonly actualClothingGroups = new Set<string>([
         "Bra",
@@ -531,10 +543,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         if (this.unifiedStore) {
             await this.executeWithRetry(
                 () =>
-                    this.unifiedStore!.updatePosition(character.MemberNumber, {
-                        X: location.x,
-                        Y: location.y,
-                    }),
+                    this.mutationService!.updateLocation(
+                        character.MemberNumber,
+                        {
+                            X: location.x,
+                            Y: location.y,
+                        },
+                    ),
                 2,
                 "update_position_after_teleport",
             );

@@ -9,9 +9,11 @@ import { EventBus } from "./eventBus";
 import { UnifiedCharacterStore } from "./unifiedCharacterStore";
 import {
     AppliedEffect,
+    CasinoState,
     CrossSystemState,
     DareState,
     GameEvent,
+    KeypadAccessRecord,
     MutationInventoryItem,
     VeratownState,
 } from "./unifiedCharacterTypes";
@@ -23,6 +25,31 @@ export interface GameStateMutationService {
         memberNumber: number,
         property: string,
         value: unknown,
+        actor?: number,
+    ): Promise<void>;
+    updateCharacterName(
+        memberNumber: number,
+        name: string,
+        actor?: number,
+    ): Promise<void>;
+    updateCasinoStats(
+        memberNumber: number,
+        updates: Partial<CasinoState>,
+        actor?: number,
+    ): Promise<void>;
+    updateDareStats(
+        memberNumber: number,
+        updates: Partial<DareState>,
+        actor?: number,
+    ): Promise<void>;
+    updateVeratownStats(
+        memberNumber: number,
+        updates: Partial<VeratownState>,
+        actor?: number,
+    ): Promise<void>;
+    updateCrossSystemStats(
+        memberNumber: number,
+        updates: Partial<CrossSystemState>,
         actor?: number,
     ): Promise<void>;
     addToInventory(
@@ -47,6 +74,7 @@ export interface GameStateMutationService {
         reason: string,
         actor?: number,
     ): Promise<void>;
+    claimDailyFreeChips(memberNumber: number, amount: number): Promise<boolean>;
     deductChips(
         memberNumber: number,
         amount: number,
@@ -76,6 +104,7 @@ export interface GameStateMutationService {
         memberNumber: number,
         amount: number,
         reason: "bondage" | "parole" | "cage",
+        lockUntil?: number,
     ): Promise<void>;
     unlockChips(memberNumber: number, amount?: number): Promise<void>;
     applyBondage(
@@ -102,11 +131,31 @@ export interface GameStateMutationService {
         reason: string,
     ): Promise<void>;
     resumeGame(memberNumber: number, gameId: string): Promise<void>;
+    addKeypadAccess(
+        memberNumber: number,
+        access: KeypadAccessRecord,
+        actor?: number,
+    ): Promise<void>;
+    removeKeypadAccess(
+        memberNumber: number,
+        doorKey: string,
+        groupName?: string,
+        actor?: number,
+    ): Promise<void>;
+    recordAuditEntry(
+        memberNumber: number,
+        operation: string,
+        context: Record<string, unknown>,
+        actor?: number,
+    ): Promise<void>;
 }
 
 type MutationStore = Pick<
     UnifiedCharacterStore,
     | "updateChips"
+    | "claimDailyFreeChips"
+    | "updateCharacterName"
+    | "updateCasinoStats"
     | "lockChips"
     | "unlockChips"
     | "applyBondage"
@@ -115,6 +164,8 @@ type MutationStore = Pick<
     | "updateDareStats"
     | "updateVeratownStats"
     | "updateCrossSystemStats"
+    | "addKeypadAccess"
+    | "removeKeypadAccess"
     | "suspendAllGames"
     | "resumeSuspendedGames"
     | "recordAuditEntry"
@@ -154,6 +205,95 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                 actor,
             );
         }, "updateCharacterProperty");
+    }
+
+    public async updateCharacterName(
+        memberNumber: number,
+        name: string,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (!name) throw new Error("name is required");
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateCharacterName(memberNumber, name);
+            await this.audit(
+                memberNumber,
+                "updateCharacterName",
+                { name },
+                actor,
+            );
+        }, "updateCharacterName");
+    }
+
+    public async updateCasinoStats(
+        memberNumber: number,
+        updates: Partial<CasinoState>,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateCasinoStats(memberNumber, updates);
+            await this.audit(
+                memberNumber,
+                "updateCasinoStats",
+                { updates },
+                actor,
+            );
+        }, "updateCasinoStats");
+    }
+
+    public async updateDareStats(
+        memberNumber: number,
+        updates: Partial<DareState>,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateDareStats(memberNumber, updates);
+            await this.audit(
+                memberNumber,
+                "updateDareStats",
+                { updates },
+                actor,
+            );
+        }, "updateDareStats");
+    }
+
+    public async updateVeratownStats(
+        memberNumber: number,
+        updates: Partial<VeratownState>,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateVeratownStats(memberNumber, updates);
+            await this.audit(
+                memberNumber,
+                "updateVeratownStats",
+                { updates },
+                actor,
+            );
+        }, "updateVeratownStats");
+    }
+
+    public async updateCrossSystemStats(
+        memberNumber: number,
+        updates: Partial<CrossSystemState>,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateCrossSystemStats(
+                memberNumber,
+                updates,
+            );
+            await this.audit(
+                memberNumber,
+                "updateCrossSystemStats",
+                { updates },
+                actor,
+            );
+        }, "updateCrossSystemStats");
     }
 
     public async addToInventory(
@@ -278,6 +418,28 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         }, "deductChips");
     }
 
+    public async claimDailyFreeChips(
+        memberNumber: number,
+        amount: number,
+    ): Promise<boolean> {
+        this.validateMember(memberNumber);
+        this.validatePositiveIntegerAmount(amount);
+        const claimed = await this.unifiedStore.claimDailyFreeChips(
+            memberNumber,
+            amount,
+            0,
+        );
+        if (claimed) {
+            await this.audit(
+                memberNumber,
+                "claimDailyFreeChips",
+                { amount },
+                0,
+            );
+        }
+        return claimed;
+    }
+
     public async updateLocation(
         memberNumber: number,
         position: { X: number; Y: number },
@@ -352,12 +514,22 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         memberNumber: number,
         amount: number,
         reason: "bondage" | "parole" | "cage",
+        lockUntil?: number,
     ): Promise<void> {
         this.validateMember(memberNumber);
         this.validateAmount(amount);
         await this.withRetry(async () => {
-            await this.unifiedStore.lockChips(memberNumber, amount, reason);
-            await this.audit(memberNumber, "lockChips", { amount, reason });
+            await this.unifiedStore.lockChips(
+                memberNumber,
+                amount,
+                reason,
+                lockUntil,
+            );
+            await this.audit(memberNumber, "lockChips", {
+                amount,
+                reason,
+                lockUntil,
+            });
         }, "lockChips");
     }
 
@@ -518,6 +690,55 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
             await this.unifiedStore.resumeSuspendedGames(memberNumber);
             await this.audit(memberNumber, "resumeGame", { gameId });
         }, "resumeGame");
+    }
+
+    public async addKeypadAccess(
+        memberNumber: number,
+        access: KeypadAccessRecord,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        await this.withRetry(async () => {
+            await this.unifiedStore.addKeypadAccess(memberNumber, access);
+            await this.audit(
+                memberNumber,
+                "addKeypadAccess",
+                { access },
+                actor,
+            );
+        }, "addKeypadAccess");
+    }
+
+    public async removeKeypadAccess(
+        memberNumber: number,
+        doorKey: string,
+        groupName?: string,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        if (!doorKey) throw new Error("doorKey is required");
+        await this.withRetry(async () => {
+            await this.unifiedStore.removeKeypadAccess(
+                memberNumber,
+                doorKey,
+                groupName,
+            );
+            await this.audit(
+                memberNumber,
+                "removeKeypadAccess",
+                { doorKey, groupName },
+                actor,
+            );
+        }, "removeKeypadAccess");
+    }
+
+    public recordAuditEntry(
+        memberNumber: number,
+        operation: string,
+        context: Record<string, unknown>,
+        actor?: number,
+    ): Promise<void> {
+        return this.audit(memberNumber, operation, context, actor);
     }
 
     private async publish(

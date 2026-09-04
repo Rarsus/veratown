@@ -187,6 +187,15 @@ export class UnifiedCharacterStore {
                 [
                     {
                         timestamp: now,
+                        type: "chip_transfer",
+                        source: "casino",
+                        actor,
+                        target: to,
+                        data: { from, to, amount, reason },
+                        processed: false,
+                    },
+                    {
+                        timestamp: now,
                         type: "chips_lost",
                         source: "casino",
                         actor,
@@ -348,6 +357,72 @@ export class UnifiedCharacterStore {
 
         await this.recordEvent(event);
         await this.eventBus.publish(event);
+    }
+
+    /**
+     * Atomically claim a daily chip grant. The date check and balance update
+     * share one transaction so concurrent joins can only grant once.
+     */
+    public async claimDailyFreeChips(
+        memberNumber: number,
+        amount: number,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        await this.getProfile(memberNumber);
+        const now = asTimestamp(Date.now());
+        const cutoff = Number(now) - 24 * 60 * 60 * 1000;
+        let event: GameEvent | undefined;
+        let claimed = false;
+
+        await this.withTransaction(async (session) => {
+            const profile = await this.profiles.findOneAndUpdate(
+                {
+                    _id: memberNumber,
+                    $or: [
+                        { "casino.lastDailyClaimAt": { $lt: cutoff } },
+                        { "casino.lastDailyClaimAt": { $exists: false } },
+                    ],
+                },
+                {
+                    $inc: {
+                        "casino.chips": amount,
+                        "casino.version": 1,
+                        version: 1,
+                    },
+                    $set: {
+                        "casino.lastDailyClaimAt": now,
+                        "casino.updatedAt": now,
+                        lastAccessedAt: now,
+                        lastAccessedBy: "casino",
+                        updatedAt: now,
+                    },
+                },
+                { returnDocument: "after", session },
+            );
+
+            if (!profile) return;
+            claimed = true;
+            event = {
+                timestamp: now,
+                type: "chips_earned",
+                source: "casino",
+                actor,
+                target: memberNumber,
+                data: {
+                    previousChips: profile.casino.chips - amount,
+                    newChips: profile.casino.chips,
+                    delta: amount,
+                    reason: "daily_free_chips",
+                },
+                processed: false,
+            };
+            await this.events.insertOne(event, { session });
+        });
+
+        if (event) {
+            await this.eventBus.publish(event);
+        }
+        return claimed;
     }
 
     /**

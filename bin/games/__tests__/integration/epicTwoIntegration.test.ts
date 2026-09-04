@@ -85,6 +85,7 @@ describe("Casino integration", () => {
         });
 
         assert.equal(store.calls[0][1], 200);
-        assert.equal(store.calls[1][1], "blackjack_win");
+        assert.equal(store.calls[1][1], "awardChips");
+        assert.equal(store.calls[2][1], "blackjack_win");
     });
 });

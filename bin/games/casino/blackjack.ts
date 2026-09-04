@@ -503,11 +503,13 @@ export class BlackjackGame implements Game {
             return;
         }
 
-        await unifiedStore.updateChips(
-            sender.MemberNumber,
-            -currentBet.stake,
-            "Blackjack double down",
-        );
+        await this.casino
+            .getMutationService()
+            .deductChips(
+                sender.MemberNumber,
+                currentBet.stake,
+                "Blackjack double down",
+            );
         currentBet.stake *= 2; // Double the stake
         hand.push(this.deck.pop()!);
         currentBet.standing = true;
@@ -622,11 +624,13 @@ export class BlackjackGame implements Game {
             );
             return;
         }
-        await unifiedStore.updateChips(
-            sender.MemberNumber,
-            -currentBet.stake,
-            "Blackjack split",
-        );
+        await this.casino
+            .getMutationService()
+            .deductChips(
+                sender.MemberNumber,
+                currentBet.stake,
+                "Blackjack split",
+            );
         player.bets.push({
             memberNumber: sender.MemberNumber,
             memberName: sender.toString(),
@@ -695,8 +699,8 @@ export class BlackjackGame implements Game {
             if (totalWinnings > 0) {
                 // Update chips using unified store (Phase 5 direct access)
                 await this.casino
-                    .getUnifiedStore()
-                    .updateChips(
+                    .getMutationService()
+                    .awardChips(
                         player.memberNumber,
                         totalWinnings,
                         "blackjack_win",
@@ -875,11 +879,9 @@ export class BlackjackGame implements Game {
                 return;
             }
 
-            await unifiedStore.updateChips(
-                sender.MemberNumber,
-                -bet.stake,
-                "Blackjack bet",
-            );
+            await this.casino
+                .getMutationService()
+                .deductChips(sender.MemberNumber, bet.stake, "Blackjack bet");
         } else {
             const blockers = getItemsBlockingForfeit(
                 sender,
@@ -1049,8 +1051,8 @@ export class BlackjackGame implements Game {
 
             if (totalRefund > 0) {
                 await this.casino
-                    .getUnifiedStore()
-                    .updateChips(
+                    .getMutationService()
+                    .awardChips(
                         sender.MemberNumber,
                         totalRefund,
                         "Blackjack bet cancellation",

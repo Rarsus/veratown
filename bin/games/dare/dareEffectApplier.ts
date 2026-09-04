@@ -14,6 +14,7 @@
 
 import { API_Character } from "bc-bot";
 import { DareDoc } from "./dareDataService";
+import { GameStateMutationService } from "../shared/gameStateMutationService";
 
 /**
  * Strategy interface for dare effect application.
@@ -52,6 +53,10 @@ export interface DareEffect {
 export class DareEffectApplier {
     private effects: Map<string, DareEffect> = new Map();
 
+    public constructor(
+        private readonly mutationService?: GameStateMutationService,
+    ) {}
+
     /**
      * Register an effect handler for a dare type.
      * Allows for extensibility without modifying this class.
@@ -76,24 +81,39 @@ export class DareEffectApplier {
         success: boolean;
         message: string;
     }> {
-        const effect = this.effects.get(dare.category);
+        const dareType =
+            (dare as DareDoc & { type?: string }).type ?? dare.category;
+        const effect = this.effects.get(dareType);
 
         if (!effect) {
             return {
                 success: false,
-                message: `Unknown dare type: ${dare.category}`,
+                message: `Unknown dare type: ${dareType}`,
             };
         }
 
         if (!effect.canApply(target)) {
             return {
                 success: false,
-                message: `Cannot apply ${dare.category} dare to ${target.Name}`,
+                message: `Cannot apply ${dareType} dare to ${target.Name}`,
             };
         }
 
         try {
             await effect.apply(target);
+            if (this.mutationService) {
+                await this.mutationService.applyEffect(target.MemberNumber, {
+                    effectKey: dare._id ?? dareType,
+                    appliedAt: Date.now(),
+                    expiresAt: dare.durationMs
+                        ? Date.now() + dare.durationMs
+                        : undefined,
+                    metadata: {
+                        category: dareType,
+                        text: dare.text,
+                    },
+                });
+            }
             return {
                 success: true,
                 message: effect.describe(),
@@ -101,7 +121,7 @@ export class DareEffectApplier {
         } catch (error) {
             return {
                 success: false,
-                message: `Failed to apply ${dare.category} dare: ${error instanceof Error ? error.message : "unknown error"}`,
+                message: `Failed to apply ${dareType} dare: ${error instanceof Error ? error.message : "unknown error"}`,
             };
         }
     }

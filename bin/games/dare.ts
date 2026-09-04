@@ -25,6 +25,10 @@ import { wait } from "../hub/utils";
 import { GameTimer } from "./casino/gameTimer";
 import { CommandValidator } from "./shared/commandValidator";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
+import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "./shared/gameStateMutationService";
 import { DareDataService, DareDoc } from "./dare/dareDataService";
 import { DareStateService } from "./dare/dareStateService";
 import {
@@ -249,6 +253,7 @@ Game Overview
     private participantManager: GameParticipantManager;
     private commandHandlers: DareCommandHandlers;
     private effectApplier: DareEffectApplier;
+    private mutationService: GameStateMutationService;
 
     /**
      * DARE SYSTEM CONSTRUCTOR - Three-Layer Architecture
@@ -267,12 +272,19 @@ Game Overview
         private dareDataService?: DareDataService,
         private dareStateService?: DareStateService,
         private config?: DareConfig,
+        mutationService?: GameStateMutationService,
     ) {
         // Initialize unified store (Layer 1: character state)
         this.unifiedStore =
             unifiedStore ||
             (global as any).unifiedCharacterStore ||
             new UnifiedCharacterStore(undefined as any);
+        this.mutationService =
+            mutationService ??
+            new GameStateMutationServiceImpl(
+                this.unifiedStore,
+                this.unifiedStore.getEventBus(),
+            );
 
         // Initialize dare data service (Layer 3: reference data)
         // If not provided, will be injected later via setter
@@ -295,7 +307,7 @@ Game Overview
         this.disconnectTracker = new DisconnectTracker();
         this.participantManager = new GameParticipantManager();
         this.commandHandlers = new DareCommandHandlers();
-        this.effectApplier = new DareEffectApplier();
+        this.effectApplier = new DareEffectApplier(this.mutationService);
         this.gameManager = new GameManager(); // Phase 3: Game management
 
         this.ready = this.loadState().catch((e) => {
@@ -1914,7 +1926,7 @@ Game Overview
                 // Reward dares always benefit the drawer, regardless of the
                 // dare's "target" field.
                 if (dare.chips) {
-                    await this.unifiedStore.updateChips(
+                    await this.mutationService.awardChips(
                         drawer.MemberNumber,
                         dare.chips,
                         "dare_reward",

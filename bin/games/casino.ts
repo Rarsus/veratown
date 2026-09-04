@@ -115,6 +115,10 @@ export class Casino implements GamePlugin {
         return this.unifiedStore;
     }
 
+    public getMutationService(): GameStateMutationService {
+        return this.mutationService;
+    }
+
     public constructor(
         private conn: API_Connector,
         db: Db,
@@ -225,7 +229,7 @@ export class Casino implements GamePlugin {
         memberNumber: number,
         name: string,
     ): Promise<void> {
-        await this.unifiedStore.updateCharacterName(memberNumber, name);
+        await this.mutationService.updateCharacterName(memberNumber, name);
     }
 
     private async getPlayer(memberNumber: number): Promise<any> {
@@ -265,7 +269,7 @@ export class Casino implements GamePlugin {
         }
         // Update casino stats if provided
         if (player.score !== undefined) {
-            await this.unifiedStore.updateCasinoStats(player.memberNumber, {
+            await this.mutationService.updateCasinoStats(player.memberNumber, {
                 score: player.score,
                 totalWins: player.totalWins || 0,
                 totalLosses: player.totalLosses || 0,
@@ -292,7 +296,7 @@ export class Casino implements GamePlugin {
 
     private async addPurchase(purchase: any): Promise<void> {
         // Record purchase as an event
-        await this.unifiedStore.recordEvent({
+        await this.mutationService.recordEvent({
             memberNumber: purchase.memberNumber,
             type: "casino_purchase",
             timestamp: Date.now(),
@@ -301,23 +305,10 @@ export class Casino implements GamePlugin {
     }
 
     private async claimDailyFreeChips(memberNumber: number): Promise<boolean> {
-        const profile = await this.unifiedStore.getProfile(memberNumber);
-        const lastClaimTime = profile.casino?.lastDailyClaimAt || 0;
-        const now = Date.now();
-        const dayInMs = 24 * 60 * 60 * 1000;
-
-        if (now - lastClaimTime < dayInMs) {
-            return false;
-        }
-
-        // Award free chips
-        await this.mutationService.awardChips(
+        return this.mutationService.claimDailyFreeChips(
             memberNumber,
             FREE_CHIPS,
-            "daily_free_chips",
-            0,
         );
-        return true;
     }
 
     private async transferCredits(
@@ -325,19 +316,17 @@ export class Casino implements GamePlugin {
         toMemberNumber: number,
         amount: number,
     ): Promise<boolean> {
-        const fromProfile =
-            await this.unifiedStore.getCasinoView(fromMemberNumber);
-        if (!fromProfile || fromProfile.chips < amount) {
+        try {
+            await this.mutationService.transferChips(
+                fromMemberNumber,
+                toMemberNumber,
+                amount,
+                "casino_transfer",
+            );
+            return true;
+        } catch {
             return false;
         }
-
-        await this.mutationService.transferChips(
-            fromMemberNumber,
-            toMemberNumber,
-            amount,
-            "casino_transfer",
-        );
-        return true;
     }
 
     /**
