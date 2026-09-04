@@ -6,6 +6,9 @@ import { GameStateMutationServiceImpl } from "../gameStateMutationService";
 function createStore() {
     const calls: string[] = [];
     const profile = {
+        name: "Player",
+        version: 0,
+        casino: { chips: 100, recentWinnings: 0 },
         dare: { activeBondage: [] },
         veratown: { cageIncarcerations: [] },
         crossSystem: { inventory: [], effects: [], bondageLevel: 0 },
@@ -33,11 +36,18 @@ function createStore() {
             Object.assign(profile.crossSystem, updates);
             calls.push("cross-system");
         },
+        updateCharacterName: async (_member: number, name: string) => {
+            profile.name = name;
+            calls.push("name");
+        },
+        updateCasinoStats: async () => calls.push("casino"),
         suspendAllGames: async () => {
             calls.push("suspend");
+            return 2;
         },
         resumeSuspendedGames: async () => {
             calls.push("resume");
+            return 2;
         },
         recordAuditEntry: async (...args: unknown[]) =>
             calls.push(`audit:${args[1]}`),
@@ -49,6 +59,8 @@ function createStore() {
             calls.push(`chips:-${args[2]}`);
             calls.push(`chips:${args[2]}`);
         },
+        addKeypadAccess: async () => calls.push("keypad-add"),
+        removeKeypadAccess: async () => calls.push("keypad-remove"),
     };
 }
 
@@ -134,4 +146,90 @@ test("GameStateMutationService claims daily chips through the atomic store API",
     assert.equal(await service.claimDailyFreeChips(1, 20), true);
     assert.ok(store.calls.includes("daily:20"));
     assert.ok(store.calls.includes("audit:claimDailyFreeChips"));
+});
+
+test("GameStateMutationService delegates all state mutations", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    await service.updateCharacterName(1, "New Name");
+    await service.updateCasinoStats(1, { score: 10 });
+    await service.updateDareStats(1, { totalGamesPlayed: 1 });
+    await service.updateVeratownStats(1, { roles: ["admin"] });
+    await service.updateCrossSystemStats(1, { bondageLevel: 2 });
+    await service.updateLocation(1, { X: 3, Y: 4 });
+    await service.lockChips(1, 5, "cage", 123);
+    await service.unlockChips(1, 2);
+    await service.applyBondage(
+        1,
+        [{ Group: "ItemNeck", Name: "Collar" } as any],
+        2,
+        "test",
+    );
+    await service.removeBondage(1, "test");
+    await service.updateGameProgress(1, "dare", { totalGamesPlayed: 2 });
+    await service.updateGameProgress(1, "veratown", { roles: ["mod"] });
+    await service.updateGameProgress(1, "casino", { score: 20 });
+    assert.equal(await service.suspendGame(1, "game", "cage"), 2);
+    assert.equal(await service.resumeGame(1, "game"), 2);
+    await service.addKeypadAccess(1, {
+        doorKey: "door",
+        groupName: "admin",
+        grantedAt: 1,
+        grantedBy: 2,
+    });
+    await service.removeKeypadAccess(1, "door", "admin");
+    await service.recordEvent({
+        type: "chips_earned",
+        source: "test",
+        actor: 1,
+        target: 1,
+        timestamp: Date.now(),
+        data: {},
+        processed: false,
+    } as any);
+    await service.recordAuditEntry(1, "manual", { value: true }, 2);
+
+    assert.ok(store.calls.includes("name"));
+    assert.ok(store.calls.includes("casino"));
+    assert.ok(store.calls.includes("dare"));
+    assert.ok(store.calls.includes("veratown"));
+    assert.ok(store.calls.includes("keypad-add"));
+    assert.ok(store.calls.includes("keypad-remove"));
+    assert.ok(store.calls.includes("event"));
+});
+
+test("GameStateMutationService validates remaining inputs and handles failed audits", async () => {
+    const store = createStore();
+    store.claimDailyFreeChips = async () => false;
+    store.recordAuditEntry = async () => {
+        throw new Error("audit unavailable");
+    };
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    assert.equal(await service.claimDailyFreeChips(1, 10), false);
+    await assert.rejects(() => service.updateCharacterName(1, ""));
+    await assert.rejects(() => service.updateCharacterProperty(1, "$bad", 1));
+    await assert.rejects(() =>
+        service.addToInventory(1, { itemKey: "", quantity: 1 }),
+    );
+    await assert.rejects(() => service.removeFromInventory(1, ""));
+    await assert.rejects(() => service.applyEffect(1, {} as any));
+    await assert.rejects(() => service.updateBondageLevel(1, -1));
+    await assert.rejects(() => service.transferChips(1, 1, 1, "same"));
+    await assert.rejects(() => service.transferChips(1, 2, -1, "negative"));
+    await assert.rejects(() => service.enterCage(1, ""));
+    await assert.rejects(() => service.updateGameProgress(1, "", {}));
+    await assert.rejects(() => service.suspendGame(1, "", "reason"));
+    await assert.rejects(() => service.resumeGame(1, ""));
+    await assert.rejects(() => service.removeKeypadAccess(1, ""));
+    await assert.rejects(() => service.updateCharacterName(-1, "bad"));
+
+    await service.awardChips(1, 1, "audit failure");
 });
