@@ -149,6 +149,7 @@ export class UnifiedCharacterStore {
         }
         await this.getProfile(from);
         await this.getProfile(to);
+        let transferEvents: GameEvent[] = [];
         await this.withTransaction(async (session) => {
             await this.init();
             const now = asTimestamp(Date.now());
@@ -197,39 +198,47 @@ export class UnifiedCharacterStore {
                 },
                 { session },
             );
-            await this.events.insertMany(
-                [
-                    {
-                        timestamp: now,
-                        type: "chip_transfer",
-                        source: "casino",
-                        actor,
-                        target: to,
-                        data: { from, to, amount, reason },
-                        processed: false,
-                    },
-                    {
-                        timestamp: now,
-                        type: "chips_lost",
-                        source: "casino",
-                        actor,
-                        target: from,
-                        data: { delta: -amount, reason, transferTo: to },
-                        processed: false,
-                    },
-                    {
-                        timestamp: now,
-                        type: "chips_earned",
-                        source: "casino",
-                        actor,
-                        target: to,
-                        data: { delta: amount, reason, transferFrom: from },
-                        processed: false,
-                    },
-                ],
-                { session },
-            );
+            transferEvents = [
+                {
+                    timestamp: now,
+                    type: "chip_transfer",
+                    source: "casino",
+                    actor,
+                    target: to,
+                    data: { from, to, amount, reason },
+                    processed: false,
+                },
+                {
+                    timestamp: now,
+                    type: "chips_lost",
+                    source: "casino",
+                    actor,
+                    target: from,
+                    data: { delta: -amount, reason, transferTo: to },
+                    processed: false,
+                },
+                {
+                    timestamp: now,
+                    type: "chips_earned",
+                    source: "casino",
+                    actor,
+                    target: to,
+                    data: { delta: amount, reason, transferFrom: from },
+                    processed: false,
+                },
+            ];
+            await this.events.insertMany(transferEvents, { session });
         });
+        for (const event of transferEvents) {
+            try {
+                await this.eventBus.publish(event);
+            } catch (error) {
+                console.warn(
+                    `Failed to publish transfer event ${event.type}:`,
+                    error,
+                );
+            }
+        }
     }
 
     /**

@@ -378,20 +378,16 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     ): Promise<void> {
         this.validateMember(memberNumber);
         this.validatePositiveIntegerAmount(amount);
-        return this.withRetry(async () => {
-            await this.unifiedStore.updateChips(
-                memberNumber,
-                amount,
-                reason,
-                actor,
+        return this.unifiedStore
+            .updateChips(memberNumber, amount, reason, actor)
+            .then(() =>
+                this.auditAfterMutation(
+                    memberNumber,
+                    "awardChips",
+                    { amount, reason },
+                    actor,
+                ),
             );
-            await this.audit(
-                memberNumber,
-                "awardChips",
-                { amount, reason },
-                actor,
-            );
-        }, "awardChips");
     }
 
     public deductChips(
@@ -402,20 +398,16 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     ): Promise<void> {
         this.validateMember(memberNumber);
         this.validatePositiveIntegerAmount(amount);
-        return this.withRetry(async () => {
-            await this.unifiedStore.updateChips(
-                memberNumber,
-                -amount,
-                reason,
-                actor,
+        return this.unifiedStore
+            .updateChips(memberNumber, -amount, reason, actor)
+            .then(() =>
+                this.auditAfterMutation(
+                    memberNumber,
+                    "deductChips",
+                    { amount, reason },
+                    actor,
+                ),
             );
-            await this.audit(
-                memberNumber,
-                "deductChips",
-                { amount, reason },
-                actor,
-            );
-        }, "deductChips");
     }
 
     public async claimDailyFreeChips(
@@ -499,13 +491,18 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
             reason,
             from,
         );
-        await this.audit(from, "transferChips", {
+        await this.auditAfterMutation(from, "transferChips", {
             from,
             to,
             amount,
             reason,
         });
-        await this.audit(to, "transferChips", { from, to, amount, reason });
+        await this.auditAfterMutation(to, "transferChips", {
+            from,
+            to,
+            amount,
+            reason,
+        });
     }
 
     public async lockChips(
@@ -672,12 +669,13 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         this.validateMember(memberNumber);
         if (!gameId || !reason)
             throw new Error("gameId and reason are required");
-        return this.withRetry(async () => {
-            const suspendedCount =
-                await this.unifiedStore.suspendAllGames(memberNumber);
-            await this.audit(memberNumber, "suspendGame", { gameId, reason });
-            return suspendedCount;
-        }, "suspendGame");
+        const suspendedCount =
+            await this.unifiedStore.suspendAllGames(memberNumber);
+        await this.auditAfterMutation(memberNumber, "suspendGame", {
+            gameId,
+            reason,
+        });
+        return suspendedCount;
     }
 
     public async resumeGame(
@@ -686,12 +684,10 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     ): Promise<number> {
         this.validateMember(memberNumber);
         if (!gameId) throw new Error("gameId is required");
-        return this.withRetry(async () => {
-            const resumedCount =
-                await this.unifiedStore.resumeSuspendedGames(memberNumber);
-            await this.audit(memberNumber, "resumeGame", { gameId });
-            return resumedCount;
-        }, "resumeGame");
+        const resumedCount =
+            await this.unifiedStore.resumeSuspendedGames(memberNumber);
+        await this.auditAfterMutation(memberNumber, "resumeGame", { gameId });
+        return resumedCount;
     }
 
     public async addKeypadAccess(
@@ -771,6 +767,22 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
             context,
             actor,
         );
+    }
+
+    private async auditAfterMutation(
+        memberNumber: number,
+        operation: string,
+        context: Record<string, unknown>,
+        actor?: number,
+    ): Promise<void> {
+        try {
+            await this.audit(memberNumber, operation, context, actor);
+        } catch (error) {
+            this.logger.error(`Audit failed: ${operation}`, error, {
+                memberNumber,
+                operation,
+            });
+        }
     }
 
     private async withRetry<T>(
