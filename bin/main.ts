@@ -17,7 +17,7 @@ import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom
 import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
 import type { API_Connector } from "bc-bot";
-import { ConfigFile } from "./config";
+import { ConfigFile, validateConfig } from "./config";
 import { Db } from "mongodb";
 import { Veratown } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
@@ -60,12 +60,10 @@ function parseBoolean(
     defaultValue: boolean,
 ): boolean {
     if (value === undefined) return defaultValue;
-    return (
-        value === "true" ||
-        value === "1" ||
-        value === "yes" ||
-        value.toLowerCase() === "true"
-    );
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes"].includes(normalized)) return true;
+    if (["false", "0", "no"].includes(normalized)) return false;
+    throw new Error(`Invalid boolean value for configuration: ${value}`);
 }
 
 /**
@@ -75,24 +73,15 @@ function parseJsonArray(
     value: string | undefined,
     fieldName: string,
 ): any[] | undefined {
-    const logger = createLogger("Config");
-    if (!value) return undefined;
+    if (value === undefined) return undefined;
     try {
         const parsed = JSON.parse(value);
         if (!Array.isArray(parsed)) {
-            logger.warn(`${fieldName} is not a valid JSON array, ignoring`, {
-                field: fieldName,
-                value,
-            });
-            return undefined;
+            throw new Error(`${fieldName} must be a JSON array`);
         }
         return parsed;
     } catch (error) {
-        logger.error(`Failed to parse ${fieldName} as JSON array`, error, {
-            field: fieldName,
-            value,
-        });
-        return undefined;
+        throw new Error(`Invalid JSON array for ${fieldName}`);
     }
 }
 
@@ -114,10 +103,8 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             fileConfig = JSON.parse(configString);
             logger.info("Loaded from file", { path: configFilePath });
         } catch (err) {
-            logger.error(
-                "Failed to read config file, using environment variables",
-                err,
-                { path: configFilePath },
+            throw new Error(
+                `Failed to read configuration file: ${configFilePath}`,
             );
         }
     } else {
@@ -132,25 +119,33 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     // ============================================================================
     // CORE BOT CREDENTIALS
     // ============================================================================
-    if (process.env.BOT_USER) config.user = process.env.BOT_USER;
-    if (process.env.BOT_PASSWORD) config.password = process.env.BOT_PASSWORD;
-    if (process.env.BOT_USER2) config.user2 = process.env.BOT_USER2;
-    if (process.env.BOT_PASSWORD2) config.password2 = process.env.BOT_PASSWORD2;
-    if (process.env.BOT_USER3) config.user3 = process.env.BOT_USER3;
-    if (process.env.BOT_PASSWORD3) config.password3 = process.env.BOT_PASSWORD3;
+    if (process.env.BOT_USER !== undefined) config.user = process.env.BOT_USER;
+    if (process.env.BOT_PASSWORD !== undefined)
+        config.password = process.env.BOT_PASSWORD;
+    if (process.env.BOT_USER2 !== undefined)
+        config.user2 = process.env.BOT_USER2;
+    if (process.env.BOT_PASSWORD2 !== undefined)
+        config.password2 = process.env.BOT_PASSWORD2;
+    if (process.env.BOT_USER3 !== undefined)
+        config.user3 = process.env.BOT_USER3;
+    if (process.env.BOT_PASSWORD3 !== undefined)
+        config.password3 = process.env.BOT_PASSWORD3;
 
     // ============================================================================
     // ENVIRONMENT AND GAME SETTINGS
     // ============================================================================
-    if (process.env.BOT_ENV) config.env = process.env.BOT_ENV;
-    if (process.env.BOT_GAME) config.game = process.env.BOT_GAME;
-    if (process.env.BC_SERVER_URL) config.url = process.env.BC_SERVER_URL;
+    if (process.env.BOT_ENV !== undefined) config.env = process.env.BOT_ENV;
+    if (process.env.BOT_GAME !== undefined) config.game = process.env.BOT_GAME;
+    if (process.env.BC_SERVER_URL !== undefined)
+        config.url = process.env.BC_SERVER_URL;
 
     // ============================================================================
     // MONGODB CONFIGURATION
     // ============================================================================
-    if (process.env.MONGODB_URI) config.mongo_uri = process.env.MONGODB_URI;
-    if (process.env.MONGODB_DB) config.mongo_db = process.env.MONGODB_DB;
+    if (process.env.MONGODB_URI !== undefined)
+        config.mongo_uri = process.env.MONGODB_URI;
+    if (process.env.MONGODB_DB !== undefined)
+        config.mongo_db = process.env.MONGODB_DB;
     if (process.env.MONGODB_TLS !== undefined) {
         config.mongo_tls = parseBoolean(process.env.MONGODB_TLS, true);
     }
@@ -173,19 +168,22 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     if (!config.room) config.room = {};
 
     // Basic room properties
-    if (process.env.ROOM_NAME) config.room.Name = process.env.ROOM_NAME;
-    if (process.env.ROOM_DESCRIPTION)
+    if (process.env.ROOM_NAME !== undefined)
+        config.room.Name = process.env.ROOM_NAME;
+    if (process.env.ROOM_DESCRIPTION !== undefined)
         config.room.Description = process.env.ROOM_DESCRIPTION;
-    if (process.env.ROOM_SPACE) config.room.Space = process.env.ROOM_SPACE;
-    if (process.env.ROOM_LIMIT)
+    if (process.env.ROOM_SPACE !== undefined)
+        config.room.Space = process.env.ROOM_SPACE;
+    if (process.env.ROOM_LIMIT !== undefined)
         config.room.Limit = parseInt(process.env.ROOM_LIMIT, 10);
 
     // Advanced room properties
-    if (process.env.ROOM_BACKGROUND)
+    if (process.env.ROOM_BACKGROUND !== undefined)
         config.room.Background = process.env.ROOM_BACKGROUND;
-    if (process.env.ROOM_LANGUAGE)
+    if (process.env.ROOM_LANGUAGE !== undefined)
         config.room.Language = process.env.ROOM_LANGUAGE;
-    if (process.env.ROOM_GAME) config.room.Game = process.env.ROOM_GAME;
+    if (process.env.ROOM_GAME !== undefined)
+        config.room.Game = process.env.ROOM_GAME;
 
     // Boolean room properties
     if (process.env.ROOM_PRIVATE !== undefined) {
@@ -218,9 +216,9 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             true,
         );
     }
-    if (process.env.DISCORD_TOKEN)
+    if (process.env.DISCORD_TOKEN !== undefined)
         config.discord_token = process.env.DISCORD_TOKEN;
-    if (process.env.DISCORD_GUILD_ID)
+    if (process.env.DISCORD_GUILD_ID !== undefined)
         config.discord_guild_id = process.env.DISCORD_GUILD_ID;
 
     const discordAdminRolesArray = parseJsonArray(
@@ -231,7 +229,7 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         config.discord_admin_roles = discordAdminRolesArray;
     }
 
-    if (process.env.DISCORD_AUDIT_CHANNEL_ID) {
+    if (process.env.DISCORD_AUDIT_CHANNEL_ID !== undefined) {
         config.discord_audit_channel_id = process.env.DISCORD_AUDIT_CHANNEL_ID;
     }
 
@@ -248,7 +246,7 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         roomAdminsCount: config.room?.Admin?.length || 0,
     });
 
-    return config as ConfigFile;
+    return validateConfig(config);
 }
 
 /**
@@ -402,6 +400,7 @@ async function initializeVeratownGame(
 
     // Create DI container for service management
     const container = new DIContainer();
+    container.register(DIServiceKeys.CONFIGURATION, config);
 
     // Phase 2.3: Initialize unified store for cross-system coordination
     const unifiedStore = new UnifiedCharacterStore(db);
