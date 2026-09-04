@@ -22,6 +22,10 @@
 import { EventBus } from "./eventBus";
 import { UnifiedCharacterStore } from "./unifiedCharacterStore";
 import { GameEvent } from "./unifiedCharacterTypes";
+import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "./gameStateMutationService";
 
 import { createLogger } from "../../logging";
 
@@ -62,8 +66,13 @@ export class CrossSystemSubscribers {
         private casino?: ExternalCasinoSystem,
         private dare?: ExternalDareSystem,
         private veratown?: ExternalVeratownSystem,
+        private mutationService?: GameStateMutationService,
     ) {
         this.eventBus = unifiedStore.getEventBus();
+        this.mutationService ??= new GameStateMutationServiceImpl(
+            unifiedStore,
+            this.eventBus,
+        );
     }
 
     /**
@@ -104,7 +113,7 @@ export class CrossSystemSubscribers {
                         : Math.ceil(profile.casino.chips * 0.5);
 
                 if (amountToLock > 0) {
-                    await this.unifiedStore.lockChips(
+                    await this.mutationService!.lockChips(
                         event.target,
                         amountToLock,
                         "bondage",
@@ -124,7 +133,7 @@ export class CrossSystemSubscribers {
         this.eventBus.subscribe("bondage_removed", async (event: GameEvent) => {
             try {
                 // Unlock all chips
-                await this.unifiedStore.unlockChips(event.target, 0);
+                await this.mutationService!.unlockChips(event.target, 0);
             } catch (error) {
                 const logger = createLogger("CrossSystemSubscribers");
                 logger.error(
@@ -154,8 +163,10 @@ export class CrossSystemSubscribers {
         this.eventBus.subscribe("cage_entry", async (event: GameEvent) => {
             try {
                 // Phase 3.3: Suspend all active games when player caged
-                const suspendedCount = await this.unifiedStore.suspendAllGames(
+                const suspendedCount = await this.mutationService!.suspendGame(
                     event.target,
+                    "cage_entry",
+                    "cage_entry",
                 );
 
                 if (suspendedCount > 0) {
@@ -177,7 +188,10 @@ export class CrossSystemSubscribers {
         this.eventBus.subscribe("cage_exit", async (event: GameEvent) => {
             try {
                 // Resume all suspended games when player uncaged
-                await this.unifiedStore.resumeSuspendedGames(event.target);
+                await this.mutationService!.resumeGame(
+                    event.target,
+                    "cage_entry",
+                );
             } catch (error) {
                 const logger = createLogger("CrossSystemSubscribers");
                 logger.error("Failed to resume games on cage exit", error, {
@@ -252,14 +266,14 @@ export class CrossSystemSubscribers {
                 ];
 
                 if (majorEventTypes.includes(event.type)) {
-                    await (this.unifiedStore.recordAuditEntry as any)(
-                        { target: event.target },
+                    await this.mutationService!.recordAuditEntry(
+                        event.target,
                         `cross_system_${event.type}`,
-                        event.actor,
                         {
                             source: event.source,
                             originalEvent: event.type,
                         },
+                        event.actor,
                     );
                 }
             } catch (error) {

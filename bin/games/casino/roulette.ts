@@ -430,13 +430,8 @@ export class RouletteGame implements Game {
             }
 
             await this.casino
-                .getUnifiedStore()
-                .updateChips(
-                    sender.MemberNumber,
-                    -bet.stake,
-                    "roulette_bet",
-                    0,
-                );
+                .getMutationService()
+                .deductChips(sender.MemberNumber, bet.stake, "roulette_bet", 0);
         } else {
             const blockers = getItemsBlockingForfeit(
                 sender,
@@ -550,8 +545,8 @@ export class RouletteGame implements Game {
                 sender.MemberNumber,
             ).reduce((sum, b) => sum + b.stake, 0);
             await this.casino
-                .getUnifiedStore()
-                .updateChips(
+                .getMutationService()
+                .awardChips(
                     sender.MemberNumber,
                     refundAmount,
                     "roulette_bet_cancel",
@@ -726,8 +721,8 @@ export class RouletteGame implements Game {
             if (winnings > 0) {
                 // Update chips using unified store (Phase 5 direct access)
                 await this.casino
-                    .getUnifiedStore()
-                    .updateChips(bet.memberNumber, winnings, "roulette_win", 0);
+                    .getMutationService()
+                    .awardChips(bet.memberNumber, winnings, "roulette_win", 0);
 
                 message += `\n${bet.memberName} wins ${winnings} chips!`;
             } else if (bet.stakeForfeit) {

@@ -26,6 +26,7 @@ import { DareConfig } from "./dare";
 import { Casino } from "./casino";
 import { CasinoConfig } from "./casino";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
+import { GameStateMutationService } from "./shared/gameStateMutationService";
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
 import { ShowerSystem } from "./veratown/showerSystem";
@@ -231,11 +232,21 @@ export class Veratown {
                           DIServiceKeys.UNIFIED_CHARACTER_STORE,
                       )
                     : new UnifiedCharacterStore(db);
+                const mutationService = this.container.has(
+                    DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                )
+                    ? this.container.get<GameStateMutationService>(
+                          DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                      )
+                    : undefined;
                 return new Dare(
                     this.conn,
                     this.commandParser,
                     unifiedStore,
-                    effectiveDareConfig as any,
+                    undefined,
+                    undefined,
+                    effectiveDareConfig,
+                    mutationService,
                 );
             });
             this.mapStore = new VeratownMapStore(db);
@@ -307,6 +318,13 @@ export class Veratown {
                               DIServiceKeys.UNIFIED_CHARACTER_STORE,
                           )
                         : new UnifiedCharacterStore(db!),
+                    this.container.has(
+                        DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                    )
+                        ? this.container.get<GameStateMutationService>(
+                              DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                          )
+                        : undefined,
                 ),
         );
 

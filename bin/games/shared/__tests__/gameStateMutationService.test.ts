@@ -15,6 +15,10 @@ function createStore() {
         profile,
         updateChips: async (...args: unknown[]) =>
             calls.push(`chips:${args[1]}`),
+        claimDailyFreeChips: async (...args: unknown[]) => {
+            calls.push(`daily:${args[1]}`);
+            return true;
+        },
         lockChips: async () => calls.push("lock"),
         unlockChips: async () => calls.push("unlock"),
         applyBondage: async () => calls.push("bondage"),
@@ -118,4 +122,16 @@ test("GameStateMutationService covers core property and progression mutations", 
     assert.ok(store.calls.includes("audit:awardChips"));
     assert.ok(store.calls.includes("audit:deductChips"));
     assert.throws(() => service.awardChips(1, 1.5, "invalid"));
+});
+
+test("GameStateMutationService claims daily chips through the atomic store API", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    assert.equal(await service.claimDailyFreeChips(1, 20), true);
+    assert.ok(store.calls.includes("daily:20"));
+    assert.ok(store.calls.includes("audit:claimDailyFreeChips"));
 });

@@ -17,6 +17,10 @@ import { KeypadAccessRecord } from "../../shared/unifiedCharacterTypes";
 import { KeypadAccessLevel, KeypadGroupMembershipDoc } from "../keypadTypes";
 import { KeypadDefinitionService } from "./keypadDefinitionService";
 import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
+import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "../../shared/gameStateMutationService";
 
 /**
  * KeypadAccessService (Layer 2)
@@ -41,6 +45,10 @@ export class KeypadAccessService {
         private db: Db,
         private definitionService: KeypadDefinitionService,
         private unifiedStore: UnifiedCharacterStore,
+        private mutationService: GameStateMutationService = new GameStateMutationServiceImpl(
+            unifiedStore,
+            unifiedStore.getEventBus(),
+        ),
     ) {
         this.memberships = this.db.collection("keypadGroupMemberships");
     }
@@ -83,7 +91,11 @@ export class KeypadAccessService {
         };
 
         // Add to character profile (Layer 1)
-        await this.unifiedStore.addKeypadAccess(memberNumber, access);
+        await this.mutationService.addKeypadAccess(
+            memberNumber,
+            access,
+            grantedBy,
+        );
 
         // Add to membership index (for admin UI queries)
         await this.memberships.updateOne(
@@ -114,7 +126,7 @@ export class KeypadAccessService {
         groupName?: string,
     ): Promise<void> {
         // Remove from character profile (Layer 1)
-        await this.unifiedStore.removeKeypadAccess(
+        await this.mutationService.removeKeypadAccess(
             memberNumber,
             doorKey,
             groupName,

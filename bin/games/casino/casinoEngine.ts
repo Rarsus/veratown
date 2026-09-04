@@ -18,6 +18,11 @@
  */
 
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "../shared/gameStateMutationService";
+import { EventBus } from "../shared/eventBus";
 import { CasinoVenueSystem } from "../shared/casinoVenueSystem";
 import { createLogger } from "../../logging";
 import { MapRegion } from "bc-bot";
@@ -53,6 +58,10 @@ export class CasinoEngine {
     constructor(
         private unifiedStore: UnifiedCharacterStore,
         private venueSystem: CasinoVenueSystem,
+        private mutationService: GameStateMutationService = new GameStateMutationServiceImpl(
+            unifiedStore as any,
+            new EventBus(),
+        ),
     ) {}
 
     /**
@@ -108,9 +117,9 @@ export class CasinoEngine {
         }
 
         // Deduct chips from player using unified store
-        await this.unifiedStore.updateChips(
+        await this.mutationService.deductChips(
             context.memberNumber,
-            -effectiveBet,
+            effectiveBet,
             `${context.gameType}_bet`,
             0, // actor memberNumber (0 = system)
         );
@@ -128,7 +137,7 @@ export class CasinoEngine {
     public async resolveOutcome(outcome: GameOutcome): Promise<void> {
         if (!outcome.won) {
             // Log loss with audit trail
-            await this.unifiedStore.recordAuditEntry(
+            await this.mutationService.recordAuditEntry(
                 outcome.memberId,
                 `${outcome.gameType}_loss`,
                 {
@@ -146,7 +155,7 @@ export class CasinoEngine {
         );
 
         // Add payout to player using unified store
-        await this.unifiedStore.updateChips(
+        await this.mutationService.awardChips(
             outcome.memberId,
             effectivePayout,
             `${outcome.gameType}_win`,
@@ -154,7 +163,7 @@ export class CasinoEngine {
         );
 
         // Log win with audit trail
-        await this.unifiedStore.recordAuditEntry(
+        await this.mutationService.recordAuditEntry(
             outcome.memberId,
             `${outcome.gameType}_win`,
             {

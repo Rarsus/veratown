@@ -32,7 +32,10 @@ import {
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 import { DeviceFactory } from "./games/shared/deviceFactory";
-import { GameStateMutationServiceImpl } from "./games/shared/gameStateMutationService";
+import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "./games/shared/gameStateMutationService";
 import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
 import { initializeLoggingFromEnv, LoggerRegistry } from "./logging";
@@ -419,12 +422,26 @@ async function initializeVeratownGame(
     logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
 
     // EPIC 2: Initialize CasinoEngine for core game logic
-    const casinoEngine = new CasinoEngine(unifiedStore, venueSystem);
+    const casinoEngine = new CasinoEngine(
+        unifiedStore,
+        venueSystem,
+        container.get<GameStateMutationService>(
+            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        ),
+    );
     container.register(DIServiceKeys.CASINO_ENGINE, casinoEngine);
     logger.info("CasinoEngine initialized (game logic extraction, EPIC 2)");
 
     // Phase 5: Initialize cross-system subscribers
-    const subscribers = new CrossSystemSubscribers(unifiedStore);
+    const subscribers = new CrossSystemSubscribers(
+        unifiedStore,
+        undefined,
+        undefined,
+        undefined,
+        container.get<GameStateMutationService>(
+            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        ),
+    );
     container.register(DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS, subscribers);
     logger.info("CrossSystemSubscribers initialized");
 

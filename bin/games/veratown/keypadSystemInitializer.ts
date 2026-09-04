@@ -16,6 +16,7 @@ import { API_Connector, CommandParser } from "bc-bot";
 import { Db } from "mongodb";
 import { createLogger } from "../../logging";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import { GameStateMutationService } from "../shared/gameStateMutationService";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
@@ -48,6 +49,7 @@ export class KeypadSystemInitializer {
         private locationStore: VeratownLocationStore,
         private characterStore: UnifiedCharacterStore,
         private commandParser?: CommandParser,
+        private mutationService?: GameStateMutationService,
     ) {}
 
     /**
@@ -201,6 +203,7 @@ export class KeypadSystemInitializer {
                 this.db,
                 definitionService,
                 this.characterStore,
+                this.mutationService,
             );
             await accessService.init();
             this.logger.info("✓ KeypadAccessService initialized");
