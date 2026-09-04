@@ -14,7 +14,7 @@
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import {
     BED_POSITIONS,
@@ -23,7 +23,6 @@ import {
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
-import { createLogger } from "../../logging";
 
 // While a character remains on a bed tile, keeps checking whether they have
 // the "Sleep" Emoticon expression active: equips a Bed device while both are
@@ -34,24 +33,19 @@ import { createLogger } from "../../logging";
 // To add narration (e.g., "*Character drifts off to sleep*"), use NarratorBot:
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(character.MapPos, "Emote", `*${character} falls asleep*`);
-export class BedSystem implements VeratownFeatureSystem {
-    public readonly key = "bed";
-    public readonly label = "Beds";
-    public enabled = true;
-
+export class BedSystem extends AbstractTileFeatureSystem {
     private readonly activeMonitors = new Set<number>();
     private monitor = createIdempotentMonitor<API_Character>("BedSystem");
-    private logger = createLogger("BedSystem");
 
     //   private sleepingCharacters = new Set<number>();
     private bedPositions: Array<{ X: number; Y: number }> = [];
-    private readonly bedTrigger: ReturnType<typeof guardHandler>;
+    private readonly bedTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
 
-    public constructor(private conn: API_Connector) {
-        this.bedTrigger = guardHandler(
-            this.key,
-            this.onCharacterEnterBed as any,
-        );
+    public constructor(conn: API_Connector) {
+        super(conn, "bed", "Beds");
+        this.bedTrigger = this.guardTileHandler(this.onCharacterEnterBed);
     }
 
     public registerTriggers(): void {

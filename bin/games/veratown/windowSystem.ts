@@ -14,13 +14,11 @@
 
 import { API_Connector, API_Character } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
-
-import { createLogger } from "../../logging";
 
 // Owns the window tiles: announces anyone who lingers at a window for the
 // full peeping delay without moving away.
@@ -29,20 +27,17 @@ import { createLogger } from "../../logging";
 // appear to come from the window location, use NarratorBot:
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(windowPos, "Emote", `*Peeping Tom detected: ${character}*`);
-export class WindowSystem implements VeratownFeatureSystem {
-    private readonly logger = createLogger("WindowSystem");
-    public readonly key = "window";
-    public readonly label = "Windows";
-    public enabled = true;
-
+export class WindowSystem extends AbstractTileFeatureSystem {
     private windowPositions: Array<{ X: number; Y: number }> = [];
-    private readonly windowTrigger: ReturnType<typeof guardHandler>;
+    private readonly windowTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("WindowSystem");
-    public constructor(private conn: API_Connector) {
-        this.windowTrigger = guardHandler(
-            this.key,
-            this.onCharacterPeepThroughWindow as any,
+    public constructor(conn: API_Connector) {
+        super(conn, "window", "Windows");
+        this.windowTrigger = this.guardTileHandler(
+            this.onCharacterPeepThroughWindow,
         );
     }
 

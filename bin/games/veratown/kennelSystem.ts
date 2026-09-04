@@ -14,13 +14,11 @@
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
-
-import { createLogger } from "../../logging";
 
 // Owns the kennel tiles: equips a Kennel device (door open, padded) on
 // entry, then automatically closes the door after a short delay as long as
@@ -29,21 +27,16 @@ import { createLogger } from "../../logging";
 // To add narration (e.g., "*Door closes behind them*"), use NarratorBot:
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(kennelPos, "Emote", `*The kennel door clicks shut*`);
-export class KennelSystem implements VeratownFeatureSystem {
-    private readonly logger = createLogger("KennelSystem");
-    public readonly key = "kennel";
-    public readonly label = "Kennels";
-    public enabled = true;
-
+export class KennelSystem extends AbstractTileFeatureSystem {
     private kennelPositions: Array<{ X: number; Y: number }> = [];
-    private readonly kennelTrigger: ReturnType<typeof guardHandler>;
+    private readonly kennelTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
-    public constructor(private conn: API_Connector) {
-        this.kennelTrigger = guardHandler(
-            this.key,
-            this.onCharacterEnterKennel as any,
-        );
+    public constructor(conn: API_Connector) {
+        super(conn, "kennel", "Kennels");
+        this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
     }
 
     public registerTriggers(): void {

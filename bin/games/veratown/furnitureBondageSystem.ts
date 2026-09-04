@@ -14,10 +14,9 @@
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
-import { createLogger } from "../../logging";
 
 interface BondageRestraint {
     group: string;
@@ -81,26 +80,23 @@ interface CharacterTimerState {
     config: FurnitureActionConfig;
 }
 
-export class FurnitureBondageSystem implements VeratownFeatureSystem {
-    private readonly logger = createLogger("FurnitureBondageSystem");
-    public readonly key = "furnitureBondage";
-    public readonly label = "Bondage furniture";
-    public enabled = true;
-
+export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
     private tiles: FurnitureTile[] = [];
     private activeTimers = new Map<number, CharacterTimerState>();
     private notifiedPlayers = new Set<number>();
-    private readonly furnitureTrigger: ReturnType<typeof guardHandler>;
+    private readonly furnitureTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
 
     // Monitor for preventing duplicate furniture activation
     private monitor = createIdempotentMonitor<API_Character>(
         "FurnitureBondageSystem",
     );
 
-    public constructor(private conn: API_Connector) {
-        this.furnitureTrigger = guardHandler(
-            this.key,
-            this.onCharacterEnterFurniture as any,
+    public constructor(conn: API_Connector) {
+        super(conn, "furnitureBondage", "Bondage furniture");
+        this.furnitureTrigger = this.guardTileHandler(
+            this.onCharacterEnterFurniture,
         );
     }
 

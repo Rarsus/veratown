@@ -5,15 +5,14 @@ import {
     MapRegion,
     CommandParser,
 } from "bc-bot";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { guardHandler } from "./featureSystem";
 import {
     VeratownLocationDoc,
     VeratownLocationStore,
 } from "./veratownLocationStore";
 import { createTimerManager } from "./shared";
 import { KeypadAccessGroupManager } from "./keypadAccessGroupManager";
-
-import { createLogger } from "../../logging";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 
 // A keypad_door location uses this data shape:
 // {
@@ -179,15 +178,14 @@ function unwrapWhisper(content: string): string {
         : content;
 }
 
-export class KeypadDoorSystem implements VeratownFeatureSystem {
-    private readonly logger = createLogger("KeypadDoorSystem");
-    public readonly key = "keypadDoor";
-    public readonly label = "Keypad doors";
-    public enabled = true;
-
+export class KeypadDoorSystem extends AbstractTileFeatureSystem {
     private doors: KeypadDoor[] = [];
-    private readonly keypadTrigger: ReturnType<typeof guardHandler>;
-    private readonly autoOpenTrigger: ReturnType<typeof guardHandler>;
+    private readonly keypadTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
+    private readonly autoOpenTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
     private readonly doorUnlockTimers = createTimerManager<string>(
         "KeypadDoorSystem.doorUnlock",
     );
@@ -199,19 +197,16 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     );
 
     public constructor(
-        private conn: API_Connector,
+        conn: API_Connector,
         private commandParser?: CommandParser,
         private locationStore?: VeratownLocationStore,
         private reloadLocationsCallback?: () => Promise<void>,
         private keypadAccessGroupManager?: KeypadAccessGroupManager,
     ) {
-        this.keypadTrigger = guardHandler(
-            this.key,
-            this.onCharacterAtKeypad as any,
-        );
-        this.autoOpenTrigger = guardHandler(
-            this.key,
-            this.onCharacterAtAutoOpenTile as any,
+        super(conn, "keypadDoor", "Keypad doors");
+        this.keypadTrigger = this.guardTileHandler(this.onCharacterAtKeypad);
+        this.autoOpenTrigger = this.guardTileHandler(
+            this.onCharacterAtAutoOpenTile,
         );
     }
 
@@ -1227,10 +1222,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     private setDoorTile(door: KeypadDoor, tile: string): void {
-        this.conn.chatRoom?.map.setObject(
-            { X: door.config.doorX, Y: door.config.doorY },
-            tile,
-        );
+        this.setTile(door.config.doorX, door.config.doorY, tile, {
+            doorKey: door.location.key,
+        });
     }
 
     private hasInsideOccupants(door: KeypadDoor): boolean {

@@ -17,6 +17,7 @@ import { API_Connector } from "bc-bot";
 import { createLogger } from "../../logging";
 import type { Logger } from "../../logging";
 import type { VeratownLocationDoc } from "../veratown/veratownLocationStore";
+import type { VeratownFeatureSystem } from "../veratown/featureSystem";
 
 /**
  * Tile data interface representing the state of a tile
@@ -82,7 +83,9 @@ export type TileEventListener = (event: TileFeatureEvent) => void | Promise<void
  * }
  * ```
  */
-export abstract class AbstractTileFeatureSystem extends EventEmitter {
+export abstract class AbstractTileFeatureSystem
+    extends EventEmitter
+    implements VeratownFeatureSystem {
     protected logger: Logger;
     public readonly key: string;
     public readonly label: string;

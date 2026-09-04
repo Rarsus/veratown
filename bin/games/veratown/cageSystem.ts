@@ -16,18 +16,15 @@ import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { remainingTimeString } from "../../utils";
 import { NarratorBot } from "./veratownNarrationUtils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { guardHandler } from "./featureSystem";
 import {
     CAGES,
-    CAGE_1,
-    CAGE_2,
-    CAGE_3,
     CAGE_INFORMATION_SCREEN,
     CRATE_LOCK_PASSWORD,
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
-import { createLogger } from "../../logging";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -36,12 +33,7 @@ import { createLogger } from "../../logging";
 // To add location-based narration, use NarratorBot:
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(cagePos, "Emote", `*Cage door slams shut with a click*`);
-export class CageSystem implements VeratownFeatureSystem {
-    private readonly logger = createLogger("CageSystem");
-    public readonly key = "cage";
-    public readonly label = "Containment cages";
-    public enabled = true;
-
+export class CageSystem extends AbstractTileFeatureSystem {
     private cagedCharacters = new Map<
         number,
         { character: API_Character; cageName: string }
@@ -72,14 +64,11 @@ export class CageSystem implements VeratownFeatureSystem {
     private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
     private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(private conn: API_Connector) {
-        this.cageTrigger = guardHandler(
-            this.key,
-            this.onCharacterEnterCage as any,
-        );
-        this.cageEntryTrigger = guardHandler(
-            this.key,
-            this.onCharacterEnterCageEntry as any,
+    public constructor(conn: API_Connector) {
+        super(conn, "cage", "Containment cages");
+        this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
+        this.cageEntryTrigger = this.guardTileHandler(
+            this.onCharacterEnterCageEntry,
         );
         this.cageInformationTrigger = guardHandler(
             this.key,
@@ -126,8 +115,11 @@ export class CageSystem implements VeratownFeatureSystem {
                 (loc) => loc.type === "cage" && loc.enabled,
             );
             for (const cage of cages) {
-                const posKey = `${cage.x},${cage.y}`;
-                const entryPosKey = `${cage.data?.entryX ?? cage.x},${cage.data?.entryY ?? cage.y}`;
+                const posKey = this.getTileKey(cage.x!, cage.y!);
+                const entryPosKey = this.getTileKey(
+                    (cage.data?.entryX as number) ?? cage.x!,
+                    (cage.data?.entryY as number) ?? cage.y!,
+                );
                 const durationMs =
                     (cage.data?.durationMs as number) ?? 5 * 60 * 1000;
                 const durationDescription =
@@ -149,8 +141,11 @@ export class CageSystem implements VeratownFeatureSystem {
             // If no database locations loaded, fall back to hardcoded CAGES
             if (locations.length === 0) {
                 for (const cage of CAGES) {
-                    const posKey = `${cage.pos.X},${cage.pos.Y}`;
-                    const entryPosKey = `${cage.entryPos.X},${cage.entryPos.Y}`;
+                    const posKey = this.getTileKey(cage.pos.X, cage.pos.Y);
+                    const entryPosKey = this.getTileKey(
+                        cage.entryPos.X,
+                        cage.entryPos.Y,
+                    );
                     this.cagesByPos.set(posKey, {
                         doc: {
                             key: cage.name.toLowerCase().replace(/\s+/g, "_"),
@@ -235,7 +230,7 @@ export class CageSystem implements VeratownFeatureSystem {
     private onCharacterEnterCageEntry = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        const posKey = `${character.X},${character.Y}`;
+        const posKey = this.getTileKey(character.X, character.Y);
         const cage = this.cageEntriesByPos.get(posKey);
         const cageName = cage?.doc.name ?? "the containment cage";
         const durationDescription =
@@ -277,7 +272,7 @@ export class CageSystem implements VeratownFeatureSystem {
             await wait(100);
             if (!stillInCage()) return;
 
-            const posKey = `${cagePos.X},${cagePos.Y}`;
+            const posKey = this.getTileKey(cagePos.X, cagePos.Y);
             const cage = this.cagesByPos.get(posKey);
             const cageName = cage?.doc.name ?? "Unknown cage";
             const lockExpiry =
