@@ -6,6 +6,9 @@ const tests = [
     "bin/games/shared/__tests__/abstractTileFeatureSystem.test.ts",
     "bin/games/shared/__tests__/abstractMessageFeatureSystem.test.ts",
     "bin/games/shared/__tests__/deviceFactory.test.ts",
+    "bin/games/shared/__tests__/eventBus.test.ts",
+    "bin/games/shared/__tests__/crossSystemSubscribers.test.ts",
+    "bin/games/shared/__tests__/unifiedCharacterStore.unit.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.integration.test.ts",
     "bin/games/__tests__/unifiedCharacterStore.test.ts",
@@ -33,9 +36,29 @@ const requiredFiles = [
     "bin/games/shared/mongodbTypeValidation.ts",
 ];
 const coverage = new Map();
+const pathStack = [];
 for (const line of result.stdout.split("\n")) {
-    const match = line.match(/^# (bin\/[^|]+)\s+\|\s+(\d+\.\d+)/);
-    if (match) coverage.set(match[1].trim(), Number(match[2]));
+    const match = line.match(/^#( +)([^|]+?)\s+\|\s*(\d+\.\d+)?/);
+    if (!match) continue;
+
+    const indent = match[1].length;
+    const name = match[2].trim();
+    if (name === "file" || name === "all files") continue;
+
+    while (
+        pathStack.length > 0 &&
+        pathStack[pathStack.length - 1].indent >= indent
+    ) {
+        pathStack.pop();
+    }
+    pathStack.push({ indent, name });
+
+    if (match[3]) {
+        coverage.set(
+            pathStack.map((part) => part.name).join("/"),
+            Number(match[3]),
+        );
+    }
 }
 
 const belowThreshold = requiredFiles.filter(

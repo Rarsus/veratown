@@ -19,6 +19,17 @@ import { Db, MongoClient } from "mongodb";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { EventBus } from "../shared/eventBus";
 import { GameEvent } from "../shared/unifiedCharacterTypes";
+import {
+    asGameCounter,
+    asTimestamp,
+    asVersion,
+    createCasinoState,
+    createCrossSystemState,
+    createDareState,
+    createTypeConversionStage,
+    createVeratownState,
+    validateCharacterProfileTypes,
+} from "../shared/mongodbTypeValidation";
 
 let mongoServer: MongoMemoryServer | undefined;
 let mongoClient: MongoClient | undefined;
@@ -390,6 +401,193 @@ test("UnifiedCharacterStore - Update character name", async (t) => {
     // Verify in views
     const casinoView = await store.getCasinoView(4001);
     assert.strictEqual(casinoView.name, "NewName");
+});
+
+test("EventBus manages specific and wildcard subscriptions", async () => {
+    const eventBus = new EventBus();
+    const event = {
+        timestamp: Date.now(),
+        type: "test",
+        source: "test",
+        actor: 1,
+        target: 1,
+        data: {},
+        processed: false,
+    } as unknown as GameEvent;
+    const calls: string[] = [];
+    const listener = async () => {
+        calls.push("specific");
+    };
+    const wildcard = async () => {
+        calls.push("wildcard");
+    };
+
+    eventBus.subscribe("test", listener);
+    eventBus.subscribe("*", wildcard);
+    assert.equal(eventBus.getListenerCount("test"), 1);
+    assert.equal(eventBus.getListenerCount("*"), 1);
+    assert.deepEqual(eventBus.getSubscribedTypes(), ["test"]);
+    await eventBus.publish(event);
+    assert.deepEqual(calls, ["specific", "wildcard"]);
+
+    eventBus.unsubscribe("test", listener);
+    eventBus.unsubscribe("*", wildcard);
+    eventBus.unsubscribe("missing", listener);
+    eventBus.unsubscribe("*", listener);
+    assert.equal(eventBus.getListenerCount("test"), 0);
+    assert.equal(eventBus.getListenerCount("*"), 0);
+    assert.deepEqual(eventBus.getSubscribedTypes(), []);
+    await eventBus.publish(event);
+    eventBus.clear();
+});
+
+test("MongoDB type validation covers valid and invalid profiles", () => {
+    const profile = {
+        createdAt: asTimestamp(Date.now()),
+        updatedAt: asTimestamp(Date.now()),
+        version: asVersion(1),
+        casino: createCasinoState(),
+        dare: createDareState(),
+        veratown: createVeratownState(),
+        crossSystem: createCrossSystemState(),
+    } as any;
+    assert.deepEqual(validateCharacterProfileTypes(profile), {
+        isValid: true,
+        errors: [],
+    });
+
+    profile.createdAt = "invalid";
+    profile.version = 1.5;
+    profile.casino.chips = 1.5;
+    const validation = validateCharacterProfileTypes(profile);
+    assert.equal(validation.isValid, false);
+    assert.ok(validation.errors.some((error) => error.includes("createdAt")));
+    assert.ok(validation.errors.some((error) => error.includes("version")));
+    assert.ok(
+        validation.errors.some((error) => error.includes("casino.chips")),
+    );
+
+    assert.equal(asGameCounter(2), 2);
+    const stage = createTypeConversionStage();
+    assert.ok((stage as any).$set["casino.lastDailyClaimAt"].$cond);
+    assert.deepEqual((stage as any).$set.version.$cond[0].$eq[0], {
+        $type: "$version",
+    });
+});
+
+test("UnifiedCharacterStore covers state recovery and keypad workflows", async (t) => {
+    const db = getTestDb(t, "test_store_workflows");
+    if (!db) return;
+    const store = new UnifiedCharacterStore(db);
+    const memberNumber = 5001;
+
+    await store.getProfile(memberNumber, "Workflow Player");
+    await store.updateCasinoStats(memberNumber, {
+        score: 25,
+        winStreak: 2,
+        lastGamePlayedAt: Date.now(),
+    });
+    await store.updateChips(memberNumber, 100, "seed");
+    await store.lockChips(memberNumber, 40, "parole", Date.now() + 1000);
+    await store.unlockChips(memberNumber, 10);
+    await store.applyBondage(memberNumber, "ItemNeck:Collar", 0, 2);
+    await store.applyBondage(memberNumber, "ItemArms:Cuffs", 0);
+    await store.updateDareStats(memberNumber, {
+        gameIds: [7],
+        participationHistory: [
+            {
+                gameId: 7,
+                joinedAt: Date.now() - 100,
+                strippedCount: 1,
+                passCounts: 0,
+                bondageItems: [],
+            },
+        ],
+    });
+    assert.equal(await store.suspendAllGames(memberNumber), 1);
+    assert.equal(await store.resumeSuspendedGames(memberNumber), 1);
+
+    const noBondage = await store.spendChipsToEscape(5002, 10);
+    assert.equal(noBondage.success, false);
+    await store.updateChips(5002, 5, "seed");
+    await store.applyBondage(5002, "ItemNeck:Collar", 0);
+    const tooExpensive = await store.spendChipsToEscape(5002, 10);
+    assert.equal(tooExpensive.success, false);
+    const escaped = await store.spendChipsToEscape(memberNumber, 20);
+    assert.equal(escaped.success, true);
+    assert.equal(escaped.bondageRemoved, 2);
+
+    await store.updatePosition(memberNumber, { X: 5, Y: 6 });
+    await store.recordCageEntry(memberNumber, "stocks", 100, 2);
+    await store.recordCageExit(memberNumber);
+    await store.recordVeratownAuditEntry(memberNumber, "workflow", 2, {
+        source: "test",
+    });
+    await store.updateVeratownStats(memberNumber, {
+        roles: ["admin"],
+        currentAppearance: undefined,
+    });
+    await store.updateCrossSystemStats(memberNumber, {
+        relationships: { bondedWith: [2] },
+        effects: undefined,
+    });
+
+    const auditEvent = {
+        type: "audit_trail",
+        source: "admin",
+        actor: 2,
+        target: memberNumber,
+        timestamp: Date.now(),
+        data: { operation: "manual" },
+        processed: false,
+    } as GameEvent;
+    await store.recordEvent(auditEvent);
+    assert.equal(await store.isDuplicateEvent(auditEvent), true);
+    const audit = await store.getAuditTrail(memberNumber, 0, Date.now());
+    assert.ok(audit.length > 0);
+    const stats = await store.getEventStats(memberNumber);
+    assert.ok(stats.totalEvents > 0);
+    assert.ok(stats.eventsByType.audit_trail > 0);
+    const unprocessed = await store.getUnprocessedEvents("veratown");
+    assert.ok(unprocessed.length > 0);
+    assert.ok(
+        (await store.getUnprocessedEvents("veratown", "audit_trail")).length >
+            0,
+    );
+    assert.ok(auditEvent._id);
+    await store.markEventProcessed(auditEvent._id!.toHexString(), "veratown");
+
+    await store.addKeypadAccess(memberNumber, {
+        doorKey: "cell",
+        groupName: "admin",
+        grantedAt: 0,
+        grantedBy: 2,
+    });
+    await store.addKeypadAccess(memberNumber, {
+        doorKey: "cell",
+        groupName: "guest",
+        grantedAt: Date.now(),
+        grantedBy: 2,
+        expiresAt: Date.now() - 1,
+    });
+    assert.equal(
+        await store.hasKeypadAccess(memberNumber, "cell", "admin"),
+        true,
+    );
+    assert.equal(
+        await store.hasKeypadAccess(memberNumber, "cell", "guest"),
+        false,
+    );
+    assert.equal(await store.hasKeypadAccess(memberNumber, "missing"), false);
+    await store.removeKeypadAccess(memberNumber, "cell", "admin");
+    await store.removeKeypadAccess(memberNumber, "cell");
+    assert.deepEqual(await store.getKeypadAccess(memberNumber), []);
+
+    await (store as any).typeSafeUpdateOne(
+        { _id: memberNumber },
+        { $set: { "crossSystem.bondageLevel": 1 } },
+    );
+    assert.equal((await store.getCasinoView(memberNumber)).score, 25);
 });
 
 after(async () => {
