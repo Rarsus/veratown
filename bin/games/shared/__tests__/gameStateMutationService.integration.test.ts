@@ -26,8 +26,8 @@ describe("GameStateMutationService MongoDB integration", () => {
     });
 
     after(async () => {
-        await client.close();
-        await mongoServer.stop();
+        await client?.close();
+        await mongoServer?.stop();
     });
 
     test("rolls back a failed transaction", async () => {

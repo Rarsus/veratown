@@ -28,8 +28,8 @@ describe("Cross-system integration", () => {
     });
 
     after(async () => {
-        await client.close();
-        await mongoServer.stop();
+        await client?.close();
+        await mongoServer?.stop();
     });
 
     test("initializes subscribers against the unified event bus", async () => {

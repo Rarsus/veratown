@@ -364,6 +364,6 @@ test("UnifiedCharacterStore - Update character name", async () => {
 });
 
 after(async () => {
-    await mongoClient.close();
-    await mongoServer.stop();
+    await mongoClient?.close();
+    await mongoServer?.stop();
 });
