@@ -123,7 +123,7 @@ export class Casino implements GamePlugin {
                       DIServiceKeys.UNIFIED_CHARACTER_STORE,
                   )
                 : new UnifiedCharacterStore(db)
-            : global.unifiedCharacterStore || new UnifiedCharacterStore(db);
+            : new UnifiedCharacterStore(db);
 
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
@@ -1181,8 +1181,8 @@ ${forfeitsString()}
             return;
         }
 
-        // Note: Full implementation would use global.unifiedStore.spendChipsToEscape()
-        // For now, send placeholder message
+        // Note: Full implementation would use this.unifiedStore.spendChipsToEscape()
+        // via the DI container. For now, send placeholder message
         this.conn.reply(
             msg,
             `Escape feature requires unified store integration (${escapeCost} chips). Coming in Phase 3.2 full release.`,

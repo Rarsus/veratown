@@ -48,20 +48,6 @@ const SERVER_URL = {
 };
 
 /**
- * Global unified store and cross-system subscribers (Phase 5+)
- * These are initialized during bot startup and made available to all systems.
- * Phase 5: All adapters removed - systems use UnifiedCharacterStore directly.
- */
-declare global {
-    var unifiedCharacterStore: UnifiedCharacterStore | undefined;
-    var crossSystemSubscribers: CrossSystemSubscribers | undefined;
-    var casinoVenueSystem: CasinoVenueSystem | undefined; // EPIC 2
-    var casinoEngine: CasinoEngine | undefined; // EPIC 2
-}
-
-// Initialize globals
-
-/**
  * Helper function to parse boolean environment variables
  */
 function parseBoolean(
@@ -292,29 +278,8 @@ export async function restartBotConnections(): Promise<void> {
                 activeVeratownGame = undefined;
             }
 
-            // Clear global state to prevent orphaned references during restart
-            if (global.unifiedCharacterStore) {
-                logger.info(
-                    "Clearing UnifiedCharacterStore for fresh initialization",
-                );
-                global.unifiedCharacterStore = undefined as any;
-            }
-            if (global.casinoVenueSystem) {
-                logger.info(
-                    "Clearing CasinoVenueSystem for fresh initialization",
-                );
-                global.casinoVenueSystem = undefined as any;
-            }
-            if (global.casinoEngine) {
-                logger.info("Clearing CasinoEngine for fresh initialization");
-                global.casinoEngine = undefined as any;
-            }
-            if (global.crossSystemSubscribers) {
-                logger.info(
-                    "Clearing CrossSystemSubscribers for fresh initialization",
-                );
-                global.crossSystemSubscribers = undefined as any;
-            }
+            // Global state cleanup removed - using DI container exclusively
+            // The container is recreated fresh on each game initialization
 
             // Close existing connections
             await closeBotConnections(previousConnections);
@@ -436,25 +401,21 @@ async function initializeVeratownGame(
     // Phase 2.3: Initialize unified store for cross-system coordination
     const unifiedStore = new UnifiedCharacterStore(db);
     container.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, unifiedStore);
-    global.unifiedCharacterStore = unifiedStore;
     logger.info("UnifiedCharacterStore initialized");
 
     // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
     const venueSystem = new CasinoVenueSystem();
     container.register(DIServiceKeys.CASINO_VENUE_SYSTEM, venueSystem);
-    global.casinoVenueSystem = venueSystem;
     logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
 
     // EPIC 2: Initialize CasinoEngine for core game logic
     const casinoEngine = new CasinoEngine(unifiedStore, venueSystem);
     container.register(DIServiceKeys.CASINO_ENGINE, casinoEngine);
-    global.casinoEngine = casinoEngine;
     logger.info("CasinoEngine initialized (game logic extraction, EPIC 2)");
 
     // Phase 5: Initialize cross-system subscribers
     const subscribers = new CrossSystemSubscribers(unifiedStore);
     container.register(DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS, subscribers);
-    global.crossSystemSubscribers = subscribers;
     logger.info("CrossSystemSubscribers initialized");
 
     // Create new Veratown instance with DI container
