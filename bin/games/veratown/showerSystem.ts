@@ -14,7 +14,7 @@
 
 import { API_Connector, API_Character, isClothing } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import {
     SHOWER_POSITIONS,
     SHOWER_BOT2_HOME_POSITION,
@@ -28,33 +28,27 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
 import type { ReleaseSystem } from "./veratownReleaseSystem";
 import { createIdempotentMonitor } from "./shared";
-import { createLogger } from "../../logging";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
 // their original clothing at the end - unless they leave the shower tile
 // early, in which case their clothes are not returned.
-export class ShowerSystem implements VeratownFeatureSystem {
-    public readonly key = "shower";
-    public readonly label = "Showers";
-    public enabled = true;
-
+export class ShowerSystem extends AbstractTileFeatureSystem {
     private monitor = createIdempotentMonitor<API_Character>("ShowerSystem");
-    private readonly logger = createLogger("ShowerSystem");
     private showerPositions: Array<{ X: number; Y: number }> = [];
     private showerBotHomePos: { X: number; Y: number } =
         SHOWER_BOT2_HOME_POSITION;
-    private readonly showerTrigger: ReturnType<typeof guardHandler>;
+    private readonly showerTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
     private releaseSystem?: ReleaseSystem;
 
     public constructor(
-        private conn: API_Connector,
+        conn: API_Connector,
         private conn2?: API_Connector,
     ) {
-        this.showerTrigger = guardHandler(
-            this.key,
-            this.onCharacterEnterShower as any,
-        );
+        super(conn, "shower", "Showers");
+        this.showerTrigger = this.guardTileHandler(this.onCharacterEnterShower);
     }
 
     /**

@@ -13,10 +13,9 @@
  */
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
-import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
+import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
-import { createLogger } from "../../logging";
 
 interface CatDogAction {
     type: "emote" | "bondage" | "vibrator";
@@ -62,28 +61,23 @@ interface CatDogTile {
     petType: "cat" | "dog";
 }
 
-export class CatDogSystem implements VeratownFeatureSystem {
-    private readonly logger = createLogger("CatDogSystem");
-    public readonly key = "catDog";
-    public readonly label = "Cat/Dog tiles";
-    public enabled = true;
-
+export class CatDogSystem extends AbstractTileFeatureSystem {
     private tiles: CatDogTile[] = [];
-    private readonly petTrigger: ReturnType<typeof guardHandler>;
+    private readonly petTrigger: ReturnType<
+        AbstractTileFeatureSystem["guardTileHandler"]
+    >;
     private botOriginalX: number = 0;
     private botOriginalY: number = 0;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("CatDogSystem");
 
     public constructor(
-        private conn: API_Connector,
+        conn: API_Connector,
         private botConn?: API_Connector,
     ) {
+        super(conn, "catDog", "Cat/Dog tiles");
         this.logger?.info("[CatDogSystem] Initializing CatDogSystem");
-        this.petTrigger = guardHandler(
-            this.key,
-            this.onCharacterStepOnPet as any,
-        );
+        this.petTrigger = this.guardTileHandler(this.onCharacterStepOnPet);
         this.logger?.info(
             "[CatDogSystem] Trigger handler created:",
             typeof this.petTrigger as any,
