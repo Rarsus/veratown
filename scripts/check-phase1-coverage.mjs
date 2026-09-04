@@ -8,6 +8,7 @@ const tests = [
     "bin/games/shared/__tests__/deviceFactory.test.ts",
     "bin/games/shared/__tests__/eventBus.test.ts",
     "bin/games/shared/__tests__/crossSystemSubscribers.test.ts",
+    "bin/games/shared/__tests__/mongodbTypeValidation.test.ts",
     "bin/games/shared/__tests__/unifiedCharacterStore.unit.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.integration.test.ts",
@@ -17,7 +18,14 @@ const tests = [
 
 const result = spawnSync(
     process.execPath,
-    ["--experimental-test-coverage", "--import", "tsx", "--test", ...tests],
+    [
+        "--experimental-test-coverage",
+        "--import",
+        "tsx",
+        ...(process.env.CI ? [] : ["--test-concurrency=1"]),
+        "--test",
+        ...tests,
+    ],
     { encoding: "utf8" },
 );
 

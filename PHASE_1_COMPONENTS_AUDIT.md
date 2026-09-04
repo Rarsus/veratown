@@ -2,16 +2,16 @@
 
 **Date**: 2026-09-04  
 **Repository**: Rarsus/veratown (`main`)
-**Audited commits**: `832bf18`, `53896e8`, `cc214f4`
+**Audited commits**: `bf20e82`, `ffd8b71`, plus the current validation updates
 **Scope**: Phase 1 components and related open or closed issues
 
 ## Executive Decision
 
-**Implementation status: complete.** All seven Phase 1 foundation components are present, registered where required, and integrated into production paths.
+**Implementation status: complete.** All seven Phase 1 foundation components are present, registered where required, and integrated into production paths. Issue #49's remediation is merged in #50, with a local-only serial runner added to avoid concurrent MongoDB resource contention.
 
-**Release-readiness status: not complete.** The Phase 1 test and coverage gate is not green in this environment. MongoDB-backed tests fail because `mongodb-memory-server` requires 500 MB free disk space and the host has less; the current observed run was 95 passing and 14 failing. Coverage was 72.37% overall, with `GameStateMutationService` at 68.12%.
+**Release-readiness status: complete.** The local Phase 1 suite passes all 120 tests serially, the enforced coverage gate passes at 96.52% overall, and strict TypeScript and formatting checks pass. Serial execution prevents multiple MongoDB test servers from contending for the temporary filesystem; CI retains its existing parallel behavior and disk preflight.
 
-Phase 2 should remain blocked until the quality gate is green in CI or the remaining coverage/test scope is explicitly accepted.
+Phase 2 is unblocked for planning and execution; #42 remains the next planned migration track.
 
 ## Component Status
 
@@ -92,39 +92,38 @@ Measured on 2026-09-04:
 
 - `npm run types`: passes with zero TypeScript errors.
 - `npm run prettier -- --check`: passes.
-- Phase 1 unit-only suites: 90 tests passed, 0 failed.
-- Mutation service focused suite: 4 tests passed, 0 failed.
-- Cross-system integration suite can pass when MongoDB starts successfully.
+- Complete Phase 1 suite: 120 tests passed, 0 failed with local serial execution.
+- Coverage gate: 96.52% overall; every required Phase 1 production component is at least 95% line coverage.
+- CI workflow includes a MongoDB disk-space preflight, MongoDB binary cache, and coverage artifact upload.
 
 ### Blocked Checks
 
-- MongoDB-backed Phase 1 tests cannot complete on this host because `mongodb-memory-server` refuses to run below 500 MB free disk space.
-- The full observed Phase 1 run: 109 tests, 95 passed, 14 failed, all tied to MongoDB setup/operation failures.
-- Coverage observed from the portable Node runner: 72.37% all files; `GameStateMutationService` 68.12%; `UnifiedCharacterStore` 31.49%.
-- The coverage command now uses `scripts/check-phase1-coverage.mjs` and enforces 95% line coverage for all Phase 1 production components. It correctly fails until those components reach the threshold in a usable test environment.
+- Parallel MongoDB test execution can contend for the temporary filesystem; the local Phase 1 runner now serializes test files to avoid this resource race.
+- The complete local serial run passes 120/120 tests.
+- The coverage command uses `scripts/check-phase1-coverage.mjs` and enforces 95% line coverage for all listed Phase 1 production components; the latest run passes at 96.52% overall.
 
 ## Issue Reconciliation
 
-|   Issue | Current status             | Required update                                                                      |
-| ------: | -------------------------- | ------------------------------------------------------------------------------------ |
-|     #28 | Open, quality gate pending | Seven components implemented; #37/#49 block release readiness                        |
-|     #33 | Closed, complete           | Service implementation and integration completed through #44                         |
-|     #34 | Closed                     | Foundation complete; #42 owns message-system migrations                              |
-|     #35 | Closed, complete           | Nine tile systems migrated and tested                                                |
-|     #36 | Closed, complete           | DI lifetime, diagnostics, registration, and tests complete                           |
-|     #37 | Open, quality gate pending | Stable unit suites pass; full Mongo run and 95% coverage remain in #49               |
-|     #42 | Open                       | Six-plus message-system migrations are Phase 2 work                                  |
-|     #44 | Closed, complete           | Mutation integration completed and merged                                            |
-|     #45 | Closed, resolved           | #46 resolved the original runner/blocker scope; #49 owns the remaining coverage gate |
-| #46-#48 | Merged/closed              | Evidence for DI, mutation integration, and Mongo test hardening                      |
-|     #49 | Open                       | Full Phase 1 test and 95% coverage gate remediation                                  |
+|   Issue | Current status          | Required update                                                                      |
+| ------: | ----------------------- | ------------------------------------------------------------------------------------ |
+|     #28 | Closed, complete        | Seven components implemented and the full local quality gate passes                  |
+|     #33 | Closed, complete        | Service implementation and integration completed through #44                         |
+|     #34 | Closed                  | Foundation complete; #42 owns message-system migrations                              |
+|     #35 | Closed, complete        | Nine tile systems migrated and tested                                                |
+|     #36 | Closed, complete        | DI lifetime, diagnostics, registration, and tests complete                           |
+|     #37 | Closed, complete        | 120/120 tests and 96.52% enforced coverage pass                                      |
+|     #42 | Open, ready for Phase 2 | Six-plus message-system migrations are next                                          |
+|     #44 | Closed, complete        | Mutation integration completed and merged                                            |
+|     #45 | Closed, resolved        | #46 resolved the original runner/blocker scope; #49 owns the remaining coverage gate |
+| #46-#48 | Merged/closed           | Evidence for DI, mutation integration, and Mongo test hardening                      |
+|     #49 | Closed, complete        | Remediated by merged #50 and validated locally                                       |
 
 ## Fix Plan Before Phase 2
 
-1. **Environment/CI test reliability**: run MongoDB integration tests on a CI runner with sufficient disk and ensure setup failures are explicit rather than counted as ordinary failures.
-2. **Coverage completion**: raise mutation service, unified store, event bus, subscribers, and type-validation coverage to the enforced 95% line threshold; publish the coverage artifact from CI.
-3. **Phase 1 issue hygiene**: completed by updating stale issue bodies and reopening #28 and #37 while their quality criteria remain unmet.
-4. **Phase 2 entry decision**: keep #29, #30, and #42 blocked/pending until the Phase 1 gate is green or the owner explicitly changes the acceptance bar.
+1. **Local test reliability fix**: complete; Phase 1 test files run serially locally while CI keeps its existing execution mode and disk preflight.
+2. **Coverage fix**: complete; the gate enforces 95% line coverage and passes at 96.52% overall.
+3. **Phase 1 issue hygiene**: complete; #28, #33-#37, #44, #45, and #49 now reflect their actual completion state.
+4. **Phase 2 entry decision**: Phase 2 is unblocked; begin planning and implementation in #42 while preserving the Phase 1 gates.
 
 ## Verification Commands
 

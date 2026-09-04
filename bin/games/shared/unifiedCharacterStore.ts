@@ -1054,6 +1054,13 @@ export class UnifiedCharacterStore {
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
 
+        await this.recordVeratownAuditEntry(
+            memberNumber,
+            operation,
+            actor,
+            context,
+        );
+
         // Create audit event with full context
         const event: GameEvent = {
             timestamp: now,
