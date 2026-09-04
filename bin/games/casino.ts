@@ -123,7 +123,7 @@ export class Casino implements GamePlugin {
                       DIServiceKeys.UNIFIED_CHARACTER_STORE,
                   )
                 : new UnifiedCharacterStore(db)
-            : global.unifiedCharacterStore || new UnifiedCharacterStore(db);
+            : new UnifiedCharacterStore(db);
 
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
