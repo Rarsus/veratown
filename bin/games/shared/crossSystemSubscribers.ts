@@ -163,15 +163,12 @@ export class CrossSystemSubscribers {
         this.eventBus.subscribe("cage_entry", async (event: GameEvent) => {
             try {
                 // Phase 3.3: Suspend all active games when player caged
-                await this.mutationService!.suspendGame(
+                const suspendedCount = await this.mutationService!.suspendGame(
                     event.target,
                     "cage_entry",
                     "cage_entry",
                 );
 
-                const suspendedCount =
-                    (await this.unifiedStore.getDareView(event.target))
-                        .suspendedGames?.length ?? 0;
                 if (suspendedCount > 0) {
                     // Also try to remove from dare if available
                     if (this.dare?.removeParticipant) {

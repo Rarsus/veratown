@@ -129,8 +129,8 @@ export interface GameStateMutationService {
         memberNumber: number,
         gameId: string,
         reason: string,
-    ): Promise<void>;
-    resumeGame(memberNumber: number, gameId: string): Promise<void>;
+    ): Promise<number>;
+    resumeGame(memberNumber: number, gameId: string): Promise<number>;
     addKeypadAccess(
         memberNumber: number,
         access: KeypadAccessRecord,
@@ -492,22 +492,20 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         this.validateAmount(amount);
         if (!reason) throw new Error("reason is required");
         if (from === to) throw new Error("source and destination must differ");
-        await this.withRetry(async () => {
-            await this.unifiedStore.transferChipsAtomically(
-                from,
-                to,
-                amount,
-                reason,
-                from,
-            );
-            await this.audit(from, "transferChips", {
-                from,
-                to,
-                amount,
-                reason,
-            });
-            await this.audit(to, "transferChips", { from, to, amount, reason });
-        }, "transferChips");
+        await this.unifiedStore.transferChipsAtomically(
+            from,
+            to,
+            amount,
+            reason,
+            from,
+        );
+        await this.audit(from, "transferChips", {
+            from,
+            to,
+            amount,
+            reason,
+        });
+        await this.audit(to, "transferChips", { from, to, amount, reason });
     }
 
     public async lockChips(
@@ -670,25 +668,29 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         memberNumber: number,
         gameId: string,
         reason: string,
-    ): Promise<void> {
+    ): Promise<number> {
         this.validateMember(memberNumber);
         if (!gameId || !reason)
             throw new Error("gameId and reason are required");
-        await this.withRetry(async () => {
-            await this.unifiedStore.suspendAllGames(memberNumber);
+        return this.withRetry(async () => {
+            const suspendedCount =
+                await this.unifiedStore.suspendAllGames(memberNumber);
             await this.audit(memberNumber, "suspendGame", { gameId, reason });
+            return suspendedCount;
         }, "suspendGame");
     }
 
     public async resumeGame(
         memberNumber: number,
         gameId: string,
-    ): Promise<void> {
+    ): Promise<number> {
         this.validateMember(memberNumber);
         if (!gameId) throw new Error("gameId is required");
-        await this.withRetry(async () => {
-            await this.unifiedStore.resumeSuspendedGames(memberNumber);
+        return this.withRetry(async () => {
+            const resumedCount =
+                await this.unifiedStore.resumeSuspendedGames(memberNumber);
             await this.audit(memberNumber, "resumeGame", { gameId });
+            return resumedCount;
         }, "resumeGame");
     }
 
@@ -771,15 +773,14 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         );
     }
 
-    private async withRetry(
-        operation: () => Promise<void>,
+    private async withRetry<T>(
+        operation: () => Promise<T>,
         name: string,
-    ): Promise<void> {
+    ): Promise<T> {
         let lastError: unknown;
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
-                await operation();
-                return;
+                return await operation();
             } catch (error) {
                 lastError = error;
                 if (attempt === 2) break;

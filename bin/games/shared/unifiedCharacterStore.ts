@@ -168,7 +168,14 @@ export class UnifiedCharacterStore {
                 {
                     $set: {
                         "casino.chips": sender.casino.chips - amount,
+                        "casino.updatedAt": now,
+                        lastAccessedAt: now,
+                        lastAccessedBy: "casino",
                         updatedAt: now,
+                    },
+                    $inc: {
+                        "casino.version": 1,
+                        version: 1,
                     },
                 },
                 { session },
@@ -178,7 +185,14 @@ export class UnifiedCharacterStore {
                 {
                     $set: {
                         "casino.chips": recipient.casino.chips + amount,
+                        "casino.updatedAt": now,
+                        lastAccessedAt: now,
+                        lastAccessedBy: "casino",
                         updatedAt: now,
+                    },
+                    $inc: {
+                        "casino.version": 1,
+                        version: 1,
                     },
                 },
                 { session },
