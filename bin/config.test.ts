@@ -5,6 +5,7 @@ import {
     configurationIssue,
     validateConfig,
 } from "./config";
+import { AppError } from "./errors";
 
 const validConfig = (overrides: Record<string, unknown> = {}) => ({
     user: "main",
@@ -85,6 +86,9 @@ test("environment parsing failures use the validation error contract", () => {
     const error = configurationIssue("MONGODB_TLS", "must be a boolean");
 
     assert.ok(error instanceof ConfigValidationError);
+    assert.ok(error instanceof AppError);
+    assert.equal(error.code, "VALIDATION_ERROR");
+    assert.equal(error.retryable, false);
     assert.deepEqual(error.issues[0]?.path, ["MONGODB_TLS"]);
     assert.match(error.message, /MONGODB_TLS/);
 });

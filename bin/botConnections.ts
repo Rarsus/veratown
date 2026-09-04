@@ -112,7 +112,11 @@ export function validateBotAccountConfiguration(config: ConfigFile): void {
         if (previousRole) {
             const error = new ValidationError(
                 `Bot account "${account.username}" is configured for both ${previousRole} and ${account.role}; each logged-in bot role must use a different account.`,
-                { account: account.username, newRole: account.role, previousRole },
+                {
+                    account: account.username,
+                    newRole: account.role,
+                    previousRole,
+                },
             );
             logger.error("Account configuration conflict", error, {
                 account: account.username,

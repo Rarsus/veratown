@@ -17,11 +17,7 @@ import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom
 import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
 import type { API_Connector } from "bc-bot";
-import {
-    ConfigFile,
-    configurationIssue,
-    validateConfig,
-} from "./config";
+import { ConfigFile, configurationIssue, validateConfig } from "./config";
 import { Db } from "mongodb";
 import { Veratown } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
@@ -50,6 +46,7 @@ import {
     type DiscordBotConfig,
 } from "./discord";
 import { DIContainer, DIServiceKeys } from "./di/container";
+import { asAppError } from "./errors";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -728,13 +725,8 @@ async function main() {
 
 main().catch(async (e) => {
     const logger = LoggerRegistry.getAppLogger();
-    logger.fatal(
-        "Application startup failed",
-        e instanceof Error ? e : undefined,
-        {
-            error: String(e),
-        },
-    );
+    const error = asAppError(e, "VALIDATION");
+    logger.fatal("Application startup failed", error);
     await shutdown();
     process.exit(1);
 });
