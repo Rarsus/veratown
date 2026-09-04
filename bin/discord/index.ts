@@ -68,6 +68,20 @@ export {
     handleBotStopCommand,
 } from "./commands/botControl";
 
+// Feature management commands
+export {
+    handleFeatureListCommand,
+    handleFeatureEnableCommand,
+    handleFeatureDisableCommand,
+} from "./commands/featureManagement";
+
+// Location management commands
+export {
+    handleLocationListCommand,
+    handleLocationGetCommand,
+    handleLocationCreateCommand,
+} from "./commands/locationManagement";
+
 // Helpers
 export {
     formatResultAsEmbed,

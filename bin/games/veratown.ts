@@ -497,6 +497,10 @@ export class Veratown {
         return this.regionManager;
     }
 
+    public getFeatures(): VeratownFeatureSystem[] {
+        return this.features;
+    }
+
     private onChatRoomCreated = async () => {
         await this.setupRoom();
         await this.setupCharacter();
