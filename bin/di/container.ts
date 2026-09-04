@@ -75,4 +75,5 @@ export const DIServiceKeys = {
     CROSS_SYSTEM_SUBSCRIBERS: "crossSystemSubscribers",
     CASINO_VENUE_SYSTEM: "casinoVenueSystem",
     CASINO_ENGINE: "casinoEngine",
+    VERATOWN: "veratown",
 } as const;

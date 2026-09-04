@@ -41,6 +41,8 @@ import { handleActivePlayersCommand } from "./commands/characterInfo";
 import { handleCharacterSearchCommand } from "./commands/characterInfo";
 import { handleBotRestartCommand } from "./commands/botControl";
 import { handleBotStopCommand } from "./commands/botControl";
+import { handleFeatureListCommand, handleFeatureEnableCommand, handleFeatureDisableCommand } from "./commands/featureManagement";
+import { handleLocationListCommand, handleLocationGetCommand, handleLocationCreateCommand } from "./commands/locationManagement";
 
 const logger = createLogger("Discord:Bot");
 
@@ -272,6 +274,94 @@ async function registerSlashCommands(
                 },
             ],
         },
+        {
+            name: "feature-list",
+            description: "List all Veratown features and their status (admin only)",
+        },
+        {
+            name: "feature-enable",
+            description: "Enable a Veratown feature (admin only)",
+            options: [
+                {
+                    name: "feature",
+                    description: "Feature name (e.g., cage, kennel, shower)",
+                    type: 3, // STRING
+                    required: true,
+                },
+            ],
+        },
+        {
+            name: "feature-disable",
+            description: "Disable a Veratown feature (admin only)",
+            options: [
+                {
+                    name: "feature",
+                    description: "Feature name (e.g., cage, kennel, shower)",
+                    type: 3, // STRING
+                    required: true,
+                },
+            ],
+        },
+        {
+            name: "location-list",
+            description: "List all locations or filter by type (admin only)",
+            options: [
+                {
+                    name: "type",
+                    description: "Optional location type filter",
+                    type: 3, // STRING
+                    required: false,
+                },
+            ],
+        },
+        {
+            name: "location-get",
+            description: "Get detailed information about a location (admin only)",
+            options: [
+                {
+                    name: "key",
+                    description: "Location key",
+                    type: 3, // STRING
+                    required: true,
+                },
+            ],
+        },
+        {
+            name: "location-create",
+            description: "Create a new location (admin only)",
+            options: [
+                {
+                    name: "key",
+                    description: "Unique location identifier",
+                    type: 3, // STRING
+                    required: true,
+                },
+                {
+                    name: "name",
+                    description: "Location display name",
+                    type: 3, // STRING
+                    required: true,
+                },
+                {
+                    name: "type",
+                    description: "Location type (cage, keypad_door, furniture, etc.)",
+                    type: 3, // STRING
+                    required: true,
+                },
+                {
+                    name: "x",
+                    description: "X coordinate",
+                    type: 4, // INTEGER
+                    required: false,
+                },
+                {
+                    name: "y",
+                    description: "Y coordinate",
+                    type: 4, // INTEGER
+                    required: false,
+                },
+            ],
+        },
     ];
 
     try {
@@ -424,6 +514,56 @@ export async function handleCommandInteraction(
 
             case "bot-stop":
                 result = await handleBotStopCommand(interaction, context);
+                break;
+
+            case "feature-list":
+                result = await handleFeatureListCommand(interaction, context);
+                break;
+
+            case "feature-enable":
+                result = await handleFeatureEnableCommand(
+                    interaction,
+                    context,
+                    (interaction as any).options?.getString("feature") || "",
+                );
+                break;
+
+            case "feature-disable":
+                result = await handleFeatureDisableCommand(
+                    interaction,
+                    context,
+                    (interaction as any).options?.getString("feature") || "",
+                );
+                break;
+
+            case "location-list":
+                result = await handleLocationListCommand(
+                    interaction,
+                    context,
+                    (interaction as any).options?.getString("type") || undefined,
+                );
+                break;
+
+            case "location-get":
+                result = await handleLocationGetCommand(
+                    interaction,
+                    context,
+                    (interaction as any).options?.getString("key") || "",
+                );
+                break;
+
+            case "location-create":
+                result = await handleLocationCreateCommand(
+                    interaction,
+                    context,
+                    {
+                        key: (interaction as any).options?.getString("key") || "",
+                        name: (interaction as any).options?.getString("name") || "",
+                        type: (interaction as any).options?.getString("type") || "",
+                        x: (interaction as any).options?.getInteger("x") || undefined,
+                        y: (interaction as any).options?.getInteger("y") || undefined,
+                    },
+                );
                 break;
 
             default:

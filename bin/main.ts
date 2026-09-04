@@ -400,6 +400,15 @@ export async function stopBotConnections(): Promise<void> {
 }
 
 /**
+ * Get the active Veratown game instance
+ * Used by Discord bot and other modules to access game state
+ * @returns The active Veratown game or undefined if not initialized
+ */
+export function getActiveVeratownGame(): Veratown | undefined {
+    return activeVeratownGame;
+}
+
+/**
  * Initialize Veratown game with full configuration and map loading
  * Used during both startup and restart to ensure room is properly configured
  * @param connections Bot connections to use
