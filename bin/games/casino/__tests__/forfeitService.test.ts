@@ -361,6 +361,31 @@ test("ForfeitService: applyForfeit applies item locking", () => {
     assert.ok(lockCalled);
 });
 
+test("ForfeitService: persists applied forfeits through the mutation service", async () => {
+    const mutations: Array<{ type: string; data?: Record<string, unknown> }> =
+        [];
+    let bondageItems = 0;
+    const service = new ForfeitService({
+        applyBondage: async (_memberNumber: number, items: unknown[]) => {
+            bondageItems = items.length;
+        },
+        recordEvent: async (event: {
+            type: string;
+            data?: Record<string, unknown>;
+        }) => {
+            mutations.push(event);
+        },
+    } as any);
+    const mockChar = new MockCharacter();
+
+    await service.persistForfeit(mockChar as any, "boots", 1111);
+
+    assert.strictEqual(bondageItems, 1);
+    assert.strictEqual(mutations.length, 1);
+    assert.strictEqual(mutations[0].type, "casino_forfeit_applied");
+    assert.strictEqual(mutations[0].data?.forfeitKey, "boots");
+});
+
 // ============================================================================
 // ForfeitService: Integration Scenarios
 // ============================================================================

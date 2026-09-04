@@ -22,6 +22,8 @@ import { FORFEITS } from "./forfeits";
 import { generatePassword } from "../../utils";
 
 import { createLogger } from "../../logging";
+import type { GameStateMutationService } from "../shared/gameStateMutationService";
+import { DeviceFactory } from "../shared/deviceFactory";
 
 /**
  * Result of forfeit validation
@@ -42,9 +44,17 @@ export class ForfeitService {
     /** Tracks locked items per member: memberNumber -> (itemGroup -> unlockTime) */
     private readonly logger = createLogger("ForfeitService");
     private lockedItems: Map<number, Map<string, number>> = new Map();
+    private readonly deviceFactory: DeviceFactory;
 
     /** Tracks cheat strikes per member */
     private cheatStrikes: Map<number, number> = new Map();
+
+    public constructor(
+        private readonly mutationService?: GameStateMutationService,
+        deviceFactory = new DeviceFactory(),
+    ) {
+        this.deviceFactory = deviceFactory;
+    }
 
     /**
      * Check if a forfeit can be applied to a character
@@ -169,7 +179,23 @@ export class ForfeitService {
             "HairFront",
         )!.GetColor() || "") as BCColor | BCColor[];
 
-        const added = character.Appearance.AddItem(item);
+        const device = this.deviceFactory.createLockedDevice({
+            assetGroup: item.Group,
+            assetName: item.Name,
+            lockDifficulty: 20,
+            lockType: "TimerPasswordPadlock",
+            craftName: `Pixie Casino ${forfeit.name}`,
+            craftDescription:
+                "This item is property of Pixie Casino. Better luck next time!",
+            owner: adminMemberNumber,
+        });
+        const lock = (device.Property as any)?.Lock;
+        device.Property = {
+            ...device.Property,
+            ...item.Property,
+            Lock: lock,
+        } as typeof device.Property;
+        const added = character.Appearance.AddItem(device);
 
         // Handle color application
         try {
@@ -227,6 +253,35 @@ export class ForfeitService {
                 LockSet: true,
             });
         }
+    }
+
+    public async persistForfeit(
+        character: API_Character,
+        forfeitKey: string,
+        adminMemberNumber: number,
+    ): Promise<void> {
+        if (!this.mutationService) return;
+
+        const forfeit = FORFEITS[forfeitKey];
+        const items = forfeit.items(character);
+        await this.mutationService.applyBondage(
+            character.MemberNumber,
+            items,
+            adminMemberNumber,
+            `casino_forfeit:${forfeitKey}`,
+        );
+        await this.mutationService.recordEvent({
+            timestamp: Date.now(),
+            type: "casino_forfeit_applied",
+            source: "casino",
+            actor: adminMemberNumber,
+            target: character.MemberNumber,
+            data: {
+                forfeitKey,
+                lockTimeMs: forfeit.lockTimeMs,
+            },
+            processed: true,
+        } as any);
     }
 
     /**

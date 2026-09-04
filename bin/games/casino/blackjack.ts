@@ -1146,7 +1146,7 @@ export class BlackjackGame implements Game {
                     );
                 message += `${player.memberName} wins ${effectiveWinnings} chips! \n`;
             } else if (player.bets[0].stakeForfeit && totalWinnings !== -100) {
-                this.casino.applyForfeit(player.bets[0]);
+                await this.casino.applyForfeit(player.bets[0]);
                 message += `${player.memberName} lost and gets ${FORFEITS[player.bets[0].stakeForfeit].name}! \n`;
             }
 
