@@ -37,7 +37,7 @@ jobs:
                   git add -A
                   if ! git diff-index --quiet HEAD --; then
                     git commit -m "style: auto-fix formatting with prettier"
-                    git push
+                    git push origin HEAD:refs/heads/${{ github.head_ref }}
                   fi
 
             - name: Install library dependencies
