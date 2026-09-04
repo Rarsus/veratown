@@ -45,9 +45,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         createIdempotentMonitor<API_Character>("BunnyParkSystem");
     public constructor(conn: API_Connector) {
         super(conn, "bunnyPark", "Bunny park");
-        this.bunnyTrigger = this.guardTileHandler(
-            this.onCharacterStepOnBunny,
-        );
+        this.bunnyTrigger = this.guardTileHandler(this.onCharacterStepOnBunny);
         this.parkTrigger = guardHandler(
             this.key,
             this.onCharacterEnterPark as any,

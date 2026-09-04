@@ -42,7 +42,9 @@ export interface TileFeatureEvent {
 /**
  * Event listener function signature
  */
-export type TileEventListener = (event: TileFeatureEvent) => void | Promise<void>;
+export type TileEventListener = (
+    event: TileFeatureEvent,
+) => void | Promise<void>;
 
 /**
  * Abstract base class for all tile-based feature systems.
@@ -85,7 +87,8 @@ export type TileEventListener = (event: TileFeatureEvent) => void | Promise<void
  */
 export abstract class AbstractTileFeatureSystem
     extends EventEmitter
-    implements VeratownFeatureSystem {
+    implements VeratownFeatureSystem
+{
     protected logger: Logger;
     public readonly key: string;
     public readonly label: string;
