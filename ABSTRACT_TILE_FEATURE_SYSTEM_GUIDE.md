@@ -107,10 +107,14 @@ this.setTile(10, 20, "metal_door", { locked: true, duration: 5000 });
 Publish an event that other systems can subscribe to.
 
 ```typescript
-this.emitFeatureEvent("door_unlocked", { x: 10, y: 20 }, {
-    reason: "code_entered",
-    duration: 10000,
-});
+this.emitFeatureEvent(
+    "door_unlocked",
+    { x: 10, y: 20 },
+    {
+        reason: "code_entered",
+        duration: 10000,
+    },
+);
 ```
 
 ### subscribeToEvents(eventType: string, listener: TileEventListener): () => void
@@ -249,9 +253,13 @@ export class DoorSystem extends AbstractTileFeatureSystem {
         this.setTile(x, y, "open_door", { locked: false });
 
         // Emit event
-        this.emitFeatureEvent("door_unlocked", { x, y }, {
-            duration: durationMs,
-        });
+        this.emitFeatureEvent(
+            "door_unlocked",
+            { x, y },
+            {
+                duration: durationMs,
+            },
+        );
 
         // Auto-lock after duration
         if (this.doorUnlockTimers.has(doorKey)) {

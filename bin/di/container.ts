@@ -223,5 +223,7 @@ export const DIServiceKeys = {
     CROSS_SYSTEM_SUBSCRIBERS: "crossSystemSubscribers",
     CASINO_VENUE_SYSTEM: "casinoVenueSystem",
     CASINO_ENGINE: "casinoEngine",
+    DEVICE_FACTORY: "deviceFactory",
+    GAME_STATE_MUTATION_SERVICE: "gameStateMutationService",
     VERATOWN: "veratown",
 } as const;
