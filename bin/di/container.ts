@@ -16,7 +16,7 @@
  * Service lifetime options for dependency injection.
  * - singleton: Single instance shared across all retrievals
  * - transient: New instance created for each retrieval
- * - lazy: Instance created only when first requested
+ * - lazy: Factory-backed instance created only when first requested, then reused
  */
 export enum ServiceLifetime {
     SINGLETON = "singleton",
@@ -26,7 +26,7 @@ export enum ServiceLifetime {
 
 /**
  * Service factory function for lazy initialization.
- * Called when the service is first requested with LAZY lifetime.
+ * Called when the service is requested for a factory-backed registration.
  */
 export type ServiceFactory<T> = () => T;
 
@@ -63,13 +63,20 @@ export class DIContainer {
      * @param name The unique identifier for the service
      * @param value The service instance to register
      * @param lifetime Service lifetime (default: SINGLETON)
-     * @throws Error if a circular dependency is detected
+     * TRANSIENT registrations must use registerLazy so a new value can be
+     * created for every retrieval.
      */
     register<T>(
         name: string,
         value: T,
         lifetime: ServiceLifetime = ServiceLifetime.SINGLETON,
     ): void {
+        if (lifetime === ServiceLifetime.TRANSIENT) {
+            throw new Error(
+                `TRANSIENT registration requires a factory for service '${name}'. ` +
+                    "Use registerLazy with TRANSIENT lifetime.",
+            );
+        }
         this.registrations.set(name, {
             value,
             lifetime,
@@ -83,19 +90,12 @@ export class DIContainer {
      * @param name The unique identifier for the service
      * @param factory Function that creates the service instance
      * @param lifetime Service lifetime (default: SINGLETON for lazy)
-     * @throws Error if a circular dependency is detected
      */
     registerLazy<T>(
         name: string,
         factory: ServiceFactory<T>,
         lifetime: ServiceLifetime = ServiceLifetime.SINGLETON,
     ): void {
-        if (lifetime === ServiceLifetime.TRANSIENT) {
-            throw new Error(
-                `Lazy registration with TRANSIENT lifetime is not supported for service '${name}'. ` +
-                    `Use SINGLETON or LAZY lifetime for lazy-initialized services.`,
-            );
-        }
         this.registrations.set(name, {
             factory: factory as ServiceFactory<unknown>,
             lifetime,
@@ -130,6 +130,19 @@ export class DIContainer {
             );
         }
 
+        // A transient factory is invoked for every retrieval and never cached.
+        if (
+            registration.lifetime === ServiceLifetime.TRANSIENT &&
+            registration.factory
+        ) {
+            registration.resolving = true;
+            try {
+                return registration.factory() as T;
+            } finally {
+                registration.resolving = false;
+            }
+        }
+
         // Handle lazy initialization
         if (registration.factory && !registration.initialized) {
             registration.resolving = true;
@@ -139,14 +152,6 @@ export class DIContainer {
             } finally {
                 registration.resolving = false;
             }
-        }
-
-        // Handle transient lifetime - create new instance each time
-        if (
-            registration.lifetime === ServiceLifetime.TRANSIENT &&
-            registration.factory
-        ) {
-            return registration.factory() as T;
         }
 
         return registration.value as T;
