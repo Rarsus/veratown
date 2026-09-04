@@ -32,6 +32,7 @@ before(async () => {
         await mongoClient.connect();
     } catch (error) {
         if (process.env.CI) throw error;
+        mongoClient = undefined;
         mongoSetupError =
             error instanceof Error ? error : new Error(String(error));
     }
