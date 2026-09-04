@@ -3,6 +3,7 @@ import { Db, MongoClient } from "mongodb";
 import { ConfigFile } from "./config";
 import { GAME_MISTRESS_POSITION, VeratownConnections } from "./games/veratown";
 import { createLogger } from "./logging";
+import { asAppError, ValidationError } from "./errors";
 
 export interface BotConnections extends VeratownConnections {
     secondary?: API_Connector;
@@ -44,7 +45,9 @@ async function connectDatabase(
             database: config.mongo_db,
         });
         await mongoClient.close();
-        throw error;
+        throw asAppError(error, "DATABASE", {
+            database: config.mongo_db,
+        });
     }
 }
 
@@ -107,8 +110,13 @@ export function validateBotAccountConfiguration(config: ConfigFile): void {
         const normalizedUsername = account.username.trim().toLowerCase();
         const previousRole = accountRoles.get(normalizedUsername);
         if (previousRole) {
-            const error = new Error(
+            const error = new ValidationError(
                 `Bot account "${account.username}" is configured for both ${previousRole} and ${account.role}; each logged-in bot role must use a different account.`,
+                {
+                    account: account.username,
+                    newRole: account.role,
+                    previousRole,
+                },
             );
             logger.error("Account configuration conflict", error, {
                 account: account.username,

@@ -147,6 +147,12 @@ export class Logger {
                 }
                 entry.context.errorMessage = error.message;
                 entry.context.errorName = error.name;
+                if (error instanceof AppError) {
+                    entry.context.errorCode = error.code;
+                    entry.context.errorCategory = error.category;
+                    entry.context.retryable = error.retryable;
+                    entry.context.errorContext = error.context;
+                }
             } else {
                 if (!entry.context) {
                     entry.context = {};

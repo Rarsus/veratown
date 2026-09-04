@@ -17,7 +17,7 @@ import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom
 import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
 import type { API_Connector } from "bc-bot";
-import { ConfigFile, validateConfig } from "./config";
+import { ConfigFile, configurationIssue, validateConfig } from "./config";
 import { Db } from "mongodb";
 import { Veratown } from "./games/veratown";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
@@ -46,6 +46,7 @@ import {
     type DiscordBotConfig,
 } from "./discord";
 import { DIContainer, DIServiceKeys } from "./di/container";
+import { asAppError } from "./errors";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -63,7 +64,10 @@ function parseBoolean(
     const normalized = value.trim().toLowerCase();
     if (["true", "1", "yes"].includes(normalized)) return true;
     if (["false", "0", "no"].includes(normalized)) return false;
-    throw new Error(`Invalid boolean value for configuration: ${value}`);
+    throw configurationIssue(
+        "configuration",
+        `invalid boolean value: ${value}`,
+    );
 }
 
 /**
@@ -77,11 +81,14 @@ function parseJsonArray(
     try {
         const parsed = JSON.parse(value);
         if (!Array.isArray(parsed)) {
-            throw new Error(`${fieldName} must be a JSON array`);
+            throw configurationIssue(fieldName, "must be a JSON array");
         }
         return parsed;
     } catch (error) {
-        throw new Error(`Invalid JSON array for ${fieldName}`);
+        if (error instanceof Error && error.name === "ConfigValidationError") {
+            throw error;
+        }
+        throw configurationIssue(fieldName, "must be valid JSON");
     }
 }
 
@@ -92,7 +99,7 @@ function parseJsonArray(
  *
  * Priority: env vars > config.json > defaults
  */
-async function loadConfig(configFilePath: string): Promise<ConfigFile> {
+export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     const logger = createLogger("Config");
     let fileConfig: any = {};
 
@@ -103,8 +110,9 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             fileConfig = JSON.parse(configString);
             logger.info("Loaded from file", { path: configFilePath });
         } catch (err) {
-            throw new Error(
-                `Failed to read configuration file: ${configFilePath}`,
+            throw configurationIssue(
+                "configurationFile",
+                `failed to read ${configFilePath}`,
             );
         }
     } else {
@@ -174,8 +182,13 @@ async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         config.room.Description = process.env.ROOM_DESCRIPTION;
     if (process.env.ROOM_SPACE !== undefined)
         config.room.Space = process.env.ROOM_SPACE;
-    if (process.env.ROOM_LIMIT !== undefined)
-        config.room.Limit = parseInt(process.env.ROOM_LIMIT, 10);
+    if (process.env.ROOM_LIMIT !== undefined) {
+        const roomLimit = Number.parseInt(process.env.ROOM_LIMIT, 10);
+        if (Number.isNaN(roomLimit)) {
+            throw configurationIssue("room.Limit", "must be an integer");
+        }
+        config.room.Limit = roomLimit;
+    }
 
     // Advanced room properties
     if (process.env.ROOM_BACKGROUND !== undefined)
@@ -712,13 +725,8 @@ async function main() {
 
 main().catch(async (e) => {
     const logger = LoggerRegistry.getAppLogger();
-    logger.fatal(
-        "Application startup failed",
-        e instanceof Error ? e : undefined,
-        {
-            error: String(e),
-        },
-    );
+    const error = asAppError(e, "VALIDATION");
+    logger.fatal("Application startup failed", error);
     await shutdown();
     process.exit(1);
 });

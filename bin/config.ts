@@ -15,6 +15,7 @@
 import { type RoomDefinition } from "bc-bot";
 import { type CasinoConfig } from "./games/casino";
 import { type DareConfig } from "./games/dare";
+import { AppError } from "./errors";
 import { z } from "zod";
 
 export interface ConfigFile {
@@ -150,7 +151,7 @@ export const configSchema = z
         }
     });
 
-export class ConfigValidationError extends Error {
+export class ConfigValidationError extends AppError {
     constructor(public readonly issues: z.ZodIssue[]) {
         super(
             `Invalid startup configuration: ${issues
@@ -159,8 +160,16 @@ export class ConfigValidationError extends Error {
                         `${issue.path.join(".") || "configuration"} ${issue.message}`,
                 )
                 .join("; ")}`,
+            "VALIDATION_ERROR",
+            "VALIDATION",
+            false,
+            {
+                issueCount: issues.length,
+                paths: issues.map((issue) => issue.path.join(".")),
+            },
         );
         this.name = "ConfigValidationError";
+        Object.setPrototypeOf(this, ConfigValidationError.prototype);
     }
 }
 
@@ -168,4 +177,17 @@ export function validateConfig(config: unknown): ConfigFile {
     const result = configSchema.safeParse(config);
     if (!result.success) throw new ConfigValidationError(result.error.issues);
     return result.data as ConfigFile;
+}
+
+export function configurationIssue(
+    path: string,
+    message: string,
+): ConfigValidationError {
+    return new ConfigValidationError([
+        {
+            code: "custom",
+            path: path ? path.split(".") : [],
+            message,
+        },
+    ]);
 }
