@@ -24,6 +24,7 @@ import {
     Routes,
     CommandInteraction,
     Guild,
+    MessageFlags,
 } from "discord.js";
 import type { Db } from "mongodb";
 import type { DiscordBotConfig, CommandContext } from "./types";
@@ -484,7 +485,7 @@ export async function handleCommandInteraction(
         const guildId = interaction.guildId;
 
         // Immediately defer reply for longer operations
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         logger.info("Handling command", {
             command: commandName,
@@ -651,31 +652,17 @@ export async function handleCommandInteraction(
         });
 
         try {
-            if (!interaction.replied) {
-                await interaction.reply({
-                    embeds: [
-                        formatResultAsEmbed({
-                            success: false,
-                            message:
-                                "An error occurred while processing the command.",
-                            error,
-                        }),
-                    ],
-                    ephemeral: true,
-                });
-            } else if (!interaction.deferred) {
-                await interaction.followUp({
-                    embeds: [
-                        formatResultAsEmbed({
-                            success: false,
-                            message:
-                                "An error occurred while processing the command.",
-                            error,
-                        }),
-                    ],
-                    ephemeral: true,
-                });
-            }
+            // After deferReply, always use editReply for the response
+            await interaction.editReply({
+                embeds: [
+                    formatResultAsEmbed({
+                        success: false,
+                        message:
+                            "An error occurred while processing the command.",
+                        error,
+                    }),
+                ],
+            });
         } catch (replyError) {
             logger.error("Failed to send error reply", replyError, {});
         }

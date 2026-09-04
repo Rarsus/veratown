@@ -37,11 +37,13 @@ export function formatResultAsEmbed(result: CommandResult): EmbedBuilder {
 
     if (result.data) {
         const dataStr = JSON.stringify(result.data, null, 2).substring(0, 1024);
-        embed.addFields({
-            name: "Data",
-            value: `\`\`\`json\n${dataStr}\n\`\`\``,
-            inline: false,
-        });
+        embed.addFields([
+            {
+                name: "Data",
+                value: `\`\`\`json\n${dataStr}\n\`\`\``,
+                inline: false,
+            },
+        ]);
     }
 
     return embed;
