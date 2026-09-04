@@ -58,6 +58,8 @@ assert.strictEqual(store1, store2); // true
 ### TRANSIENT
 
 A new instance is created for each retrieval. Use for stateless services or when you need independent instances.
+Transient services must be registered with `registerLazy`, because the factory is
+called for each retrieval.
 
 ```typescript
 container.registerLazy(

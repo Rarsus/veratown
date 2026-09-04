@@ -12,10 +12,8 @@
  * limitations under the License.
  */
 
-// @ts-ignore - jest types not available
-import { beforeEach, describe, it, expect, afterEach } from "@jest/globals";
-// @ts-ignore - jest types not available
-declare const jest: any;
+import { beforeEach, describe, it, afterEach } from "node:test";
+import { expect } from "../../../testUtils";
 import { Db } from "mongodb";
 import { MongoClient } from "mongodb";
 import { MongoMemoryServer } from "mongodb-memory-server";

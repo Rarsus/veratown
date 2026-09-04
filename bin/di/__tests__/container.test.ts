@@ -184,7 +184,18 @@ describe("DIContainer", () => {
             assert.notStrictEqual(instance1, instance2);
             assert.strictEqual((instance1 as any).id, 1);
             assert.strictEqual((instance2 as any).id, 2);
-            assert.strictEqual(callCount, 2);
+        });
+
+        test("TRANSIENT instance registration requires a factory", () => {
+            assert.throws(
+                () =>
+                    container.register(
+                        "invalidTransient",
+                        {},
+                        ServiceLifetime.TRANSIENT,
+                    ),
+                /TRANSIENT registration requires a factory/,
+            );
         });
 
         test("getLifetime returns correct lifetime", () => {

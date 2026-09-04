@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongoClient } from "mongodb";
@@ -23,7 +23,7 @@ import { GameEvent } from "../shared/unifiedCharacterTypes";
 let mongoServer: MongoMemoryServer;
 let mongoClient: MongoClient;
 
-test("UnifiedCharacterStore - Setup", async () => {
+before(async () => {
     mongoServer = await MongoMemoryServer.create();
     const mongoUri = mongoServer.getUri();
     mongoClient = new MongoClient(mongoUri);
@@ -363,7 +363,7 @@ test("UnifiedCharacterStore - Update character name", async () => {
     assert.strictEqual(casinoView.name, "NewName");
 });
 
-test("UnifiedCharacterStore - Cleanup", async () => {
+after(async () => {
     await mongoClient.close();
     await mongoServer.stop();
 });
