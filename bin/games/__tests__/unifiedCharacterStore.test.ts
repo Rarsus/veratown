@@ -12,26 +12,45 @@
  * limitations under the License.
  */
 
-import { after, before, test } from "node:test";
+import { after, before, test, type TestContext } from "node:test";
 import * as assert from "node:assert/strict";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { MongoClient } from "mongodb";
+import { Db, MongoClient } from "mongodb";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { EventBus } from "../shared/eventBus";
 import { GameEvent } from "../shared/unifiedCharacterTypes";
 
-let mongoServer: MongoMemoryServer;
-let mongoClient: MongoClient;
+let mongoServer: MongoMemoryServer | undefined;
+let mongoClient: MongoClient | undefined;
+let mongoSetupError: Error | undefined;
 
 before(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const mongoUri = mongoServer.getUri();
-    mongoClient = new MongoClient(mongoUri);
-    await mongoClient.connect();
+    try {
+        mongoServer = await MongoMemoryServer.create();
+        const mongoUri = mongoServer.getUri();
+        mongoClient = new MongoClient(mongoUri);
+        await mongoClient.connect();
+    } catch (error) {
+        if (process.env.CI) throw error;
+        mongoClient = undefined;
+        mongoSetupError =
+            error instanceof Error ? error : new Error(String(error));
+    }
 });
 
-test("UnifiedCharacterStore - Profile creation and retrieval", async () => {
-    const db = mongoClient.db("test_unified");
+function getTestDb(context: TestContext, name: string): Db | undefined {
+    if (!mongoClient) {
+        context.skip(
+            `MongoDB integration unavailable: ${mongoSetupError?.message ?? "setup failed"}`,
+        );
+        return undefined;
+    }
+    return mongoClient.db(name);
+}
+
+test("UnifiedCharacterStore - Profile creation and retrieval", async (t) => {
+    const db = getTestDb(t, "test_unified");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Create a profile
@@ -43,8 +62,9 @@ test("UnifiedCharacterStore - Profile creation and retrieval", async () => {
     assert.strictEqual(profile.veratown.auditLog.length, 0);
 });
 
-test("UnifiedCharacterStore - Casino view and chip updates", async () => {
-    const db = mongoClient.db("test_casino");
+test("UnifiedCharacterStore - Casino view and chip updates", async (t) => {
+    const db = getTestDb(t, "test_casino");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Get casino view for new player
@@ -68,8 +88,9 @@ test("UnifiedCharacterStore - Casino view and chip updates", async () => {
     assert.strictEqual(view.chips, 0);
 });
 
-test("UnifiedCharacterStore - EventBus integration with chip updates", async () => {
-    const db = mongoClient.db("test_events_chips");
+test("UnifiedCharacterStore - EventBus integration with chip updates", async (t) => {
+    const db = getTestDb(t, "test_events_chips");
+    if (!db) return;
     const eventBus = new EventBus();
     const store = new UnifiedCharacterStore(db, eventBus);
 
@@ -99,8 +120,9 @@ test("UnifiedCharacterStore - EventBus integration with chip updates", async () 
     assert.strictEqual(events.length, initialLength);
 });
 
-test("UnifiedCharacterStore - Dare view and bondage management", async () => {
-    const db = mongoClient.db("test_dare");
+test("UnifiedCharacterStore - Dare view and bondage management", async (t) => {
+    const db = getTestDb(t, "test_dare");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Get dare view
@@ -128,8 +150,9 @@ test("UnifiedCharacterStore - Dare view and bondage management", async () => {
     assert.strictEqual(view.activeBondage[0].forfeitKey, "corset");
 });
 
-test("UnifiedCharacterStore - Bondage events", async () => {
-    const db = mongoClient.db("test_bondage_events");
+test("UnifiedCharacterStore - Bondage events", async (t) => {
+    const db = getTestDb(t, "test_bondage_events");
+    if (!db) return;
     const eventBus = new EventBus();
     const store = new UnifiedCharacterStore(db, eventBus);
 
@@ -160,8 +183,9 @@ test("UnifiedCharacterStore - Bondage events", async () => {
     assert.strictEqual(events.length, initialLength);
 });
 
-test("UnifiedCharacterStore - Veratown view and position tracking", async () => {
-    const db = mongoClient.db("test_veratown");
+test("UnifiedCharacterStore - Veratown view and position tracking", async (t) => {
+    const db = getTestDb(t, "test_veratown");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Get veratown view
@@ -190,8 +214,9 @@ test("UnifiedCharacterStore - Veratown view and position tracking", async () => 
     assert.strictEqual(view.auditLog[0].performedBy, 555);
 });
 
-test("UnifiedCharacterStore - Cage entry and exit events", async () => {
-    const db = mongoClient.db("test_cage_events");
+test("UnifiedCharacterStore - Cage entry and exit events", async (t) => {
+    const db = getTestDb(t, "test_cage_events");
+    if (!db) return;
     const eventBus = new EventBus();
     const store = new UnifiedCharacterStore(db, eventBus);
 
@@ -219,8 +244,9 @@ test("UnifiedCharacterStore - Cage entry and exit events", async () => {
     assert.strictEqual(view.auditLog.length, 0); // recordCageEntry doesn't auto-add audit
 });
 
-test("UnifiedCharacterStore - Cross-system queries", async () => {
-    const db = mongoClient.db("test_queries");
+test("UnifiedCharacterStore - Cross-system queries", async (t) => {
+    const db = getTestDb(t, "test_queries");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Set up test data
@@ -248,8 +274,9 @@ test("UnifiedCharacterStore - Cross-system queries", async () => {
     assert.ok(bondedPlayers.some((p) => p._id === 1002));
 });
 
-test("UnifiedCharacterStore - Leaderboard", async () => {
-    const db = mongoClient.db("test_leaderboard");
+test("UnifiedCharacterStore - Leaderboard", async (t) => {
+    const db = getTestDb(t, "test_leaderboard");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Create some players with scores
@@ -263,8 +290,9 @@ test("UnifiedCharacterStore - Leaderboard", async () => {
     assert.strictEqual(leaderboard[0].casino.score, 500);
 });
 
-test("UnifiedCharacterStore - Active players", async () => {
-    const db = mongoClient.db("test_active");
+test("UnifiedCharacterStore - Active players", async (t) => {
+    const db = getTestDb(t, "test_active");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Create a profile (sets lastAccessedAt to now)
@@ -343,8 +371,9 @@ test("UnifiedCharacterStore - EventBus wildcard listeners", async () => {
     assert.strictEqual(events[1].type, "bondage_applied");
 });
 
-test("UnifiedCharacterStore - Update character name", async () => {
-    const db = mongoClient.db("test_name_update");
+test("UnifiedCharacterStore - Update character name", async (t) => {
+    const db = getTestDb(t, "test_name_update");
+    if (!db) return;
     const store = new UnifiedCharacterStore(db);
 
     // Create profile
