@@ -29,6 +29,7 @@ describe("Cross-system integration", () => {
             await client.connect();
             db = client.db("cross_system_integration");
         } catch (error) {
+            if (process.env.CI) throw error;
             mongoSetupError =
                 error instanceof Error ? error : new Error(String(error));
         }

@@ -26,6 +26,7 @@ describe("GameStateMutationService MongoDB integration", () => {
             store = new UnifiedCharacterStore(db);
             service = new GameStateMutationServiceImpl(store, new EventBus());
         } catch (error) {
+            if (process.env.CI) throw error;
             mongoSetupError =
                 error instanceof Error ? error : new Error(String(error));
         }
