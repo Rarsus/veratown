@@ -8,6 +8,7 @@ function createStore() {
     const profile = {
         dare: { activeBondage: [] },
         veratown: { cageIncarcerations: [] },
+        crossSystem: { inventory: [], effects: [], bondageLevel: 0 },
     };
     return {
         calls,
@@ -21,6 +22,13 @@ function createStore() {
         getProfile: async () => profile,
         updateDareStats: async () => calls.push("dare"),
         updateVeratownStats: async () => calls.push("veratown"),
+        updateCrossSystemStats: async (
+            _member: number,
+            updates: Record<string, unknown>,
+        ) => {
+            Object.assign(profile.crossSystem, updates);
+            calls.push("cross-system");
+        },
         suspendAllGames: async () => {
             calls.push("suspend");
         },
@@ -33,6 +41,10 @@ function createStore() {
         withTransaction: async (
             operation: (session: unknown) => Promise<unknown>,
         ) => operation({}),
+        transferChipsAtomically: async (...args: unknown[]) => {
+            calls.push(`chips:-${args[2]}`);
+            calls.push(`chips:${args[2]}`);
+        },
     };
 }
 
@@ -79,4 +91,31 @@ test("GameStateMutationService validates mutation inputs", async () => {
 
     await assert.rejects(() => service.lockChips(-1, 10, "cage"));
     await assert.rejects(() => service.applyBondage(1, []));
+});
+
+test("GameStateMutationService covers core property and progression mutations", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    await service.updateCharacterProperty(1, "lastPosition", { X: 1, Y: 2 });
+    await service.addToInventory(1, { itemKey: "key", quantity: 1 });
+    await service.applyEffect(1, {
+        effectKey: "stunned",
+        appliedAt: Date.now(),
+    });
+    await service.updateBondageLevel(1, 3);
+    await service.removeFromInventory(1, "key");
+    await service.awardChips(1, 10, "award");
+    await service.deductChips(1, 4, "deduct");
+
+    assert.equal(store.profile.crossSystem.bondageLevel, 3);
+    assert.deepEqual(store.profile.crossSystem.inventory, []);
+    assert.equal(store.profile.crossSystem.effects.length, 1);
+    assert.ok(store.calls.includes("cross-system"));
+    assert.ok(store.calls.includes("audit:awardChips"));
+    assert.ok(store.calls.includes("audit:deductChips"));
+    assert.throws(() => service.awardChips(1, 1.5, "invalid"));
 });

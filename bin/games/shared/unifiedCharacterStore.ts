@@ -137,6 +137,78 @@ export class UnifiedCharacterStore {
         }
     }
 
+    public async transferChipsAtomically(
+        from: number,
+        to: number,
+        amount: number,
+        reason: string,
+        actor: number = from,
+    ): Promise<void> {
+        if (from === to || !Number.isFinite(amount) || amount <= 0) {
+            throw new Error("invalid chip transfer");
+        }
+        await this.getProfile(from);
+        await this.getProfile(to);
+        await this.withTransaction(async (session) => {
+            await this.init();
+            const now = asTimestamp(Date.now());
+            const sender = await this.profiles.findOne(
+                { _id: from },
+                { session },
+            );
+            const recipient = await this.profiles.findOne(
+                { _id: to },
+                { session },
+            );
+            if (!sender || !recipient || sender.casino.chips < amount) {
+                throw new Error("insufficient chips or missing profile");
+            }
+            await this.profiles.updateOne(
+                { _id: from },
+                {
+                    $set: {
+                        "casino.chips": sender.casino.chips - amount,
+                        updatedAt: now,
+                    },
+                },
+                { session },
+            );
+            await this.profiles.updateOne(
+                { _id: to },
+                {
+                    $set: {
+                        "casino.chips": recipient.casino.chips + amount,
+                        updatedAt: now,
+                    },
+                },
+                { session },
+            );
+            await this.events.insertMany(
+                [
+                    {
+                        timestamp: now,
+                        type: "chips_lost",
+                        source: "casino",
+                        actor,
+                        target: from,
+                        data: { delta: -amount, reason, transferTo: to },
+                        processed: false,
+                    },
+                    {
+                        timestamp: now,
+                        type: "chips_earned",
+                        source: "casino",
+                        actor,
+                        target: to,
+                        data: { delta: amount, reason, transferFrom: from },
+                        processed: false,
+                    },
+                ],
+                { session },
+            );
+        });
+    }
+
     /**
      * Get or create a unified character profile.
      * All state is initialized with sensible defaults.

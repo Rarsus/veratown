@@ -120,6 +120,7 @@ type MutationStore = Pick<
     | "recordAuditEntry"
     | "recordEvent"
     | "withTransaction"
+    | "transferChipsAtomically"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -236,17 +237,21 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         actor = memberNumber,
     ): Promise<void> {
         this.validateMember(memberNumber);
-        this.validateAmount(amount);
-        return this.withRetry(
-            () =>
-                this.unifiedStore.updateChips(
-                    memberNumber,
-                    Math.abs(amount),
-                    reason,
-                    actor,
-                ),
-            "awardChips",
-        );
+        this.validatePositiveIntegerAmount(amount);
+        return this.withRetry(async () => {
+            await this.unifiedStore.updateChips(
+                memberNumber,
+                amount,
+                reason,
+                actor,
+            );
+            await this.audit(
+                memberNumber,
+                "awardChips",
+                { amount, reason },
+                actor,
+            );
+        }, "awardChips");
     }
 
     public deductChips(
@@ -256,17 +261,21 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         actor = memberNumber,
     ): Promise<void> {
         this.validateMember(memberNumber);
-        this.validateAmount(amount);
-        return this.withRetry(
-            () =>
-                this.unifiedStore.updateChips(
-                    memberNumber,
-                    -Math.abs(amount),
-                    reason,
-                    actor,
-                ),
-            "deductChips",
-        );
+        this.validatePositiveIntegerAmount(amount);
+        return this.withRetry(async () => {
+            await this.unifiedStore.updateChips(
+                memberNumber,
+                -amount,
+                reason,
+                actor,
+            );
+            await this.audit(
+                memberNumber,
+                "deductChips",
+                { amount, reason },
+                actor,
+            );
+        }, "deductChips");
     }
 
     public async updateLocation(
@@ -322,8 +331,13 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         if (!reason) throw new Error("reason is required");
         if (from === to) throw new Error("source and destination must differ");
         await this.withRetry(async () => {
-            await this.unifiedStore.updateChips(from, -amount, reason, from);
-            await this.unifiedStore.updateChips(to, amount, reason, from);
+            await this.unifiedStore.transferChipsAtomically(
+                from,
+                to,
+                amount,
+                reason,
+                from,
+            );
             await this.audit(from, "transferChips", {
                 from,
                 to,
@@ -566,6 +580,12 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     private validateAmount(amount: number): void {
         if (!Number.isFinite(amount) || amount < 0) {
             throw new Error("amount must be a non-negative number");
+        }
+    }
+
+    private validatePositiveIntegerAmount(amount: number): void {
+        if (!Number.isSafeInteger(amount) || amount <= 0) {
+            throw new Error("amount must be a positive integer");
         }
     }
 }

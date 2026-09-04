@@ -46,6 +46,10 @@ import {
 import { loadRegionFromDatabase } from "./shared/locationUtils";
 import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
+import {
+    GameStateMutationService,
+    GameStateMutationServiceImpl,
+} from "./shared/gameStateMutationService";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 import { createLogger } from "../logging";
 import { DIContainer, DIServiceKeys } from "../di/container";
@@ -96,6 +100,7 @@ export class Casino implements GamePlugin {
     private game: Game;
     private commandParser?: CommandParser;
     public unifiedStore: UnifiedCharacterStore;
+    private mutationService: GameStateMutationService;
     private cocktailOfTheDay: Cocktail | undefined;
     public multiplier = 1;
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
@@ -124,6 +129,16 @@ export class Casino implements GamePlugin {
                   )
                 : new UnifiedCharacterStore(db)
             : new UnifiedCharacterStore(db);
+        this.mutationService = container?.has(
+            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        )
+            ? container.get<GameStateMutationService>(
+                  DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+              )
+            : new GameStateMutationServiceImpl(
+                  this.unifiedStore,
+                  this.unifiedStore.getEventBus(),
+              );
 
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
@@ -231,12 +246,21 @@ export class Casino implements GamePlugin {
             );
             const delta = player.credits - (current?.chips || 0);
             if (delta !== 0) {
-                await this.unifiedStore.updateChips(
-                    player.memberNumber,
-                    delta,
-                    "save_player_update",
-                    0,
-                );
+                if (delta > 0) {
+                    await this.mutationService.awardChips(
+                        player.memberNumber,
+                        delta,
+                        "save_player_update",
+                        0,
+                    );
+                } else {
+                    await this.mutationService.deductChips(
+                        player.memberNumber,
+                        -delta,
+                        "save_player_update",
+                        0,
+                    );
+                }
             }
         }
         // Update casino stats if provided
@@ -253,7 +277,7 @@ export class Casino implements GamePlugin {
         memberNumber: number,
         amount: number,
     ): Promise<void> {
-        await this.unifiedStore.updateChips(
+        await this.mutationService.awardChips(
             memberNumber,
             amount,
             "casino_credit",
@@ -287,7 +311,7 @@ export class Casino implements GamePlugin {
         }
 
         // Award free chips
-        await this.unifiedStore.updateChips(
+        await this.mutationService.awardChips(
             memberNumber,
             FREE_CHIPS,
             "daily_free_chips",
@@ -307,19 +331,11 @@ export class Casino implements GamePlugin {
             return false;
         }
 
-        // Deduct from sender
-        await this.unifiedStore.updateChips(
+        await this.mutationService.transferChips(
             fromMemberNumber,
-            -amount,
-            "transfer_out",
-            0,
-        );
-        // Add to receiver
-        await this.unifiedStore.updateChips(
             toMemberNumber,
             amount,
-            "transfer_in",
-            0,
+            "casino_transfer",
         );
         return true;
     }
