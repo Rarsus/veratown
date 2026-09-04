@@ -53,6 +53,13 @@ export interface ConfigFile {
 }
 
 const nonEmptyString = z.string().trim().min(1);
+const mapRegionSchema = z.object({
+    TopLeft: z.object({ X: z.number().finite(), Y: z.number().finite() }),
+    BottomRight: z.object({
+        X: z.number().finite(),
+        Y: z.number().finite(),
+    }),
+});
 
 /**
  * The startup configuration contract. Secrets are intentionally represented
@@ -87,7 +94,24 @@ export const configSchema = z
         discord_guild_id: nonEmptyString.optional(),
         discord_admin_roles: z.array(nonEmptyString).default([]),
         discord_audit_channel_id: nonEmptyString.optional(),
-        casino: z.custom<CasinoConfig>().optional(),
+        casino: z
+            .object({
+                cocktail: z.string().trim().min(1).optional(),
+                game: z.enum(["roulette", "blackjack"]).optional(),
+                region: mapRegionSchema.optional(),
+                venues: z
+                    .array(
+                        z.object({
+                            region: z.union([nonEmptyString, mapRegionSchema]),
+                            chipMultiplier: z.number().finite().nonnegative(),
+                            description: nonEmptyString,
+                            requiresAddonMissing: z.boolean().optional(),
+                        }),
+                    )
+                    .optional(),
+            })
+            .passthrough()
+            .optional(),
         dare: z.custom<DareConfig>().optional(),
     })
     .passthrough()

@@ -1,12 +1,17 @@
 # Casino System Migration - Phase 5 Implementation
 
 **Date:** 2026-08-31  
-**Status:** ✅ COMPLETE  
+**Status:** ✅ COMPLETE (venue migration included)
 **Tests:** 483/483 passing
 
 ## Overview
 
 Successfully implemented Phase 5 adapter removal for Casino system. Removed `CasinoStoreAdapter` dependency and migrated all Casino operations to use `UnifiedCharacterStore` directly.
+
+The Casino Venue System now receives configured venues and its mutation service
+through DI. Location persistence uses `GameStateMutationService.updateLocation`
+and emits a persisted `audit_trail` event, while unknown locations continue to
+use the neutral fallback multiplier.
 
 ## Changes Made
 

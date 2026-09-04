@@ -21,6 +21,17 @@
 
 ## 🏗️ Architecture Understanding
 
+### Casino Venue System
+
+Casino venue configuration and services are provided through the DI container.
+Use `DIServiceKeys.CASINO_VENUE_SYSTEM` and the shared
+`GameStateMutationService` rather than reading global configuration or writing
+character location state directly. Venue location changes must use
+`CasinoVenueSystem.persistLocation()`, which persists through the mutation
+boundary and emits a casino audit event. Unknown locations retain the neutral
+fallback multiplier, while malformed configured venues and coordinates are
+rejected.
+
 ### Release System: 7-Stage State Machine
 
 The release system is carefully designed, NOT just strip-and-free:

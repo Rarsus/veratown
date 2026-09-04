@@ -53,6 +53,10 @@ import {
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 import { createLogger } from "../logging";
 import { DIContainer, DIServiceKeys } from "../di/container";
+import {
+    CasinoVenueConfig,
+    CasinoVenueSystem,
+} from "./shared/casinoVenueSystem";
 
 const logger = createLogger("Casino");
 
@@ -89,6 +93,7 @@ export interface CasinoConfig {
     // Location store and fallback config for database-backed region loading
     locationStore?: VeratownLocationStore;
     fallbackLocations?: VeratownLocationDoc[];
+    venues?: CasinoVenueConfig["venues"];
 }
 
 export class Casino implements GamePlugin {
@@ -106,6 +111,7 @@ export class Casino implements GamePlugin {
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
     private gameRegion?: MapRegion;
     private forfeitService: ForfeitService;
+    public readonly venueSystem: CasinoVenueSystem;
 
     /**
      * Phase 5: Direct UnifiedCharacterStore access (no adapters)
@@ -142,6 +148,14 @@ export class Casino implements GamePlugin {
             : new GameStateMutationServiceImpl(
                   this.unifiedStore,
                   this.unifiedStore.getEventBus(),
+              );
+        this.venueSystem = container?.has(DIServiceKeys.CASINO_VENUE_SYSTEM)
+            ? container.get<CasinoVenueSystem>(
+                  DIServiceKeys.CASINO_VENUE_SYSTEM,
+              )
+            : new CasinoVenueSystem(
+                  { venues: config?.venues },
+                  this.mutationService,
               );
 
         // If no CommandParser provided, create one for this casino instance
