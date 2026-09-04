@@ -29,8 +29,8 @@ import {
     VeratownLocationDoc,
 } from "./veratownLocationStore";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
-import { createLogger } from "../../logging";
 import { RegionManager, VeratownRegion } from "./regionManager";
+import { CommandSystemMessageFeatureSystem } from "../shared/commandSystemMessageFeatureSystem";
 import {
     getLocationTemplate,
     getAllLocationTemplates,
@@ -45,15 +45,14 @@ import {
 // room feature systems (bin/games/veratown/featureSystem.ts), so a bug in
 // one admin command is logged and swallowed instead of crashing the bot or
 // taking out any other command.
-export class VeratownAdminCommands {
+export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
     // Guards against overlapping "!maintenance" runs (eg. a second admin
     // triggering it while the one-minute warning is still counting down).
     private maintenanceInProgress = false;
-    private readonly logger = createLogger("VeratownAdminCommands");
 
     public constructor(
-        private conn: API_Connector,
-        private commandParser: CommandParser,
+        conn: API_Connector,
+        commandParser: CommandParser,
         private features: VeratownFeatureSystem[],
         private mapStore?: VeratownMapStore,
         private locationStore?: VeratownLocationStore,
@@ -68,40 +67,27 @@ export class VeratownAdminCommands {
         private conn2?: API_Connector,
         private reloadLocations?: () => Promise<void>,
         private getStatus?: () => string,
-    ) {}
+    ) {
+        super(
+            conn,
+            commandParser,
+            "administration-commands",
+            "Administration Commands",
+            () => true,
+        );
+    }
 
     public registerCommands(): void {
-        this.commandParser.register(
-            "strip",
-            guardHandler("admin:strip", this.onCommandStrip),
-        );
-        this.commandParser.register(
-            "feature",
-            guardHandler("admin:feature", this.onCommandFeature),
-        );
-        this.commandParser.register(
-            "map",
-            guardHandler("admin:map", this.onCommandMap),
-        );
-        this.commandParser.register(
-            "maintenance",
-            guardHandler("admin:maintenance", this.onCommandMaintenance),
-        );
-        this.commandParser.register(
-            "adminhelp",
-            guardHandler("admin:help", this.onCommandAdminHelp),
-        );
-        this.commandParser.register(
-            "location",
-            guardHandler("admin:location", this.onCommandLocation),
-        );
+        this.registerCommand("strip", this.onCommandStrip);
+        this.registerCommand("feature", this.onCommandFeature);
+        this.registerCommand("map", this.onCommandMap);
+        this.registerCommand("maintenance", this.onCommandMaintenance);
+        this.registerCommand("adminhelp", this.onCommandAdminHelp);
+        this.registerCommand("location", this.onCommandLocation);
         // "!map import <data>" is handled separately from the other "map"
         // subcommands above: CommandParser lowercases the *entire* message
         // before any handler sees it (including command arguments), but
-        this.commandParser.register(
-            "status",
-            guardHandler("admin:status", this.onCommandStatus),
-        );
+        this.registerCommand("status", this.onCommandStatus);
         // the base64 map bundle produced by "!map export" is case-
         // sensitive, so routing "import" through CommandParser the normal
         // way would silently corrupt every import. This raw listener reads
@@ -110,6 +96,10 @@ export class VeratownAdminCommands {
             "Message",
             guardHandler("admin:map-import", this.onRawMessage),
         );
+    }
+
+    protected isEnabled(): boolean {
+        return true;
     }
 
     private onCommandStatus = async (
@@ -122,7 +112,7 @@ export class VeratownAdminCommands {
         );
     };
 
-    private requireAdmin(
+    private ensureAdmin(
         sender: API_Character,
         msg: BC_Server_ChatRoomMessage,
     ): boolean {
@@ -138,7 +128,7 @@ export class VeratownAdminCommands {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.requireAdmin(sender, msg)) return;
+        if (!this.ensureAdmin(sender, msg)) return;
 
         if (args.length === 0) {
             this.conn.reply(msg, "Usage: strip <name or member number>");
@@ -205,7 +195,7 @@ export class VeratownAdminCommands {
             return;
         }
 
-        if (!this.requireAdmin(sender, msg)) return;
+        if (!this.ensureAdmin(sender, msg)) return;
 
         const key = args[1];
         // CommandParser lowercases every arg (not just the command name)
@@ -236,7 +226,7 @@ export class VeratownAdminCommands {
 
         switch (sub) {
             case "update": {
-                if (!this.requireAdmin(sender, msg)) return;
+                if (!this.ensureAdmin(sender, msg)) return;
 
                 const mapData = this.conn.chatRoom!.map.mapData;
                 if (!mapData) {
@@ -259,7 +249,7 @@ export class VeratownAdminCommands {
                 break;
             }
             case "reset": {
-                if (!this.requireAdmin(sender, msg)) return;
+                if (!this.ensureAdmin(sender, msg)) return;
 
                 const mapData = JSON.parse(
                     decompressFromBase64(DEFAULT_MAP_BUNDLE),
@@ -277,7 +267,7 @@ export class VeratownAdminCommands {
                 break;
             }
             case "export": {
-                if (!this.requireAdmin(sender, msg)) return;
+                if (!this.ensureAdmin(sender, msg)) return;
 
                 const mapData = this.conn.chatRoom!.map.mapData;
                 if (!mapData) {
@@ -304,7 +294,7 @@ export class VeratownAdminCommands {
                 );
                 break;
             case "backups": {
-                if (!this.requireAdmin(sender, msg)) return;
+                if (!this.ensureAdmin(sender, msg)) return;
 
                 if (!this.mapStore) {
                     this.conn.reply(
@@ -335,7 +325,7 @@ export class VeratownAdminCommands {
                 break;
             }
             case "restore": {
-                if (!this.requireAdmin(sender, msg)) return;
+                if (!this.ensureAdmin(sender, msg)) return;
 
                 if (!this.mapStore) {
                     this.conn.reply(
@@ -371,7 +361,7 @@ export class VeratownAdminCommands {
                 break;
             }
             case "history": {
-                if (!this.requireAdmin(sender, msg)) return;
+                if (!this.ensureAdmin(sender, msg)) return;
 
                 if (!this.mapStore) {
                     this.conn.reply(
@@ -426,7 +416,7 @@ export class VeratownAdminCommands {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.requireAdmin(sender, msg)) return;
+        if (!this.ensureAdmin(sender, msg)) return;
 
         if (this.maintenanceInProgress) {
             this.conn.reply(
@@ -491,7 +481,7 @@ export class VeratownAdminCommands {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.requireAdmin(sender, msg)) return;
+        if (!this.ensureAdmin(sender, msg)) return;
 
         const helpText = [
             "=== ADMIN COMMANDS ===",
@@ -544,7 +534,7 @@ export class VeratownAdminCommands {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.requireAdmin(sender, msg)) return;
+        if (!this.ensureAdmin(sender, msg)) return;
 
         if (!this.locationStore) {
             this.conn.reply(

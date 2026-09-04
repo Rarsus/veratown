@@ -24,6 +24,7 @@ import {
     type ParsedCommand,
     type PermissionCheckResult,
 } from "../abstractMessageFeatureSystem";
+import { CommandSystemMessageFeatureSystem } from "../commandSystemMessageFeatureSystem";
 
 /**
  * Mock concrete implementation for testing
@@ -77,6 +78,25 @@ class AdminOnlyFeatureSystem extends AbstractMessageFeatureSystem {
     ): Promise<void> {
         // Just echo the command
         await this.sendMessage(1, `Handled: ${parsed.command}`);
+    }
+}
+
+class CommandFeatureSystem extends CommandSystemMessageFeatureSystem {
+    public calls: string[][] = [];
+
+    constructor(conn: API_Connector, commandParser: any) {
+        super(conn, commandParser, "commands", "Command Feature", () => true);
+    }
+
+    public addCommand(
+        command: string,
+        handler: (
+            sender: API_Character,
+            msg: BC_Server_ChatRoomMessage,
+            args: string[],
+        ) => Promise<void>,
+    ): void {
+        this.registerCommand(command, handler);
     }
 }
 
@@ -146,6 +166,43 @@ describe("AbstractMessageFeatureSystem", () => {
             "admin-test",
             "Admin Test Feature",
         );
+    });
+
+    describe("CommandSystemMessageFeatureSystem", () => {
+        it("runs a registered handler once after base validation", async () => {
+            const connector = createMockConnector();
+            let registeredHandler:
+                | ((
+                      sender: API_Character,
+                      msg: BC_Server_ChatRoomMessage,
+                      args: string[],
+                  ) => Promise<void>)
+                | undefined;
+            const parser = {
+                register: (
+                    _command: string,
+                    handler: (
+                        sender: API_Character,
+                        msg: BC_Server_ChatRoomMessage,
+                        args: string[],
+                    ) => Promise<void>,
+                ) => {
+                    registeredHandler = handler;
+                },
+            };
+            const system = new CommandFeatureSystem(connector, parser);
+            system.addCommand("echo", async (_sender, _msg, args) => {
+                system.calls.push(args);
+            });
+
+            await registeredHandler!(
+                createMockCharacter(),
+                createMockMessage(),
+                ["one", "two"],
+            );
+
+            assert.deepStrictEqual(system.calls, [["one", "two"]]);
+        });
     });
 
     describe("processMessage", () => {
