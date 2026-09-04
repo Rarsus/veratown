@@ -133,8 +133,7 @@ export async function handleFeatureEnableCommand(
         if (!context.isAdmin) {
             return {
                 success: false,
-                message:
-                    "❌ You don't have permission to enable features",
+                message: "❌ You don't have permission to enable features",
             };
         }
 
@@ -175,7 +174,6 @@ export async function handleFeatureEnableCommand(
         }
 
         // Enable the feature
-        await feature.enable?.();
         feature.enabled = true;
 
         logger.warn("Feature enabled via Discord", {
@@ -230,8 +228,7 @@ export async function handleFeatureDisableCommand(
         if (!context.isAdmin) {
             return {
                 success: false,
-                message:
-                    "❌ You don't have permission to disable features",
+                message: "❌ You don't have permission to disable features",
             };
         }
 
@@ -272,7 +269,6 @@ export async function handleFeatureDisableCommand(
         }
 
         // Disable the feature
-        await feature.disable?.();
         feature.enabled = false;
 
         logger.warn("Feature disabled via Discord", {

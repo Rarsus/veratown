@@ -116,17 +116,16 @@ export async function handleLocationListCommand(
             success: true,
             message: `📍 **Locations** (${filtered.length} total)${filterType ? ` - Type: \`${filterType}\`` : ""}\n\n${locationList}${moreText}`,
             data: {
-                locations: filtered
-                    .slice(0, 50)
-                    .map((loc) => ({
-                        key: loc.key,
-                        name: loc.name,
-                        type: loc.type,
-                        coordinates: loc.x !== undefined && loc.y !== undefined
+                locations: filtered.slice(0, 50).map((loc) => ({
+                    key: loc.key,
+                    name: loc.name,
+                    type: loc.type,
+                    coordinates:
+                        loc.x !== undefined && loc.y !== undefined
                             ? { x: loc.x, y: loc.y }
                             : undefined,
-                        enabled: loc.enabled,
-                    })),
+                    enabled: loc.enabled,
+                })),
                 count: filtered.length,
                 filterType,
             },
@@ -227,9 +226,10 @@ export async function handleLocationGetCommand(
                     name: location.name,
                     type: location.type,
                     enabled: location.enabled,
-                    coordinates: location.x !== undefined && location.y !== undefined
-                        ? { x: location.x, y: location.y }
-                        : undefined,
+                    coordinates:
+                        location.x !== undefined && location.y !== undefined
+                            ? { x: location.x, y: location.y }
+                            : undefined,
                     region: location.region,
                     label: location.label,
                     description: location.description,
@@ -284,17 +284,12 @@ export async function handleLocationCreateCommand(
         if (!context.isAdmin) {
             return {
                 success: false,
-                message:
-                    "❌ You don't have permission to create locations",
+                message: "❌ You don't have permission to create locations",
             };
         }
 
         // Validate location type
-        if (
-            !VALID_LOCATION_TYPES.includes(
-                locationData.type as any,
-            )
-        ) {
+        if (!VALID_LOCATION_TYPES.includes(locationData.type as any)) {
             return {
                 success: false,
                 message: `❌ Invalid location type: \`${locationData.type}\`\nValid types: ${VALID_LOCATION_TYPES.join(", ")}`,
@@ -350,9 +345,11 @@ export async function handleLocationCreateCommand(
                     key: locationData.key,
                     name: locationData.name,
                     type: locationData.type,
-                    coordinates: locationData.x !== undefined && locationData.y !== undefined
-                        ? { x: locationData.x, y: locationData.y }
-                        : undefined,
+                    coordinates:
+                        locationData.x !== undefined &&
+                        locationData.y !== undefined
+                            ? { x: locationData.x, y: locationData.y }
+                            : undefined,
                     enabled: true,
                     createdBy: context.userId,
                     createdAt: new Date().toISOString(),

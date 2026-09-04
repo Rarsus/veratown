@@ -41,8 +41,16 @@ import { handleActivePlayersCommand } from "./commands/characterInfo";
 import { handleCharacterSearchCommand } from "./commands/characterInfo";
 import { handleBotRestartCommand } from "./commands/botControl";
 import { handleBotStopCommand } from "./commands/botControl";
-import { handleFeatureListCommand, handleFeatureEnableCommand, handleFeatureDisableCommand } from "./commands/featureManagement";
-import { handleLocationListCommand, handleLocationGetCommand, handleLocationCreateCommand } from "./commands/locationManagement";
+import {
+    handleFeatureListCommand,
+    handleFeatureEnableCommand,
+    handleFeatureDisableCommand,
+} from "./commands/featureManagement";
+import {
+    handleLocationListCommand,
+    handleLocationGetCommand,
+    handleLocationCreateCommand,
+} from "./commands/locationManagement";
 
 const logger = createLogger("Discord:Bot");
 
@@ -276,7 +284,8 @@ async function registerSlashCommands(
         },
         {
             name: "feature-list",
-            description: "List all Veratown features and their status (admin only)",
+            description:
+                "List all Veratown features and their status (admin only)",
         },
         {
             name: "feature-enable",
@@ -316,7 +325,8 @@ async function registerSlashCommands(
         },
         {
             name: "location-get",
-            description: "Get detailed information about a location (admin only)",
+            description:
+                "Get detailed information about a location (admin only)",
             options: [
                 {
                     name: "key",
@@ -344,7 +354,8 @@ async function registerSlashCommands(
                 },
                 {
                     name: "type",
-                    description: "Location type (cage, keypad_door, furniture, etc.)",
+                    description:
+                        "Location type (cage, keypad_door, furniture, etc.)",
                     type: 3, // STRING
                     required: true,
                 },
@@ -540,7 +551,8 @@ export async function handleCommandInteraction(
                 result = await handleLocationListCommand(
                     interaction,
                     context,
-                    (interaction as any).options?.getString("type") || undefined,
+                    (interaction as any).options?.getString("type") ||
+                        undefined,
                 );
                 break;
 
@@ -557,11 +569,21 @@ export async function handleCommandInteraction(
                     interaction,
                     context,
                     {
-                        key: (interaction as any).options?.getString("key") || "",
-                        name: (interaction as any).options?.getString("name") || "",
-                        type: (interaction as any).options?.getString("type") || "",
-                        x: (interaction as any).options?.getInteger("x") || undefined,
-                        y: (interaction as any).options?.getInteger("y") || undefined,
+                        key:
+                            (interaction as any).options?.getString("key") ||
+                            "",
+                        name:
+                            (interaction as any).options?.getString("name") ||
+                            "",
+                        type:
+                            (interaction as any).options?.getString("type") ||
+                            "",
+                        x:
+                            (interaction as any).options?.getInteger("x") ||
+                            undefined,
+                        y:
+                            (interaction as any).options?.getInteger("y") ||
+                            undefined,
                     },
                 );
                 break;
