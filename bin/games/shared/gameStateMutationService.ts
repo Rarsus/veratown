@@ -5,11 +5,7 @@
 import { BC_AppearanceItem } from "bc-bot";
 import { ClientSession } from "mongodb";
 import { createLogger, Logger } from "../../logging";
-import {
-    DatabaseError,
-    ValidationError,
-    isRetryableError,
-} from "../../errors";
+import { DatabaseError, ValidationError, isRetryableError } from "../../errors";
 import { EventBus } from "./eventBus";
 import { UnifiedCharacterStore } from "./unifiedCharacterStore";
 import {
@@ -198,7 +194,9 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     ): Promise<void> {
         this.validateMember(memberNumber);
         if (!property || property.includes("$"))
-            throw new ValidationError("property is invalid", { field: "property" });
+            throw new ValidationError("property is invalid", {
+                field: "property",
+            });
         await this.withRetry(async () => {
             await this.unifiedStore.updateVeratownStats(memberNumber, {
                 [property]: value,
@@ -218,7 +216,8 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         actor = memberNumber,
     ): Promise<void> {
         this.validateMember(memberNumber);
-        if (!name) throw new ValidationError("name is required", { field: "name" });
+        if (!name)
+            throw new ValidationError("name is required", { field: "name" });
         await this.withRetry(async () => {
             await this.unifiedStore.updateCharacterName(memberNumber, name);
             await this.audit(
@@ -499,7 +498,9 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         this.validateMember(to);
         this.validateAmount(amount);
         if (!reason)
-            throw new ValidationError("reason is required", { field: "reason" });
+            throw new ValidationError("reason is required", {
+                field: "reason",
+            });
         if (from === to)
             throw new ValidationError("source and destination must differ", {
                 fields: ["from", "to"],
@@ -713,7 +714,9 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     ): Promise<number> {
         this.validateMember(memberNumber);
         if (!gameId)
-            throw new ValidationError("gameId is required", { field: "gameId" });
+            throw new ValidationError("gameId is required", {
+                field: "gameId",
+            });
         const resumedCount =
             await this.unifiedStore.resumeSuspendedGames(memberNumber);
         await this.auditAfterMutation(memberNumber, "resumeGame", { gameId });
@@ -854,19 +857,17 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
 
     private validateAmount(amount: number): void {
         if (!Number.isFinite(amount) || amount < 0) {
-            throw new ValidationError(
-                "amount must be a non-negative number",
-                { field: "amount" },
-            );
+            throw new ValidationError("amount must be a non-negative number", {
+                field: "amount",
+            });
         }
     }
 
     private validatePositiveIntegerAmount(amount: number): void {
         if (!Number.isSafeInteger(amount) || amount <= 0) {
-            throw new ValidationError(
-                "amount must be a positive integer",
-                { field: "amount" },
-            );
+            throw new ValidationError("amount must be a positive integer", {
+                field: "amount",
+            });
         }
     }
 }

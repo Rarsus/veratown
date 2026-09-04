@@ -34,5 +34,8 @@ test("application errors classify, serialize, and redact secrets", () => {
 test("permanent and transient errors have explicit retry policy", () => {
     assert.equal(isRetryableError(new ValidationError("invalid input")), false);
     assert.equal(isRetryableError(new AuthenticationError("denied")), false);
-    assert.equal(isRetryableError(new DatabaseError("temporary failure")), true);
+    assert.equal(
+        isRetryableError(new DatabaseError("temporary failure")),
+        true,
+    );
 });

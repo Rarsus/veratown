@@ -23,7 +23,8 @@ export type ErrorCode =
 
 export type SafeErrorContext = Record<string, unknown>;
 
-const SENSITIVE_KEY = /password|passwd|secret|token|api[-_]?key|authorization|cookie|credential/i;
+const SENSITIVE_KEY =
+    /password|passwd|secret|token|api[-_]?key|authorization|cookie|credential/i;
 
 function redact(value: unknown, seen = new WeakSet<object>()): unknown {
     if (typeof value === "string") return value;
@@ -34,7 +35,9 @@ function redact(value: unknown, seen = new WeakSet<object>()): unknown {
 
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
-        result[key] = SENSITIVE_KEY.test(key) ? "[REDACTED]" : redact(item, seen);
+        result[key] = SENSITIVE_KEY.test(key)
+            ? "[REDACTED]"
+            : redact(item, seen);
     }
     return result;
 }
@@ -116,13 +119,26 @@ export class ConnectionError extends AppError {
         context?: Record<string, unknown>,
         options?: { cause?: unknown },
     ) {
-        super(message, "CONNECTION_ERROR", "CONNECTION", true, context, options);
+        super(
+            message,
+            "CONNECTION_ERROR",
+            "CONNECTION",
+            true,
+            context,
+            options,
+        );
     }
 }
 
 export class BusinessLogicError extends AppError {
     constructor(message: string, context?: Record<string, unknown>) {
-        super(message, "BUSINESS_LOGIC_ERROR", "BUSINESS_LOGIC", false, context);
+        super(
+            message,
+            "BUSINESS_LOGIC_ERROR",
+            "BUSINESS_LOGIC",
+            false,
+            context,
+        );
     }
 }
 
@@ -138,7 +154,13 @@ export class DatabaseError extends AppError {
 
 export class AuthenticationError extends AppError {
     constructor(message: string, context?: Record<string, unknown>) {
-        super(message, "AUTHENTICATION_ERROR", "AUTHENTICATION", false, context);
+        super(
+            message,
+            "AUTHENTICATION_ERROR",
+            "AUTHENTICATION",
+            false,
+            context,
+        );
     }
 }
 
