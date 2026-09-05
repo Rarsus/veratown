@@ -11,7 +11,7 @@ import {
 } from "../mongodbTypeValidation";
 
 function createStore() {
-    const profile: any = {
+    let profile: any = {
         _id: 1,
         name: "Player",
         createdAt: Date.now(),
@@ -39,7 +39,10 @@ function createStore() {
     const profiles = {
         createIndex: async () => "index",
         findOne: async () => profile,
-        findOneAndUpdate: async () => profile,
+        findOneAndUpdate: async (_filter: unknown, update: any) => {
+            profile ??= update.$setOnInsert;
+            return profile;
+        },
         updateOne: async () => ({}),
         find: () => chain([profile]),
     };
@@ -76,6 +79,9 @@ function createStore() {
         store: new UnifiedCharacterStore(db as any, new EventBus()),
         profile,
         events,
+        clearProfile: () => {
+            profile = null;
+        },
     };
 }
 
@@ -91,7 +97,9 @@ test("UnifiedCharacterStore covers non-Mongo state and event workflows", async (
     await store.claimDailyFreeChips(1, 10);
     await store.updateCasinoStats(1, { score: 5 });
     await store.lockChips(1, 10, "cage", 10);
+    profile.casino.lockedChips = 10;
     await store.unlockChips(1, 5);
+    assert.ok(events.some((event) => event.type === "chips_unlocked"));
     assert.equal((await store.getDareView(1)).gameIds[0], 7);
     await store.applyBondage(1, "cuffs", 10, 2);
     await store.removeBondage(1, "collar");
@@ -152,6 +160,17 @@ test("UnifiedCharacterStore covers non-Mongo state and event workflows", async (
     await store.transferChipsAtomically(1, 2, 1, "gift");
     await (store as any).typeSafeUpdateOne({ _id: 1 }, { $set: {} });
     assert.equal(profile._id, 1);
+});
+
+test("UnifiedCharacterStore creates profiles with default state", async () => {
+    const { store, clearProfile } = createStore();
+    clearProfile();
+
+    const profile = await store.getProfile(2, "New Player");
+
+    assert.equal(profile._id, 2);
+    assert.equal(profile.name, "New Player");
+    assert.equal(profile.casino.chips, 0);
 });
 
 /**
