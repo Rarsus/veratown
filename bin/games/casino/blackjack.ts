@@ -348,8 +348,10 @@ export class BlackjackGame implements Game {
 
     async endGame(): Promise<void> {
         await waitForCondition(() => this.willDealAt === undefined);
-        // await wait(2000);
 
+        this.dealTimer.clear();
+        this.autoStandTimer.clear();
+        this.resetTimer.clear();
         this.clear();
     }
 

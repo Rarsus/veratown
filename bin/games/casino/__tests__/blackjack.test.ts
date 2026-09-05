@@ -308,6 +308,13 @@ function createMockConnector() {
         SendMessage: (type: string, msg: string, target?: number) => {
             sentMessages.push({ type, msg, target });
         },
+        Player: {
+            setScriptPermissions: () => {},
+            Appearance: {
+                InventoryGet: () => null,
+                AddItem: () => ({ setProperty: () => {} }),
+            },
+        },
     };
 }
 
@@ -427,6 +434,7 @@ function createMockCasino(
         venueSystem,
         getSign: () => sign,
         setTextColor: () => {},
+        setBio: async () => {},
         applyForfeit: () => {},
         cheatPunishment: () => {},
         multiplier: options.multiplier ?? 1,
@@ -548,6 +556,49 @@ test("Blackjack Phase 2A.2: Idempotent settlement and venue modifier application
         1,
         "Settlement must be idempotent and not pay out twice",
     );
+});
+
+test("Blackjack: reset expiry allows a consecutive round to accept bets", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ chips: 1000, venueMultiplier: 1 });
+    const game = new BlackjackGame(conn as any, casino as any);
+    const player = createMockCharacter(550, "RoundTwoPlayer");
+    const resetTimer = (game as any).resetTimer;
+    const startTimer = resetTimer.start.bind(resetTimer);
+
+    resetTimer.start = (
+        _durationMs: number,
+        callback: () => void,
+        isInterval = false,
+    ) => startTimer(10, callback, isInterval);
+
+    await game.onCommandBet(player, {} as any, ["100"]);
+    const firstBet = game.getBetsForPlayer(550)[0];
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "10" },
+        { suit: "Clubs", value: "7" },
+    ];
+    (game as any).playerHands.set(firstBet, [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "K" },
+    ]);
+
+    await (game as any).resolveGame();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    assert.strictEqual(resetTimer.isActive(), false);
+
+    await game.onCommandBet(player, {} as any, ["100"]);
+    assert.strictEqual(game.getBetsForPlayer(550).length, 1);
+    assert.strictEqual(
+        conn.sentMessages.some((message) =>
+            message.msg.includes("The next game hasn't started yet"),
+        ),
+        false,
+    );
+
+    (game as any).willDealAt = undefined;
+    (game as any).dealTimer.clear();
 });
 
 test("Blackjack Phase 2A.2: Recoverable game state persistence and recovery", async () => {

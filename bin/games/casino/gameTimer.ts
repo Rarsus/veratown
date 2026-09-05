@@ -81,10 +81,17 @@ export class GameTimer {
         }
 
         this.isInterval = isInterval;
+        const wrappedCallback = () => {
+            if (!this.isInterval) {
+                this.handle = undefined;
+                this.isInterval = false;
+            }
+            callback();
+        };
         if (isInterval) {
-            this.handle = setInterval(callback, durationMs);
+            this.handle = setInterval(wrappedCallback, durationMs);
         } else {
-            this.handle = setTimeout(callback, durationMs);
+            this.handle = setTimeout(wrappedCallback, durationMs);
         }
     }
 
