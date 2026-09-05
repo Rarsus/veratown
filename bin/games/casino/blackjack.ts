@@ -12,10 +12,10 @@ import {
     BC_Server_ChatRoomMessage,
     API_AppearanceItem,
     AssetGet,
-    CommandParser,
 } from "bc-bot";
 import { createLogger } from "../../logging";
 import { getXpRewardForSource } from "../shared/progressionRules";
+import type { GamePluginCommandRouter } from "../shared/gamePlugin";
 
 //TODOs:
 // + fix forfeit pushing
@@ -215,21 +215,21 @@ export class BlackjackGame implements Game {
     public COMMANDSMESSAGE = BLACKJACKCOMMANDS;
 
     /**
-     * Register Blackjack-specific commands with the CommandParser.
+     * Register Blackjack-specific commands with the command router.
      * Called by Casino after instantiation (follows plugin architecture principles).
      */
-    public registerCommands(commandParser: CommandParser): void {
-        commandParser.register("cancel", this.onCommandCancel);
-        commandParser.register("bet", this.onCommandBet);
-        commandParser.register("hit", this.onCommandHit);
-        commandParser.register("stand", this.onCommandStand);
-        commandParser.register("double", this.onCommandDouble);
-        commandParser.register("split", this.onCommandSplit);
-        commandParser.register("bjrole", this.onCommandSetRole);
-        commandParser.register("bjreset", this.onCommandReset);
-        commandParser.register("bjsettle", this.onCommandSettle);
-        commandParser.register("bjrefund", this.onCommandRefund);
-        commandParser.register(
+    public registerCommands(router: GamePluginCommandRouter): void {
+        router.registerRootCommand("cancel", this.onCommandCancel);
+        router.registerRootCommand("bet", this.onCommandBet);
+        router.registerRootCommand("hit", this.onCommandHit);
+        router.registerRootCommand("stand", this.onCommandStand);
+        router.registerRootCommand("double", this.onCommandDouble);
+        router.registerRootCommand("split", this.onCommandSplit);
+        router.registerRootCommand("bjrole", this.onCommandSetRole);
+        router.registerRootCommand("bjreset", this.onCommandReset);
+        router.registerRootCommand("bjsettle", this.onCommandSettle);
+        router.registerRootCommand("bjrefund", this.onCommandRefund);
+        router.registerRootCommand(
             "sign",
             (
                 sender: API_Character,
@@ -244,6 +244,24 @@ export class BlackjackGame implements Game {
                 this.casino.setTextColor("#ffffff");
             },
         );
+    }
+
+    public unregisterCommands(router: GamePluginCommandRouter): void {
+        for (const command of [
+            "cancel",
+            "bet",
+            "hit",
+            "stand",
+            "double",
+            "split",
+            "bjrole",
+            "bjreset",
+            "bjsettle",
+            "bjrefund",
+            "sign",
+        ]) {
+            router.unregisterRootCommand(command);
+        }
     }
 
     constructor(
@@ -332,23 +350,6 @@ export class BlackjackGame implements Game {
         await waitForCondition(() => this.willDealAt === undefined);
         // await wait(2000);
 
-        if (this.casino) {
-            const parser = (this.casino as any).commandParser as
-                CommandParser | undefined;
-            if (parser) {
-                parser.unregister("cancel");
-                parser.unregister("bet");
-                parser.unregister("hit");
-                parser.unregister("stand");
-                parser.unregister("double");
-                parser.unregister("split");
-                parser.unregister("bjrole");
-                parser.unregister("bjreset");
-                parser.unregister("bjsettle");
-                parser.unregister("bjrefund");
-                parser.unregister("sign");
-            }
-        }
         this.clear();
     }
 

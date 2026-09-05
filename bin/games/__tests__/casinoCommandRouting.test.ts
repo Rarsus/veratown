@@ -80,7 +80,7 @@ test("Casino registers its commands at the plugin root", async () => {
 
     assert.deepEqual(
         [...((parser as any).commands as Map<string, unknown>).keys()],
-        ["casino"],
+        ["casino", "game"],
     );
 
     connection.emitMessage("!casino game blackjack", "Whisper");
@@ -88,6 +88,76 @@ test("Casino registers its commands at the plugin root", async () => {
     await flushCommands();
 
     assert.deepEqual(routedCommands, [["blackjack"], ["roulette"]]);
+});
+
+test("Casino registers documented root commands for both active game modes", async () => {
+    mock.timers.enable();
+    try {
+        for (const game of ["roulette", "blackjack"] as const) {
+            const connection = new MockConnection() as any;
+            Object.assign(connection, {
+                setItemPermission: () => {},
+                Player: {
+                    Name: "Casino",
+                    MemberNumber: 1,
+                    Appearance: {
+                        AddItem: () => ({ setProperty: () => {} }),
+                        InventoryGet: () => null,
+                    },
+                    setScriptPermissions: () => {},
+                },
+                SendMessage: () => {},
+            });
+            const casino = new Casino(
+                connection,
+                { collection: () => ({}) } as any,
+                { game },
+            );
+            (casino as any).unifiedStore.getProfile = async () => ({
+                _id: 123,
+                name: "Player",
+                casino: { chips: 100 },
+            });
+
+            const commands = (casino as any).commandParser.commands as Map<
+                string,
+                unknown
+            >;
+            for (const command of [
+                "cancel",
+                "chips",
+                "give",
+                "help",
+                "commands",
+                "forfeits",
+            ]) {
+                assert.ok(
+                    commands.has(command),
+                    `${game} should register ${command}`,
+                );
+            }
+            assert.equal(commands.has("casino casino"), false);
+
+            connection.emitMessage("!cancel", "Whisper");
+            connection.emitMessage("!chips", "Whisper");
+            connection.emitMessage("!give", "Whisper");
+            connection.emitMessage("!help", "Whisper");
+            connection.emitMessage("!commands", "Whisper");
+            connection.emitMessage("ChatRoomBot forfeits", "Hidden");
+            await Promise.resolve();
+            await Promise.resolve();
+
+            assert.equal(
+                connection.replies.some((reply: string) =>
+                    reply.includes("Unknown command"),
+                ),
+                false,
+                `${game} root commands should dispatch`,
+            );
+        }
+    } finally {
+        mock.timers.reset();
+    }
 });
 
 test("Casino dispatches the documented root-level game command", async () => {

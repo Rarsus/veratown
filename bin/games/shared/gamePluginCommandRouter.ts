@@ -31,6 +31,7 @@ import type {
  * Usage:
  *   const router = new GamePluginCommandRouterImpl(commandParser, "casino");
  *   router.registerCommand("play", handler);  // Responds to /bot casino play
+ *   router.registerRootCommand("help", handler); // Responds to /bot help
  *   router.registerGroup("chips", {buy, sell}); // Responds to /bot casino chips buy, etc.
  *
  * The CommandParser will invoke the registered handlers for commands matching:
@@ -59,6 +60,22 @@ export class GamePluginCommandRouterImpl implements GamePluginCommandRouter {
      */
     public registerRoot(handler: GamePluginCommandHandler): void {
         this.commandParser.register(this.pluginKey, handler);
+    }
+
+    /**
+     * Register a command at the parser root without the plugin key.
+     *
+     * CommandParser will match commands like: /bot <name> [args...]
+     */
+    public registerRootCommand(
+        name: string,
+        handler: GamePluginCommandHandler,
+    ): void {
+        this.commandParser.register(name, handler);
+    }
+
+    public unregisterRootCommand(name: string): void {
+        this.commandParser.unregister(name);
     }
 
     /**
