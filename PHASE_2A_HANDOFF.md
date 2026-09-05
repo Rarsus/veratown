@@ -34,9 +34,9 @@ The local non-Mongo baseline on Node 22.23.2 with 1,000 iterations was:
 
 | Operation                      |                 Mean |      p95 |        Gate |
 | ------------------------------ | -------------------: | -------: | ----------: |
-| Command validation | 0.006 ms | 0.003 ms | < 1 ms p95 |
-| Event processing (3 listeners) | 0.021 ms | 0.007 ms | < 5 ms p95 |
-| Heap growth | 0.49 MiB | — | < 32 MiB |
+| Command validation             |             0.006 ms | 0.003 ms |  < 1 ms p95 |
+| Event processing (3 listeners) |             0.021 ms | 0.007 ms |  < 5 ms p95 |
+| Heap growth                    |             0.49 MiB |        — |    < 32 MiB |
 | MongoDB `getCasinoView`        | not measured locally |        — | < 50 ms p95 |
 
 The MongoDB row is a required release measurement, not a value to infer from
