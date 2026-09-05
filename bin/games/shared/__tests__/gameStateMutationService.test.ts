@@ -67,6 +67,20 @@ function createStore() {
         },
         addKeypadAccess: async () => calls.push("keypad-add"),
         removeKeypadAccess: async () => calls.push("keypad-remove"),
+        awardProgressionXp: async (...args: unknown[]) => {
+            calls.push(`progression-xp:${args[1]}:${args[2]}:${args[3]}`);
+            return {
+                applied: true,
+                duplicate: false,
+                totalXp: args[1] as number,
+                level: 0,
+                leveledUp: false,
+            };
+        },
+        rollbackProgressionXp: async (...args: unknown[]) => {
+            calls.push(`progression-rollback:${args[1]}`);
+            return { applied: true, totalXp: 0, level: 0 };
+        },
     };
 }
 
@@ -173,6 +187,41 @@ test("GameStateMutationService claims daily chips through the atomic store API",
     assert.equal(await service.claimDailyFreeChips(1, 20), true);
     assert.ok(store.calls.includes("daily:20"));
     assert.ok(store.calls.includes("audit:claimDailyFreeChips"));
+});
+
+test("GameStateMutationService awards and rolls back progression XP idempotently", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    const result = await service.awardProgressionXp(
+        1,
+        10,
+        "casino_blackjack_win",
+        "blackjack:round1:1",
+    );
+    assert.equal(result.applied, true);
+    assert.ok(
+        store.calls.includes(
+            "progression-xp:10:casino_blackjack_win:blackjack:round1:1",
+        ),
+    );
+    assert.ok(store.calls.includes("audit:awardProgressionXp"));
+
+    const rollback = await service.rollbackProgressionXp(
+        1,
+        "blackjack:round1:1",
+    );
+    assert.equal(rollback.applied, true);
+    assert.ok(store.calls.includes("progression-rollback:blackjack:round1:1"));
+    assert.ok(store.calls.includes("audit:rollbackProgressionXp"));
+
+    await assert.rejects(() => service.awardProgressionXp(1, 0, "src", "key"));
+    await assert.rejects(() => service.awardProgressionXp(1, 10, "", "key"));
+    await assert.rejects(() => service.awardProgressionXp(1, 10, "src", ""));
+    await assert.rejects(() => service.rollbackProgressionXp(1, ""));
 });
 
 test("GameStateMutationService delegates all state mutations", async () => {

@@ -15,6 +15,7 @@ import {
     CommandParser,
 } from "bc-bot";
 import { createLogger } from "../../logging";
+import { getXpRewardForSource } from "../shared/progressionRules";
 
 //TODOs:
 // + fix forfeit pushing
@@ -1235,6 +1236,17 @@ export class BlackjackGame implements Game {
                         player.memberNumber,
                         effectiveWinnings,
                         "blackjack_win",
+                        player.memberNumber,
+                    );
+                // Phase 2A.7: Award progression XP, keyed by round so
+                // retried settlements never grant duplicate XP.
+                await this.casino
+                    .getMutationService()
+                    .awardProgressionXp(
+                        player.memberNumber,
+                        getXpRewardForSource("casino_blackjack_win"),
+                        "casino_blackjack_win",
+                        `blackjack:${this.currentRoundId}:${player.memberNumber}`,
                         player.memberNumber,
                     );
                 message += `${player.memberName} wins ${effectiveWinnings} chips! \n`;

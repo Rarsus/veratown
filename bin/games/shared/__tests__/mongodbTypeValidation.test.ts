@@ -7,6 +7,7 @@ import {
     createCasinoState,
     createCrossSystemState,
     createDareState,
+    createProgressionState,
     createTypeConversionStage,
     createVeratownState,
     validateCharacterProfileTypes,
@@ -21,6 +22,10 @@ test("MongoDB type helpers preserve values and create defaults", () => {
     assert.equal(createVeratownState().roles.length, 0);
     assert.equal(createCrossSystemState().bondageLevel, 0);
     assert.ok(createTypeConversionStage().$set);
+    assert.equal(createProgressionState().level, 0);
+    assert.equal(createProgressionState().totalXp, 0);
+    assert.equal(createProgressionState().claimedRewards.length, 0);
+    assert.equal(createProgressionState({ totalXp: 50 }).totalXp, 50);
 });
 
 test("MongoDB type validation reports invalid numeric fields", () => {
