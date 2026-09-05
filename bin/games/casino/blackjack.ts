@@ -159,6 +159,7 @@ export interface BlackjackGameState {
     gameId: string;
     roundId: string;
     phase: "betting" | "dealt" | "playing" | "resolving" | "settled";
+    roles?: Record<string, BlackjackRole>;
     players: BlackjackPlayerState[];
     dealerHand: Card[];
     willDealAt?: number;
@@ -449,7 +450,7 @@ export class BlackjackGame implements Game {
         } catch (e) {
             this.logger?.warn(
                 "Error persisting game state to mutation service",
-                e,
+                { error: e instanceof Error ? e.message : String(e) },
             );
         }
     }
@@ -1179,7 +1180,7 @@ export class BlackjackGame implements Game {
         if (this.currentRoundId) {
             this.settledRounds.add(this.currentRoundId);
         }
-        this.phase = "idle";
+        this.currentPhase = "resolving";
         if (this.dealerHand.length < 2) {
             if (this.deck.length < 2) {
                 this.createShoe(1);
@@ -1737,7 +1738,7 @@ export class BlackjackGame implements Game {
     }
 
     private async initialDeal(): Promise<void> {
-        this.phase = "playing";
+        this.currentPhase = "playing";
         this.autoStandTimer.start(
             1000,
             () => {

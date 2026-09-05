@@ -420,13 +420,7 @@ test("KeypadAccessService handles expiry, revocations, and cage/role state", asy
     );
 
     // Revoke access
-    await accessService.revokeAccess(
-        102,
-        "door_vault",
-        "members",
-        200,
-        "revoked",
-    );
+    await accessService.revokeAccess(102, "door_vault", "members");
     assert.equal(
         await accessService.canAccessDoor(102, "door_vault", false),
         false,
@@ -443,7 +437,12 @@ test("KeypadAccessService handles expiry, revocations, and cage/role state", asy
     const profile = await store.getProfile(103);
     profile.veratown = profile.veratown ?? { cageIncarcerations: [] };
     profile.veratown.cageIncarcerations = [
-        { cageKey: "cell_1", enteredAt: Date.now(), releasedAt: undefined },
+        {
+            cageName: "cell_1",
+            enteredAt: Date.now(),
+            duration: 0,
+            releasedAt: undefined,
+        },
     ];
 
     // Caged character -> fail closed
