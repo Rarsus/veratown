@@ -12,8 +12,10 @@ const tests = [
     "bin/games/shared/__tests__/gameStateMutationService.test.ts",
     "bin/games/shared/__tests__/unifiedCharacterStore.unit.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.integration.test.ts",
+    "bin/games/shared/__tests__/progressionSystem.integration.test.ts",
     "bin/games/__tests__/unifiedCharacterStore.test.ts",
     "bin/games/__tests__/integration/crossSystemIntegration.test.ts",
+    "bin/games/__tests__/integration/phase2aIntegration.test.ts",
 ];
 
 const args = [

@@ -61,6 +61,9 @@ jobs:
                   NODE_V8_COVERAGE: coverage
               run: "pnpm run test:phase1:coverage"
 
+            - name: Run Phase 2A integration tests
+              run: "pnpm run test:integration"
+
             - name: Upload Phase 1 coverage
               if: always()
               uses: actions/upload-artifact@v4
