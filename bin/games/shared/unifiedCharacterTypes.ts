@@ -211,6 +211,7 @@ export interface CrossSystemState {
     inventory: MutationInventoryItem[];
     inventoryMutationKeys: string[];
     effects: AppliedEffect[];
+    effectMutationKeys: string[];
     bondageLevel: number;
     features: {
         canBetChipsToEscape?: boolean;
@@ -238,10 +239,24 @@ export interface InventoryMutationResult {
 }
 
 export interface AppliedEffect {
+    /** Stable identity for the effect definition. */
     effectKey: string;
+    /** Stable event/delivery identity; retries with this key are no-ops. */
+    applicationKey: string;
+    source: "casino" | "dare" | "veratown" | "progression" | "admin";
+    stacking: "stack" | "replace" | "refresh";
+    status: "active" | "expired" | "cancelled";
     appliedAt: number;
     expiresAt?: number;
+    cancelledAt?: number;
+    cancellationReason?: string;
     metadata?: Record<string, unknown>;
+}
+
+export interface EffectMutationResult {
+    applied: boolean;
+    duplicate: boolean;
+    effect: AppliedEffect;
 }
 
 // ===== UNIFIED CHARACTER PROFILE (Main MongoDB document)
@@ -312,8 +327,11 @@ export interface GameEvent {
         | "progression_level_up" // Phase 2A.7: Character crossed a level threshold
         | "progression_xp_rollback" // Phase 2A.7: A previously granted reward was reversed
         | "inventory_added"
-        | "inventory_removed";
-    source: "casino" | "dare" | "veratown" | "admin";
+        | "inventory_removed"
+        | "effect_applied"
+        | "effect_cancelled"
+        | "effect_expired";
+    source: "casino" | "dare" | "veratown" | "progression" | "admin";
     actor: number; // memberNumber of who caused this
     target: number; // memberNumber affected
     data: Record<string, unknown>;

@@ -10,6 +10,7 @@ import { EventBus } from "./eventBus";
 import { UnifiedCharacterStore } from "./unifiedCharacterStore";
 import {
     AppliedEffect,
+    EffectMutationResult,
     CasinoState,
     CrossSystemState,
     DareState,
@@ -79,7 +80,14 @@ export interface GameStateMutationService {
         memberNumber: number,
         effect: AppliedEffect,
         actor?: number,
-    ): Promise<void>;
+    ): Promise<EffectMutationResult>;
+    cancelEffect(
+        memberNumber: number,
+        applicationKey: string,
+        reason: string,
+        actor?: number,
+    ): Promise<boolean>;
+    getActiveEffects(memberNumber: number): Promise<AppliedEffect[]>;
     recordEvent(event: GameEvent): Promise<void>;
     awardChips(
         memberNumber: number,
@@ -201,6 +209,9 @@ type MutationStore = Pick<
     | "awardProgressionXp"
     | "rollbackProgressionXp"
     | "mutateInventory"
+    | "applyEffect"
+    | "cancelEffect"
+    | "getActiveEffects"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -453,19 +464,78 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         memberNumber: number,
         effect: AppliedEffect,
         actor = memberNumber,
-    ): Promise<void> {
+    ): Promise<EffectMutationResult> {
         this.validateMember(memberNumber);
-        if (!effect?.effectKey)
+        if (
+            !effect?.effectKey ||
+            !effect.applicationKey ||
+            !effect.source ||
+            !effect.stacking ||
+            effect.status !== "active" ||
+            !["stack", "replace", "refresh"].includes(effect.stacking) ||
+            !["casino", "dare", "veratown", "progression", "admin"].includes(
+                effect.source,
+            )
+        )
             throw new ValidationError("effect is required", {
                 field: "effect",
             });
-        await this.withRetry(async () => {
-            const profile = await this.unifiedStore.getProfile(memberNumber);
-            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
-                effects: [...(profile.crossSystem.effects ?? []), effect],
-            });
-            await this.audit(memberNumber, "applyEffect", { effect }, actor);
-        }, "applyEffect");
+        if (
+            effect.expiresAt !== undefined &&
+            (effect.expiresAt <= effect.appliedAt ||
+                effect.expiresAt <= Date.now())
+        ) {
+            throw new ValidationError(
+                "effect expiry must be after application",
+                {
+                    field: "effect.expiresAt",
+                },
+            );
+        }
+        const result = await this.withRetry(
+            () => this.unifiedStore.applyEffect(memberNumber, effect, actor),
+            "applyEffect",
+        );
+        if (result.applied) {
+            await this.audit(memberNumber, "applyEffect", { ...result }, actor);
+        }
+        return result;
+    }
+
+    public async cancelEffect(
+        memberNumber: number,
+        applicationKey: string,
+        reason: string,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        this.validateMember(memberNumber);
+        if (!applicationKey || !reason) {
+            throw new ValidationError("applicationKey and reason are required");
+        }
+        const cancelled = await this.withRetry(
+            () =>
+                this.unifiedStore.cancelEffect(
+                    memberNumber,
+                    applicationKey,
+                    reason,
+                    actor,
+                ),
+            "cancelEffect",
+        );
+        if (cancelled) {
+            await this.audit(
+                memberNumber,
+                "cancelEffect",
+                { applicationKey, reason },
+                actor,
+            );
+        }
+        return cancelled;
+    }
+
+    public getActiveEffects(memberNumber: number): Promise<AppliedEffect[]> {
+        this.validateMember(memberNumber);
+        return this.unifiedStore.getActiveEffects(memberNumber);
     }
 
     public recordEvent(event: GameEvent): Promise<void> {

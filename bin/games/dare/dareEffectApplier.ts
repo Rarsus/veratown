@@ -104,6 +104,10 @@ export class DareEffectApplier {
             if (this.mutationService) {
                 await this.mutationService.applyEffect(target.MemberNumber, {
                     effectKey: dare._id ?? dareType,
+                    applicationKey: `dare:${dare._id ?? dareType}:${target.MemberNumber}`,
+                    source: "dare",
+                    stacking: "replace",
+                    status: "active",
                     appliedAt: Date.now(),
                     expiresAt: dare.durationMs
                         ? Date.now() + dare.durationMs

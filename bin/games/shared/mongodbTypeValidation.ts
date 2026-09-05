@@ -353,6 +353,7 @@ export function createCrossSystemState(
         inventory: [],
         inventoryMutationKeys: [],
         effects: [],
+        effectMutationKeys: [],
         bondageLevel: 0,
         features: {},
         relationships: {},
