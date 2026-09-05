@@ -33,12 +33,12 @@ This document is the current status source. Earlier status reports are preserved
 
 The following checks were run against the local `main` checkout on September 5, 2026:
 
-| Check                          | Result      | Current evidence                                                                                                     |
-| ------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------- |
-| `npm run types`                | Failing     | Six errors in `bin/botConnections.ts` and `bin/config.ts`; `zod` types are unresolved in the current environment.    |
-| `npm run test:phase1:coverage` | Failing     | `unifiedCharacterStore.ts` is at 88.22% line coverage; overall reported line coverage is 93.79%.                     |
-| `npm run test:integration`     | Failing     | 31 tests pass; two Location Event tests fail because multiple records use `deliveryId: null` against a unique index. |
-| `npm run test:unit`            | Interrupted | The previously started command exited with code 130; no passing full-suite result is claimed.                        |
+| Check                          | Result         | Current evidence                                                                                                  |
+| ------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `npm run types`                | Passed locally | Passed after installing the locked root dependencies; CI remains authoritative.                                   |
+| `npm run test:phase1:coverage` | CI required    | The local MongoDB-memory-server binary could not be downloaded, so no local coverage result is claimed.           |
+| `npm run test:integration`     | CI required    | The local MongoDB-memory-server binary could not be downloaded; the nullable `deliveryId` index path is hardened. |
+| `npm run test:unit`            | CI required    | MongoDB-backed tests could not start locally because the binary was unavailable.                                  |
 
 The historical claim of “0 TypeScript errors” is therefore deprecated until the current type check passes again.
 
@@ -61,6 +61,7 @@ The historical claim of “0 TypeScript errors” is therefore deprecated until 
 ## Related Documents
 
 - [Current Hybrid Strategy Plan](HYBRID_STRATEGY_CURRENT_PLAN.md)
+- [Phase 2A Handoff Report](PHASE_2A_HANDOFF.md)
 - [Original Hybrid Strategy Plan (deprecated archive)](docs/archived/HYBRID_STRATEGY_IMPLEMENTATION_PLAN_2026_09_04_DEPRECATED.md)
 - [Implementation Documentation](docs/IMPLEMENTATION/README.md)
 - [Archived Documentation](docs/archived/README.md)

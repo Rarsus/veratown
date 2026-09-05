@@ -9,6 +9,7 @@
         "test:phase1": "node scripts/run-phase1-tests.mjs",
         "test:phase1:coverage": "node scripts/check-phase1-coverage.mjs",
         "test:integration": "node scripts/run-integration-tests.mjs",
+        "performance:phase2a": "node --import tsx scripts/phase2a-performance.mjs",
         "prettier": "prettier --check .",
         "prettier:fix": "prettier -w .",
         "compile:bc-bot": "cd src && npm run compile",

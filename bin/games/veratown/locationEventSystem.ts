@@ -151,7 +151,10 @@ export class LocationEventSystem {
         await this.executionCollection.createIndex({ triggeredAt: -1 });
         await this.executionCollection.createIndex(
             { deliveryId: 1 },
-            { unique: true, sparse: true },
+            {
+                unique: true,
+                partialFilterExpression: { deliveryId: { $type: "string" } },
+            },
         );
         await this.transitionCollection.createIndex(
             { transitionId: 1 },
@@ -319,7 +322,7 @@ export class LocationEventSystem {
             narrationSent: true,
             consequences: [],
             durationMs: event.durationMs,
-            deliveryId,
+            ...(deliveryId ? { deliveryId } : {}),
         };
         if (deliveryId) {
             try {

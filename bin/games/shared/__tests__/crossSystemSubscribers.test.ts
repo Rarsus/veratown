@@ -176,3 +176,29 @@ test("CrossSystemSubscribers routes location transitions once per delivery key",
 
     assert.deepEqual(locations, ["location_entered"]);
 });
+
+test("CrossSystemSubscribers does not register duplicate subscriptions", async () => {
+    const eventBus = new EventBus();
+    const locations: string[] = [];
+    const subscribers = new CrossSystemSubscribers(
+        { getEventBus: () => eventBus } as any,
+        {
+            onLocationChanged: async (event: any) => {
+                locations.push(event.type);
+            },
+        },
+        undefined,
+        undefined,
+        {
+            recordAuditEntry: async () => undefined,
+        } as any,
+    );
+
+    await subscribers.initialize();
+    await subscribers.initialize();
+    await eventBus.publish(
+        createEvent("location_entered", { transitionId: "transition-2" }),
+    );
+
+    assert.deepEqual(locations, ["location_entered"]);
+});

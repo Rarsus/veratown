@@ -64,6 +64,7 @@ export class CrossSystemSubscribers {
     private readonly logger = createLogger("CrossSystemSubscribers");
     private eventBus: EventBus;
     private readonly handledLocationEvents = new Set<string>();
+    private initialized = false;
 
     constructor(
         private unifiedStore: UnifiedCharacterStore,
@@ -84,6 +85,8 @@ export class CrossSystemSubscribers {
      * Must be called after systems are initialized.
      */
     public async initialize(): Promise<void> {
+        if (this.initialized) return;
+        this.initialized = true;
         this.setupBondageSubscribers();
         this.setupCageSubscribers();
         this.setupChipTransferSubscribers();
