@@ -14,6 +14,12 @@
 
 import { UnifiedCharacterProfile } from "../shared/unifiedCharacterTypes";
 import {
+    CharacterBio,
+    CharacterBioUpdate,
+} from "../shared/unifiedCharacterTypes";
+import type { GameStateMutationService } from "../shared/gameStateMutationService";
+import type { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import {
     forfeitsString,
     restraintsRemoveString,
     servicesString,
@@ -39,6 +45,29 @@ const FREE_CHIPS = 20;
  * ```
  */
 export class CasinoBioManager {
+    public constructor(
+        private readonly store?: Pick<UnifiedCharacterStore, "getBio">,
+        private readonly mutationService?: Pick<
+            GameStateMutationService,
+            "updateBio"
+        >,
+    ) {}
+
+    public async getBio(memberNumber: number): Promise<CharacterBio> {
+        if (!this.store) return { updatedAt: 0, version: 0 };
+        return this.store.getBio(memberNumber);
+    }
+
+    public async updateBio(
+        memberNumber: number,
+        updates: CharacterBioUpdate,
+        actor?: number,
+    ): Promise<void> {
+        if (!this.mutationService) {
+            throw new Error("Bio mutation service is not configured");
+        }
+        await this.mutationService.updateBio(memberNumber, updates, actor);
+    }
     /**
      * Builds the complete casino bot biography/description
      *
@@ -147,7 +176,13 @@ https://github.com/FriendsOfBC/ropeybot
         player: UnifiedCharacterProfile,
         position: number = 1,
     ): string {
-        return `${position}. ${player.name} (${player._id}): ${player.casino.score} chips won`;
+        const legacy = player as UnifiedCharacterProfile & {
+            memberNumber?: number;
+            score?: number;
+        };
+        return `${position}. ${player.name} (${player._id ?? legacy.memberNumber}): ${
+            player.casino?.score ?? legacy.score ?? 0
+        } chips won`;
     }
 }
 

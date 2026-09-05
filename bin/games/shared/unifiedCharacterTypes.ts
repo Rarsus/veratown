@@ -18,6 +18,20 @@ import { ObjectId } from "mongodb";
 // ===== SHARED TYPES
 export type ChatRoomMapPos = { X: number; Y: number };
 
+export interface CharacterBio {
+    title?: string;
+    description?: string;
+    status?: string;
+    pronouns?: string;
+    updatedAt: number;
+    version: number;
+}
+
+export type CharacterBioUpdate = Pick<
+    CharacterBio,
+    "title" | "description" | "status" | "pronouns"
+>;
+
 // ===== CASINO STATE
 export interface CasinoState {
     chips: number;
@@ -195,6 +209,7 @@ export interface UnifiedCharacterProfile {
     _id: number; // memberNumber (primary key)
     name: string;
     createdAt: number;
+    bio: CharacterBio;
 
     // System-specific state
     casino: CasinoState;

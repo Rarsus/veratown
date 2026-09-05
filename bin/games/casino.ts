@@ -107,6 +107,7 @@ export class Casino implements GamePlugin {
     private commandParser?: CommandParser;
     public unifiedStore: UnifiedCharacterStore;
     private mutationService: GameStateMutationService;
+    private readonly bioManager: BioManager;
     private cocktailOfTheDay: Cocktail | undefined;
     public multiplier = 1;
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
@@ -125,6 +126,10 @@ export class Casino implements GamePlugin {
 
     public getMutationService(): GameStateMutationService {
         return this.mutationService;
+    }
+
+    public getBioManager(): BioManager {
+        return this.bioManager;
     }
 
     public constructor(
@@ -151,6 +156,10 @@ export class Casino implements GamePlugin {
                   this.unifiedStore,
                   this.unifiedStore.getEventBus(),
               );
+        this.bioManager = new BioManager(
+            this.unifiedStore,
+            this.mutationService,
+        );
         this.venueSystem = container?.has(DIServiceKeys.CASINO_VENUE_SYSTEM)
             ? container.get<CasinoVenueSystem>(
                   DIServiceKeys.CASINO_VENUE_SYSTEM,
@@ -704,7 +713,7 @@ ${forfeitsString()}
         const unredeemed = await this.getStore().getUnredeemedPurchases();
 
         this.conn.setBotDescription(
-            makeBio(
+            this.bioManager.buildBio(
                 topPlayers
                     .map((player, idx) => {
                         return `${idx + 1}. ${player.name} (${player.memberNumber}): ${player.score} chips won`;

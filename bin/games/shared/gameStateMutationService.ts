@@ -17,6 +17,7 @@ import {
     KeypadAccessRecord,
     MutationInventoryItem,
     VeratownState,
+    CharacterBioUpdate,
 } from "./unifiedCharacterTypes";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
@@ -31,6 +32,11 @@ export interface GameStateMutationService {
     updateCharacterName(
         memberNumber: number,
         name: string,
+        actor?: number,
+    ): Promise<void>;
+    updateBio(
+        memberNumber: number,
+        updates: CharacterBioUpdate,
         actor?: number,
     ): Promise<void>;
     updateCasinoStats(
@@ -156,6 +162,7 @@ type MutationStore = Pick<
     | "updateChips"
     | "claimDailyFreeChips"
     | "updateCharacterName"
+    | "updateBio"
     | "updateCasinoStats"
     | "lockChips"
     | "unlockChips"
@@ -227,6 +234,52 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                 actor,
             );
         }, "updateCharacterName");
+    }
+
+    public async updateBio(
+        memberNumber: number,
+        updates: CharacterBioUpdate,
+        actor = memberNumber,
+    ): Promise<void> {
+        this.validateMember(memberNumber);
+        const allowed = ["title", "description", "status", "pronouns"] as const;
+        const normalized: CharacterBioUpdate = {};
+        for (const key of Object.keys(updates)) {
+            if (!allowed.includes(key as (typeof allowed)[number])) {
+                throw new ValidationError("bio field is invalid", {
+                    field: key,
+                });
+            }
+            const value = updates[key as keyof CharacterBioUpdate];
+            if (
+                value !== undefined &&
+                (typeof value !== "string" || value.length > 500)
+            ) {
+                throw new ValidationError(
+                    "bio fields must be strings of 500 characters or fewer",
+                    {
+                        field: key,
+                    },
+                );
+            }
+            if (value !== undefined) {
+                normalized[key as keyof CharacterBioUpdate] = value;
+            }
+        }
+        if (Object.keys(normalized).length === 0) {
+            throw new ValidationError("bio updates are required", {
+                field: "updates",
+            });
+        }
+        await this.withRetry(async () => {
+            await this.unifiedStore.updateBio(memberNumber, normalized);
+            await this.audit(
+                memberNumber,
+                "updateBio",
+                { updates: normalized },
+                actor,
+            );
+        }, "updateBio");
     }
 
     public async updateCasinoStats(

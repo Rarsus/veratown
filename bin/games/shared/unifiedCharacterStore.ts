@@ -26,6 +26,8 @@ import {
     RoleplayFlags,
     KeypadAccessRecord,
     SuspendedGame,
+    CharacterBio,
+    CharacterBioUpdate,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 import {
@@ -34,6 +36,7 @@ import {
     createDareState,
     createVeratownState,
     createCrossSystemState,
+    createCharacterBio,
     asTimestamp,
     asVersion,
 } from "./mongodbTypeValidation";
@@ -262,6 +265,7 @@ export class UnifiedCharacterStore {
             _id: memberNumber,
             name: characterName ?? "",
             createdAt: now,
+            bio: createCharacterBio(),
             casino: createCasinoState(),
             dare: createDareState(),
             veratown: createVeratownState(),
@@ -312,6 +316,57 @@ export class UnifiedCharacterStore {
             chipLockReason: profile.casino.chipLockReason,
             chipLockUntil: profile.casino.chipLockUntil,
         };
+    }
+
+    public async getBio(memberNumber: number): Promise<CharacterBio> {
+        const profile = await this.getProfile(memberNumber);
+        if (profile.bio && typeof profile.bio === "object") {
+            return profile.bio;
+        }
+
+        // Older profiles kept these values at the document root. Read them
+        // without writing them back so the unified bio remains authoritative.
+        const legacy = profile as UnifiedCharacterProfile & {
+            description?: string;
+            status?: string;
+            pronouns?: string;
+            title?: string;
+        };
+        return createCharacterBio({
+            title: legacy.title,
+            description:
+                typeof (legacy as { bio?: unknown }).bio === "string"
+                    ? (legacy as unknown as { bio: string }).bio
+                    : legacy.description,
+            status: legacy.status,
+            pronouns: legacy.pronouns,
+        });
+    }
+
+    public async updateBio(
+        memberNumber: number,
+        updates: CharacterBioUpdate,
+    ): Promise<void> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        const now = asTimestamp(Date.now());
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    bio: {
+                        ...(profile.bio ?? createCharacterBio()),
+                        ...updates,
+                        updatedAt: now,
+                        version: asVersion((profile.bio?.version ?? 0) + 1),
+                    },
+                    updatedAt: now,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "admin",
+                },
+                $inc: { version: 1 },
+            },
+        );
     }
 
     /**

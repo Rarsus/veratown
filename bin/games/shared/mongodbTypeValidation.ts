@@ -17,6 +17,7 @@ import {
     DareState,
     VeratownState,
     CrossSystemState,
+    CharacterBio,
 } from "./unifiedCharacterTypes";
 
 export type Timestamp = number & { readonly __brand: "Timestamp" };
@@ -29,6 +30,16 @@ export const asGameCounter = (count: number): GameCounter =>
     count as GameCounter;
 export const asVersion = (version: number): Version => version as Version;
 
+export function createCharacterBio(
+    overrides: Partial<CharacterBio> = {},
+): CharacterBio {
+    return {
+        updatedAt: asTimestamp(Date.now()),
+        version: 0,
+        ...overrides,
+    };
+}
+
 /**
  * Type specifications for the database schema.
  * Documents which fields should be stored as which MongoDB types.
@@ -40,6 +51,7 @@ export const SCHEMA_TYPE_SPECS = {
         "createdAt",
         "updatedAt",
         "lastAccessedAt",
+        "bio.updatedAt",
         "casino.updatedAt",
         "casino.lastDailyClaimAt",
         "casino.lastGamePlayedAt",
@@ -54,6 +66,7 @@ export const SCHEMA_TYPE_SPECS = {
     // Version fields: Should be stored as int32
     VERSION_FIELDS: [
         "version",
+        "bio.version",
         "casino.version",
         "dare.version",
         "veratown.version",
@@ -136,6 +149,7 @@ export function createTypeConversionStage(): Record<string, unknown> {
             createdAt: { $toLong: "$createdAt" },
             updatedAt: { $toLong: "$updatedAt" },
             lastAccessedAt: { $toLong: "$lastAccessedAt" },
+            "bio.updatedAt": { $toLong: "$bio.updatedAt" },
             "casino.updatedAt": { $toLong: "$casino.updatedAt" },
             "casino.lastDailyClaimAt": {
                 $cond: [
@@ -178,6 +192,19 @@ export function createTypeConversionStage(): Record<string, unknown> {
                         },
                     },
                     "$version",
+                ],
+            },
+            "bio.version": {
+                $cond: [
+                    { $eq: [{ $type: "$bio.version" }, "double"] },
+                    {
+                        $convert: {
+                            input: "$bio.version",
+                            to: "int",
+                            onError: 0,
+                        },
+                    },
+                    "$bio.version",
                 ],
             },
             "casino.version": {
