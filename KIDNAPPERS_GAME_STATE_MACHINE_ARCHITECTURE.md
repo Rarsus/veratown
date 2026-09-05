@@ -1,0 +1,213 @@
+# KidnappersGame Domain Model & State Machine (Phase 2B.1)
+
+**Issue:** [#102](https://github.com/Rarsus/veratown/issues/102) (Phase 2B.1 of the
+[Phase 2B epic](https://github.com/Rarsus/veratown/issues/28))  
+**Coordinates with:** Phase 2A ([#54](https://github.com/Rarsus/veratown/issues/54),
+handoff [#59](https://github.com/Rarsus/veratown/issues/59))  
+**Hands off to:** Recovery/persistence — [#30.2](https://github.com/Rarsus/veratown/issues/30)  
+**Purpose:** Define the authoritative KidnappersGame domain model and explicit
+state machine on the Phase 1 architecture (DI container, `AppError`
+hierarchy, no global mutable state).
+
+This phase defines **only** the domain model, the state machine, and its DI
+lifecycle wiring. It intentionally does **not** wire up chat commands,
+Discord interactions, matchmaking, or persistence — those are later Phase 2B
+sub-issues. The legacy hub prototype at
+`bin/hub/logic/kidnappersGameRoom.ts` is the source of the role/phase
+vocabulary reused here, adapted onto the Phase 1 conventions used by
+`bin/games/dare` and `bin/games/shared/gameStateMutationService.ts`.
+
+## Module layout
+
+```
+bin/games/kidnappers/
+├── kidnappersGameTypes.ts            # Phases, roles, commands, events, invariants (pure data)
+├── kidnappersGameErrors.ts           # KidnappersGameError (typed, AppError-based)
+├── kidnappersGameStateMachine.ts     # Deterministic transition logic (the only mutator)
+├── kidnappersGameSession.ts          # Owns one state machine instance; correlation id helper
+├── kidnappersGameLifecycleService.ts # DI-registered owner of all active sessions
+└── __tests__/                        # Unit tests for all of the above
+```
+
+## State ownership and mutation boundaries
+
+| Concern                                  | Owner                                               |
+| ---------------------------------------- | --------------------------------------------------- |
+| Legal phases, invariants, error taxonomy | `kidnappersGameTypes.ts` (pure data, no behavior)   |
+| The _only_ mutable copy of session state | `KidnappersGameStateMachine` (private field)        |
+| Read-only, serializable view of state    | `KidnappersSessionSnapshot`, returned by every call |
+| One state machine per active game        | `KidnappersGameSession`                             |
+| The set of all active sessions           | `KidnappersGameLifecycleService` (DI singleton)     |
+
+No module in this package holds state at module scope. Every mutable field
+lives on an instance created and owned by its caller, which is what allows
+`KidnappersGameLifecycleService` to be registered in a `DIContainer` (see
+`bin/di/container.ts`, key `DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE`)
+without introducing global mutable state: multiple containers (multiple
+tests, or a future multi-shard bot) can each own an independent set of
+sessions.
+
+`KidnappersSessionSnapshot` is always a fresh, defensively-copied object;
+callers can never obtain a reference to the state machine's internal `Map`
+or mutate a previously returned snapshot to affect future state (see the
+"snapshots are defensive copies" test in
+`__tests__/kidnappersGameStateMachine.test.ts`).
+
+## Phase state machine
+
+```
+                     ┌────────────────────────────────────────────┐
+                     │                                              │
+   lobby ──START_GAME──▶ night ──ADVANCE──▶ resolving_night ──ADVANCE──▶ day
+     ▲                                                                    │
+     │                                                                ADVANCE
+     │                                                                    │
+     │                                                                    ▼
+     │                                                                 voting
+     │                                                        RAISE_ACCUSATION │ ADVANCE (no accusation)
+     │                                                                    │           │
+     │                                                                    ▼           │
+     │                                                                defense         │
+     │                                                                    │           │
+     │                                                                ADVANCE         │
+     │                                                                    │           │
+     │                                                                    ▼           ▼
+     └──────────────────────────────────────────────────────────── resolving_day
+                                                                          │
+                                                                       ADVANCE
+                                                                          │
+                                                                          ▼
+                                                                       (back to night, round + 1)
+
+Any non-terminal phase ──ABORT_SESSION──▶ aborted (terminal)
+Any non-terminal phase ──COMPLETE_GAME (after lobby)──▶ completed (terminal)
+Any phase, including terminal ──SHUTDOWN_SESSION──▶ aborted (idempotent)
+```
+
+- **Terminal phases:** `completed`, `aborted`. Once reached, every command
+  except `SHUTDOWN_SESSION` is rejected with reason `SESSION_TERMINAL`.
+  `SHUTDOWN_SESSION` is idempotent from a terminal phase: calling it twice is
+  safe and produces the same resulting snapshot.
+- **Round counting:** the `round` counter increments exactly once per full
+  `night → … → resolving_day → night` cycle, when `ADVANCE_PHASE` lands back
+  on `night`.
+- **Player registry invariants**, enforced only in the `lobby` phase:
+    - `JOIN_SESSION` rejects a duplicate member number (`PLAYER_ALREADY_JOINED`)
+      and rejects joins beyond `KIDNAPPERS_MAX_PLAYERS` (`SESSION_FULL`).
+    - `START_GAME` rejects with `INSUFFICIENT_PLAYERS` below
+      `KIDNAPPERS_MIN_PLAYERS`.
+    - Both are rejected outside the lobby with `GAME_ALREADY_STARTED` /
+      `PLAYER_NOT_FOUND` as appropriate — no player roster changes are legal
+      once a game has started.
+
+## Commands, events, and correlation
+
+Every `KidnappersGameCommand` carries a `correlationId` and `issuedAt`
+timestamp supplied by the caller (or generated by
+`KidnappersGameSession.dispatchCommand` when omitted). Every resulting
+`KidnappersGameEvent` echoes the same `correlationId`, so a command can be
+traced end-to-end through logs, tests, and (in a future phase) persisted
+audit records — the same correlation pattern already used by
+`GameStateMutationService` and `EventBus` (see
+`bin/games/shared/gameStateMutationService.ts`,
+`bin/games/shared/eventBus.ts`).
+
+Commands: `JOIN_SESSION`, `LEAVE_SESSION`, `START_GAME`, `ADVANCE_PHASE`,
+`RAISE_ACCUSATION`, `COMPLETE_GAME`, `ABORT_SESSION`, `SHUTDOWN_SESSION`.
+
+Events: `PLAYER_JOINED`, `PLAYER_LEFT`, `GAME_STARTED`, `PHASE_CHANGED`,
+`ACCUSATION_RAISED`, `GAME_COMPLETED`, `SESSION_ABORTED`, `SESSION_SHUT_DOWN`.
+
+## Deterministic transitions and typed errors
+
+`KidnappersGameStateMachine.dispatch()` never throws for an expected domain
+rejection. It always returns a discriminated union:
+
+```ts
+type KidnappersGameTransitionResult =
+    | { ok: true; event: KidnappersGameEvent; state: KidnappersSessionSnapshot }
+    | {
+          ok: false;
+          error: KidnappersGameError;
+          state: KidnappersSessionSnapshot;
+      };
+```
+
+Every guard is read-only and runs to completion _before_ any field is
+mutated; if a guard rejects the command, `state` on the result is the exact
+pre-dispatch snapshot (verified with `assert.deepEqual` in the state machine
+tests), so a rejected command can never leave the session partially mutated.
+
+`KidnappersGameError` extends the shared `BusinessLogicError` /
+`AppError` (`bin/errors.ts`), so it carries the standard stable
+`code`/`category`/`retryable`/sanitized `context` contract used across the
+codebase, plus a narrow `reason: KidnappersGameErrorReason` field that
+callers can switch on:
+
+`INVALID_TRANSITION`, `SESSION_TERMINAL`, `PLAYER_NOT_FOUND`,
+`PLAYER_ALREADY_JOINED`, `SESSION_FULL`, `GAME_ALREADY_STARTED`,
+`INSUFFICIENT_PLAYERS`, `NOT_IN_ROLE` (reserved for role-gated commands in a
+later phase), `UNKNOWN_COMMAND`.
+
+## DI lifecycle: minimal playable session
+
+`KidnappersGameLifecycleService` is the DI-registered owner of every active
+`KidnappersGameSession`:
+
+```ts
+const container = new DIContainer();
+container.register(
+    DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+    new KidnappersGameLifecycleService(),
+);
+
+const service = container.get<KidnappersGameLifecycleService>(
+    DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+);
+
+const session = service.createSession("playable-session");
+// ... dispatch JOIN_SESSION for KIDNAPPERS_MIN_PLAYERS members, then START_GAME ...
+
+service.shutdownAll(); // shuts down every session; safe to call more than once
+```
+
+See `__tests__/kidnappersGameLifecycleService.test.ts` ("a minimal session
+can be created and started end to end through DI") for the executable
+version of this example, exercising create → join → start → shutdown.
+
+`shutdownSession`/`shutdownAll` are idempotent: shutting down an
+already-removed or unknown session id is a no-op, and `shutdownAll` may be
+called more than once without error, which is required for safe use as an
+application-shutdown hook.
+
+## Rollback / recovery note (handoff to #30.2)
+
+This phase deliberately keeps all state **in-memory and non-persistent**:
+
+- No MongoDB collection, schema, or store is introduced by this change.
+- `KidnappersSessionSnapshot` and all command/event types are plain,
+  JSON-serializable data (no class instances, no functions), so a future
+  persistence layer can snapshot/restore a session without redesigning the
+  domain model.
+- If the process restarts, all in-flight sessions are lost; there is
+  currently no recovery path. This is an accepted, explicit limitation of
+  Phase 2B.1, not an oversight.
+- Rollback of this change is a pure code revert: no migrations, indexes, or
+  DI registrations touch shared/global state, and no other module currently
+  depends on `bin/games/kidnappers/*` or
+  `DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE`.
+- **Handed off to [#30.2](https://github.com/Rarsus/veratown/issues/30):**
+  durable persistence of `KidnappersSessionSnapshot`, crash-recovery/resume
+  of an in-progress session, and reconciliation of the in-memory state
+  machine against a persisted record after a restart.
+
+## Exit evidence
+
+| Gate                                             | Evidence                                                                                  |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Explicit, deterministic, unit-tested transitions | `bin/games/kidnappers/__tests__/kidnappersGameStateMachine.test.ts`                       |
+| Invalid transitions: typed errors, no mutation   | Same file: `assert.deepEqual(result.state, before)` on every rejection path               |
+| DI-registered lifecycle, no global mutable state | `bin/games/kidnappers/__tests__/kidnappersGameLifecycleService.test.ts`                   |
+| Minimal playable session init + shutdown via DI  | `kidnappersGameLifecycleService.test.ts` ("...created and started end to end through DI") |
+| Strict TypeScript                                | `npm run types`                                                                           |
+| Unit test suite                                  | `npm run test:unit`, `npm run test:phase1`                                                |
