@@ -103,6 +103,8 @@ export interface API_Message {
 }
 
 interface ConnectorEvents {
+    Connected: [];
+    Disconnected: [reason: Socket.DisconnectReason];
     PoseChange: [character: API_Character];
     Message: [message: API_Message];
     Beep: [beep: ServerAccountBeepResponse];
@@ -317,6 +319,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private onSocketConnect = async () => {
         console.log("Socket connected!");
+        this.emit("Connected");
         this.wrappedSock.emit("AccountLogin", {
             AccountName: this.username,
             Password: this.password,
@@ -339,6 +342,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private onSocketDisconnect = (reason: Socket.DisconnectReason) => {
         console.log(`Socket disconnected: ${reason}`);
+        this.emit("Disconnected", reason);
 
         // clean up existing promises and resolve them if any to prevent a stuck await (i.e. disconnect when waiting for roomJoinPromise)
         if (this.roomJoinPromise) {
