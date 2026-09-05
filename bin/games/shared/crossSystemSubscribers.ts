@@ -36,11 +36,13 @@ import { createLogger } from "../../logging";
 export interface ExternalCasinoSystem {
     lockWinnings?(memberNumber: number): Promise<void>;
     unlockWinnings?(memberNumber: number): Promise<void>;
+    onLocationChanged?(event: GameEvent): Promise<void>;
 }
 
 export interface ExternalDareSystem {
     removeParticipant?(memberNumber: number): Promise<void>;
     blockRedressing?(memberNumber: number, until: number): Promise<void>;
+    onLocationChanged?(event: GameEvent): Promise<void>;
 }
 
 export interface ExternalVeratownSystem {
@@ -49,6 +51,7 @@ export interface ExternalVeratownSystem {
         player2: number,
         type: string,
     ): Promise<void>;
+    onLocationChanged?(event: GameEvent): Promise<void>;
 }
 
 /**
@@ -60,6 +63,7 @@ export interface ExternalVeratownSystem {
 export class CrossSystemSubscribers {
     private readonly logger = createLogger("CrossSystemSubscribers");
     private eventBus: EventBus;
+    private readonly handledLocationEvents = new Set<string>();
 
     constructor(
         private unifiedStore: UnifiedCharacterStore,
@@ -83,6 +87,7 @@ export class CrossSystemSubscribers {
         this.setupBondageSubscribers();
         this.setupCageSubscribers();
         this.setupChipTransferSubscribers();
+        this.setupLocationSubscribers();
         this.setupAuditSubscribers();
     }
 
@@ -242,6 +247,29 @@ export class CrossSystemSubscribers {
         });
     }
 
+    private setupLocationSubscribers(): void {
+        const handle = async (event: GameEvent): Promise<void> => {
+            const transitionId =
+                typeof event.data.transitionId === "string"
+                    ? event.data.transitionId
+                    : `${event.target}:${event.timestamp}`;
+            const key = `${event.type}:${transitionId}`;
+            if (this.handledLocationEvents.has(key)) return;
+            this.handledLocationEvents.add(key);
+
+            await Promise.allSettled(
+                [
+                    this.casino?.onLocationChanged?.(event),
+                    this.dare?.onLocationChanged?.(event),
+                    this.veratown?.onLocationChanged?.(event),
+                ].filter((result): result is Promise<void> => Boolean(result)),
+            );
+        };
+
+        this.eventBus.subscribe("location_entered", handle);
+        this.eventBus.subscribe("location_exited", handle);
+    }
+
     /**
      * Audit feature: Log all cross-system events
      *
@@ -263,6 +291,8 @@ export class CrossSystemSubscribers {
                     "chip_transfer",
                     "chips_earned",
                     "character_frozen",
+                    "location_entered",
+                    "location_exited",
                 ];
 
                 if (majorEventTypes.includes(event.type)) {

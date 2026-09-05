@@ -260,6 +260,8 @@ export interface GameEvent {
         | "casino_blackjack_deal"
         | "parole_violated"
         | "position_changed"
+        | "location_entered"
+        | "location_exited"
         | "character_frozen"
         | "character_unfrozen"
         | "audit_trail"; // Phase 3.4: Generic audit trail event

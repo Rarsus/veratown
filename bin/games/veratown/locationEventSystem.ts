@@ -14,8 +14,32 @@
 
 import { Collection, Db } from "mongodb";
 import { createLogger } from "../../logging";
+import type { EventBus } from "../shared/eventBus";
+import type { GameEvent } from "../shared/unifiedCharacterTypes";
+import type { GameStateMutationService } from "../shared/gameStateMutationService";
 
-export type EventTriggerType = "occupancy" | "daily" | "random" | "manual";
+export type EventTriggerType =
+    "occupancy" | "daily" | "random" | "manual" | "entry" | "exit";
+
+export interface LocationEventCondition {
+    locationKey?: string;
+    minOccupancy?: number;
+    requiredProgression?: string;
+}
+
+export interface LocationEventOutcome {
+    type: "bondage" | "emotion" | "location_effect" | "progression" | "custom";
+    value: unknown;
+}
+
+export interface LocationTransition {
+    transitionId: string;
+    memberNumber: number;
+    fromLocationKey?: string;
+    toLocationKey?: string;
+    timestamp?: number;
+    actor?: number;
+}
 
 export interface LocationEvent {
     eventId: string;
@@ -39,10 +63,10 @@ export interface LocationEvent {
     // Event content
     narration: string; // What gets sent to players
     narrationTo?: "all" | "location" | "individual"; // Who receives narration
-    consequences?: Array<{
-        type: "bondage" | "emotion" | "location_effect" | "custom";
-        value: unknown;
-    }>;
+    conditions?: LocationEventCondition;
+    cooldownMs?: number;
+    consequences?: LocationEventOutcome[];
+    outcomes?: LocationEventOutcome[];
     durationMs?: number; // How long event effects last
 
     // State
@@ -69,23 +93,45 @@ export interface LocationEventExecution {
     durationMs?: number;
     completedAt?: number;
     notes?: string;
+    deliveryId?: string;
 }
 
 const MAX_EVENTS_PER_LOCATION = 50;
 const MAX_EXECUTION_HISTORY = 1000;
 
+export interface LocationEventSystemOptions {
+    eventBus?: EventBus;
+    mutationService?: GameStateMutationService;
+    locationResolver?: (position: {
+        X: number;
+        Y: number;
+    }) => string | undefined;
+}
+
 export class LocationEventSystem {
     private eventCollection: Collection<LocationEvent>;
     private executionCollection: Collection<LocationEventExecution>;
+    private transitionCollection: Collection<{
+        transitionId: string;
+        createdAt: number;
+    }>;
     private inited = false;
     private readonly logger = createLogger("LocationEventSystem");
     private timers = new Map<string, NodeJS.Timeout>();
+    private readonly options: LocationEventSystemOptions;
 
-    public constructor(private db: Db) {
+    public constructor(
+        private db: Db,
+        options: LocationEventSystemOptions = {},
+    ) {
+        this.options = options;
         this.eventCollection =
             this.db.collection<LocationEvent>("locationEvents");
         this.executionCollection = this.db.collection<LocationEventExecution>(
             "locationEventExecutions",
+        );
+        this.transitionCollection = this.db.collection(
+            "locationEventTransitions",
         );
     }
 
@@ -103,6 +149,14 @@ export class LocationEventSystem {
         await this.executionCollection.createIndex({ eventId: 1 });
         await this.executionCollection.createIndex({ locationKey: 1 });
         await this.executionCollection.createIndex({ triggeredAt: -1 });
+        await this.executionCollection.createIndex(
+            { deliveryId: 1 },
+            { unique: true, sparse: true },
+        );
+        await this.transitionCollection.createIndex(
+            { transitionId: 1 },
+            { unique: true },
+        );
         this.inited = true;
     }
 
@@ -114,6 +168,9 @@ export class LocationEventSystem {
         event: Omit<LocationEvent, "createdAt" | "updatedAt">,
     ): Promise<LocationEvent> {
         await this.init();
+        if (!locationKey || event.locationKey !== locationKey) {
+            throw new Error("Location event location does not match its key");
+        }
 
         const newEvent: LocationEvent = {
             ...event,
@@ -238,10 +295,19 @@ export class LocationEventSystem {
         eventId: string,
         affectedMembers: number[],
         triggeredBy: LocationEventExecution["triggeredBy"],
+        deliveryId?: string,
     ): Promise<LocationEventExecution> {
+        await this.init();
         const event = await this.getEvent(eventId);
         if (!event) {
             throw new Error(`Event ${eventId} not found`);
+        }
+
+        if (deliveryId) {
+            const existing = await this.executionCollection.findOne({
+                deliveryId,
+            });
+            if (existing) return existing;
         }
 
         const execution: LocationEventExecution = {
@@ -253,10 +319,71 @@ export class LocationEventSystem {
             narrationSent: true,
             consequences: [],
             durationMs: event.durationMs,
+            deliveryId,
         };
+        if (deliveryId) {
+            try {
+                await this.executionCollection.insertOne(execution);
+            } catch (error) {
+                if ((error as { code?: number }).code === 11000) {
+                    return (
+                        (await this.executionCollection.findOne({
+                            deliveryId,
+                        })) ?? execution
+                    );
+                }
+                throw error;
+            }
+        }
 
-        // Record execution
-        await this.executionCollection.insertOne(execution);
+        const outcomes = event.outcomes ?? event.consequences ?? [];
+        const consequences: LocationEventExecution["consequences"] = [];
+        for (const outcome of outcomes) {
+            for (const memberNumber of affectedMembers) {
+                try {
+                    if (outcome.type === "location_effect") {
+                        if (!this.options.mutationService) {
+                            throw new Error(
+                                "Location event mutation service is not configured",
+                            );
+                        }
+                        await this.options.mutationService?.applyEffect(
+                            memberNumber,
+                            {
+                                effectKey: String(outcome.value),
+                                appliedAt: Date.now(),
+                                ...(event.durationMs
+                                    ? {
+                                          expiresAt:
+                                              Date.now() + event.durationMs,
+                                      }
+                                    : {}),
+                            },
+                        );
+                    }
+                    consequences.push({ type: outcome.type, success: true });
+                } catch (error) {
+                    consequences.push({
+                        type: outcome.type,
+                        success: false,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            }
+        }
+
+        execution.consequences = consequences;
+        if (deliveryId) {
+            await this.executionCollection.updateOne(
+                { deliveryId },
+                { $set: { consequences, completedAt: Date.now() } },
+            );
+        } else {
+            await this.executionCollection.insertOne(execution);
+        }
 
         // Update event's last triggered time
         await this.updateEvent(eventId, {
@@ -274,6 +401,114 @@ export class LocationEventSystem {
         );
 
         return execution;
+    }
+
+    /**
+     * Publish a deterministic entry/exit transition and execute matching events.
+     * The transition id is the idempotency key for retries and redelivery.
+     */
+    public async handleLocationTransition(
+        transition: LocationTransition,
+    ): Promise<LocationEventExecution[]> {
+        await this.init();
+        if (
+            !transition.transitionId ||
+            !Number.isInteger(transition.memberNumber) ||
+            transition.memberNumber < 0 ||
+            (!transition.fromLocationKey && !transition.toLocationKey)
+        ) {
+            throw new Error("Invalid location transition");
+        }
+        try {
+            await this.transitionCollection.insertOne({
+                transitionId: transition.transitionId,
+                createdAt: Date.now(),
+            });
+        } catch (error) {
+            if ((error as { code?: number }).code === 11000) return [];
+            throw error;
+        }
+
+        const timestamp = transition.timestamp ?? Date.now();
+        const actor = transition.actor ?? transition.memberNumber;
+        const publish = async (
+            type: "location_entered" | "location_exited",
+            locationKey: string | undefined,
+        ) => {
+            if (!locationKey) return;
+            const event: GameEvent = {
+                timestamp,
+                type,
+                source: "veratown",
+                actor,
+                target: transition.memberNumber,
+                data: {
+                    transitionId: transition.transitionId,
+                    locationKey,
+                    fromLocationKey: transition.fromLocationKey,
+                    toLocationKey: transition.toLocationKey,
+                },
+                processed: false,
+            };
+            if (this.options.mutationService) {
+                await this.options.mutationService.recordEvent(event);
+            } else {
+                await this.options.eventBus?.publish(event);
+            }
+        };
+
+        await publish("location_exited", transition.fromLocationKey);
+        await publish("location_entered", transition.toLocationKey);
+
+        const executions: LocationEventExecution[] = [];
+        const locationKey = transition.toLocationKey;
+        if (locationKey) {
+            const events = await this.getEventsByTriggerType(
+                locationKey,
+                "entry",
+            );
+            for (const event of events) {
+                if (
+                    !event.isEnabled ||
+                    (event.cooldownMs &&
+                        event.lastTriggeredAt &&
+                        timestamp - event.lastTriggeredAt < event.cooldownMs)
+                )
+                    continue;
+                executions.push(
+                    await this.executeEvent(
+                        event.eventId,
+                        [transition.memberNumber],
+                        "manual",
+                        `${transition.transitionId}:entry:${event.eventId}`,
+                    ),
+                );
+            }
+        }
+        if (transition.fromLocationKey) {
+            const events = await this.getEventsByTriggerType(
+                transition.fromLocationKey,
+                "exit",
+            );
+            for (const event of events) {
+                if (
+                    !event.isEnabled ||
+                    (event.cooldownMs &&
+                        event.lastTriggeredAt &&
+                        timestamp - event.lastTriggeredAt < event.cooldownMs)
+                )
+                    continue;
+                executions.push(
+                    await this.executeEvent(
+                        event.eventId,
+                        [transition.memberNumber],
+                        "manual",
+                        `${transition.transitionId}:exit:${event.eventId}`,
+                    ),
+                );
+            }
+        }
+        return executions;
     }
 
     /**
@@ -472,6 +707,8 @@ export class LocationEventSystem {
             daily: 0,
             random: 0,
             manual: 0,
+            entry: 0,
+            exit: 0,
         };
 
         eventStats.forEach((stat) => {

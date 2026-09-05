@@ -148,3 +148,31 @@ test("CrossSystemSubscribers isolates subscriber failures", async () => {
         eventBus.publish(createEvent("character_frozen")),
     );
 });
+
+test("CrossSystemSubscribers routes location transitions once per delivery key", async () => {
+    const eventBus = new EventBus();
+    const locations: string[] = [];
+    const subscribers = new CrossSystemSubscribers(
+        { getEventBus: () => eventBus } as any,
+        {
+            onLocationChanged: async (event: any) => {
+                locations.push(event.type);
+            },
+        },
+        undefined,
+        undefined,
+        {
+            recordAuditEntry: async () => undefined,
+        } as any,
+    );
+    await subscribers.initialize();
+
+    const event = createEvent("location_entered", {
+        transitionId: "transition-1",
+        locationKey: "yard",
+    });
+    await eventBus.publish(event);
+    await eventBus.publish(event);
+
+    assert.deepEqual(locations, ["location_entered"]);
+});
