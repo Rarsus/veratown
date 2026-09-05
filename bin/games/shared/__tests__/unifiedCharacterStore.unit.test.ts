@@ -173,6 +173,43 @@ test("UnifiedCharacterStore creates profiles with default state", async () => {
     assert.equal(profile.casino.chips, 0);
 });
 
+test("UnifiedCharacterStore rejects escape attempts without bondage or chips", async () => {
+    const { store, profile } = createStore();
+
+    profile.dare.activeBondage = [];
+    assert.deepEqual(await store.spendChipsToEscape(1, 10), {
+        success: false,
+        message: "You don't have any active bondage to escape from.",
+        bondageRemoved: 0,
+    });
+
+    profile.dare.activeBondage = [
+        { forfeitKey: "cuffs", appliedAt: 1, lockedUntil: 2 },
+    ];
+    profile.casino.chips = 5;
+    assert.deepEqual(await store.spendChipsToEscape(1, 10), {
+        success: false,
+        message: "Insufficient chips. You need 10 chips but have 5.",
+        bondageRemoved: 0,
+    });
+});
+
+test("UnifiedCharacterStore makes cage entry and exit idempotent", async () => {
+    const { store, profile } = createStore();
+
+    profile.veratown.cageIncarcerations = [
+        {
+            enteredAt: 1,
+            duration: 10,
+            expiresAt: 11,
+            cageName: "cell",
+        },
+    ];
+    assert.equal(await store.recordCageEntry(1, "second-cell", 10), false);
+    assert.equal(await store.recordCageExit(1), true);
+    assert.equal(await store.recordCageExit(1), false);
+});
+
 /**
  * Minimal in-memory MongoDB-like collection supporting just the operators
  * `unifiedCharacterStore.ts` uses for progression mutations ($ne filters,

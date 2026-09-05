@@ -149,9 +149,27 @@ export class LocationEventSystem {
         await this.executionCollection.createIndex({ eventId: 1 });
         await this.executionCollection.createIndex({ locationKey: 1 });
         await this.executionCollection.createIndex({ triggeredAt: -1 });
+        const deliveryIndexes = await this.executionCollection
+            .listIndexes()
+            .toArray();
+        const deliveryIndex = deliveryIndexes.find(
+            (index) => index.key?.deliveryId === 1,
+        );
+        const partialDeliveryIndex =
+            deliveryIndex?.partialFilterExpression?.deliveryId;
+        if (
+            deliveryIndex &&
+            (!partialDeliveryIndex ||
+                (partialDeliveryIndex as { $type?: string }).$type !== "string")
+        ) {
+            await this.executionCollection.dropIndex(deliveryIndex.name!);
+        }
         await this.executionCollection.createIndex(
             { deliveryId: 1 },
-            { unique: true, sparse: true },
+            {
+                unique: true,
+                partialFilterExpression: { deliveryId: { $type: "string" } },
+            },
         );
         await this.transitionCollection.createIndex(
             { transitionId: 1 },
@@ -319,7 +337,7 @@ export class LocationEventSystem {
             narrationSent: true,
             consequences: [],
             durationMs: event.durationMs,
-            deliveryId,
+            ...(deliveryId ? { deliveryId } : {}),
         };
         if (deliveryId) {
             try {
