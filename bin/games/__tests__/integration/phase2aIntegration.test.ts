@@ -1,4 +1,11 @@
-import { after, before, beforeEach, describe, test, type TestContext } from "node:test";
+import {
+    after,
+    before,
+    beforeEach,
+    describe,
+    test,
+    type TestContext,
+} from "node:test";
 import assert from "node:assert/strict";
 import { Db, MongoClient } from "mongodb";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
@@ -6,7 +13,10 @@ import { CrossSystemSubscribers } from "../../shared/crossSystemSubscribers";
 import { EventBus } from "../../shared/eventBus";
 import { GameStateMutationServiceImpl } from "../../shared/gameStateMutationService";
 import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
-import { GameEvent } from "../../shared/unifiedCharacterTypes";
+import {
+    GameEvent,
+    UnifiedCharacterProfile,
+} from "../../shared/unifiedCharacterTypes";
 
 describe("Phase 2A cross-system integration", () => {
     let replSet: MongoMemoryReplSet | undefined;
@@ -18,13 +28,16 @@ describe("Phase 2A cross-system integration", () => {
 
     before(async () => {
         try {
-            replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+            replSet = await MongoMemoryReplSet.create({
+                replSet: { count: 1 },
+            });
             client = new MongoClient(replSet.getUri());
             await client.connect();
             db = client.db("phase_2a_integration");
         } catch (error) {
             if (process.env.CI) throw error;
-            setupError = error instanceof Error ? error : new Error(String(error));
+            setupError =
+                error instanceof Error ? error : new Error(String(error));
         }
     });
 
@@ -32,7 +45,10 @@ describe("Phase 2A cross-system integration", () => {
         if (!db) return;
         await db.dropDatabase();
         store = new UnifiedCharacterStore(db);
-        mutations = new GameStateMutationServiceImpl(store, store.getEventBus());
+        mutations = new GameStateMutationServiceImpl(
+            store,
+            store.getEventBus(),
+        );
     });
 
     after(async () => {
@@ -70,15 +86,23 @@ describe("Phase 2A cross-system integration", () => {
 
         assert.equal((await store.getCasinoView(1001)).chips, 375);
         assert.equal((await store.getCasinoView(1002)).chips, 125);
-        assert.equal((await store.getProfile(1002)).crossSystem.inventory[0].quantity, 2);
+        assert.equal(
+            (await store.getProfile(1002)).crossSystem.inventory[0].quantity,
+            2,
+        );
         assert.equal((await store.getProgressionView(1002)).totalXp, 10);
 
-        const events = await db!.collection<GameEvent>("gameEvents").find({
-            target: { $in: [1001, 1002] },
-        }).toArray();
+        const events = await db!
+            .collection<GameEvent>("gameEvents")
+            .find({
+                target: { $in: [1001, 1002] },
+            })
+            .toArray();
         assert.ok(events.some((event) => event.type === "chip_transfer"));
         assert.ok(events.some((event) => event.type === "inventory_added"));
-        assert.ok(events.some((event) => event.type === "progression_xp_awarded"));
+        assert.ok(
+            events.some((event) => event.type === "progression_xp_awarded"),
+        );
         assert.ok((await store.getVeratownView(1002)).auditLog.length >= 2);
     });
 
@@ -88,11 +112,15 @@ describe("Phase 2A cross-system integration", () => {
         await store.getProfile(2001);
         await assert.rejects(
             store.withTransaction(async (session) => {
-                await db!.collection("unifiedCharacterProfiles").updateOne(
-                    { _id: 2001 },
-                    { $set: { "casino.chips": 999 } },
-                    { session },
-                );
+                await db!
+                    .collection<UnifiedCharacterProfile>(
+                        "unifiedCharacterProfiles",
+                    )
+                    .updateOne(
+                        { _id: 2001 },
+                        { $set: { "casino.chips": 999 } },
+                        { session },
+                    );
                 throw new Error("forced rollback");
             }),
             /forced rollback/,
@@ -131,12 +159,25 @@ describe("Phase 2A cross-system integration", () => {
         const profile = await store.getProfile(3001);
         assert.equal(profile.dare.activeBondage.length, 0);
         assert.equal(profile.casino.chips, 25);
-        assert.equal(profile.veratown.cageIncarcerations[0].releasedAt !== undefined, true);
-        assert.equal(profile.veratown.auditLog.at(-1)?.action, "phase2a_workflow");
+        assert.equal(
+            profile.veratown.cageIncarcerations[0].releasedAt !== undefined,
+            true,
+        );
+        assert.equal(
+            profile.veratown.auditLog.at(-1)?.action,
+            "phase2a_workflow",
+        );
         assert.ok(
             (await db!.collection<GameEvent>("gameEvents").countDocuments({
                 target: 3001,
-                type: { $in: ["bondage_applied", "cage_entry", "escape_payment", "cage_exit"] },
+                type: {
+                    $in: [
+                        "bondage_applied",
+                        "cage_entry",
+                        "escape_payment",
+                        "cage_exit",
+                    ],
+                },
             })) >= 4,
         );
     });
@@ -145,19 +186,24 @@ describe("Phase 2A cross-system integration", () => {
         if (skipWithoutMongo(t)) return;
 
         const delivered: string[] = [];
-        const subscribers = new CrossSystemSubscribers(store, {
-            onLocationChanged: async () => {
-                throw new Error("casino unavailable");
+        const subscribers = new CrossSystemSubscribers(
+            store,
+            {
+                onLocationChanged: async () => {
+                    throw new Error("casino unavailable");
+                },
             },
-        }, {
-            onLocationChanged: async () => {
-                delivered.push("dare");
+            {
+                onLocationChanged: async () => {
+                    delivered.push("dare");
+                },
             },
-        }, {
-            onLocationChanged: async () => {
-                delivered.push("veratown");
+            {
+                onLocationChanged: async () => {
+                    delivered.push("veratown");
+                },
             },
-        });
+        );
         await subscribers.initialize();
 
         const event: GameEvent = {
