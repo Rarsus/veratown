@@ -901,10 +901,18 @@ Game Overview
                     );
                     return;
                 }
-                await this.dareDataService?.resetDares();
+                if (!this.dareDataService) {
+                    this.whisper(
+                        senderCharacter.MemberNumber,
+                        "Dare service not available",
+                    );
+                    return;
+                }
+                await this.dareDataService.resetDares();
+                const summary = await this.dareDataService.getSummary();
                 this.conn.SendMessage(
                     "Emote",
-                    "*" + ((await this.dareDataService?.getSummary()) ?? ""),
+                    "*" + (summary || "Dare deck reset."),
                 );
                 break;
             case "validate": {

@@ -36,10 +36,17 @@ class MockConnection {
 
     public reply(): void {}
 
-    public emitMessage(content: string, type: string): void {
+    public emitMessage(
+        content: string,
+        type: string,
+        isRoomAdmin = false,
+    ): void {
         const event = {
             message: { Content: content, Type: type },
-            sender: { MemberNumber: 123 },
+            sender: {
+                MemberNumber: 123,
+                IsRoomAdmin: () => isRoomAdmin,
+            },
         };
         for (const listener of this.listeners.get("Message") ?? []) {
             listener(event);
@@ -107,4 +114,66 @@ test("Dare registers and dispatches its root command through both command syntax
         ...subcommands.flatMap((subcommand) => [[subcommand], [subcommand]]),
         ["unknown"],
     ]);
+});
+
+test("Dare reset routes both syntaxes, resets injected service, and reports summary", async () => {
+    const connection = new MockConnection();
+    const parser = new CommandParser(connection as any);
+    let resetCount = 0;
+    const dareDataService = {
+        resetDares: async () => {
+            resetCount++;
+        },
+        getSummary: async () => "Dare Deck: 2/2 active",
+    };
+    new Dare(
+        connection as any,
+        parser,
+        { getEventBus: () => ({}) } as any,
+        dareDataService as any,
+        { loadState: async () => undefined } as any,
+        undefined,
+        {} as any,
+    );
+
+    connection.emitMessage("!dare reset", "Whisper", true);
+    connection.emitMessage("ChatRoomBot dare reset", "Hidden", true);
+    await flushCommands();
+
+    assert.equal(resetCount, 2);
+    assert.deepEqual(
+        connection.sentMessages.filter(({ type }) => type === "Emote"),
+        [
+            { type: "Emote", content: "*Dare Deck: 2/2 active" },
+            { type: "Emote", content: "*Dare Deck: 2/2 active" },
+        ],
+    );
+});
+
+test("Dare reset requires an admin and reports a missing service", async () => {
+    const connection = new MockConnection();
+    const parser = new CommandParser(connection as any);
+    const dare = new Dare(
+        connection as any,
+        parser,
+        { getEventBus: () => ({}) } as any,
+        undefined,
+        { loadState: async () => undefined } as any,
+        undefined,
+        {} as any,
+    );
+
+    connection.emitMessage("!dare reset", "Whisper");
+    await flushCommands();
+    assert.deepEqual(connection.sentMessages, [
+        { type: "Whisper", content: "Only admins can use this command." },
+    ]);
+
+    connection.sentMessages.length = 0;
+    connection.emitMessage("!dare reset", "Whisper", true);
+    await flushCommands();
+    assert.deepEqual(connection.sentMessages, [
+        { type: "Whisper", content: "Dare service not available" },
+    ]);
+    assert.equal(dare.getStatus().startsWith("Dare:"), true);
 });

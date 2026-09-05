@@ -23,6 +23,7 @@ import {
 import { wait } from "../hub/utils";
 import { Dare } from "./dare";
 import { DareConfig } from "./dare";
+import { DareDataService } from "./dare/dareDataService";
 import { Casino } from "./casino";
 import { CasinoConfig } from "./casino";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
@@ -239,11 +240,18 @@ export class Veratown {
                           DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                       )
                     : undefined;
+                const dareDataService = this.container.has(
+                    DIServiceKeys.DARE_DATA_SERVICE,
+                )
+                    ? this.container.get<DareDataService>(
+                          DIServiceKeys.DARE_DATA_SERVICE,
+                      )
+                    : new DareDataService(db);
                 return new Dare(
                     this.conn,
                     this.commandParser,
                     unifiedStore,
-                    undefined,
+                    dareDataService,
                     undefined,
                     effectiveDareConfig,
                     mutationService,

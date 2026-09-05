@@ -30,6 +30,7 @@ import {
     DatabaseConnection,
 } from "./botConnections";
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
+import { DareDataService } from "./games/dare/dareDataService";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 import { DeviceFactory } from "./games/shared/deviceFactory";
 import {
@@ -422,6 +423,10 @@ async function initializeVeratownGame(
     const unifiedStore = new UnifiedCharacterStore(db);
     container.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, unifiedStore);
     logger.info("UnifiedCharacterStore initialized");
+    container.register(
+        DIServiceKeys.DARE_DATA_SERVICE,
+        new DareDataService(db),
+    );
     container.register(DIServiceKeys.DEVICE_FACTORY, new DeviceFactory());
     container.register(
         DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
