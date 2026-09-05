@@ -84,6 +84,9 @@ test("UnifiedCharacterStore covers non-Mongo state and event workflows", async (
 
     assert.equal((await store.getProfile(1)).name, "Player");
     assert.equal((await store.getCasinoView(1)).chips, 100);
+    // Legacy profile lacks a `progression` field; getProfile must backfill a
+    // default state so older documents remain readable (migration/backfill).
+    assert.equal((await store.getProgressionView(1)).level, 0);
     await store.updateChips(1, 10, "award");
     await store.claimDailyFreeChips(1, 10);
     await store.updateCasinoStats(1, { score: 5 });
@@ -149,4 +152,213 @@ test("UnifiedCharacterStore covers non-Mongo state and event workflows", async (
     await store.transferChipsAtomically(1, 2, 1, "gift");
     await (store as any).typeSafeUpdateOne({ _id: 1 }, { $set: {} });
     assert.equal(profile._id, 1);
+});
+
+/**
+ * Minimal in-memory MongoDB-like collection supporting just the operators
+ * `unifiedCharacterStore.ts` uses for progression mutations ($ne filters,
+ * $addToSet, $inc, $set, $pull). This lets the duplicate-reward, level-up
+ * and rollback branches be exercised deterministically without requiring a
+ * real MongoDB instance.
+ */
+function createProgressionFakeProfiles(initial: Record<number, any>) {
+    const docs = new Map<number, any>(
+        Object.entries(initial).map(([id, doc]) => [Number(id), doc]),
+    );
+
+    function getPath(obj: any, path: string): any {
+        return path
+            .split(".")
+            .reduce((value, key) => (value ? value[key] : undefined), obj);
+    }
+
+    function setPath(obj: any, path: string, value: unknown): void {
+        const parts = path.split(".");
+        let target = obj;
+        for (let i = 0; i < parts.length - 1; i++) {
+            target[parts[i]] = target[parts[i]] ?? {};
+            target = target[parts[i]];
+        }
+        target[parts[parts.length - 1]] = value;
+    }
+
+    function matches(doc: any, filter: Record<string, unknown>): boolean {
+        return Object.entries(filter).every(([key, condition]) => {
+            if (key === "_id") return doc._id === condition;
+            if (
+                key.endsWith(".rewardKey") &&
+                condition &&
+                typeof condition === "object" &&
+                "$ne" in (condition as Record<string, unknown>)
+            ) {
+                const arrayPath = key.slice(0, -".rewardKey".length);
+                const arr = (getPath(doc, arrayPath) ?? []) as Array<{
+                    rewardKey: string;
+                }>;
+                const target = (condition as Record<string, unknown>)["$ne"];
+                return !arr.some((item) => item.rewardKey === target);
+            }
+            if (key.endsWith(".rewardKey")) {
+                const arrayPath = key.slice(0, -".rewardKey".length);
+                const arr = (getPath(doc, arrayPath) ?? []) as Array<{
+                    rewardKey: string;
+                }>;
+                return arr.some((item) => item.rewardKey === condition);
+            }
+            return getPath(doc, key) === condition;
+        });
+    }
+
+    function applyUpdate(doc: any, update: Record<string, any>): void {
+        for (const [op, changes] of Object.entries(update)) {
+            for (const [path, value] of Object.entries(
+                changes as Record<string, unknown>,
+            )) {
+                if (op === "$set") setPath(doc, path, value);
+                else if (op === "$inc") {
+                    setPath(
+                        doc,
+                        path,
+                        (getPath(doc, path) ?? 0) + (value as number),
+                    );
+                } else if (op === "$addToSet") {
+                    const arr = getPath(doc, path) ?? [];
+                    arr.push(value);
+                    setPath(doc, path, arr);
+                } else if (op === "$pull") {
+                    const arr = (getPath(doc, path) ?? []) as any[];
+                    const spec = value as Record<string, unknown>;
+                    const filtered = arr.filter(
+                        (item) =>
+                            !Object.entries(spec).every(
+                                ([k, v]) => item[k] === v,
+                            ),
+                    );
+                    setPath(doc, path, filtered);
+                }
+            }
+        }
+    }
+
+    return {
+        createIndex: async () => "index",
+        findOne: async (filter: Record<string, unknown>) =>
+            [...docs.values()].find((doc) => matches(doc, filter)) ?? null,
+        findOneAndUpdate: async (
+            filter: Record<string, unknown>,
+            update: Record<string, unknown>,
+        ) => {
+            const doc = [...docs.values()].find((candidate) =>
+                matches(candidate, filter),
+            );
+            if (!doc) return null;
+            applyUpdate(doc, update);
+            return doc;
+        },
+        updateOne: async (
+            filter: Record<string, unknown>,
+            update: Record<string, unknown>,
+        ) => {
+            const doc = [...docs.values()].find((candidate) =>
+                matches(candidate, filter),
+            );
+            if (doc) applyUpdate(doc, update);
+            return {};
+        },
+        find: () => ({
+            sort: () => ({ limit: () => ({ toArray: async () => [] }) }),
+            toArray: async () => [...docs.values()],
+        }),
+        docs,
+    };
+}
+
+test("UnifiedCharacterStore progression: prevents duplicate rewards, levels up, and rolls back", async () => {
+    const profile: any = {
+        _id: 42,
+        name: "Progressor",
+        createdAt: Date.now(),
+        casino: createCasinoState(),
+        dare: createDareState(),
+        veratown: createVeratownState(),
+        crossSystem: createCrossSystemState(),
+        progression: {
+            level: 0,
+            totalXp: 0,
+            claimedRewards: [],
+            version: 0,
+            updatedAt: Date.now(),
+        },
+        lastAccessedAt: Date.now(),
+        updatedAt: Date.now(),
+        version: 0,
+    };
+    const profiles = createProgressionFakeProfiles({ 42: profile });
+    const events: any[] = [];
+    const eventCollection = {
+        createIndex: async () => "index",
+        insertOne: async (event: any) => {
+            events.push(event);
+            return {};
+        },
+        insertMany: async () => ({}),
+        findOne: async () => events[0],
+        find: () => ({ toArray: async () => events }),
+        updateOne: async () => ({}),
+    };
+    const db = {
+        collection: (name: string) =>
+            name === "gameEvents" ? eventCollection : profiles,
+        client: {
+            startSession: () => ({
+                withTransaction: async (op: () => Promise<unknown>) => op(),
+                endSession: async () => {},
+            }),
+        },
+    };
+    const store = new UnifiedCharacterStore(db as any, new EventBus());
+
+    const first = await store.awardProgressionXp(
+        42,
+        100,
+        "casino_blackjack_win",
+        "blackjack:round-1:42",
+    );
+    assert.equal(first.applied, true);
+    assert.equal(first.duplicate, false);
+    assert.equal(first.totalXp, 100);
+    assert.equal(first.level, 1);
+    assert.equal(first.leveledUp, true);
+
+    // Retrying the same reward key must be a safe no-op.
+    const retry = await store.awardProgressionXp(
+        42,
+        100,
+        "casino_blackjack_win",
+        "blackjack:round-1:42",
+    );
+    assert.equal(retry.applied, false);
+    assert.equal(retry.duplicate, true);
+    assert.equal(retry.totalXp, 100);
+
+    const view = await store.getProgressionView(42);
+    assert.equal(view.totalXp, 100);
+    assert.equal(view.level, 1);
+
+    const rollback = await store.rollbackProgressionXp(
+        42,
+        "blackjack:round-1:42",
+    );
+    assert.equal(rollback.applied, true);
+    assert.equal(rollback.totalXp, 0);
+    assert.equal(rollback.level, 0);
+
+    // Rolling back a reward that was never granted (or already rolled back)
+    // is a safe no-op.
+    const missingRollback = await store.rollbackProgressionXp(42, "unknown");
+    assert.equal(missingRollback.applied, false);
+
+    assert.ok(events.some((event) => event.type === "progression_xp_awarded"));
+    assert.ok(events.some((event) => event.type === "progression_level_up"));
+    assert.ok(events.some((event) => event.type === "progression_xp_rollback"));
 });

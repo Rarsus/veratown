@@ -18,6 +18,7 @@ import {
     VeratownState,
     CrossSystemState,
     CharacterBio,
+    ProgressionState,
 } from "./unifiedCharacterTypes";
 
 export type Timestamp = number & { readonly __brand: "Timestamp" };
@@ -61,6 +62,7 @@ export const SCHEMA_TYPE_SPECS = {
         "veratown.lastPositionAt",
         "veratown.lastAppearanceAt",
         "crossSystem.updatedAt",
+        "progression.updatedAt",
     ],
 
     // Version fields: Should be stored as int32
@@ -70,6 +72,7 @@ export const SCHEMA_TYPE_SPECS = {
         "casino.version",
         "dare.version",
         "veratown.version",
+        "progression.version",
     ],
 
     // Integer counters: Should be stored as int32
@@ -87,6 +90,8 @@ export const SCHEMA_TYPE_SPECS = {
         "dare.totalDaresComplayed",
         "veratown.totalTimeInCages",
         "veratown.totalTimeInKennels",
+        "progression.level",
+        "progression.totalXp",
     ],
 };
 
@@ -350,6 +355,24 @@ export function createCrossSystemState(
         bondageLevel: 0,
         features: {},
         relationships: {},
+        updatedAt: asTimestamp(Date.now()),
+        ...overrides,
+    };
+}
+
+/**
+ * Creates a properly typed ProgressionState object (Phase 2A.7) with correct
+ * timestamp handling. Used both for brand-new profiles and to backfill
+ * existing profiles created before progression tracking was introduced.
+ */
+export function createProgressionState(
+    overrides: Partial<ProgressionState> = {},
+): ProgressionState {
+    return {
+        level: 0,
+        totalXp: 0,
+        claimedRewards: [],
+        version: 0,
         updatedAt: asTimestamp(Date.now()),
         ...overrides,
     };

@@ -23,6 +23,9 @@ import {
     CasinoView,
     DareView,
     VeratownView,
+    ProgressionView,
+    ProgressionAwardResult,
+    ProgressionRollbackResult,
     RoleplayFlags,
     KeypadAccessRecord,
     SuspendedGame,
@@ -37,9 +40,15 @@ import {
     createVeratownState,
     createCrossSystemState,
     createCharacterBio,
+    createProgressionState,
     asTimestamp,
     asVersion,
 } from "./mongodbTypeValidation";
+import {
+    computeLevelForXp,
+    computeProgressionSummary,
+    deriveEventSourceFromRewardSource,
+} from "./progressionRules";
 
 /**
  * Unified character state store with system-specific views and cross-system events.
@@ -256,6 +265,19 @@ export class UnifiedCharacterStore {
 
         let profile = await this.profiles.findOne({ _id: memberNumber });
         if (profile) {
+            if (!profile.progression) {
+                // Phase 2A.7 migration/backfill: profiles created before
+                // progression tracking existed are missing this field.
+                // Persist a default state once so subsequent reads and
+                // writes see a consistent, authoritative document without
+                // disturbing any other existing state or version counters.
+                const progression = createProgressionState();
+                await this.profiles.updateOne(
+                    { _id: memberNumber },
+                    { $set: { progression } },
+                );
+                profile = { ...profile, progression };
+            }
             return profile;
         }
 
@@ -269,6 +291,7 @@ export class UnifiedCharacterStore {
             casino: createCasinoState(),
             dare: createDareState(),
             veratown: createVeratownState(),
+            progression: createProgressionState(),
             crossSystem: createCrossSystemState(),
             lastAccessedAt: now,
             updatedAt: now,
@@ -367,6 +390,235 @@ export class UnifiedCharacterStore {
                 $inc: { version: 1 },
             },
         );
+    }
+
+    // ===== PROGRESSION SYSTEM INTERFACE (Phase 2A.7)
+
+    /**
+     * Get the progression view of a character's profile, used for bio
+     * presentation and access-control decisions elsewhere in the codebase.
+     * Level and XP-into-level are always recomputed from `totalXp` using the
+     * deterministic rules in progressionRules.ts, so the view self-heals even
+     * if the persisted `level` field ever drifts.
+     */
+    public async getProgressionView(
+        memberNumber: number,
+    ): Promise<ProgressionView> {
+        const profile = await this.getProfile(memberNumber);
+        const summary = computeProgressionSummary(profile.progression.totalXp);
+        return {
+            memberNumber: profile._id,
+            name: profile.name,
+            level: summary.level,
+            totalXp: profile.progression.totalXp,
+            xpIntoLevel: summary.xpIntoLevel,
+            xpForNextLevel: summary.xpForNextLevel,
+            updatedAt: profile.progression.updatedAt,
+        };
+    }
+
+    /**
+     * Grants progression XP for a documented reward `source`, keyed by a
+     * caller-supplied `rewardKey` that uniquely identifies the outcome that
+     * earned the reward (e.g. a specific blackjack round). The grant is only
+     * applied if `rewardKey` has not already been recorded, so retrying this
+     * call after a transient failure can never award the same reward twice.
+     */
+    public async awardProgressionXp(
+        memberNumber: number,
+        amount: number,
+        source: string,
+        rewardKey: string,
+        actor?: number,
+    ): Promise<ProgressionAwardResult> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        const previousLevel = profile.progression.level;
+        const now = asTimestamp(Date.now());
+
+        const updated = await this.profiles.findOneAndUpdate(
+            {
+                _id: memberNumber,
+                "progression.claimedRewards.rewardKey": { $ne: rewardKey },
+            },
+            {
+                $addToSet: {
+                    "progression.claimedRewards": {
+                        rewardKey,
+                        source,
+                        amount,
+                        awardedAt: now,
+                    },
+                },
+                $inc: {
+                    "progression.totalXp": amount,
+                    "progression.version": 1,
+                    version: 1,
+                },
+                $set: {
+                    "progression.updatedAt": now,
+                    updatedAt: now,
+                    lastAccessedAt: now,
+                },
+            },
+            { returnDocument: "after" },
+        );
+
+        if (!updated) {
+            // rewardKey already claimed: no-op so retries stay idempotent.
+            return {
+                applied: false,
+                duplicate: true,
+                totalXp: profile.progression.totalXp,
+                level: previousLevel,
+                leveledUp: false,
+            };
+        }
+
+        const newLevel = computeLevelForXp(updated.progression.totalXp);
+        const leveledUp = newLevel !== previousLevel;
+        if (leveledUp) {
+            await this.profiles.updateOne(
+                { _id: memberNumber },
+                { $set: { "progression.level": newLevel } },
+            );
+        }
+
+        const eventSource = deriveEventSourceFromRewardSource(source);
+        const xpEvent: GameEvent = {
+            timestamp: now,
+            type: "progression_xp_awarded",
+            source: eventSource,
+            actor: actor ?? memberNumber,
+            target: memberNumber,
+            data: {
+                source,
+                amount,
+                rewardKey,
+                totalXp: updated.progression.totalXp,
+                level: newLevel,
+            },
+            processed: false,
+        };
+        await this.recordEvent(xpEvent);
+        await this.eventBus.publish(xpEvent);
+
+        if (leveledUp) {
+            const levelEvent: GameEvent = {
+                timestamp: now,
+                type: "progression_level_up",
+                source: eventSource,
+                actor: actor ?? memberNumber,
+                target: memberNumber,
+                data: {
+                    previousLevel,
+                    level: newLevel,
+                    totalXp: updated.progression.totalXp,
+                },
+                processed: false,
+            };
+            await this.recordEvent(levelEvent);
+            await this.eventBus.publish(levelEvent);
+        }
+
+        return {
+            applied: true,
+            duplicate: false,
+            totalXp: updated.progression.totalXp,
+            level: newLevel,
+            leveledUp,
+        };
+    }
+
+    /**
+     * Reverses a previously granted progression reward, identified by the
+     * same `rewardKey` used to grant it (e.g. when a game outcome is voided
+     * after the fact). No-ops if the reward was never granted or was already
+     * rolled back.
+     */
+    public async rollbackProgressionXp(
+        memberNumber: number,
+        rewardKey: string,
+        actor?: number,
+    ): Promise<ProgressionRollbackResult> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        const record = profile.progression.claimedRewards.find(
+            (reward) => reward.rewardKey === rewardKey,
+        );
+        if (!record) {
+            return {
+                applied: false,
+                totalXp: profile.progression.totalXp,
+                level: profile.progression.level,
+            };
+        }
+
+        const now = asTimestamp(Date.now());
+        const updated = await this.profiles.findOneAndUpdate(
+            {
+                _id: memberNumber,
+                "progression.claimedRewards.rewardKey": rewardKey,
+            },
+            {
+                $pull: { "progression.claimedRewards": { rewardKey } },
+                $inc: {
+                    "progression.totalXp": -record.amount,
+                    "progression.version": 1,
+                    version: 1,
+                },
+                $set: {
+                    "progression.updatedAt": now,
+                    updatedAt: now,
+                    lastAccessedAt: now,
+                },
+            },
+            { returnDocument: "after" },
+        );
+
+        if (!updated) {
+            return {
+                applied: false,
+                totalXp: profile.progression.totalXp,
+                level: profile.progression.level,
+            };
+        }
+
+        const clampedXp = Math.max(0, updated.progression.totalXp);
+        const newLevel = computeLevelForXp(clampedXp);
+        if (
+            clampedXp !== updated.progression.totalXp ||
+            newLevel !== updated.progression.level
+        ) {
+            await this.profiles.updateOne(
+                { _id: memberNumber },
+                {
+                    $set: {
+                        "progression.totalXp": clampedXp,
+                        "progression.level": newLevel,
+                    },
+                },
+            );
+        }
+
+        const rollbackEvent: GameEvent = {
+            timestamp: now,
+            type: "progression_xp_rollback",
+            source: deriveEventSourceFromRewardSource(record.source),
+            actor: actor ?? memberNumber,
+            target: memberNumber,
+            data: {
+                rewardKey,
+                amount: record.amount,
+                totalXp: clampedXp,
+                level: newLevel,
+            },
+            processed: false,
+        };
+        await this.recordEvent(rollbackEvent);
+        await this.eventBus.publish(rollbackEvent);
+
+        return { applied: true, totalXp: clampedXp, level: newLevel };
     }
 
     /**

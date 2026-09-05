@@ -336,6 +336,7 @@ function createMockCasino(
     const events: any[] = [];
     const deductCalls: any[] = [];
     const awardChipsCalls: any[] = [];
+    const progressionXpCalls: any[] = [];
     const gameProgressUpdates: any[] = [];
 
     const unifiedStore = {
@@ -373,6 +374,28 @@ function createMockCasino(
             const prof = await unifiedStore.getProfile(memberNumber);
             prof.casino.chips += amount;
         },
+        awardProgressionXp: async (
+            memberNumber: number,
+            amount: number,
+            source: string,
+            rewardKey: string,
+            actor?: number,
+        ) => {
+            progressionXpCalls.push({
+                memberNumber,
+                amount,
+                source,
+                rewardKey,
+                actor,
+            });
+            return {
+                applied: true,
+                duplicate: false,
+                totalXp: amount,
+                level: 0,
+                leveledUp: false,
+            };
+        },
         recordEvent: async (evt: any) => {
             events.push(evt);
         },
@@ -397,6 +420,7 @@ function createMockCasino(
         events,
         deductCalls,
         awardChipsCalls,
+        progressionXpCalls,
         gameProgressUpdates,
         getUnifiedStore: () => unifiedStore,
         getMutationService: () => mutationService,

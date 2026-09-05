@@ -173,6 +173,38 @@ export interface VeratownState {
     updatedAt: number;
 }
 
+// ===== PROGRESSION STATE (Phase 2A.7)
+export interface ProgressionRewardRecord {
+    rewardKey: string;
+    source: string;
+    amount: number;
+    awardedAt: number;
+}
+
+export interface ProgressionState {
+    level: number;
+    totalXp: number;
+    // Reward keys already applied. Used to guarantee rewards cannot be
+    // duplicated when a mutation is retried after a transient failure.
+    claimedRewards: ProgressionRewardRecord[];
+    updatedAt: number;
+    version: number;
+}
+
+export interface ProgressionAwardResult {
+    applied: boolean;
+    duplicate: boolean;
+    totalXp: number;
+    level: number;
+    leveledUp: boolean;
+}
+
+export interface ProgressionRollbackResult {
+    applied: boolean;
+    totalXp: number;
+    level: number;
+}
+
 // ===== CROSS-SYSTEM STATE
 export interface CrossSystemState {
     recentEvents: GameEvent[];
@@ -215,6 +247,9 @@ export interface UnifiedCharacterProfile {
     casino: CasinoState;
     dare: DareState;
     veratown: VeratownState;
+
+    // Authoritative character progression (Phase 2A.7), shared across systems
+    progression: ProgressionState;
 
     // Cross-system state
     crossSystem: CrossSystemState;
@@ -264,7 +299,10 @@ export interface GameEvent {
         | "location_exited"
         | "character_frozen"
         | "character_unfrozen"
-        | "audit_trail"; // Phase 3.4: Generic audit trail event
+        | "audit_trail" // Phase 3.4: Generic audit trail event
+        | "progression_xp_awarded" // Phase 2A.7: XP granted toward character progression
+        | "progression_level_up" // Phase 2A.7: Character crossed a level threshold
+        | "progression_xp_rollback"; // Phase 2A.7: A previously granted reward was reversed
     source: "casino" | "dare" | "veratown" | "admin";
     actor: number; // memberNumber of who caused this
     target: number; // memberNumber affected
@@ -299,6 +337,17 @@ export interface DareView {
     totalGamesPlayed: number;
     // Phase 3: Game suspension
     suspendedGames?: number[];
+}
+
+// ===== PROGRESSION VIEW (What Bio/access-control systems see)
+export interface ProgressionView {
+    memberNumber: number;
+    name: string;
+    level: number;
+    totalXp: number;
+    xpIntoLevel: number;
+    xpForNextLevel: number;
+    updatedAt: number;
 }
 
 // ===== VERATOWN VIEW (What Veratown system sees)

@@ -18,6 +18,8 @@ import {
     MutationInventoryItem,
     VeratownState,
     CharacterBioUpdate,
+    ProgressionAwardResult,
+    ProgressionRollbackResult,
 } from "./unifiedCharacterTypes";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
@@ -155,6 +157,18 @@ export interface GameStateMutationService {
         context: Record<string, unknown>,
         actor?: number,
     ): Promise<void>;
+    awardProgressionXp(
+        memberNumber: number,
+        amount: number,
+        source: string,
+        rewardKey: string,
+        actor?: number,
+    ): Promise<ProgressionAwardResult>;
+    rollbackProgressionXp(
+        memberNumber: number,
+        rewardKey: string,
+        actor?: number,
+    ): Promise<ProgressionRollbackResult>;
 }
 
 type MutationStore = Pick<
@@ -180,6 +194,8 @@ type MutationStore = Pick<
     | "recordEvent"
     | "withTransaction"
     | "transferChipsAtomically"
+    | "awardProgressionXp"
+    | "rollbackProgressionXp"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -473,6 +489,67 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                     actor,
                 ),
             );
+    }
+
+    public async awardProgressionXp(
+        memberNumber: number,
+        amount: number,
+        source: string,
+        rewardKey: string,
+        actor = memberNumber,
+    ): Promise<ProgressionAwardResult> {
+        this.validateMember(memberNumber);
+        this.validatePositiveIntegerAmount(amount);
+        if (!source)
+            throw new ValidationError("source is required", {
+                field: "source",
+            });
+        if (!rewardKey)
+            throw new ValidationError("rewardKey is required", {
+                field: "rewardKey",
+            });
+        return this.withRetry(async () => {
+            const result = await this.unifiedStore.awardProgressionXp(
+                memberNumber,
+                amount,
+                source,
+                rewardKey,
+                actor,
+            );
+            await this.auditAfterMutation(
+                memberNumber,
+                "awardProgressionXp",
+                { amount, source, rewardKey, ...result },
+                actor,
+            );
+            return result;
+        }, "awardProgressionXp");
+    }
+
+    public async rollbackProgressionXp(
+        memberNumber: number,
+        rewardKey: string,
+        actor = memberNumber,
+    ): Promise<ProgressionRollbackResult> {
+        this.validateMember(memberNumber);
+        if (!rewardKey)
+            throw new ValidationError("rewardKey is required", {
+                field: "rewardKey",
+            });
+        return this.withRetry(async () => {
+            const result = await this.unifiedStore.rollbackProgressionXp(
+                memberNumber,
+                rewardKey,
+                actor,
+            );
+            await this.auditAfterMutation(
+                memberNumber,
+                "rollbackProgressionXp",
+                { rewardKey, ...result },
+                actor,
+            );
+            return result;
+        }, "rollbackProgressionXp");
     }
 
     public async claimDailyFreeChips(

@@ -30,6 +30,7 @@ import { GameTimer } from "./gameTimer";
 import { CommandValidator } from "../shared/commandValidator";
 
 import { createLogger } from "../../logging";
+import { getXpRewardForSource } from "../shared/progressionRules";
 
 const ROULETTECOMMANDMESSAGE = `
 Available commands:
@@ -901,6 +902,17 @@ export class RouletteGame implements Game {
                         bet.memberNumber,
                         effectiveWinnings,
                         "roulette_win",
+                        bet.memberNumber,
+                    );
+                // Phase 2A.7: Award progression XP, keyed by round so
+                // retried settlements never grant duplicate XP.
+                await this.casino
+                    .getMutationService()
+                    .awardProgressionXp(
+                        bet.memberNumber,
+                        getXpRewardForSource("casino_roulette_win"),
+                        "casino_roulette_win",
+                        `roulette:${this.currentRoundId}:${bet.memberNumber}`,
                         bet.memberNumber,
                     );
 
