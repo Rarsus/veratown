@@ -95,7 +95,7 @@ export interface GamePlugin {
      *
      * The router abstracts away the distinction between /bot and ! syntax:
      * - registerCommand("play", handler) responds to both `/bot {key} play` and `!{key} play`
-     * - registerGroup("dare", {join, leave}) responds to both syntaxes for each subcommand
+     * - registerRoot(handler) responds to `/bot {key} <subcommand>` and `!{key} <subcommand>`
      *
      * All commands are automatically scoped to this plugin's key.
      *
@@ -104,11 +104,7 @@ export interface GamePlugin {
      * @example
      * registerCommands(router) {
      *   router.registerCommand("play", this.onPlay);
-     *   router.registerGroup("dare", {
-     *     join: this.onDareJoin,
-     *     leave: this.onDareLeave,
-     *     start: this.onDareStart,
-     *   });
+     *   router.registerRoot(this.onDare);
      * }
      */
     registerCommands(router: GamePluginCommandRouter): void;
@@ -181,6 +177,15 @@ export interface GamePlugin {
  */
 export interface GamePluginCommandRouter {
     /**
+     * Register the command at this plugin's root.
+     *
+     * @example
+     * // Responds to: /bot dare <subcommand>, !dare <subcommand>
+     * router.registerRoot(async (sender, msg, args) => {...});
+     */
+    registerRoot(handler: GamePluginCommandHandler): void;
+
+    /**
      * Register a single command that responds to both /bot and ! syntax.
      *
      * The plugin's key is automatically prepended to the command namespace.
@@ -196,16 +201,16 @@ export interface GamePluginCommandRouter {
     registerCommand(name: string, handler: GamePluginCommandHandler): void;
 
     /**
-     * Register a group of related sub-commands (e.g., dare join, dare leave, dare start).
+     * Register a nested group of related sub-commands.
      *
      * All sub-commands are automatically scoped to the plugin's key.
      *
-     * @param groupName Group name (e.g., "dare", "roulette")
+     * @param groupName Group name (e.g., "lobby", "roulette")
      * @param subcommands Object mapping sub-command names to their handlers
      *
      * @example
-     * // Responds to: /bot dare join, /bot dare leave, /bot dare start, !dare join, etc.
-     * router.registerGroup("dare", {
+     * // Responds to: /bot dare lobby join, /bot dare lobby leave, etc.
+     * router.registerGroup("lobby", {
      *   join: async (sender, msg, args) => {...},
      *   leave: async (sender, msg, args) => {...},
      *   start: async (sender, msg, args) => {...},

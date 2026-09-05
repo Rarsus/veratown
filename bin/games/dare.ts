@@ -40,6 +40,7 @@ import { VeratownFeatureSystem, guardHandler } from "./veratown/featureSystem";
 import { VeratownLocationDoc } from "./veratown/veratownLocationStore";
 import { createLogger } from "../logging";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
+import { GamePluginCommandRouterImpl } from "./shared/gamePluginCommandRouter";
 import { GamePluginMessageFeatureSystem } from "./shared/gamePluginMessageFeatureSystem";
 
 // Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
@@ -327,6 +328,11 @@ Game Overview
                 );
             },
         );
+        if (this.commandParser) {
+            this.registerCommands(
+                new GamePluginCommandRouterImpl(this.commandParser, this.key),
+            );
+        }
 
         this.ready = this.loadState().catch((e) => {
             this.logger.error("Failed to load persisted state", { error: e });
@@ -355,41 +361,9 @@ Game Overview
      * Called during Veratown plugin initialization.
      */
     public registerCommands(router: GamePluginCommandRouter): void {
-        router.registerGroup("dare", {
-            join: this.routeDareCommand("join"),
-            leave: this.routeDareCommand("leave"),
-            start: this.routeDareCommand("start"),
-            turn: this.routeDareCommand("turn"),
-            draw: this.routeDareCommand("draw"),
-            pass: this.routeDareCommand("pass"),
-            forfeit: this.routeDareCommand("forfeit"),
-            players: this.routeDareCommand("players"),
-            remove: this.routeDareCommand("remove"),
-            stop: this.routeDareCommand("stop"),
-            add: this.routeDareCommand("add"),
-            list: this.routeDareCommand("list"),
-            reset: this.routeDareCommand("reset"),
-            validate: this.routeDareCommand("validate"),
-            balancerewards: this.routeDareCommand("balancerewards"),
-            help: this.routeDareCommand("help"),
-        });
+        router.registerRoot(this.onDare);
         router.registerCommand("pick", this.routePickCommand);
     }
-
-    private routeDareCommand =
-        (command: string) =>
-        async (
-            sender: API_Character,
-            msg: BC_Server_ChatRoomMessage,
-            args: string[],
-        ): Promise<void> => {
-            await this.messageFeatureSystem.processCommand(
-                sender,
-                msg,
-                command,
-                args,
-            );
-        };
 
     private routePickCommand = async (
         sender: API_Character,
