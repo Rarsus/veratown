@@ -7,6 +7,7 @@ import {
 import { ValidationError } from "./errors";
 import { ConfigFile } from "./config";
 import { formatWhisperContent, normalizeWhisperContent } from "bc-bot";
+import { waitForConnectionStability } from "./botConnections";
 
 function config(overrides: Partial<ConfigFile>): ConfigFile {
     return {
@@ -82,3 +83,72 @@ test("map whispers use a transport wrapper around clean content", () => {
     assert.equal(content.slice(1, -1).includes("("), false);
     assert.equal(content.slice(1, -1).includes(")"), false);
 });
+
+test("connection readiness waits for the connector event instead of polling", async () => {
+    const connection = Object.assign(createConnection(), {
+        isConnected: () => false,
+        Player: { Name: "test-bot" },
+    });
+    const waiting = waitForConnectionStability(connection as never, 100);
+    connection.emit("Connected");
+    connection.emit("Connected");
+    await waiting;
+});
+
+test("connection readiness supports timeout and cancellation", async () => {
+    const connection = Object.assign(createConnection(), {
+        isConnected: () => false,
+        Player: { Name: "test-bot" },
+    });
+    const log = console.log;
+    console.log = () => {};
+    try {
+        await waitForConnectionStability(connection as never, 1);
+    } finally {
+        console.log = log;
+    }
+
+    const controller = new AbortController();
+    const cancelled = waitForConnectionStability(
+        connection as never,
+        1000,
+        controller.signal,
+    );
+    controller.abort();
+    await cancelled.then(
+        () => assert.fail("connection wait should be cancelled"),
+        (error: unknown) => {
+            assert.equal((error as Error).name, "AbortError");
+        },
+    );
+});
+
+function createConnection() {
+    const listeners = new Map<string, Set<() => void>>();
+    const onceListeners = new Map<string, Set<() => void>>();
+    return {
+        isConnected: () => false,
+        once: (event: string, listener: () => void) => {
+            const eventListeners = listeners.get(event) ?? new Set();
+            eventListeners.add(listener);
+            listeners.set(event, eventListeners);
+            const eventOnceListeners = onceListeners.get(event) ?? new Set();
+            eventOnceListeners.add(listener);
+            onceListeners.set(event, eventOnceListeners);
+        },
+        off: (event: string, listener: () => void) => {
+            listeners.get(event)?.delete(listener);
+            onceListeners.get(event)?.delete(listener);
+        },
+        emit: (event: string) => {
+            const eventListeners = listeners.get(event) ?? new Set();
+            const eventOnceListeners = onceListeners.get(event) ?? new Set();
+            for (const listener of [...eventListeners]) {
+                if (eventOnceListeners.delete(listener)) {
+                    eventListeners.delete(listener);
+                }
+                listener();
+            }
+        },
+    };
+}

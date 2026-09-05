@@ -70,36 +70,62 @@ async function connectBotAccount(
 
 /**
  * Wait for a connection to be stable and ready for operations.
- * Checks that the connection is actively connected and has received
- * at least one room update message.
+ * Resolves from the connector's connection event, with a bounded fallback.
  */
-async function waitForConnectionStability(
+export async function waitForConnectionStability(
     connection: API_Connector,
     maxWaitMs: number = 5000,
+    signal?: AbortSignal,
 ): Promise<void> {
     const logger = createLogger("BotConnection");
-    const startTime = Date.now();
     const botName = connection.Player?.Name || "<unknown>";
 
-    while (Date.now() - startTime < maxWaitMs) {
-        try {
-            // Check if connection is alive
-            if (!(connection as any).socket?.connected) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                continue;
-            }
-
-            // Connection is stable
-            logger.debug("Connection stable", { bot: botName });
-            return;
-        } catch {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+    if (connection.isConnected()) {
+        logger.debug("Connection stable", { bot: botName });
+        return;
     }
 
-    logger.warn("Connection did not stabilize in time, proceeding anyway", {
-        bot: botName,
-        maxWaitMs,
+    await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const cleanup = () => {
+            clearTimeout(timeout);
+            connection.off("Connected", onConnected);
+            signal?.removeEventListener("abort", onAbort);
+        };
+        const settle = (callback: () => void) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback();
+        };
+        const onConnected = () => {
+            logger.debug("Connection stable", { bot: botName });
+            settle(resolve);
+        };
+        const onAbort = () =>
+            settle(() =>
+                reject(
+                    Object.assign(new Error("Connection wait cancelled"), {
+                        name: "AbortError",
+                    }),
+                ),
+            );
+        const timeout = setTimeout(
+            () =>
+                settle(() => {
+                    logger.warn(
+                        "Connection did not stabilize in time, proceeding anyway",
+                        { bot: botName, maxWaitMs },
+                    );
+                    resolve();
+                }),
+            maxWaitMs,
+        );
+
+        connection.once("Connected", onConnected);
+        signal?.addEventListener("abort", onAbort, { once: true });
+        if (signal?.aborted) onAbort();
+        else if (connection.isConnected()) onConnected();
     });
 }
 
