@@ -200,6 +200,7 @@ export class Casino implements GamePlugin {
             },
             async () => {},
         );
+        this.commandParser.register("game", this.routeCasinoCommand("game"));
 
         // Register game-specific commands (separate from constructor to follow plugin architecture)
         this.game.registerCommands(this.commandParser!);
@@ -380,22 +381,17 @@ export class Casino implements GamePlugin {
      * Called during Veratown plugin initialization.
      */
     public registerCommands(router: GamePluginCommandRouter): void {
-        router.registerGroup("casino", {
-            help: this.routeCasinoCommand("help"),
-            forfeits: this.routeCasinoCommand("forfeits"),
-            commands: this.routeCasinoCommand("commands"),
-            chips: this.routeCasinoCommand("chips"),
-            addfriend: this.routeCasinoCommand("addfriend"),
-            remove: this.routeCasinoCommand("remove"),
-            buy: this.routeCasinoCommand("buy"),
-            vouchers: this.routeCasinoCommand("vouchers"),
-            give: this.routeCasinoCommand("give"),
-            grant: this.routeCasinoCommand("grant"),
-            close: this.routeCasinoCommand("close"),
-            open: this.routeCasinoCommand("open"),
-            bonus: this.routeCasinoCommand("bonus"),
-            game: this.routeCasinoCommand("game"),
-            escape: this.routeCasinoCommand("escape"),
+        router.registerRoot(async (sender, msg, args) => {
+            const command = args[0]?.toLowerCase();
+            if (!command) return;
+            if (
+                !Object.prototype.hasOwnProperty.call(
+                    this.casinoCommandHandlers,
+                    command,
+                )
+            )
+                return;
+            await this.routeCasinoCommand(command)(sender, msg, args.slice(1));
         });
     }
 
@@ -1221,6 +1217,7 @@ ${forfeitsString()}
             );
             await this.game.endGame();
             this.game = new RouletteGame(this.conn, this);
+            this.game.registerCommands(this.commandParser!);
             this.conn.reply(msg, "Switched to roulette.");
             this.conn.SendMessage(
                 "Chat",
@@ -1236,6 +1233,7 @@ ${forfeitsString()}
             );
             await this.game.endGame();
             this.game = new BlackjackGame(this.conn, this);
+            this.game.registerCommands(this.commandParser!);
             this.conn.reply(msg, "Switched to blackjack.");
             this.conn.SendMessage(
                 "Chat",
