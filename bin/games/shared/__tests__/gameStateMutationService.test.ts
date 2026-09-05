@@ -11,7 +11,10 @@ function createStore() {
         version: 0,
         casino: { chips: 100, recentWinnings: 0 },
         dare: { activeBondage: [] },
-        veratown: { cageIncarcerations: [] },
+        veratown: {
+            cageIncarcerations: [] as any[],
+            kennelSessions: [] as any[],
+        },
         crossSystem: { inventory: [] as any[], effects: [], bondageLevel: 0 },
     };
     return {
@@ -27,6 +30,54 @@ function createStore() {
         unlockChips: async () => calls.push("unlock"),
         applyBondage: async () => calls.push("bondage"),
         removeBondage: async () => calls.push("remove"),
+        recordCageEntry: async (
+            _member: number,
+            cageName: string,
+            duration: number,
+            actor: number,
+        ) => {
+            if (
+                profile.veratown.cageIncarcerations.some(
+                    (session: any) => !session.releasedAt,
+                )
+            ) {
+                return false;
+            }
+            profile.veratown.cageIncarcerations.push({
+                cageName,
+                duration,
+                enteredAt: Date.now(),
+                detailedBy: actor,
+            });
+            calls.push("cage-entry");
+            return true;
+        },
+        recordCageExit: async () => {
+            const session = profile.veratown.cageIncarcerations.find(
+                (candidate: any) => !candidate.releasedAt,
+            );
+            if (!session) return false;
+            session.releasedAt = Date.now();
+            calls.push("cage-exit");
+            return true;
+        },
+        recordKennelEntry: async () => {
+            const sessions = profile.veratown.kennelSessions;
+            if (sessions.some((session: any) => !session.releasedAt))
+                return false;
+            sessions.push({ enteredAt: Date.now(), totalTime: 0 });
+            calls.push("kennel-entry");
+            return true;
+        },
+        recordKennelExit: async () => {
+            const session = profile.veratown.kennelSessions.find(
+                (candidate: any) => !candidate.releasedAt,
+            );
+            if (!session) return false;
+            session.releasedAt = Date.now();
+            calls.push("kennel-exit");
+            return true;
+        },
         getProfile: async () => profile,
         updateDareStats: async () => calls.push("dare"),
         updateVeratownStats: async () => calls.push("veratown"),
@@ -188,22 +239,55 @@ test("GameStateMutationService delegates chip transfers and audits them", async 
     ]);
 });
 
-test("GameStateMutationService emits cage events", async () => {
+test("GameStateMutationService records idempotent cage and kennel sessions", async () => {
     const store = createStore();
-    const events: string[] = [];
-    const eventBus = new EventBus();
-    eventBus.subscribe("cage_entry", async (event) => {
-        events.push(event.type);
-    });
-    eventBus.subscribe("cage_exit", async (event) => {
-        events.push(event.type);
-    });
-    const service = new GameStateMutationServiceImpl(store as any, eventBus);
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
 
-    await service.enterCage(1, "cell", 1000);
-    await service.exitCage(1);
+    assert.equal(await service.enterCage(1, "cell", 1000, 99), true);
+    assert.equal(await service.enterCage(1, "cell", 1000, 99), false);
+    assert.equal(await service.exitCage(1, 99), true);
+    assert.equal(await service.exitCage(1, 99), false);
+    assert.equal(await service.enterKennel(1, 99), true);
+    assert.equal(await service.enterKennel(1, 99), false);
+    assert.equal(await service.exitKennel(1, 99), true);
+    assert.equal(await service.exitKennel(1, 99), false);
 
-    assert.deepEqual(events, ["cage_entry", "cage_exit"]);
+    assert.deepEqual(
+        store.calls.filter((call) =>
+            ["cage-entry", "cage-exit", "kennel-entry", "kennel-exit"].includes(
+                call,
+            ),
+        ),
+        ["cage-entry", "cage-exit", "kennel-entry", "kennel-exit"],
+    );
+    assert.deepEqual(
+        store.calls.filter((call) => call.startsWith("audit:")),
+        [
+            "audit:enterCage",
+            "audit:exitCage",
+            "audit:enterKennel",
+            "audit:exitKennel",
+        ],
+    );
+});
+
+test("GameStateMutationService does not audit failed containment persistence", async () => {
+    const store = createStore();
+    store.recordKennelEntry = async () => {
+        throw new Error("database unavailable");
+    };
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    await assert.rejects(() => service.enterKennel(1), {
+        code: "DATABASE_ERROR",
+    });
+    assert.ok(!store.calls.includes("audit:enterKennel"));
 });
 
 test("GameStateMutationService validates mutation inputs", async () => {

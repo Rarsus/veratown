@@ -96,6 +96,7 @@ export interface CageSession {
     enteredAt: number;
     releasedAt?: number;
     duration: number;
+    expiresAt?: number;
     cageName: string;
     detailedBy?: number; // memberNumber
 }
@@ -104,6 +105,7 @@ export interface KennelSession {
     enteredAt: number;
     releasedAt?: number;
     totalTime: number;
+    detailedBy?: number;
 }
 
 export interface CurrentRestraint {
@@ -385,6 +387,10 @@ export interface VeratownView {
     lastPosition?: ChatRoomMapPos;
     currentAppearance?: BC_AppearanceItem[];
     currentRestraints: CurrentRestraint[];
+    cageIncarcerations: CageSession[];
+    kennelSessions: KennelSession[];
+    totalTimeInCages: number;
+    totalTimeInKennels: number;
     releaseParoleState?: ReleaseParoleState;
     roles: string[];
     auditLog: AuditLogEntry[];

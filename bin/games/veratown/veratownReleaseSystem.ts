@@ -574,6 +574,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     ): Promise<RemovedBondageItem[]> {
         this.logger?.info(`[ReleaseSystem] Stage 4: Stripping all items`);
 
+        await this.mutationService?.exitCage(character.MemberNumber);
+        await this.mutationService?.exitKennel(character.MemberNumber);
         const removedItems = await this.stripNonOwnerItems(character);
 
         const clothingCount = removedItems.filter((item) =>

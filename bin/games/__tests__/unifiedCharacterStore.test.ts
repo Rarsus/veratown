@@ -240,19 +240,49 @@ test("UnifiedCharacterStore - Cage entry and exit events", async (t) => {
     });
 
     // Enter cage
-    await store.recordCageEntry(666, "stocks", 60000, 777);
+    assert.strictEqual(
+        await store.recordCageEntry(666, "stocks", 60000, 777),
+        true,
+    );
+    assert.strictEqual(
+        await store.recordCageEntry(666, "stocks", 60000, 777),
+        false,
+    );
     assert.strictEqual(events.length, 1);
     assert.strictEqual(events[0].type, "cage_entry");
     assert.strictEqual(events[0].data.cageName, "stocks");
+    assert.strictEqual(events[0].data.expiresAt !== undefined, true);
 
     // Exit cage
-    await store.recordCageExit(666);
+    assert.strictEqual(await store.recordCageExit(666, 888), true);
+    assert.strictEqual(await store.recordCageExit(666, 888), false);
     assert.strictEqual(events.length, 2);
     assert.strictEqual(events[1].type, "cage_exit");
+    assert.strictEqual(events[1].actor, 888);
+
+    eventBus.subscribe("kennel_entry", async (event) => {
+        events.push(event);
+    });
+    eventBus.subscribe("kennel_exit", async (event) => {
+        events.push(event);
+    });
+    assert.strictEqual(await store.recordKennelEntry(666, 777), true);
+    assert.strictEqual(await store.recordKennelEntry(666, 777), false);
+    assert.strictEqual(await store.recordKennelExit(666, 888), true);
+    assert.strictEqual(await store.recordKennelExit(666, 888), false);
+    assert.deepStrictEqual(
+        events.slice(2).map((event) => event.type),
+        ["kennel_entry", "kennel_exit"],
+    );
 
     // Verify audit trail
     const view = await store.getVeratownView(666);
     assert.strictEqual(view.auditLog.length, 0); // recordCageEntry doesn't auto-add audit
+    assert.strictEqual(
+        view.cageIncarcerations[0].releasedAt !== undefined,
+        true,
+    );
+    assert.strictEqual(view.kennelSessions[0].releasedAt !== undefined, true);
 });
 
 test("UnifiedCharacterStore - Cross-system queries", async (t) => {

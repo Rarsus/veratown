@@ -25,6 +25,7 @@ import {
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
+import { GameStateMutationService } from "../shared/gameStateMutationService";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -64,7 +65,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
     private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
 
-    public constructor(conn: API_Connector) {
+    public constructor(
+        conn: API_Connector,
+        private readonly mutationService?: GameStateMutationService,
+    ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
         this.cageEntryTrigger = this.guardTileHandler(
@@ -221,8 +225,13 @@ export class CageSystem extends AbstractTileFeatureSystem {
     // Removes a caged character's crate immediately, regardless of the
     // lock's remaining time. No-op if the character isn't currently caged.
     // Used by Veratown's "freeandleave"/admin release flows.
-    public freeCharacterIfCaged(character: API_Character): void {
-        if (this.cagedCharacters.delete(character.MemberNumber)) {
+    public async freeCharacterIfCaged(character: API_Character): Promise<void> {
+        if (
+            character.Appearance.getItemData("ItemDevices")?.Name ===
+            "FuturisticCrate"
+        ) {
+            await this.mutationService?.exitCage(character.MemberNumber);
+            this.cagedCharacters.delete(character.MemberNumber);
             character.Appearance.RemoveItem("ItemDevices");
         }
     }
@@ -277,31 +286,45 @@ export class CageSystem extends AbstractTileFeatureSystem {
             const cageName = cage?.doc.name ?? "Unknown cage";
             const lockExpiry =
                 Date.now() + (cage?.durationMs ?? 30 * 60 * 1000);
-
-            const crate = character.Appearance.AddItem(
-                AssetGet("ItemDevices", "FuturisticCrate"),
+            const persisted = await this.mutationService?.enterCage(
+                character.MemberNumber,
+                cageName,
+                lockExpiry - Date.now(),
             );
-            crate.SetCraft({
-                Name: `Veratown Futuristic Crate`,
-                Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
-            });
-            crate.setProperty("TypeRecord", {
-                w: 2, // Big window
-                l: 3,
-                a: 3,
-                d: 1,
-                t: 1,
-                h: 4,
-            });
-            crate.setProperty("Mode", "Deny");
+            if (
+                persisted === false &&
+                character.Appearance.getItemData("ItemDevices")?.Name !==
+                    "FuturisticCrate"
+            ) {
+                return;
+            }
 
-            crate.lock("TimerPasswordPadlock", character.MemberNumber, {
-                Password: CRATE_LOCK_PASSWORD,
-                RemoveItem: true,
-                RemoveTimer: lockExpiry,
-                ShowTimer: true,
-                LockSet: true,
-            });
+            if (persisted !== false) {
+                const crate = character.Appearance.AddItem(
+                    AssetGet("ItemDevices", "FuturisticCrate"),
+                );
+                crate.SetCraft({
+                    Name: `Veratown Futuristic Crate`,
+                    Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+                });
+                crate.setProperty("TypeRecord", {
+                    w: 2, // Big window
+                    l: 3,
+                    a: 3,
+                    d: 1,
+                    t: 1,
+                    h: 4,
+                });
+                crate.setProperty("Mode", "Deny");
+
+                crate.lock("TimerPasswordPadlock", character.MemberNumber, {
+                    Password: CRATE_LOCK_PASSWORD,
+                    RemoveItem: true,
+                    RemoveTimer: lockExpiry,
+                    ShowTimer: true,
+                    LockSet: true,
+                });
+            }
             this.cagedCharacters.set(character.MemberNumber, {
                 character,
                 cageName,
@@ -328,8 +351,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 expiry = this.getCageLockExpiry(character);
             }
 
-            if (!this.cagedCharacters.delete(character.MemberNumber)) return;
-
+            if (!this.cagedCharacters.has(character.MemberNumber)) return;
+            await this.mutationService?.exitCage(character.MemberNumber);
+            this.cagedCharacters.delete(character.MemberNumber);
             character.Appearance.RemoveItem("ItemDevices");
             character.Tell(
                 "Whisper",
@@ -362,6 +386,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         for (const [memberNumber, occupant] of this.cagedCharacters) {
             if (this.getCageLockExpiry(occupant.character) === undefined) {
                 this.cagedCharacters.delete(memberNumber);
+                await this.mutationService?.exitCage(memberNumber);
             }
         }
 

@@ -23,6 +23,8 @@ import {
     CasinoView,
     DareView,
     VeratownView,
+    CageSession,
+    KennelSession,
     ProgressionView,
     ProgressionAwardResult,
     ProgressionRollbackResult,
@@ -1513,6 +1515,10 @@ export class UnifiedCharacterStore {
             lastPosition: profile.veratown.lastPosition,
             currentAppearance: profile.veratown.currentAppearance,
             currentRestraints: profile.veratown.currentRestraints,
+            cageIncarcerations: profile.veratown.cageIncarcerations ?? [],
+            kennelSessions: profile.veratown.kennelSessions ?? [],
+            totalTimeInCages: profile.veratown.totalTimeInCages ?? 0,
+            totalTimeInKennels: profile.veratown.totalTimeInKennels ?? 0,
             releaseParoleState: profile.veratown.releaseParoleState,
             roles: profile.veratown.roles,
             auditLog: profile.veratown.auditLog,
@@ -1574,24 +1580,26 @@ export class UnifiedCharacterStore {
         cageName: string,
         duration: number,
         detailedBy?: number,
-    ): Promise<void> {
+    ): Promise<boolean> {
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
+        const currentSessions = profile.veratown.cageIncarcerations ?? [];
+        if (currentSessions.some((session) => !session.releasedAt)) {
+            return false;
+        }
         const now = Date.now();
 
-        const cageSession = {
+        const cageSession: CageSession = {
             enteredAt: now,
             duration,
+            expiresAt: now + duration,
             cageName,
             detailedBy,
         };
 
         // Keep only last 10 cage sessions
-        const sessions = [
-            ...profile.veratown.cageIncarcerations,
-            cageSession,
-        ].slice(-10);
+        const sessions = [...currentSessions, cageSession].slice(-10);
 
         await this.profiles.updateOne(
             { _id: memberNumber },
@@ -1618,38 +1626,46 @@ export class UnifiedCharacterStore {
             data: {
                 cageName,
                 duration,
+                expiresAt: cageSession.expiresAt,
             },
             processed: false,
         };
 
         await this.recordEvent(event);
         await this.eventBus.publish(event);
+        return true;
     }
 
     /**
      * Record cage exit.
      * Emits cage_exit event.
      */
-    public async recordCageExit(memberNumber: number): Promise<void> {
+    public async recordCageExit(
+        memberNumber: number,
+        releasedBy = memberNumber,
+    ): Promise<boolean> {
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
 
         // Find the last incomplete cage session and mark it as released
-        const sessions = [...profile.veratown.cageIncarcerations];
-        for (let i = sessions.length - 1; i >= 0; i--) {
-            if (!sessions[i].releasedAt) {
-                sessions[i].releasedAt = now;
-                break;
-            }
-        }
+        const sessions = [...(profile.veratown.cageIncarcerations ?? [])];
+        const current = [...sessions]
+            .reverse()
+            .find((session) => !session.releasedAt);
+        if (!current) return false;
+        current.releasedAt = now;
+        current.duration = now - current.enteredAt;
 
         await this.profiles.updateOne(
             { _id: memberNumber },
             {
                 $set: {
                     "veratown.cageIncarcerations": sessions,
+                    "veratown.totalTimeInCages":
+                        (profile.veratown.totalTimeInCages ?? 0) +
+                        current.duration,
                     "veratown.updatedAt": now,
                     "veratown.version": profile.veratown.version + 1,
                     lastAccessedAt: now,
@@ -1665,14 +1681,126 @@ export class UnifiedCharacterStore {
             timestamp: now,
             type: "cage_exit",
             source: "veratown",
-            actor: memberNumber,
+            actor: releasedBy,
             target: memberNumber,
-            data: {},
+            data: {
+                cageName: current.cageName,
+                enteredAt: current.enteredAt,
+                duration: current.duration,
+            },
             processed: false,
         };
 
         await this.recordEvent(event);
         await this.eventBus.publish(event);
+        return true;
+    }
+
+    /**
+     * Record kennel entry.
+     * Emits kennel_entry event.
+     */
+    public async recordKennelEntry(
+        memberNumber: number,
+        detailedBy?: number,
+    ): Promise<boolean> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const currentSessions = profile.veratown.kennelSessions ?? [];
+        if (currentSessions.some((session) => !session.releasedAt)) {
+            return false;
+        }
+        const now = Date.now();
+        const kennelSession: KennelSession = {
+            enteredAt: now,
+            totalTime: 0,
+            detailedBy,
+        };
+        const sessions = [...currentSessions, kennelSession].slice(-10);
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "veratown.kennelSessions": sessions,
+                    "veratown.updatedAt": now,
+                    "veratown.version": profile.veratown.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        const event: GameEvent = {
+            timestamp: now,
+            type: "kennel_entry",
+            source: "veratown",
+            actor: detailedBy ?? memberNumber,
+            target: memberNumber,
+            data: { enteredAt: now },
+            processed: false,
+        };
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+        return true;
+    }
+
+    /**
+     * Record kennel release.
+     * Emits kennel_exit event.
+     */
+    public async recordKennelExit(
+        memberNumber: number,
+        releasedBy = memberNumber,
+    ): Promise<boolean> {
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+        const sessions = [...(profile.veratown.kennelSessions ?? [])];
+        const current = [...sessions]
+            .reverse()
+            .find((session) => !session.releasedAt);
+        if (!current) return false;
+        current.releasedAt = now;
+        current.totalTime = now - current.enteredAt;
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "veratown.kennelSessions": sessions,
+                    "veratown.totalTimeInKennels":
+                        (profile.veratown.totalTimeInKennels ?? 0) +
+                        current.totalTime,
+                    "veratown.updatedAt": now,
+                    "veratown.version": profile.veratown.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+
+        const event: GameEvent = {
+            timestamp: now,
+            type: "kennel_exit",
+            source: "veratown",
+            actor: releasedBy,
+            target: memberNumber,
+            data: {
+                enteredAt: current.enteredAt,
+                totalTime: current.totalTime,
+            },
+            processed: false,
+        };
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+        return true;
     }
 
     /**
