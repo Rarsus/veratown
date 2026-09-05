@@ -209,6 +209,7 @@ export interface ProgressionRollbackResult {
 export interface CrossSystemState {
     recentEvents: GameEvent[];
     inventory: MutationInventoryItem[];
+    inventoryMutationKeys: string[];
     effects: AppliedEffect[];
     bondageLevel: number;
     features: {
@@ -226,7 +227,14 @@ export interface CrossSystemState {
 export interface MutationInventoryItem {
     itemKey: string;
     quantity: number;
+    ownerMemberNumber: number;
     metadata?: Record<string, unknown>;
+}
+
+export interface InventoryMutationResult {
+    applied: boolean;
+    duplicate: boolean;
+    availableQuantity: number;
 }
 
 export interface AppliedEffect {
@@ -302,7 +310,9 @@ export interface GameEvent {
         | "audit_trail" // Phase 3.4: Generic audit trail event
         | "progression_xp_awarded" // Phase 2A.7: XP granted toward character progression
         | "progression_level_up" // Phase 2A.7: Character crossed a level threshold
-        | "progression_xp_rollback"; // Phase 2A.7: A previously granted reward was reversed
+        | "progression_xp_rollback" // Phase 2A.7: A previously granted reward was reversed
+        | "inventory_added"
+        | "inventory_removed";
     source: "casino" | "dare" | "veratown" | "admin";
     actor: number; // memberNumber of who caused this
     target: number; // memberNumber affected

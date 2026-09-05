@@ -351,6 +351,7 @@ export function createCrossSystemState(
     return {
         recentEvents: [],
         inventory: [],
+        inventoryMutationKeys: [],
         effects: [],
         bondageLevel: 0,
         features: {},
