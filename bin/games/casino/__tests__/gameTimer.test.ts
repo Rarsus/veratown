@@ -72,9 +72,9 @@ test("GameTimer: one-shot timer fires callback", async () => {
     });
 
     await wait(50);
-    timer.clear();
 
     assert.strictEqual(callCount, 1);
+    assert.strictEqual(timer.isActive(), false);
 });
 
 test("GameTimer: one-shot timer does not repeat", async () => {
@@ -86,9 +86,9 @@ test("GameTimer: one-shot timer does not repeat", async () => {
     });
 
     await wait(100);
-    timer.clear();
 
     assert.strictEqual(callCount, 1);
+    assert.strictEqual(timer.isActive(), false);
 });
 
 test("GameTimer: one-shot timer can be prevented with clear", async () => {
@@ -198,17 +198,18 @@ test("GameTimer: reset extends timer duration", async () => {
     const timer = new GameTimer();
     let callCount = 0;
 
-    // Start with 20ms timeout
-    timer.start(20, () => {
+    // Start with 100ms timeout
+    timer.start(100, () => {
         callCount++;
     });
 
-    // Reset to 100ms after 30ms (prevents firing)
+    // Reset to 50ms after 30ms (prevents the original callback)
     await wait(30);
     const initialCount = callCount;
-    timer.reset(50, () => {
+    const reset = timer.reset(50, () => {
         callCount++;
     });
+    assert.strictEqual(reset, true);
 
     // Wait for new timer to fire
     await wait(100);
@@ -379,8 +380,6 @@ test("GameTimer: Integration - Game timer lifecycle (reset timeout pattern)", as
     assert.strictEqual(timer.isActive(), true);
     await wait(50);
     assert.strictEqual(gameResetCalled, true);
-    // Note: After callback fires, timer may still be active until next event loop
-    timer.clear();
     assert.strictEqual(timer.isActive(), false);
 });
 
