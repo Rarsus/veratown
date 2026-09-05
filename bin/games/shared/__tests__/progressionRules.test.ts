@@ -72,6 +72,24 @@ test("computeProgressionSummary reports progress toward the next level", () => {
     assert.equal(zeroSummary.xpIntoLevel, 0);
 });
 
+test("progression rules clamp fractional, non-finite, and capped XP", () => {
+    assert.equal(xpRequiredForLevel(-1), 0);
+    assert.equal(
+        xpRequiredForLevel(MAX_PROGRESSION_LEVEL + 1),
+        xpRequiredForLevel(MAX_PROGRESSION_LEVEL),
+    );
+    assert.equal(computeLevelForXp(199.99), 1);
+    assert.equal(computeLevelForXp(Infinity), 0);
+    assert.deepEqual(
+        computeProgressionSummary(xpRequiredForLevel(MAX_PROGRESSION_LEVEL)),
+        {
+            level: MAX_PROGRESSION_LEVEL,
+            xpIntoLevel: 0,
+            xpForNextLevel: 0,
+        },
+    );
+});
+
 test("getXpRewardForSource returns documented rewards and defaults unknown sources to zero", () => {
     for (const [source, amount] of Object.entries(PROGRESSION_XP_REWARDS)) {
         assert.equal(getXpRewardForSource(source), amount);

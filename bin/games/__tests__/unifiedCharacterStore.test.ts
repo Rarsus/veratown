@@ -194,6 +194,56 @@ test("UnifiedCharacterStore - Bondage events", async (t) => {
     assert.strictEqual(events.length, initialLength);
 });
 
+test("UnifiedCharacterStore - chip guards and bondage lifecycle no-ops", async (t) => {
+    const db = getTestDb(t, "test_chip_and_bondage_guards");
+    if (!db) return;
+    const eventBus = new EventBus();
+    const events: GameEvent[] = [];
+    eventBus.subscribe("*", async (event) => {
+        events.push(event);
+    });
+    const store = new UnifiedCharacterStore(db, eventBus);
+    const memberNumber = 334;
+
+    await store.lockChips(memberNumber, 10, "cage", Date.now() + 1_000);
+    await store.unlockChips(memberNumber);
+    assert.equal(events.length, 0);
+
+    await store.updateChips(memberNumber, 25, "seed");
+    await store.lockChips(memberNumber, 100, "cage", Date.now() + 1_000);
+    let casino = await store.getCasinoView(memberNumber);
+    assert.equal(casino.chips, 0);
+    assert.equal(casino.lockedChips, 25);
+
+    await store.unlockChips(memberNumber, 100);
+    casino = await store.getCasinoView(memberNumber);
+    assert.equal(casino.chips, 25);
+    assert.equal(casino.lockedChips, 0);
+    await store.unlockChips(memberNumber, -1);
+    assert.equal((await store.getCasinoView(memberNumber)).chips, 25);
+
+    const lockedUntil = Date.now() + 1_000;
+    await store.applyBondage(memberNumber, "cuffs", lockedUntil, 999);
+    const dare = await store.getDareView(memberNumber);
+    assert.deepEqual(dare.activeBondage, [
+        {
+            forfeitKey: "cuffs",
+            appliedAt: dare.activeBondage[0].appliedAt,
+            lockedUntil,
+            appliedBy: 999,
+        },
+    ]);
+    await store.removeBondage(memberNumber, "cuffs");
+    assert.equal(
+        events.find((event) => event.type === "bondage_removed")?.data
+            .wasLockedUntil,
+        lockedUntil,
+    );
+    const eventCount = events.length;
+    await store.removeBondage(memberNumber, "missing");
+    assert.equal(events.length, eventCount);
+});
+
 test("UnifiedCharacterStore - Veratown view and position tracking", async (t) => {
     const db = getTestDb(t, "test_veratown");
     if (!db) return;
@@ -508,7 +558,12 @@ test("MongoDB type validation covers valid and invalid profiles", () => {
 test("UnifiedCharacterStore covers state recovery and keypad workflows", async (t) => {
     const db = getTestDb(t, "test_store_workflows");
     if (!db) return;
-    const store = new UnifiedCharacterStore(db);
+    const eventBus = new EventBus();
+    const escapeEvents: GameEvent[] = [];
+    eventBus.subscribe("escape_payment", async (event) => {
+        escapeEvents.push(event);
+    });
+    const store = new UnifiedCharacterStore(db, eventBus);
     const memberNumber = 5001;
 
     await store.getProfile(memberNumber, "Workflow Player");
@@ -546,6 +601,14 @@ test("UnifiedCharacterStore covers state recovery and keypad workflows", async (
     const escaped = await store.spendChipsToEscape(memberNumber, 20);
     assert.equal(escaped.success, true);
     assert.equal(escaped.bondageRemoved, 2);
+    assert.equal((await store.getCasinoView(memberNumber)).chips, 50);
+    assert.deepEqual((await store.getDareView(memberNumber)).activeBondage, []);
+    assert.deepEqual(escapeEvents[0].data, {
+        chipsCost: 20,
+        bondageItemsRemoved: 2,
+        previousChips: 70,
+        remainingChips: 50,
+    });
 
     await store.updatePosition(memberNumber, { X: 5, Y: 6 });
     await store.recordCageEntry(memberNumber, "stocks", 100, 2);

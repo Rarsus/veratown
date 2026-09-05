@@ -15,6 +15,7 @@ import {
 } from "../logLevels";
 import { createLogger, LoggerRegistry, type LogContext } from "../index";
 import { initializeLogging, initializeLoggingFromEnv } from "../config";
+import { DatabaseError } from "../../errors";
 
 // Test Suite: Log Levels
 describe("Log Levels", () => {
@@ -202,6 +203,17 @@ describe("LoggerRegistry", () => {
         assert.equal(typeof LoggerRegistry.getAppLogger, "function");
         assert.equal(typeof LoggerRegistry.setGlobalLogLevel, "function");
     });
+
+    test("LoggerRegistry updates cached loggers and clears them", () => {
+        LoggerRegistry.clear();
+        const first = LoggerRegistry.getLogger("Cached");
+        assert.equal(LoggerRegistry.getLogger("Cached"), first);
+        LoggerRegistry.setGlobalLogLevel("ERROR");
+        assert.equal(first.getLogLevel(), "ERROR");
+        assert.equal(LoggerRegistry.getAllLoggers().size, 1);
+        LoggerRegistry.clear();
+        assert.equal(LoggerRegistry.getAllLoggers().size, 0);
+    });
 });
 
 // Test Suite: Log Context
@@ -293,6 +305,34 @@ describe("Logger Configuration", () => {
             process.env.LOG_LEVEL = originalEnv;
         }
     });
+
+    test("logging initialization preserves false options and production environment", () => {
+        const messages: string[] = [];
+        const originalLog = console.log;
+        const originalNodeEnv = process.env.NODE_ENV;
+        console.log = (message: string) => messages.push(message);
+        process.env.NODE_ENV = "production";
+
+        try {
+            initializeLogging({ colorize: false, timestamps: false });
+            initializeLoggingFromEnv();
+        } finally {
+            console.log = originalLog;
+            process.env.NODE_ENV = originalNodeEnv;
+        }
+
+        assert.ok(
+            messages.some((message) => message.includes("colorize=false")),
+        );
+        assert.ok(
+            messages.some((message) => message.includes("timestamps=false")),
+        );
+        assert.ok(
+            messages.some((message) =>
+                message.includes('nodeEnv="production"'),
+            ),
+        );
+    });
 });
 
 // Test Suite: Error Handling
@@ -303,6 +343,41 @@ describe("Error Handling", () => {
 
         // Should not throw
         logger.error("Something went wrong", error);
+    });
+
+    test("Logger serializes application and unknown errors to the appropriate output", () => {
+        const logger = new Logger("Coverage", "DEBUG");
+        const output: string[] = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        console.log = (message: string) => output.push(message);
+        console.error = (message: string) => output.push(message);
+
+        try {
+            logger.debug("debug", { ignored: "", count: 2 });
+            logger.error(
+                "database operation failed",
+                new DatabaseError("unavailable", { password: "private" }),
+            );
+            logger.error("unknown failure", { reason: "unknown" });
+            logger.fatal("fatal failure", new Error("fatal"));
+        } finally {
+            console.log = originalLog;
+            console.error = originalError;
+        }
+
+        assert.ok(output.some((message) => message.includes("count=2")));
+        assert.ok(
+            output.some((message) =>
+                message.includes('errorCode="DATABASE_ERROR"'),
+            ),
+        );
+        assert.ok(
+            output.some((message) =>
+                message.includes('error="[object Object]"'),
+            ),
+        );
+        assert.ok(output.some((message) => message.includes("FATAL")));
     });
 
     test("Logger handles error objects with stack traces", () => {
