@@ -418,3 +418,127 @@ test("UnifiedCharacterStore progression: prevents duplicate rewards, levels up, 
     assert.ok(events.some((event) => event.type === "progression_level_up"));
     assert.ok(events.some((event) => event.type === "progression_xp_rollback"));
 });
+
+test("UnifiedCharacterStore persists bio, inventory, and effect mutations", async () => {
+    const profile: any = {
+        _id: 7,
+        name: "Systems Player",
+        createdAt: Date.now(),
+        casino: createCasinoState(),
+        dare: createDareState(),
+        veratown: createVeratownState(),
+        crossSystem: createCrossSystemState(),
+        lastAccessedAt: Date.now(),
+        updatedAt: Date.now(),
+        version: 0,
+    };
+    const events: any[] = [];
+    const setPath = (path: string, value: unknown) => {
+        const parts = path.split(".");
+        let target = profile;
+        for (let i = 0; i < parts.length - 1; i++) {
+            target = target[parts[i]] ?? (target[parts[i]] = {});
+        }
+        target[parts.at(-1)!] = value;
+    };
+    const profiles = {
+        createIndex: async () => "index",
+        findOne: async () => profile,
+        findOneAndUpdate: async () => profile,
+        updateOne: async (
+            _filter: unknown,
+            update: { $set?: Record<string, unknown> },
+        ) => {
+            for (const [path, value] of Object.entries(update.$set ?? {})) {
+                if (!path.includes("$[")) setPath(path, value);
+            }
+            return { matchedCount: 1, modifiedCount: 1 };
+        },
+        find: () => ({
+            limit: () => ({ toArray: async () => [profile] }),
+        }),
+    };
+    const eventCollection = {
+        createIndex: async () => "index",
+        insertOne: async (event: any) => {
+            events.push(event);
+            return {};
+        },
+        findOne: async () => events[0],
+        find: () => ({ toArray: async () => events }),
+        updateOne: async () => ({}),
+    };
+    const db = {
+        collection: (name: string) =>
+            name === "gameEvents" ? eventCollection : profiles,
+        client: {
+            startSession: () => ({
+                withTransaction: async (operation: () => Promise<unknown>) =>
+                    operation(),
+                endSession: async () => {},
+            }),
+        },
+    };
+    const store = new UnifiedCharacterStore(db as any, new EventBus());
+
+    assert.equal((await store.getBio(7)).description, undefined);
+    await store.updateBio(7, { description: "Updated" });
+    assert.equal((await store.getBio(7)).description, "Updated");
+
+    const item = {
+        itemKey: "token",
+        quantity: 2,
+        ownerMemberNumber: 7,
+        metadata: {},
+    };
+    assert.equal(
+        (
+            await store.mutateInventory(7, {
+                operation: "add",
+                item,
+                mutationKey: "grant-1",
+            })
+        ).applied,
+        true,
+    );
+    profile.crossSystem.inventory = [item];
+    profile.crossSystem.inventoryMutationKeys = ["grant-1"];
+    assert.equal(
+        (
+            await store.mutateInventory(7, {
+                operation: "add",
+                item,
+                mutationKey: "grant-1",
+            })
+        ).duplicate,
+        true,
+    );
+    assert.equal(
+        (
+            await store.mutateInventory(7, {
+                operation: "remove",
+                itemKey: "token",
+                quantity: 1,
+                mutationKey: "remove-1",
+            })
+        ).applied,
+        true,
+    );
+
+    const effect: any = {
+        effectKey: "glow",
+        applicationKey: "effect-1",
+        status: "active",
+        stacking: "replace",
+        source: "test",
+        appliedAt: Date.now(),
+        expiresAt: Date.now() + 1_000,
+    };
+    assert.equal((await store.applyEffect(7, effect)).applied, true);
+    profile.crossSystem.effectMutationKeys = ["effect-1"];
+    profile.crossSystem.effects = [effect];
+    assert.equal((await store.applyEffect(7, effect)).duplicate, true);
+    assert.equal(await store.cancelEffect(7, "effect-1", "test"), true);
+    assert.equal(await store.expireEffects(7, Date.now() + 2_000), 1);
+    assert.ok(events.some((event) => event.type === "effect_expired"));
+});
