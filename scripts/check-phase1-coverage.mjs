@@ -13,6 +13,7 @@ const tests = [
     "bin/games/shared/__tests__/gameStateMutationService.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.integration.test.ts",
     "bin/games/__tests__/unifiedCharacterStore.test.ts",
+    "bin/games/__tests__/phase3-chip-locking.test.ts",
     "bin/games/__tests__/integration/crossSystemIntegration.test.ts",
 ];
 
