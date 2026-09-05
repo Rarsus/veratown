@@ -266,7 +266,24 @@ export class Veratown {
                 this.conn,
             );
             this.appearanceAuditTrail = new AppearanceAuditTrail(db);
-            this.locationEventSystem = new LocationEventSystem(db);
+            const unifiedStore = this.container.has(
+                DIServiceKeys.UNIFIED_CHARACTER_STORE,
+            )
+                ? this.container.get<UnifiedCharacterStore>(
+                      DIServiceKeys.UNIFIED_CHARACTER_STORE,
+                  )
+                : new UnifiedCharacterStore(db);
+            const mutationService = this.container.has(
+                DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+            )
+                ? this.container.get<GameStateMutationService>(
+                      DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                  )
+                : undefined;
+            this.locationEventSystem = new LocationEventSystem(db, {
+                eventBus: unifiedStore.getEventBus(),
+                mutationService,
+            });
             this.playerRoleSystem = new PlayerRoleSystem(db);
         } else {
             logger.info(

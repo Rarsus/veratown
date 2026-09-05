@@ -468,4 +468,72 @@ describe("Feature 1.3.5: Location Event System", () => {
             assert.ok(typeof stats.byTriggerType === "object");
         });
     });
+
+    describe("Location transitions", () => {
+        it("publishes entry/exit transitions and deduplicates delivery", async () => {
+            const published: string[] = [];
+            const effects: number[] = [];
+            const transitionSystem = new LocationEventSystem(db, {
+                eventBus: {
+                    publish: async (event: { type: string }) => {
+                        published.push(event.type);
+                    },
+                } as any,
+                mutationService: {
+                    applyEffect: async (memberNumber: number) => {
+                        effects.push(memberNumber);
+                    },
+                    recordEvent: async (event: any) => {
+                        published.push(event.type);
+                    },
+                } as any,
+            });
+            await transitionSystem.createEvent("new_room", {
+                locationKey: "new_room",
+                eventId: "entry_event",
+                eventName: "Welcome",
+                triggerType: "entry",
+                isEnabled: true,
+                narration: "Welcome",
+                outcomes: [{ type: "location_effect", value: "welcomed" }],
+            });
+
+            const transition = {
+                transitionId: "transition-1",
+                memberNumber: 123,
+                fromLocationKey: "old_room",
+                toLocationKey: "new_room",
+            };
+            const first =
+                await transitionSystem.handleLocationTransition(transition);
+            const second =
+                await transitionSystem.handleLocationTransition(transition);
+
+            assert.equal(first.length, 1);
+            assert.deepEqual(second, []);
+            assert.deepEqual(effects, [123]);
+            assert.deepEqual(published, [
+                "location_exited",
+                "location_entered",
+            ]);
+        });
+
+        it("rejects invalid transitions and safely ignores missing configuration", async () => {
+            await assert.rejects(
+                eventSystem.handleLocationTransition({
+                    transitionId: "",
+                    memberNumber: 1,
+                    toLocationKey: "room",
+                }),
+            );
+            assert.deepEqual(
+                await eventSystem.handleLocationTransition({
+                    transitionId: "unconfigured-transition",
+                    memberNumber: 1,
+                    toLocationKey: "unconfigured-room",
+                }),
+                [],
+            );
+        });
+    });
 });

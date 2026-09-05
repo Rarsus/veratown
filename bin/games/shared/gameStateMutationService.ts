@@ -514,6 +514,15 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                 { position },
                 actor,
             );
+            await this.recordEvent({
+                timestamp: Date.now(),
+                type: "position_changed",
+                source: "veratown",
+                actor,
+                target: memberNumber,
+                data: { position },
+                processed: false,
+            });
         }, "updateLocation");
     }
 
