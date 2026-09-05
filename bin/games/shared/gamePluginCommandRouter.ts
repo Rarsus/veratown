@@ -51,6 +51,17 @@ export class GamePluginCommandRouterImpl implements GamePluginCommandRouter {
     ) {}
 
     /**
+     * Register the command at this plugin's root.
+     *
+     * CommandParser will match commands like: /bot <pluginKey> [args...]
+     *
+     * @param handler Function to call when the plugin root is invoked
+     */
+    public registerRoot(handler: GamePluginCommandHandler): void {
+        this.commandParser.register(this.pluginKey, handler);
+    }
+
+    /**
      * Register a single command under this plugin's key.
      *
      * CommandParser will match commands like: /bot <pluginKey> <name> [args...]
@@ -87,15 +98,15 @@ export class GamePluginCommandRouterImpl implements GamePluginCommandRouter {
      * @param subcommands Object mapping sub-command names to handlers
      *
      * @example
-     * registerGroup("dare", {
+     * registerGroup("lobby", {
      *   join: handler1,
      *   leave: handler2,
      *   start: handler3
      * })
      * // Responds to:
-     * // - /bot dare join
-     * // - /bot dare leave
-     * // - /bot dare start
+     * // - /bot dare lobby join
+     * // - /bot dare lobby leave
+     * // - /bot dare lobby start
      * // handler1/2/3 called with appropriate args
      */
     public registerGroup(
@@ -123,7 +134,7 @@ export class GamePluginCommandRouterImpl implements GamePluginCommandRouter {
         };
 
         // Register the dispatcher with the full compound command
-        // /bot dare join -> handled by dispatcher -> routes to subcommands["join"]
+        // /bot dare lobby join -> handled by dispatcher -> routes to subcommands["join"]
         const fullCommand = `${this.pluginKey} ${groupName}`;
         this.commandParser.register(fullCommand, dispatcher);
     }
