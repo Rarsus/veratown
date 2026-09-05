@@ -12,24 +12,35 @@ import {
     KeypadGroupDefinitionDoc,
 } from "../keypadTypes";
 
+function isUnsafeKey(key: string): boolean {
+    return key === "__proto__" || key === "constructor" || key === "prototype";
+}
+
 function setNestedPath(obj: any, path: string, value: any) {
     const parts = path.split(".");
     let curr = obj;
     for (let i = 0; i < parts.length - 1; i++) {
-        if (!curr[parts[i]]) curr[parts[i]] = {};
-        curr = curr[parts[i]];
+        const key = parts[i];
+        if (isUnsafeKey(key)) return;
+        if (!curr[key]) curr[key] = {};
+        curr = curr[key];
     }
-    curr[parts[parts.length - 1]] = value;
+    const lastKey = parts[parts.length - 1];
+    if (isUnsafeKey(lastKey)) return;
+    curr[lastKey] = value;
 }
 
 function pushNestedPath(obj: any, path: string, value: any) {
     const parts = path.split(".");
     let curr = obj;
     for (let i = 0; i < parts.length - 1; i++) {
-        if (!curr[parts[i]]) curr[parts[i]] = {};
-        curr = curr[parts[i]];
+        const key = parts[i];
+        if (isUnsafeKey(key)) return;
+        if (!curr[key]) curr[key] = {};
+        curr = curr[key];
     }
     const last = parts[parts.length - 1];
+    if (isUnsafeKey(last)) return;
     if (!Array.isArray(curr[last])) curr[last] = [];
     if (value && typeof value === "object" && "$each" in value) {
         curr[last].push(...value.$each);
@@ -42,10 +53,12 @@ function pullNestedPath(obj: any, path: string, pullCond: any) {
     const parts = path.split(".");
     let curr = obj;
     for (let i = 0; i < parts.length - 1; i++) {
-        if (!curr[parts[i]]) return;
-        curr = curr[parts[i]];
+        const key = parts[i];
+        if (isUnsafeKey(key) || !curr[key]) return;
+        curr = curr[key];
     }
     const last = parts[parts.length - 1];
+    if (isUnsafeKey(last)) return;
     if (Array.isArray(curr[last])) {
         curr[last] = curr[last].filter((item: any) => {
             if (pullCond && typeof pullCond === "object") {
