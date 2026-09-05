@@ -30,6 +30,32 @@ test("CasinoBioManager: buildBio includes welcome section", () => {
     assert.ok(bio.includes("🎰🎰🎰 Welcome to the Veratown Casino!"));
 });
 
+test("CasinoBioManager: delegates persisted bio reads and mutations", async () => {
+    const calls: string[] = [];
+    const manager = new CasinoBioManager(
+        {
+            getBio: async () => ({
+                description: "saved",
+                updatedAt: 1,
+                version: 2,
+            }),
+        },
+        {
+            updateBio: async (_member, updates, actor) => {
+                calls.push(`${updates.description}:${actor}`);
+            },
+        },
+    );
+
+    assert.deepEqual(await manager.getBio(123), {
+        description: "saved",
+        updatedAt: 1,
+        version: 2,
+    });
+    await manager.updateBio(123, { description: "updated" }, 456);
+    assert.deepEqual(calls, ["updated:456"]);
+});
+
 test("CasinoBioManager: buildBio includes daily chips info", () => {
     const manager = new CasinoBioManager();
     const bio = manager.buildBio("", "Example", "Help");

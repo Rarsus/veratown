@@ -40,6 +40,12 @@ function createStore() {
             profile.name = name;
             calls.push("name");
         },
+        updateBio: async (
+            _member: number,
+            updates: Record<string, unknown>,
+        ) => {
+            calls.push(`bio:${updates.description}`);
+        },
         updateCasinoStats: async () => calls.push("casino"),
         suspendAllGames: async () => {
             calls.push("suspend");
@@ -107,6 +113,27 @@ test("GameStateMutationService validates mutation inputs", async () => {
 
     await assert.rejects(() => service.lockChips(-1, 10, "cage"));
     await assert.rejects(() => service.applyBondage(1, []));
+});
+
+test("GameStateMutationService validates and audits bio updates", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    await service.updateBio(1, { description: "A new description" }, 99);
+
+    assert.ok(store.calls.includes("bio:A new description"));
+    assert.ok(store.calls.includes("audit:updateBio"));
+    await assert.rejects(
+        () => service.updateBio(1, { description: "x".repeat(501) }),
+        { code: "VALIDATION_ERROR" },
+    );
+    await assert.rejects(
+        () => service.updateBio(1, { invalid: "not allowed" } as any),
+        { code: "VALIDATION_ERROR" },
+    );
 });
 
 test("GameStateMutationService covers core property and progression mutations", async () => {
