@@ -13,13 +13,7 @@ const tests = [
 
 const result = spawnSync(
     process.execPath,
-    [
-        "--import",
-        "tsx",
-        ...(process.env.CI ? [] : ["--test-concurrency=1"]),
-        "--test",
-        ...tests,
-    ],
+    ["--import", "tsx", "--test-concurrency=1", "--test", ...tests],
     { stdio: "inherit" },
 );
 
