@@ -132,6 +132,13 @@ test("UnifiedCharacterStore covers non-Mongo state and event workflows", async (
         grantedAt: 1,
         grantedBy: 2,
     });
+    // Add duplicate access to test update/pull
+    await store.addKeypadAccess(1, {
+        doorKey: "door",
+        groupName: "admin",
+        grantedAt: 2,
+        grantedBy: 2,
+    });
     await store.removeKeypadAccess(1, "door", "admin");
     assert.deepEqual(await store.getKeypadAccess(1), []);
     assert.equal(await store.hasKeypadAccess(1, "door"), false);

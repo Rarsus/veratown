@@ -41,14 +41,14 @@ export function colourOutfit(
     mainColour: string,
     tintColour: string,
 ): BC_AppearanceItem[] {
-    const coloured = JSON.parse(JSON.stringify(outfit));
+    const coloured = JSON.parse(JSON.stringify(outfit)) as BC_AppearanceItem[];
     for (const item of coloured) {
         if (typeof item.Color === "string") {
-            item.Color = replaceColour(item.Color, mainColour, tintColour);
-        } else if (typeof item.Color === "object") {
+            item.Color = replaceColour(item.Color, mainColour, tintColour) as any;
+        } else if (Array.isArray(item.Color)) {
             item.Color = item.Color.map((colour: string) =>
                 replaceColour(colour, mainColour, tintColour),
-            );
+            ) as any;
         }
     }
 

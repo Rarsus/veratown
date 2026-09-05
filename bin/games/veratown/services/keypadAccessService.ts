@@ -81,6 +81,7 @@ export class KeypadAccessService {
         groupName: string,
         grantedBy: number,
         reason?: string,
+        expiresAt?: number,
     ): Promise<void> {
         const access: KeypadAccessRecord = {
             doorKey,
@@ -88,6 +89,7 @@ export class KeypadAccessService {
             grantedAt: Date.now(),
             grantedBy,
             grantedReason: reason,
+            expiresAt,
         };
 
         // Add to character profile (Layer 1)
@@ -164,6 +166,23 @@ export class KeypadAccessService {
     // ===== DOOR ACCESS CHECKING =====
 
     /**
+     * Check if character is restricted from using keypads (e.g. caged or restricted role)
+     */
+    private async isAccessRestricted(memberNumber: number): Promise<boolean> {
+        const profile = await this.unifiedStore.getProfile(memberNumber);
+        if (!profile?.veratown) return false;
+
+        const activeIncarceration = profile.veratown.cageIncarcerations?.some(
+            (c) => !c.releasedAt,
+        );
+        if (activeIncarceration) return true;
+
+        if (profile.veratown.roles?.includes("restricted")) return true;
+
+        return false;
+    }
+
+    /**
      * Check if a character can access a door (comprehensive check)
      * Returns the highest access level the character has
      */
@@ -174,6 +193,8 @@ export class KeypadAccessService {
     ): Promise<boolean> {
         // Admins always have access
         if (isAdmin) return true;
+
+        if (await this.isAccessRestricted(memberNumber)) return false;
 
         // Check character's keypad access
         const access = await this.getCharacterAccessToDoor(
@@ -199,6 +220,8 @@ export class KeypadAccessService {
         isAdmin: boolean,
     ): Promise<KeypadAccessLevel> {
         if (isAdmin) return "admin";
+
+        if (await this.isAccessRestricted(memberNumber)) return "denied";
 
         const access = await this.getCharacterAccessToDoor(
             memberNumber,
@@ -236,6 +259,8 @@ export class KeypadAccessService {
         isAdmin: boolean,
     ): Promise<boolean> {
         if (isAdmin) return true;
+
+        if (await this.isAccessRestricted(memberNumber)) return false;
 
         // Verify the code is valid for this door
         const groupName = await this.definitionService.verifyCode(

@@ -232,4 +232,8 @@ export const DIServiceKeys = {
     DEVICE_FACTORY: "deviceFactory",
     GAME_STATE_MUTATION_SERVICE: "gameStateMutationService",
     VERATOWN: "veratown",
+    KEYPAD_DEFINITION_SERVICE: "keypadDefinitionService",
+    KEYPAD_ACCESS_SERVICE: "keypadAccessService",
+    KEYPAD_ACCESS_GROUP_MANAGER: "keypadAccessGroupManager",
+    KEYPAD_DOOR_SYSTEM: "keypadDoorSystem",
 } as const;

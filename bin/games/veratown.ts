@@ -254,7 +254,13 @@ export class Veratown {
             // EPIC 1.3: Initialize Veratown Architecture Systems (Phase 2 Integration)
             // These systems provide core functionality: access control, furniture interactions,
             // audit trails, location events, and role management
-            this.keypadAccessGroupManager = new KeypadAccessGroupManager(db);
+            this.keypadAccessGroupManager = this.container.has(
+                DIServiceKeys.KEYPAD_ACCESS_GROUP_MANAGER,
+            )
+                ? this.container.get<KeypadAccessGroupManager>(
+                      DIServiceKeys.KEYPAD_ACCESS_GROUP_MANAGER,
+                  )
+                : new KeypadAccessGroupManager(db);
             this.furnitureInteractionSystem = new FurnitureInteractionSystem(
                 db,
                 this.conn,
@@ -289,13 +295,17 @@ export class Veratown {
         );
         this.keypadDoorSystem = this.initFeature(
             () =>
-                new KeypadDoorSystem(
-                    this.conn,
-                    this.commandParser,
-                    this.locationStore,
-                    () => this.reloadLocations(),
-                    this.keypadAccessGroupManager,
-                ),
+                this.container.has(DIServiceKeys.KEYPAD_DOOR_SYSTEM)
+                    ? this.container.get<KeypadDoorSystem>(
+                          DIServiceKeys.KEYPAD_DOOR_SYSTEM,
+                      )
+                    : new KeypadDoorSystem(
+                          this.conn,
+                          this.commandParser,
+                          this.locationStore,
+                          () => this.reloadLocations(),
+                          this.keypadAccessGroupManager,
+                      ),
         );
         this.catDogSystem = this.initFeature(
             () =>
