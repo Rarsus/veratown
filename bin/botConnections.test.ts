@@ -124,17 +124,31 @@ test("connection readiness supports timeout and cancellation", async () => {
 });
 
 function createConnection() {
-    const listeners = new Set<() => void>();
+    const listeners = new Map<string, Set<() => void>>();
+    const onceListeners = new Map<string, Set<() => void>>();
     return {
         isConnected: () => false,
-        once: (_event: string, listener: () => void) => {
-            listeners.add(listener);
+        once: (event: string, listener: () => void) => {
+            const eventListeners = listeners.get(event) ?? new Set();
+            eventListeners.add(listener);
+            listeners.set(event, eventListeners);
+            const eventOnceListeners = onceListeners.get(event) ?? new Set();
+            eventOnceListeners.add(listener);
+            onceListeners.set(event, eventOnceListeners);
         },
-        off: (_event: string, listener: () => void) => {
-            listeners.delete(listener);
+        off: (event: string, listener: () => void) => {
+            listeners.get(event)?.delete(listener);
+            onceListeners.get(event)?.delete(listener);
         },
-        emit: (_event: string) => {
-            for (const listener of listeners) listener();
+        emit: (event: string) => {
+            const eventListeners = listeners.get(event) ?? new Set();
+            const eventOnceListeners = onceListeners.get(event) ?? new Set();
+            for (const listener of [...eventListeners]) {
+                if (eventOnceListeners.delete(listener)) {
+                    eventListeners.delete(listener);
+                }
+                listener();
+            }
         },
     };
 }
