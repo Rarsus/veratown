@@ -386,6 +386,7 @@ export interface ForfeitApplyResult {
     group: AssetGroupName;
     outcome: "applied" | "extended";
     durationMs: number;
+    items: BC_AppearanceItem[];
 }
 
 /**
@@ -482,6 +483,7 @@ export async function applyForfeitForDare(
             group,
             outcome: "extended",
             durationMs: extendMs,
+            items: [existing.getData()],
         };
     }
 
@@ -501,6 +503,7 @@ export async function applyForfeitForDare(
             group,
             outcome: "applied",
             durationMs: forfeit.lockTimeMs ?? 0,
+            items: probeItems,
         };
     }
 
@@ -579,6 +582,7 @@ export async function applyForfeitForDare(
         group,
         outcome: "applied",
         durationMs: lockTime ?? 0,
+        items: [added.getData()],
     };
 }
 

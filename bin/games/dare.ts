@@ -481,19 +481,13 @@ Game Overview
             return;
         }
 
-        const subcommand = args[0].toLowerCase();
-
         // Validate argument count based on subcommand (Phase 2C consolidation)
-        // Most dare subcommands take just 1 argument (the subcommand itself)
-        // except "forfeit" which takes 2 (subcommand + forfeit item)
-        let expectedArgCount = 1;
-        if (subcommand === "forfeit") {
-            expectedArgCount = 2;
-        }
-
+        // All dare subcommands (including "forfeit", which just kennels the
+        // caller instead of applying their pending bondage draw) take just
+        // the subcommand itself - 1 argument.
         const argCountResult = this.commandValidator.validateArgumentCount(
             args,
-            expectedArgCount,
+            1,
         );
         if (!argCountResult.valid) {
             this.whisper(
@@ -1254,6 +1248,16 @@ Game Overview
                     error: e,
                 }),
             );
+            // Clear the persisted bondage record on the character's profile
+            // now that every dare-applied item is confirmed gone.
+            void this.mutationService
+                .removeBondage(memberNumber, "dare_released")
+                .catch((e) =>
+                    this.logger.error("Failed to persist bondage removal", {
+                        memberNumber,
+                        error: e,
+                    }),
+                );
         }
     };
 
@@ -1939,6 +1943,24 @@ Game Overview
                         describeForfeitOutcome(target, result),
                     );
                     if (result.outcome === "applied") appliedCount++;
+
+                    // Track the applied bondage on the character's profile
+                    // (UnifiedCharacterStore) so it survives restarts and is
+                    // visible outside of this in-memory session state.
+                    try {
+                        await this.mutationService.applyBondage(
+                            target.MemberNumber,
+                            result.items,
+                            this.conn.Player.MemberNumber,
+                            "dare",
+                        );
+                    } catch (e) {
+                        this.logger.error("Failed to persist applied bondage", {
+                            forfeitKey,
+                            memberNumber: target.MemberNumber,
+                            error: e,
+                        });
+                    }
                 }
                 this.addBinds(target.MemberNumber, appliedCount);
                 if (dare.noRedress) {
