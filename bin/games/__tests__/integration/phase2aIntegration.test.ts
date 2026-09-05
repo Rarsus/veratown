@@ -103,7 +103,9 @@ describe("Phase 2A cross-system integration", () => {
         assert.ok(
             events.some((event) => event.type === "progression_xp_awarded"),
         );
-        assert.ok((await store.getVeratownView(1002)).auditLog.length >= 2);
+        const auditLog = (await store.getVeratownView(1002)).auditLog;
+        assert.equal(auditLog.length, 1);
+        assert.equal(auditLog[0].action, "addToInventory");
     });
 
     test("rolls back failed writes and preserves idempotent retries", async (t) => {
