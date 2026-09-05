@@ -4,6 +4,7 @@ import {
     asGameCounter,
     asTimestamp,
     asVersion,
+    createCharacterBio,
     createCasinoState,
     createCrossSystemState,
     createDareState,
@@ -42,4 +43,22 @@ test("MongoDB type validation reports invalid numeric fields", () => {
     assert.ok(result.errors.some((error) => error.includes("createdAt")));
     assert.ok(result.errors.some((error) => error.includes("casino.version")));
     assert.ok(result.errors.some((error) => error.includes("casino.chips")));
+});
+
+test("MongoDB type helpers create a bio and allow missing optional fields", () => {
+    const bio = createCharacterBio({ title: "Tester", version: 4 });
+    assert.equal(bio.title, "Tester");
+    assert.equal(bio.version, 4);
+    assert.equal(typeof bio.updatedAt, "number");
+    assert.deepEqual(
+        validateCharacterProfileTypes({
+            createdAt: 1,
+            updatedAt: 1,
+            lastAccessedAt: 1,
+            casino: {},
+            dare: {},
+            veratown: {},
+        } as any),
+        { isValid: true, errors: [] },
+    );
 });

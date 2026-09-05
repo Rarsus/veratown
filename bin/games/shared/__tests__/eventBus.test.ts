@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventBus } from "../eventBus";
+import { BusinessLogicError } from "../../../errors";
 
 const event = {
     timestamp: Date.now(),
@@ -38,4 +39,21 @@ test("EventBus publishes, unsubscribes, and reports subscriptions", async () => 
     await bus.publish(event);
     bus.clear();
     assert.equal(bus.getListenerCount("*"), 0);
+});
+
+test("EventBus wraps listener failures with event context", async () => {
+    const bus = new EventBus();
+    bus.subscribe("test", async () => {
+        throw new Error("listener failed");
+    });
+
+    await assert.rejects(bus.publish(event), (error: unknown) => {
+        assert.ok(error instanceof BusinessLogicError);
+        assert.equal(error.message, "listener failed");
+        assert.deepEqual(error.context, {
+            eventType: "test",
+            source: "test",
+        });
+        return true;
+    });
 });
