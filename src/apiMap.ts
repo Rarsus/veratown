@@ -107,8 +107,8 @@ export class API_Map extends EventEmitter<MapEvents> {
 
     public setMapFromString(mapDataBundle: string): void {
         const mapData = JSON.parse(
-            lzString.decompressFromBase64(mapDataBundle),
-        );
+            lzString.decompressFromBase64(mapDataBundle)!,
+        ) as ServerChatRoomMapData;
         this.setMapFromData(mapData);
     }
 

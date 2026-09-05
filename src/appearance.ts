@@ -359,7 +359,7 @@ export class AppearanceType {
     }
 
     public MakeAppearanceBundle(): BC_AppearanceItem[] {
-        return JSON.parse(JSON.stringify(this.data));
+        return JSON.parse(JSON.stringify(this.data)) as BC_AppearanceItem[];
     }
 
     public SetExpression(group: AssetGroupName, expr: ExpressionName): void {
