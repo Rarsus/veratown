@@ -226,6 +226,7 @@ export class DIContainerError extends Error {
 export const DIServiceKeys = {
     CONFIGURATION: "configuration",
     UNIFIED_CHARACTER_STORE: "unifiedCharacterStore",
+    DARE_DATA_SERVICE: "dareDataService",
     CROSS_SYSTEM_SUBSCRIBERS: "crossSystemSubscribers",
     CASINO_VENUE_SYSTEM: "casinoVenueSystem",
     CASINO_ENGINE: "casinoEngine",
