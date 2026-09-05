@@ -14,7 +14,7 @@ const tests = [
 for (const test of tests) {
     const result = spawnSync(
         process.execPath,
-        ["--import", "tsx", "--test", test],
+        ["--import", "tsx", "--test-concurrency=1", "--test", test],
         { stdio: "inherit" },
     );
 
