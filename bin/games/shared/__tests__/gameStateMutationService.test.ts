@@ -127,6 +127,47 @@ function createStore() {
                 availableQuantity: existing.quantity,
             };
         },
+        applyEffect: async (_member: number, effect: any) => {
+            const keys = (profile.crossSystem as any).effectMutationKeys ?? [];
+            if (keys.includes(effect.applicationKey)) {
+                return { applied: false, duplicate: true, effect };
+            }
+            const effects = (profile.crossSystem as any).effects;
+            (profile.crossSystem as any).effects =
+                effect.stacking === "stack"
+                    ? [...effects, effect]
+                    : [
+                          ...effects.filter(
+                              (existing: any) =>
+                                  existing.status !== "active" ||
+                                  existing.effectKey !== effect.effectKey,
+                          ),
+                          effect,
+                      ];
+            (profile.crossSystem as any).effectMutationKeys = [
+                ...keys,
+                effect.applicationKey,
+            ];
+            calls.push("effect");
+            return { applied: true, duplicate: false, effect };
+        },
+        cancelEffect: async (_member: number, applicationKey: string) => {
+            const effect = (profile.crossSystem as any).effects.find(
+                (candidate: any) =>
+                    candidate.applicationKey === applicationKey &&
+                    candidate.status === "active",
+            );
+            if (!effect) return false;
+            effect.status = "cancelled";
+            calls.push("effect-cancel");
+            return true;
+        },
+        getActiveEffects: async () =>
+            (profile.crossSystem as any).effects.filter(
+                (effect: any) =>
+                    effect.status === "active" &&
+                    (!effect.expiresAt || effect.expiresAt > Date.now()),
+            ),
     };
 }
 
@@ -175,6 +216,54 @@ test("GameStateMutationService validates mutation inputs", async () => {
     await assert.rejects(() => service.applyBondage(1, []));
 });
 
+test("GameStateMutationService makes effect application idempotent and cancellable", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+    const effect = {
+        effectKey: "casino-bonus",
+        applicationKey: "roulette:round-1:member-1",
+        source: "casino" as const,
+        stacking: "replace" as const,
+        status: "active" as const,
+        appliedAt: Date.now(),
+    };
+
+    assert.equal((await service.applyEffect(1, effect)).applied, true);
+    assert.equal((await service.applyEffect(1, effect)).duplicate, true);
+    assert.equal((await service.getActiveEffects(1)).length, 1);
+    assert.equal(
+        await service.cancelEffect(1, effect.applicationKey, "round reversed"),
+        true,
+    );
+    assert.equal(
+        await service.cancelEffect(1, effect.applicationKey, "round reversed"),
+        false,
+    );
+    assert.equal((await service.getActiveEffects(1)).length, 0);
+});
+
+test("GameStateMutationService rejects already expired effects", async () => {
+    const service = new GameStateMutationServiceImpl(
+        createStore() as any,
+        new EventBus(),
+    );
+    const now = Date.now() - 1;
+    await assert.rejects(() =>
+        service.applyEffect(1, {
+            effectKey: "expired",
+            applicationKey: "expired:1",
+            source: "admin",
+            stacking: "stack",
+            status: "active",
+            appliedAt: now,
+            expiresAt: now + 1,
+        }),
+    );
+});
+
 test("GameStateMutationService validates and audits bio updates", async () => {
     const store = createStore();
     const service = new GameStateMutationServiceImpl(
@@ -211,6 +300,10 @@ test("GameStateMutationService covers core property and progression mutations", 
     );
     await service.applyEffect(1, {
         effectKey: "stunned",
+        applicationKey: "test:stunned:1",
+        source: "admin",
+        stacking: "replace",
+        status: "active",
         appliedAt: Date.now(),
     });
     await service.updateBondageLevel(1, 3);

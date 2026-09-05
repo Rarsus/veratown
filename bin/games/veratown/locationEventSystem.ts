@@ -351,6 +351,10 @@ export class LocationEventSystem {
                             memberNumber,
                             {
                                 effectKey: String(outcome.value),
+                                applicationKey: `location:${deliveryId ?? `${eventId}:${memberNumber}`}:${String(outcome.value)}`,
+                                source: "veratown",
+                                stacking: "replace",
+                                status: "active",
                                 appliedAt: Date.now(),
                                 ...(event.durationMs
                                     ? {

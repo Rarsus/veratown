@@ -33,6 +33,8 @@ import {
     CharacterBioUpdate,
     InventoryMutationResult,
     MutationInventoryItem,
+    AppliedEffect,
+    EffectMutationResult,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 import {
@@ -1924,6 +1926,191 @@ export class UnifiedCharacterStore {
 
         if (event) await this.eventBus.publish(event);
         return result;
+    }
+
+    public async applyEffect(
+        memberNumber: number,
+        effect: AppliedEffect,
+        actor = memberNumber,
+    ): Promise<EffectMutationResult> {
+        await this.init();
+        const now = asTimestamp(Date.now());
+        let event: GameEvent | undefined;
+        let result: EffectMutationResult = {
+            applied: false,
+            duplicate: false,
+            effect,
+        };
+
+        await this.withTransaction(async (session) => {
+            const profile = await this.profiles.findOne(
+                { _id: memberNumber },
+                { session },
+            );
+            if (!profile) throw new Error("character profile was not found");
+            const keys = profile.crossSystem.effectMutationKeys ?? [];
+            if (keys.includes(effect.applicationKey)) {
+                result = { applied: false, duplicate: true, effect };
+                return;
+            }
+            const effects = profile.crossSystem.effects ?? [];
+            const nextEffects =
+                effect.stacking === "stack"
+                    ? effects
+                    : effects.map((existing) =>
+                          existing.status === "active" &&
+                          existing.effectKey === effect.effectKey
+                              ? {
+                                    ...existing,
+                                    status: "cancelled" as const,
+                                    cancelledAt: now,
+                                    cancellationReason: "replaced",
+                                }
+                              : existing,
+                      );
+            const updated = await this.profiles.updateOne(
+                {
+                    _id: memberNumber,
+                    "crossSystem.effectMutationKeys": {
+                        $ne: effect.applicationKey,
+                    },
+                },
+                {
+                    $set: {
+                        "crossSystem.effects": [...nextEffects, effect],
+                        "crossSystem.effectMutationKeys": [
+                            ...keys,
+                            effect.applicationKey,
+                        ],
+                        "crossSystem.updatedAt": now,
+                        updatedAt: now,
+                        lastAccessedAt: now,
+                    },
+                    $inc: { version: 1 },
+                },
+                { session },
+            );
+            if (updated.matchedCount === 0) {
+                result = { applied: false, duplicate: true, effect };
+                return;
+            }
+            result = { applied: true, duplicate: false, effect };
+            event = {
+                timestamp: now,
+                type: "effect_applied",
+                source: effect.source,
+                actor,
+                target: memberNumber,
+                data: { effect },
+                processed: false,
+            };
+            await this.events.insertOne(event, { session });
+        });
+        if (event) await this.eventBus.publish(event);
+        return result;
+    }
+
+    public async cancelEffect(
+        memberNumber: number,
+        applicationKey: string,
+        reason: string,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        await this.init();
+        const now = asTimestamp(Date.now());
+        const updated = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "crossSystem.effects": {
+                    $elemMatch: { applicationKey, status: "active" },
+                },
+            },
+            {
+                $set: {
+                    "crossSystem.effects.$[effect].status": "cancelled",
+                    "crossSystem.effects.$[effect].cancelledAt": now,
+                    "crossSystem.effects.$[effect].cancellationReason": reason,
+                    "crossSystem.updatedAt": now,
+                    updatedAt: now,
+                    lastAccessedAt: now,
+                },
+                $inc: { version: 1 },
+            },
+            {
+                arrayFilters: [
+                    {
+                        "effect.applicationKey": applicationKey,
+                        "effect.status": "active",
+                    },
+                ],
+            },
+        );
+        if (!updated.modifiedCount) return false;
+        const event: GameEvent = {
+            timestamp: now,
+            type: "effect_cancelled",
+            source: "admin",
+            actor,
+            target: memberNumber,
+            data: { applicationKey, reason },
+            processed: false,
+        };
+        await this.events.insertOne(event);
+        await this.eventBus.publish(event);
+        return true;
+    }
+
+    public async getActiveEffects(
+        memberNumber: number,
+        now = Date.now(),
+    ): Promise<AppliedEffect[]> {
+        await this.expireEffects(memberNumber, now);
+        const profile = await this.getProfile(memberNumber);
+        return (profile.crossSystem.effects ?? []).filter(
+            (effect) =>
+                effect.status === "active" &&
+                (effect.expiresAt === undefined || effect.expiresAt > now),
+        );
+    }
+
+    public async expireEffects(
+        memberNumber: number,
+        now = Date.now(),
+    ): Promise<number> {
+        await this.init();
+        const updated = await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "crossSystem.effects.$[effect].status": "expired",
+                    "crossSystem.updatedAt": asTimestamp(now),
+                    updatedAt: asTimestamp(now),
+                },
+                $inc: { version: 1 },
+            },
+            {
+                arrayFilters: [
+                    {
+                        "effect.status": "active",
+                        "effect.expiresAt": { $lte: now },
+                    },
+                ],
+            },
+        );
+        if (updated.modifiedCount) {
+            const event: GameEvent = {
+                timestamp: asTimestamp(now),
+                type: "effect_expired",
+                source: "admin",
+                actor: memberNumber,
+                target: memberNumber,
+                data: { expiredAt: now },
+                processed: false,
+            };
+            await this.events.insertOne(event);
+            await this.eventBus.publish(event);
+        }
+        return updated.modifiedCount;
     }
 
     // ===== CROSS-SYSTEM QUERIES
