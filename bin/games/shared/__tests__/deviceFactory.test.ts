@@ -43,3 +43,31 @@ test("DeviceFactory rejects invalid lock difficulty", () => {
         }),
     );
 });
+
+test("DeviceFactory creates a keypad locked device", () => {
+    const factory = new DeviceFactory();
+    const device = factory.createKeypadLockedDevice({
+        assetGroup: "ItemDevices",
+        assetName: "KeypadCage",
+        doorKey: "cell_101",
+        keypadGroup: "guards",
+    });
+
+    assert.equal(device.Group, "ItemDevices");
+    assert.equal(device.Name, "KeypadCage");
+    const lock = (device.Property as Record<string, any>).Lock;
+    assert.equal(lock.AssetName, "KeypadLock");
+    assert.equal(lock.KeypadDoorKey, "cell_101");
+    assert.equal(lock.KeypadGroup, "guards");
+});
+
+test("DeviceFactory throws if doorKey is missing in createKeypadLockedDevice", () => {
+    const factory = new DeviceFactory();
+    assert.throws(() =>
+        factory.createKeypadLockedDevice({
+            assetGroup: "ItemDevices",
+            assetName: "KeypadCage",
+            doorKey: "",
+        }),
+    );
+});

@@ -38,6 +38,9 @@ import {
 } from "./games/shared/gameStateMutationService";
 import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
+import { KeypadDefinitionService } from "./games/veratown/services/keypadDefinitionService";
+import { KeypadAccessService } from "./games/veratown/services/keypadAccessService";
+import { KeypadAccessGroupManager } from "./games/veratown/keypadAccessGroupManager";
 import { initializeLoggingFromEnv, LoggerRegistry } from "./logging";
 import { createLogger } from "./logging";
 import {
@@ -461,6 +464,43 @@ async function initializeVeratownGame(
     );
     container.register(DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS, subscribers);
     logger.info("CrossSystemSubscribers initialized");
+
+    // Phase 2A.4: Initialize Keypad Access Control System
+    const keypadDefService = new KeypadDefinitionService(db);
+    await keypadDefService.init().catch((err) => {
+        logger.warn(
+            `KeypadDefinitionService.init warning: ${err instanceof Error ? err.message : String(err)}`,
+        );
+    });
+    container.register(
+        DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
+        keypadDefService,
+    );
+
+    const keypadAccessService = new KeypadAccessService(
+        db,
+        keypadDefService,
+        unifiedStore,
+        container.get<GameStateMutationService>(
+            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        ),
+    );
+    await keypadAccessService.init().catch((err) => {
+        logger.warn(
+            `KeypadAccessService.init warning: ${err instanceof Error ? err.message : String(err)}`,
+        );
+    });
+    container.register(
+        DIServiceKeys.KEYPAD_ACCESS_SERVICE,
+        keypadAccessService,
+    );
+
+    const keypadAccessGroupManager = new KeypadAccessGroupManager(db);
+    container.register(
+        DIServiceKeys.KEYPAD_ACCESS_GROUP_MANAGER,
+        keypadAccessGroupManager,
+    );
+    logger.info("Keypad Access Control System services registered in DI");
 
     // Create new Veratown instance with DI container
     const game = new Veratown(

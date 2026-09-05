@@ -15,6 +15,11 @@ export interface LockedDeviceConfig {
     owner?: number;
 }
 
+export interface KeypadLockedDeviceConfig extends LockedDeviceConfig {
+    doorKey: string;
+    keypadGroup?: string;
+}
+
 export type RestraintConfig = LockedDeviceConfig;
 
 /**
@@ -63,5 +68,25 @@ export class DeviceFactory {
 
     public createRestraint(config: RestraintConfig): BC_AppearanceItem {
         return this.createLockedDevice(config);
+    }
+
+    public createKeypadLockedDevice(
+        config: KeypadLockedDeviceConfig,
+    ): BC_AppearanceItem {
+        if (!config.doorKey) {
+            throw new Error("doorKey is required for keypad locked devices");
+        }
+        const device = this.createLockedDevice({
+            ...config,
+            lockType: config.lockType ?? "KeypadLock",
+        });
+        const prop = device.Property as Record<string, any> | undefined;
+        if (prop?.Lock) {
+            prop.Lock.KeypadDoorKey = config.doorKey;
+            if (config.keypadGroup) {
+                prop.Lock.KeypadGroup = config.keypadGroup;
+            }
+        }
+        return device;
     }
 }
