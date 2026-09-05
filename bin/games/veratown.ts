@@ -293,19 +293,18 @@ export class Veratown {
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn),
         );
-        this.keypadDoorSystem = this.initFeature(
-            () =>
-                this.container.has(DIServiceKeys.KEYPAD_DOOR_SYSTEM)
-                    ? this.container.get<KeypadDoorSystem>(
-                          DIServiceKeys.KEYPAD_DOOR_SYSTEM,
-                      )
-                    : new KeypadDoorSystem(
-                          this.conn,
-                          this.commandParser,
-                          this.locationStore,
-                          () => this.reloadLocations(),
-                          this.keypadAccessGroupManager,
-                      ),
+        this.keypadDoorSystem = this.initFeature(() =>
+            this.container.has(DIServiceKeys.KEYPAD_DOOR_SYSTEM)
+                ? this.container.get<KeypadDoorSystem>(
+                      DIServiceKeys.KEYPAD_DOOR_SYSTEM,
+                  )
+                : new KeypadDoorSystem(
+                      this.conn,
+                      this.commandParser,
+                      this.locationStore,
+                      () => this.reloadLocations(),
+                      this.keypadAccessGroupManager,
+                  ),
         );
         this.catDogSystem = this.initFeature(
             () =>

@@ -301,7 +301,8 @@ test("Blackjack: Summary - CommandValidator standardizes casino validation", asy
 });
 
 function createMockConnector() {
-    const sentMessages: Array<{ type: string; msg: string; target?: number }> = [];
+    const sentMessages: Array<{ type: string; msg: string; target?: number }> =
+        [];
     return {
         sentMessages,
         SendMessage: (type: string, msg: string, target?: number) => {
@@ -310,7 +311,10 @@ function createMockConnector() {
     };
 }
 
-function createMockCharacter(memberNumber: number, name: string = `Player_${memberNumber}`) {
+function createMockCharacter(
+    memberNumber: number,
+    name: string = `Player_${memberNumber}`,
+) {
     return {
         MemberNumber: memberNumber,
         toString: () => name,
@@ -320,12 +324,14 @@ function createMockCharacter(memberNumber: number, name: string = `Player_${memb
     } as unknown as any;
 }
 
-function createMockCasino(options: {
-    chips?: number;
-    lockedChips?: number;
-    multiplier?: number;
-    venueMultiplier?: number;
-} = {}) {
+function createMockCasino(
+    options: {
+        chips?: number;
+        lockedChips?: number;
+        multiplier?: number;
+        venueMultiplier?: number;
+    } = {},
+) {
     const profiles = new Map<number, any>();
     const events: any[] = [];
     const deductCalls: any[] = [];
@@ -347,12 +353,22 @@ function createMockCasino(options: {
     };
 
     const mutationService = {
-        deductChips: async (memberNumber: number, amount: number, reason: string, actor?: number) => {
+        deductChips: async (
+            memberNumber: number,
+            amount: number,
+            reason: string,
+            actor?: number,
+        ) => {
             deductCalls.push({ memberNumber, amount, reason, actor });
             const prof = await unifiedStore.getProfile(memberNumber);
             prof.casino.chips -= amount;
         },
-        awardChips: async (memberNumber: number, amount: number, reason: string, actor?: number) => {
+        awardChips: async (
+            memberNumber: number,
+            amount: number,
+            reason: string,
+            actor?: number,
+        ) => {
             awardChipsCalls.push({ memberNumber, amount, reason, actor });
             const prof = await unifiedStore.getProfile(memberNumber);
             prof.casino.chips += amount;
@@ -367,7 +383,8 @@ function createMockCasino(options: {
 
     const venueSystem = {
         getVenueMultiplier: () => options.venueMultiplier ?? 1.5,
-        applyVenueBonus: (chips: number) => Math.floor(chips * (options.venueMultiplier ?? 1.5)),
+        applyVenueBonus: (chips: number) =>
+            Math.floor(chips * (options.venueMultiplier ?? 1.5)),
     };
 
     const sign = {
@@ -405,35 +422,23 @@ test("Blackjack Phase 2A.2: Role permission matrix and assignment", async () => 
     game.setRole(100, "administrator");
 
     // Admin sets observer role for member 200
-    await (game as any).onCommandSetRole(
-        admin,
-        {} as any,
-        ["200", "observer"],
-    );
+    await (game as any).onCommandSetRole(admin, {} as any, ["200", "observer"]);
 
     assert.strictEqual(game.getRole(200), "observer");
 
     // Observer tries to bet
-    await game.onCommandBet(
-        observer,
-        {} as any,
-        ["50"],
-    );
+    await game.onCommandBet(observer, {} as any, ["50"]);
 
-    const whisper = conn.sentMessages.find(
-        (m) => m.msg.includes("Permission denied"),
+    const whisper = conn.sentMessages.find((m) =>
+        m.msg.includes("Permission denied"),
     );
     assert.ok(whisper, "Observer should be denied bet action");
 
     // Admin tries to assign invalid role
-    await (game as any).onCommandSetRole(
-        admin,
-        {} as any,
-        ["200", "supergod"],
-    );
+    await (game as any).onCommandSetRole(admin, {} as any, ["200", "supergod"]);
 
-    const invalidRoleWhisper = conn.sentMessages.find(
-        (m) => m.msg.includes("Invalid member number or role"),
+    const invalidRoleWhisper = conn.sentMessages.find((m) =>
+        m.msg.includes("Invalid member number or role"),
     );
     assert.ok(invalidRoleWhisper, "Invalid role should produce error whisper");
 });
@@ -452,7 +457,11 @@ test("Blackjack Phase 2A.2: Locked chips enforcement", async () => {
         (m) => m.target === 300 && m.msg.includes("chips are locked"),
     );
     assert.ok(lockedWhisper, "Bet should be rejected due to locked chips");
-    assert.strictEqual(casino.deductCalls.length, 0, "No chips should be deducted");
+    assert.strictEqual(
+        casino.deductCalls.length,
+        0,
+        "No chips should be deducted",
+    );
 });
 
 test("Blackjack Phase 2A.2: Balance mutation service routing and event audit", async () => {
@@ -469,7 +478,9 @@ test("Blackjack Phase 2A.2: Balance mutation service routing and event audit", a
     assert.strictEqual(casino.deductCalls[0].amount, 100);
     assert.strictEqual(casino.deductCalls[0].actor, 400);
 
-    const betEvent = casino.events.find((e) => e.type === "casino_blackjack_bet");
+    const betEvent = casino.events.find(
+        (e) => e.type === "casino_blackjack_bet",
+    );
     assert.ok(betEvent, "casino_blackjack_bet event should be recorded");
     assert.strictEqual(betEvent.actor, 400);
 });
@@ -484,14 +495,24 @@ test("Blackjack Phase 2A.2: Idempotent settlement and venue modifier application
     await game.onCommandBet(player, {} as any, ["100"]);
 
     // Force dealer and player hands so player wins
-    (game as any).dealerHand = [{ suit: "Hearts", value: "10" }, { suit: "Clubs", value: "7" }]; // 17
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "10" },
+        { suit: "Clubs", value: "7" },
+    ]; // 17
     const bets = game.getBetsForPlayer(500);
-    (game as any).playerHands.set(bets[0], [{ suit: "Spades", value: "10" }, { suit: "Hearts", value: "K" }]); // 20
+    (game as any).playerHands.set(bets[0], [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "K" },
+    ]); // 20
 
     // Resolve game first time
     await (game as any).resolveGame();
 
-    assert.strictEqual(casino.awardChipsCalls.length, 1, "Should award chips once");
+    assert.strictEqual(
+        casino.awardChipsCalls.length,
+        1,
+        "Should award chips once",
+    );
     // Winnings: 100 * 2 = 200 base, with 2.0x venue multiplier = 400
     assert.strictEqual(casino.awardChipsCalls[0].amount, 400);
 
@@ -542,7 +563,10 @@ test("Blackjack Phase 2A.2: Player disconnect handling", async () => {
     await game.handlePlayerDisconnect(700);
 
     const bets = game.getBetsForPlayer(700);
-    assert.ok(bets.length > 0 && bets[0].standing, "Disconnected player's bet should be stood");
+    assert.ok(
+        bets.length > 0 && bets[0].standing,
+        "Disconnected player's bet should be stood",
+    );
 });
 
 test("Blackjack Phase 2A.2: Admin commands (!bjreset, !bjsettle, !bjrefund)", async () => {
@@ -568,7 +592,11 @@ test("Blackjack Phase 2A.2: Admin commands (!bjreset, !bjsettle, !bjrefund)", as
 
     // Admin resets game
     await (game as any).onCommandReset(admin, {} as any, []);
-    assert.strictEqual((game as any).players.length, 0, "Game should be cleared on reset");
+    assert.strictEqual(
+        (game as any).players.length,
+        0,
+        "Game should be cleared on reset",
+    );
 
     const validator = new CommandValidator();
 
