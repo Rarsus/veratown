@@ -25,7 +25,7 @@ const result = spawnSync(
         "--experimental-test-coverage",
         "--import",
         "tsx",
-        ...(process.env.CI ? [] : ["--test-concurrency=1"]),
+        "--test-concurrency=1",
         "--test",
         ...tests,
     ],

@@ -508,7 +508,12 @@ test("MongoDB type validation covers valid and invalid profiles", () => {
 test("UnifiedCharacterStore covers state recovery and keypad workflows", async (t) => {
     const db = getTestDb(t, "test_store_workflows");
     if (!db) return;
-    const store = new UnifiedCharacterStore(db);
+    const eventBus = new EventBus();
+    const escapeEvents: GameEvent[] = [];
+    eventBus.subscribe("escape_payment", async (event) => {
+        escapeEvents.push(event);
+    });
+    const store = new UnifiedCharacterStore(db, eventBus);
     const memberNumber = 5001;
 
     await store.getProfile(memberNumber, "Workflow Player");
@@ -546,6 +551,14 @@ test("UnifiedCharacterStore covers state recovery and keypad workflows", async (
     const escaped = await store.spendChipsToEscape(memberNumber, 20);
     assert.equal(escaped.success, true);
     assert.equal(escaped.bondageRemoved, 2);
+    assert.equal((await store.getCasinoView(memberNumber)).chips, 50);
+    assert.deepEqual((await store.getDareView(memberNumber)).activeBondage, []);
+    assert.deepEqual(escapeEvents[0].data, {
+        chipsCost: 20,
+        bondageItemsRemoved: 2,
+        previousChips: 70,
+        remainingChips: 50,
+    });
 
     await store.updatePosition(memberNumber, { X: 5, Y: 6 });
     await store.recordCageEntry(memberNumber, "stocks", 100, 2);
