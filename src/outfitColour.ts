@@ -44,7 +44,11 @@ export function colourOutfit(
     const coloured = JSON.parse(JSON.stringify(outfit)) as BC_AppearanceItem[];
     for (const item of coloured) {
         if (typeof item.Color === "string") {
-            item.Color = replaceColour(item.Color, mainColour, tintColour) as any;
+            item.Color = replaceColour(
+                item.Color,
+                mainColour,
+                tintColour,
+            ) as any;
         } else if (Array.isArray(item.Color)) {
             item.Color = item.Color.map((colour: string) =>
                 replaceColour(colour, mainColour, tintColour),

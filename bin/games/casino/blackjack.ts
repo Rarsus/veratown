@@ -91,7 +91,10 @@ export interface RolePermissions {
     canAdminister: boolean;
 }
 
-export const BLACKJACK_ROLE_PERMISSIONS: Record<BlackjackRole, RolePermissions> = {
+export const BLACKJACK_ROLE_PERMISSIONS: Record<
+    BlackjackRole,
+    RolePermissions
+> = {
     player: {
         canBet: true,
         canHit: true,
@@ -199,7 +202,8 @@ export class BlackjackGame implements Game {
 
     private roles: Map<number, BlackjackRole> = new Map();
     private currentRoundId: string = "";
-    private currentPhase: "betting" | "dealt" | "playing" | "resolving" | "settled" = "betting";
+    private currentPhase:
+        "betting" | "dealt" | "playing" | "resolving" | "settled" = "betting";
     private settledRounds: Set<string> = new Set();
     private latestState?: BlackjackGameState;
 
@@ -346,18 +350,29 @@ export class BlackjackGame implements Game {
         this.clear();
     }
 
-    public setRole(memberNumber: number, role: BlackjackRole, assignedBy?: number): void {
+    public setRole(
+        memberNumber: number,
+        role: BlackjackRole,
+        assignedBy?: number,
+    ): void {
         this.roles.set(memberNumber, role);
-        this.logger?.info(`Assigned role ${role} to member ${memberNumber}${assignedBy ? ` by ${assignedBy}` : ""}`);
+        this.logger?.info(
+            `Assigned role ${role} to member ${memberNumber}${assignedBy ? ` by ${assignedBy}` : ""}`,
+        );
     }
 
     public getRole(memberNumber: number): BlackjackRole {
         return this.roles.get(memberNumber) || "player";
     }
 
-    public hasPermission(memberNumber: number, action: keyof RolePermissions): boolean {
+    public hasPermission(
+        memberNumber: number,
+        action: keyof RolePermissions,
+    ): boolean {
         const role = this.getRole(memberNumber);
-        const perms = BLACKJACK_ROLE_PERMISSIONS[role] || BLACKJACK_ROLE_PERMISSIONS.player;
+        const perms =
+            BLACKJACK_ROLE_PERMISSIONS[role] ||
+            BLACKJACK_ROLE_PERMISSIONS.player;
         return perms[action] ?? false;
     }
 
@@ -382,7 +397,10 @@ export class BlackjackGame implements Game {
         this.currentRoundId = `bj_round_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
         this.currentPhase = "betting";
         this.persistGameState().catch((err) => {
-            this.logger?.error("Failed to persist game state on round start", err);
+            this.logger?.error(
+                "Failed to persist game state on round start",
+                err,
+            );
         });
     }
 
@@ -422,10 +440,17 @@ export class BlackjackGame implements Game {
         try {
             const mutationService = this.casino.getMutationService();
             if (mutationService) {
-                await mutationService.updateGameProgress(0, "blackjack", state as unknown as Record<string, unknown>);
+                await mutationService.updateGameProgress(
+                    0,
+                    "blackjack",
+                    state as unknown as Record<string, unknown>,
+                );
             }
         } catch (e) {
-            this.logger?.warn("Error persisting game state to mutation service", e);
+            this.logger?.warn(
+                "Error persisting game state to mutation service",
+                e,
+            );
         }
     }
 
@@ -439,7 +464,12 @@ export class BlackjackGame implements Game {
             this.settledRounds.add(state.roundId);
         }
         if (state.roles) {
-            this.roles = new Map(Object.entries(state.roles).map(([k, v]) => [Number(k), v as BlackjackRole]));
+            this.roles = new Map(
+                Object.entries(state.roles).map(([k, v]) => [
+                    Number(k),
+                    v as BlackjackRole,
+                ]),
+            );
         }
         this.players = [];
         this.playerHands.clear();
@@ -470,7 +500,9 @@ export class BlackjackGame implements Game {
     }
 
     public handlePlayerDisconnect(memberNumber: number): void {
-        const player = this.players.find((p) => p.memberNumber === memberNumber);
+        const player = this.players.find(
+            (p) => p.memberNumber === memberNumber,
+        );
         if (!player) return;
 
         player.disconnected = true;
@@ -483,23 +515,30 @@ export class BlackjackGame implements Game {
             `${player.memberName} disconnected. Their hand has been stood automatically.`,
         );
 
-        this.casino.getMutationService().recordEvent({
-            timestamp: Date.now(),
-            type: "casino_blackjack_disconnect",
-            source: "casino",
-            actor: memberNumber,
-            target: memberNumber,
-            data: {
-                roundId: this.currentRoundId,
-                memberNumber,
-            },
-            processed: true,
-        }).catch((e) => this.logger?.error("Failed to record disconnect event", e));
+        this.casino
+            .getMutationService()
+            .recordEvent({
+                timestamp: Date.now(),
+                type: "casino_blackjack_disconnect",
+                source: "casino",
+                actor: memberNumber,
+                target: memberNumber,
+                data: {
+                    roundId: this.currentRoundId,
+                    memberNumber,
+                },
+                processed: true,
+            })
+            .catch((e) =>
+                this.logger?.error("Failed to record disconnect event", e),
+            );
 
         this.persistGameState().catch(() => {});
 
         if (this.allPlayersDone()) {
-            this.resolveGame().catch((e) => this.logger?.error("Error resolving game after disconnect", e));
+            this.resolveGame().catch((e) =>
+                this.logger?.error("Error resolving game after disconnect", e),
+            );
         }
     }
 
@@ -508,19 +547,32 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.verifyRolePermission(sender, "canAdminister", "assign_role")) return;
+        if (!this.verifyRolePermission(sender, "canAdminister", "assign_role"))
+            return;
         if (args.length < 2) {
-            this.conn.SendMessage("Whisper", "Usage: /bot bjrole <memberNumber> <player|dealer|observer|administrator>", sender.MemberNumber);
+            this.conn.SendMessage(
+                "Whisper",
+                "Usage: /bot bjrole <memberNumber> <player|dealer|observer|administrator>",
+                sender.MemberNumber,
+            );
             return;
         }
         const targetMember = parseInt(args[0], 10);
         const targetRole = args[1].toLowerCase() as BlackjackRole;
         if (isNaN(targetMember) || !BLACKJACK_ROLE_PERMISSIONS[targetRole]) {
-            this.conn.SendMessage("Whisper", "Invalid member number or role.", sender.MemberNumber);
+            this.conn.SendMessage(
+                "Whisper",
+                "Invalid member number or role.",
+                sender.MemberNumber,
+            );
             return;
         }
         this.setRole(targetMember, targetRole, sender.MemberNumber);
-        this.conn.SendMessage("Whisper", `Role '${targetRole}' assigned to member ${targetMember}.`, sender.MemberNumber);
+        this.conn.SendMessage(
+            "Whisper",
+            `Role '${targetRole}' assigned to member ${targetMember}.`,
+            sender.MemberNumber,
+        );
     };
 
     private onCommandReset = async (
@@ -528,7 +580,11 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.verifyRolePermission(sender, "canAdminister", "reset") && !this.verifyRolePermission(sender, "canManageDealer", "reset")) return;
+        if (
+            !this.verifyRolePermission(sender, "canAdminister", "reset") &&
+            !this.verifyRolePermission(sender, "canManageDealer", "reset")
+        )
+            return;
         this.clear();
         this.willDealAt = undefined;
         this.willStandAt = undefined;
@@ -537,7 +593,10 @@ export class BlackjackGame implements Game {
         this.dealTimer.clear();
         this.autoStandTimer.clear();
         this.resetTimer.clear();
-        this.conn.SendMessage("Chat", `Blackjack table reset by ${sender.toString()}.`);
+        this.conn.SendMessage(
+            "Chat",
+            `Blackjack table reset by ${sender.toString()}.`,
+        );
     };
 
     private onCommandSettle = async (
@@ -545,7 +604,8 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.verifyRolePermission(sender, "canAdminister", "settle")) return;
+        if (!this.verifyRolePermission(sender, "canAdminister", "settle"))
+            return;
         await this.resolveGame();
     };
 
@@ -554,14 +614,23 @@ export class BlackjackGame implements Game {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        if (!this.verifyRolePermission(sender, "canAdminister", "refund")) return;
+        if (!this.verifyRolePermission(sender, "canAdminister", "refund"))
+            return;
         if (args.length < 1) {
-            this.conn.SendMessage("Whisper", "Usage: /bot bjrefund <memberNumber>", sender.MemberNumber);
+            this.conn.SendMessage(
+                "Whisper",
+                "Usage: /bot bjrefund <memberNumber>",
+                sender.MemberNumber,
+            );
             return;
         }
         const targetMember = parseInt(args[0], 10);
         if (isNaN(targetMember)) {
-            this.conn.SendMessage("Whisper", "Invalid member number.", sender.MemberNumber);
+            this.conn.SendMessage(
+                "Whisper",
+                "Invalid member number.",
+                sender.MemberNumber,
+            );
             return;
         }
         const bets = this.getBetsForPlayer(targetMember);
@@ -570,11 +639,26 @@ export class BlackjackGame implements Game {
             refundTotal += b.stake;
         }
         if (refundTotal > 0) {
-            await this.casino.getMutationService().awardChips(targetMember, refundTotal, "Blackjack admin refund", sender.MemberNumber);
+            await this.casino
+                .getMutationService()
+                .awardChips(
+                    targetMember,
+                    refundTotal,
+                    "Blackjack admin refund",
+                    sender.MemberNumber,
+                );
             this.clearBetsForPlayer(targetMember);
-            this.conn.SendMessage("Whisper", `Refunded ${refundTotal} chips to member ${targetMember}.`, sender.MemberNumber);
+            this.conn.SendMessage(
+                "Whisper",
+                `Refunded ${refundTotal} chips to member ${targetMember}.`,
+                sender.MemberNumber,
+            );
         } else {
-            this.conn.SendMessage("Whisper", `No active bets found for member ${targetMember}.`, sender.MemberNumber);
+            this.conn.SendMessage(
+                "Whisper",
+                `No active bets found for member ${targetMember}.`,
+                sender.MemberNumber,
+            );
         }
     };
 
@@ -1083,8 +1167,13 @@ export class BlackjackGame implements Game {
 
     private async resolveGame(): Promise<void> {
         this.autoStandTimer.clear();
-        if (this.currentRoundId && this.settledRounds.has(this.currentRoundId)) {
-            this.logger?.warn(`Round ${this.currentRoundId} is already settled.`);
+        if (
+            this.currentRoundId &&
+            this.settledRounds.has(this.currentRoundId)
+        ) {
+            this.logger?.warn(
+                `Round ${this.currentRoundId} is already settled.`,
+            );
             return;
         }
         if (this.currentRoundId) {
@@ -1113,7 +1202,8 @@ export class BlackjackGame implements Game {
         );
         this.casino.setTextColor("#ffffff");
 
-        const venueMultiplier = this.casino.venueSystem?.getVenueMultiplier() ?? 1;
+        const venueMultiplier =
+            this.casino.venueSystem?.getVenueMultiplier() ?? 1;
 
         for (const player of this.players) {
             let totalWinnings = 0;
@@ -1131,7 +1221,9 @@ export class BlackjackGame implements Game {
 
             const effectiveWinnings =
                 totalWinnings > 0
-                    ? (this.casino.venueSystem?.applyVenueBonus(totalWinnings) ?? totalWinnings)
+                    ? (this.casino.venueSystem?.applyVenueBonus(
+                          totalWinnings,
+                      ) ?? totalWinnings)
                     : totalWinnings;
 
             if (effectiveWinnings > 0) {

@@ -62,14 +62,18 @@ function pullNestedPath(obj: any, path: string, pullCond: any) {
     if (Array.isArray(curr[last])) {
         curr[last] = curr[last].filter((item: any) => {
             if (pullCond && typeof pullCond === "object") {
-                return !Object.keys(pullCond).every((k) => item[k] === pullCond[k]);
+                return !Object.keys(pullCond).every(
+                    (k) => item[k] === pullCond[k],
+                );
             }
             return item !== pullCond;
         });
     }
 }
 
-function createMockCollection<T extends Record<string, any>>(initialDocs: T[] = []) {
+function createMockCollection<T extends Record<string, any>>(
+    initialDocs: T[] = [],
+) {
     const docs: T[] = [...initialDocs];
 
     const matchesFilter = (doc: T, filter: Record<string, any>): boolean => {
@@ -111,12 +115,17 @@ function createMockCollection<T extends Record<string, any>>(initialDocs: T[] = 
         findOne: async (filter: Record<string, any>) => {
             return docs.find((d) => matchesFilter(d, filter)) ?? null;
         },
-        findOneAndUpdate: async (filter: Record<string, any>, update: Record<string, any>, opts?: any) => {
+        findOneAndUpdate: async (
+            filter: Record<string, any>,
+            update: Record<string, any>,
+            opts?: any,
+        ) => {
             let doc = docs.find((d) => matchesFilter(d, filter));
             if (!doc && opts?.upsert) {
                 doc = {} as T;
                 if (filter._id !== undefined) (doc as any)._id = filter._id;
-                if (update.$setOnInsert) Object.assign(doc, update.$setOnInsert);
+                if (update.$setOnInsert)
+                    Object.assign(doc, update.$setOnInsert);
                 docs.push(doc);
             }
             if (doc) {
@@ -146,12 +155,17 @@ function createMockCollection<T extends Record<string, any>>(initialDocs: T[] = 
             }
             return { acknowledged: true };
         },
-        updateOne: async (filter: Record<string, any>, update: Record<string, any>, opts?: any) => {
+        updateOne: async (
+            filter: Record<string, any>,
+            update: Record<string, any>,
+            opts?: any,
+        ) => {
             let doc = docs.find((d) => matchesFilter(d, filter));
             if (!doc && opts?.upsert) {
                 doc = {} as T;
                 if (filter._id !== undefined) (doc as any)._id = filter._id;
-                if (update.$setOnInsert) Object.assign(doc, update.$setOnInsert);
+                if (update.$setOnInsert)
+                    Object.assign(doc, update.$setOnInsert);
                 docs.push(doc);
             }
             if (doc) {
@@ -185,7 +199,10 @@ function createMockCollection<T extends Record<string, any>>(initialDocs: T[] = 
 }
 
 function createMockDb() {
-    const collections = new Map<string, ReturnType<typeof createMockCollection>>();
+    const collections = new Map<
+        string,
+        ReturnType<typeof createMockCollection>
+    >();
 
     const getColl = (name: string) => {
         if (!collections.has(name)) {
@@ -238,7 +255,10 @@ test("KeypadDefinitionService creates and manages door and group definitions", a
     };
     await defService.createGroup(group);
 
-    const retrievedGroup = await defService.getGroupDefinition("door_1", "staff");
+    const retrievedGroup = await defService.getGroupDefinition(
+        "door_1",
+        "staff",
+    );
     assert.equal(retrievedGroup?.code, "1234");
 });
 
@@ -248,7 +268,10 @@ test("KeypadAccessService enforces deterministic fail-closed access decisions", 
     await defService.init();
 
     const store = new UnifiedCharacterStore(db as any, new EventBus());
-    const mutationService = new GameStateMutationServiceImpl(store, new EventBus());
+    const mutationService = new GameStateMutationServiceImpl(
+        store,
+        new EventBus(),
+    );
     const accessService = new KeypadAccessService(
         db as any,
         defService,
@@ -258,7 +281,10 @@ test("KeypadAccessService enforces deterministic fail-closed access decisions", 
     await accessService.init();
 
     // 1. Non-existent door -> fail closed (false)
-    assert.equal(await accessService.canAccessDoor(100, "nonexistent", false), false);
+    assert.equal(
+        await accessService.canAccessDoor(100, "nonexistent", false),
+        false,
+    );
 
     // 2. Setup existing door
     await defService.createDoor({
@@ -284,23 +310,48 @@ test("KeypadAccessService enforces deterministic fail-closed access decisions", 
     });
 
     // 3. Un-granted character -> fail closed
-    assert.equal(await accessService.canAccessDoor(100, "door_secure", false), false);
+    assert.equal(
+        await accessService.canAccessDoor(100, "door_secure", false),
+        false,
+    );
 
     // 4. Admin override -> allowed
-    assert.equal(await accessService.canAccessDoor(100, "door_secure", true), true);
+    assert.equal(
+        await accessService.canAccessDoor(100, "door_secure", true),
+        true,
+    );
 
     // 5. Grant access -> allowed
-    await accessService.grantAccess(100, "door_secure", "guards", 200, "Guard duty");
-    assert.equal(await accessService.canAccessDoor(100, "door_secure", false), true);
+    await accessService.grantAccess(
+        100,
+        "door_secure",
+        "guards",
+        200,
+        "Guard duty",
+    );
+    assert.equal(
+        await accessService.canAccessDoor(100, "door_secure", false),
+        true,
+    );
 
     // 6. Code matching -> allowed
     assert.equal(
-        await accessService.canAccessWithCode(100, "door_secure", "9999", false),
+        await accessService.canAccessWithCode(
+            100,
+            "door_secure",
+            "9999",
+            false,
+        ),
         true,
     );
     // Wrong code -> denied
     assert.equal(
-        await accessService.canAccessWithCode(100, "door_secure", "0000", false),
+        await accessService.canAccessWithCode(
+            100,
+            "door_secure",
+            "0000",
+            false,
+        ),
         false,
     );
 });
@@ -311,7 +362,10 @@ test("KeypadAccessService handles expiry, revocations, and cage/role state", asy
     await defService.init();
 
     const store = new UnifiedCharacterStore(db as any, new EventBus());
-    const mutationService = new GameStateMutationServiceImpl(store, new EventBus());
+    const mutationService = new GameStateMutationServiceImpl(
+        store,
+        new EventBus(),
+    );
     const accessService = new KeypadAccessService(
         db as any,
         defService,
@@ -335,23 +389,55 @@ test("KeypadAccessService handles expiry, revocations, and cage/role state", asy
 
     // Grant access with past expiration
     const past = Date.now() - 5000;
-    await accessService.grantAccess(101, "door_vault", "members", 200, "temp", past);
+    await accessService.grantAccess(
+        101,
+        "door_vault",
+        "members",
+        200,
+        "temp",
+        past,
+    );
 
     // Expired access -> denied (fail closed)
-    assert.equal(await accessService.canAccessDoor(101, "door_vault", false), false);
+    assert.equal(
+        await accessService.canAccessDoor(101, "door_vault", false),
+        false,
+    );
 
     // Grant valid access with future expiration
     const future = Date.now() + 60000;
-    await accessService.grantAccess(102, "door_vault", "members", 200, "valid", future);
-    assert.equal(await accessService.canAccessDoor(102, "door_vault", false), true);
+    await accessService.grantAccess(
+        102,
+        "door_vault",
+        "members",
+        200,
+        "valid",
+        future,
+    );
+    assert.equal(
+        await accessService.canAccessDoor(102, "door_vault", false),
+        true,
+    );
 
     // Revoke access
-    await accessService.revokeAccess(102, "door_vault", "members", 200, "revoked");
-    assert.equal(await accessService.canAccessDoor(102, "door_vault", false), false);
+    await accessService.revokeAccess(
+        102,
+        "door_vault",
+        "members",
+        200,
+        "revoked",
+    );
+    assert.equal(
+        await accessService.canAccessDoor(102, "door_vault", false),
+        false,
+    );
 
     // Active cage incarceration -> fail closed
     await accessService.grantAccess(103, "door_vault", "members", 200, "valid");
-    assert.equal(await accessService.canAccessDoor(103, "door_vault", false), true);
+    assert.equal(
+        await accessService.canAccessDoor(103, "door_vault", false),
+        true,
+    );
 
     // Incarcerate character in cage
     const profile = await store.getProfile(103);
@@ -361,14 +447,23 @@ test("KeypadAccessService handles expiry, revocations, and cage/role state", asy
     ];
 
     // Caged character -> fail closed
-    assert.equal(await accessService.canAccessDoor(103, "door_vault", false), false);
+    assert.equal(
+        await accessService.canAccessDoor(103, "door_vault", false),
+        false,
+    );
     // Caged character with admin override -> allowed
-    assert.equal(await accessService.canAccessDoor(103, "door_vault", true), true);
+    assert.equal(
+        await accessService.canAccessDoor(103, "door_vault", true),
+        true,
+    );
 
     // Role restriction -> fail closed
     profile.veratown.cageIncarcerations[0].releasedAt = Date.now(); // Released from cage
     profile.veratown.roles = ["restricted"];
-    assert.equal(await accessService.canAccessDoor(103, "door_vault", false), false);
+    assert.equal(
+        await accessService.canAccessDoor(103, "door_vault", false),
+        false,
+    );
 });
 
 test("Keypad services integrate with DIContainer and DeviceFactory", async () => {
