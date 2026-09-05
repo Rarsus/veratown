@@ -297,8 +297,32 @@ export class Veratown {
         // Each system is constructed and registered independently: if one
         // fails (eg. a bug in a single feature), the others are unaffected
         // and Veratown still starts up with everything else working.
-        this.cageSystem = this.initFeature(() => new CageSystem(this.conn));
-        this.kennelSystem = this.initFeature(() => new KennelSystem(this.conn));
+        this.cageSystem = this.initFeature(
+            () =>
+                new CageSystem(
+                    this.conn,
+                    this.container.has(
+                        DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                    )
+                        ? this.container.get<GameStateMutationService>(
+                              DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                          )
+                        : undefined,
+                ),
+        );
+        this.kennelSystem = this.initFeature(
+            () =>
+                new KennelSystem(
+                    this.conn,
+                    this.container.has(
+                        DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                    )
+                        ? this.container.get<GameStateMutationService>(
+                              DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                          )
+                        : undefined,
+                ),
+        );
         this.showerSystem = this.initFeature(
             () => new ShowerSystem(this.conn, this.conn2),
         );
@@ -588,7 +612,7 @@ export class Veratown {
         msg: BC_Server_ChatRoomMessage,
         args: string[],
     ) => {
-        this.freeCharacter(sender);
+        await this.freeCharacter(sender);
         await wait(500);
         sender.Kick();
     };
@@ -612,41 +636,53 @@ export class Veratown {
         this.conn.reply(msg, Veratown.description);
     };
 
-    private freeCharacter(character: API_Character): void {
+    private async freeCharacter(character: API_Character): Promise<void> {
         const logger = createLogger("Veratown.freeCharacter");
 
         // Use atomic appearance sync to prevent data corruption if process crashes
         // during strip-then-restore sequence
-        syncAppearanceMutation(
-            character,
-            async () => {
-                try {
-                    // Strip every bind item (locked or not) regardless of which bot
-                    // system placed it - dare game bondage/pillory/kennel, casino
-                    // forfeits, veratown cages, etc. Collars (ItemNeck/
-                    // ItemNeckAccessories) are intentionally left alone by stripBulk.
-                    character.Appearance.stripBulk({ item: true }, true);
-                    logger.info("Character freed from bondage", {
-                        memberNumber: character.MemberNumber,
-                    });
-                } catch (e) {
-                    logger.error("Failed to strip bondage items", e as Error, {
-                        memberNumber: character.MemberNumber,
-                    });
-                }
+        try {
+            await syncAppearanceMutation(
+                character,
+                async () => {
+                    try {
+                        await this.cageSystem?.freeCharacterIfCaged(character);
+                        await this.kennelSystem?.freeCharacterIfKenneled(
+                            character,
+                        );
+                    } catch (e) {
+                        logger.error(
+                            "Failed to record containment release",
+                            e as Error,
+                            { memberNumber: character.MemberNumber },
+                        );
+                        return;
+                    }
 
-                try {
-                    this.cageSystem?.freeCharacterIfCaged(character);
-                } catch (e) {
-                    logger.error("Failed to free from cage", e as Error, {
-                        memberNumber: character.MemberNumber,
-                    });
-                }
-            },
-            100,
-        ).catch((err) => {
+                    try {
+                        // Strip every bind item (locked or not) regardless of which bot
+                        // system placed it - dare game bondage/pillory/kennel, casino
+                        // forfeits, veratown cages, etc. Collars (ItemNeck/
+                        // ItemNeckAccessories) are intentionally left alone by stripBulk.
+                        character.Appearance.stripBulk({ item: true }, true);
+                        logger.info("Character freed from bondage", {
+                            memberNumber: character.MemberNumber,
+                        });
+                    } catch (e) {
+                        logger.error(
+                            "Failed to strip bondage items",
+                            e as Error,
+                            {
+                                memberNumber: character.MemberNumber,
+                            },
+                        );
+                    }
+                },
+                100,
+            );
+        } catch (err) {
             logger.error("freeCharacter mutation failed", err as Error);
-        });
+        }
     }
 
     // EPIC 1.3 System Accessors

@@ -15,6 +15,7 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
+import { GameStateMutationService } from "../shared/gameStateMutationService";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
@@ -34,7 +35,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     >;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
-    public constructor(conn: API_Connector) {
+    public constructor(
+        conn: API_Connector,
+        private readonly mutationService?: GameStateMutationService,
+    ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
     }
@@ -85,6 +89,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
 
         // Use idempotent monitor to prevent duplicate execution
         await this.monitor.run(character, async () => {
+            const persisted = await this.mutationService?.enterKennel(
+                character.MemberNumber,
+            );
+            if (persisted === false) return;
             const kennel = character.Appearance.AddItem(
                 AssetGet("ItemDevices", "Kennel"),
             );
@@ -115,9 +123,12 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     /**
      * Remove the Kennel device if the character is wearing one
      */
-    public freeCharacterIfKenneled(character: API_Character): void {
+    public async freeCharacterIfKenneled(
+        character: API_Character,
+    ): Promise<void> {
         const kennel = character.Appearance.getItemData("ItemDevices");
         if (kennel?.Name === "Kennel") {
+            await this.mutationService?.exitKennel(character.MemberNumber);
             character.Appearance.RemoveItem("ItemDevices" as any);
         }
     }

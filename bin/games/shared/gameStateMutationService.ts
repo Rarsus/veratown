@@ -139,8 +139,11 @@ export interface GameStateMutationService {
         memberNumber: number,
         cageName: string,
         durationMs?: number,
-    ): Promise<void>;
-    exitCage(memberNumber: number): Promise<void>;
+        actor?: number,
+    ): Promise<boolean>;
+    exitCage(memberNumber: number, actor?: number): Promise<boolean>;
+    enterKennel(memberNumber: number, actor?: number): Promise<boolean>;
+    exitKennel(memberNumber: number, actor?: number): Promise<boolean>;
     updateGameProgress(
         memberNumber: number,
         gameType: GameType,
@@ -212,6 +215,10 @@ type MutationStore = Pick<
     | "applyEffect"
     | "cancelEffect"
     | "getActiveEffects"
+    | "recordCageEntry"
+    | "recordCageExit"
+    | "recordKennelEntry"
+    | "recordKennelExit"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -851,50 +858,81 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         memberNumber: number,
         cageName: string,
         durationMs?: number,
-    ): Promise<void> {
+        actor = memberNumber,
+    ): Promise<boolean> {
         this.validateMember(memberNumber);
         if (!cageName)
             throw new ValidationError("cageName is required", {
                 field: "cageName",
             });
         if (durationMs !== undefined) this.validateAmount(durationMs);
-        await this.withRetry(async () => {
-            const now = Date.now();
-            const profile = await this.unifiedStore.getProfile(memberNumber);
-            const sessions = [
-                ...profile.veratown.cageIncarcerations,
-                { enteredAt: now, duration: durationMs ?? 0, cageName },
-            ];
-            await this.unifiedStore.updateVeratownStats(memberNumber, {
-                cageIncarcerations: sessions,
-            });
-            await this.audit(memberNumber, "enterCage", {
+        return this.withRetry(async () => {
+            const applied = await this.unifiedStore.recordCageEntry(
+                memberNumber,
                 cageName,
-                durationMs,
-            });
-            await this.publish("cage_entry", memberNumber, {
-                cageName,
-                durationMs,
-            });
+                durationMs ?? 0,
+                actor,
+            );
+            if (!applied) return false;
+            await this.audit(
+                memberNumber,
+                "enterCage",
+                {
+                    cageName,
+                    durationMs,
+                },
+                actor,
+            );
+            return true;
         }, "enterCage");
     }
 
-    public async exitCage(memberNumber: number): Promise<void> {
+    public async exitCage(
+        memberNumber: number,
+        actor = memberNumber,
+    ): Promise<boolean> {
         this.validateMember(memberNumber);
-        await this.withRetry(async () => {
-            const profile = await this.unifiedStore.getProfile(memberNumber);
-            const sessions = [...profile.veratown.cageIncarcerations];
-            const current = sessions[sessions.length - 1];
-            if (current && !current.releasedAt) {
-                current.releasedAt = Date.now();
-                current.duration = current.releasedAt - current.enteredAt;
-            }
-            await this.unifiedStore.updateVeratownStats(memberNumber, {
-                cageIncarcerations: sessions,
-            });
-            await this.audit(memberNumber, "exitCage", {});
-            await this.publish("cage_exit", memberNumber, {});
+        return this.withRetry(async () => {
+            const applied = await this.unifiedStore.recordCageExit(
+                memberNumber,
+                actor,
+            );
+            if (!applied) return false;
+            await this.audit(memberNumber, "exitCage", {}, actor);
+            return true;
         }, "exitCage");
+    }
+
+    public async enterKennel(
+        memberNumber: number,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        this.validateMember(memberNumber);
+        return this.withRetry(async () => {
+            const applied = await this.unifiedStore.recordKennelEntry(
+                memberNumber,
+                actor,
+            );
+            if (!applied) return false;
+            await this.audit(memberNumber, "enterKennel", {}, actor);
+            return true;
+        }, "enterKennel");
+    }
+
+    public async exitKennel(
+        memberNumber: number,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        this.validateMember(memberNumber);
+        return this.withRetry(async () => {
+            const applied = await this.unifiedStore.recordKennelExit(
+                memberNumber,
+                actor,
+            );
+            if (!applied) return false;
+            await this.audit(memberNumber, "exitKennel", {}, actor);
+            return true;
+        }, "exitKennel");
     }
 
     public async updateGameProgress(
