@@ -2,6 +2,10 @@
 
 Development practices, testing, logging, and coding standards for Ropeybot.
 
+## Current Status
+
+Read [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_05.md) before assessing readiness or planning the next phase. Historical status snapshots in [the archive](../archived/) are deprecated.
+
 ## Core Implementation Guides
 
 - **[Logging Guide](LOGGING_GUIDE.md)** - How to use the centralized logging system
@@ -52,6 +56,8 @@ node --test --verbose bin/logging/__tests__/logger.test.ts
 ```
 
 Test coverage: 38+ logging tests, 400+ total tests
+
+The active quality gates are the commands in the current status report. Do not rely on historical test counts or “0 errors” claims without rerunning the checks.
 
 ---
 

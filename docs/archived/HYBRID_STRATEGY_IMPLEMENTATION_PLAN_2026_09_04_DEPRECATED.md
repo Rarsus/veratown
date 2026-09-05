@@ -1,4 +1,6 @@
-# HYBRID STRATEGY (OPTION C) - COMPLETE IMPLEMENTATION PLAN
+# DEPRECATED: HYBRID STRATEGY (OPTION C) - ORIGINAL IMPLEMENTATION PLAN
+
+> **Deprecated on 2026-09-05.** This document is the original September 4 planning snapshot. It is preserved in `docs/archived/` for historical traceability; it is not an accurate execution status. See [IMPLEMENTATION_STATUS_2026_09_05.md](../../IMPLEMENTATION_STATUS_2026_09_05.md) and [HYBRID_STRATEGY_CURRENT_PLAN.md](../../HYBRID_STRATEGY_CURRENT_PLAN.md).
 
 **Status**: ✅ **READY TO EXECUTE**  
 **Duration**: 12-14 weeks  
@@ -406,8 +408,8 @@ Go-Live: November 19, 2026
 
 All planning documents are available:
 
-- [GITHUB_ISSUES_RE_VALIDATION_ACTUAL_STATE_2026_09_03.md](GITHUB_ISSUES_RE_VALIDATION_ACTUAL_STATE_2026_09_03.md) - Validation report
-- [HYBRID_STRATEGY_IMPLEMENTATION_PLAN.md](HYBRID_STRATEGY_IMPLEMENTATION_PLAN.md) - This document
+- [GITHUB_ISSUES_RE_VALIDATION_ACTUAL_STATE_2026_09_03_DEPRECATED.md](GITHUB_ISSUES_RE_VALIDATION_ACTUAL_STATE_2026_09_03_DEPRECATED.md) - Historical validation report
+- [HYBRID_STRATEGY_CURRENT_PLAN.md](../../HYBRID_STRATEGY_CURRENT_PLAN.md) - Current execution plan
 
 All issues are properly documented with requirements and success criteria.
 

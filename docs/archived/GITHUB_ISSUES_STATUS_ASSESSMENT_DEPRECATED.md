@@ -1,4 +1,6 @@
-# GitHub Issues Status Assessment & Hybrid Strategy Alignment
+# DEPRECATED: GitHub Issues Status Assessment & Hybrid Strategy Alignment
+
+> **Deprecated on 2026-09-05.** This pre-implementation assessment is retained for traceability. Use [IMPLEMENTATION_STATUS_2026_09_05.md](../../IMPLEMENTATION_STATUS_2026_09_05.md) for current status and priorities.
 
 ## Pre-Implementation Review (September 3, 2026)
 

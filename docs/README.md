@@ -9,6 +9,8 @@ Welcome to the Ropeybot documentation. Start here to find what you need.
 - **Want to deploy?** → Check [Deployment Options](DEPLOYMENT/)
 - **Need system details?** → Read [Architecture](ARCHITECTURE/)
 - **Developing a feature?** → Follow [Developer Guide](GUIDES/DEVELOPMENT.md)
+- **Checking implementation status?** → Read [Current Implementation Status](../IMPLEMENTATION_STATUS_2026_09_05.md)
+- **Planning Phase 2B?** → Read [Current Hybrid Strategy Plan](../HYBRID_STRATEGY_CURRENT_PLAN.md)
 
 ---
 
@@ -90,6 +92,8 @@ Historical documentation from previous phases and epics.
 - Past migration guides
 - Historical analysis
 
+Current status reports and execution plans are kept at the repository root. Archived status snapshots are historical only and must not be used to determine readiness.
+
 ---
 
 ## 🔍 Find Documentation By Topic
@@ -130,6 +134,6 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for code contribution guidelines.
 
 ---
 
-**Last Updated**: 2026-09-02  
+**Last Updated**: 2026-09-05
 **Total Documentation Files**: 60+ files organized by purpose  
 **See Also**: [Archived Documentation](archived/) for historical reference

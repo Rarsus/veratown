@@ -21,6 +21,25 @@
 
 ## 🏗️ Architecture Understanding
 
+## Current Implementation Status (2026-09-05)
+
+The authoritative status is [IMPLEMENTATION_STATUS_2026_09_05.md](IMPLEMENTATION_STATUS_2026_09_05.md).
+
+- Phase 1 is complete: DI, abstract feature foundations, mutation boundaries, EventBus, DeviceFactory, and the Phase 1 test foundation are implemented.
+- Phase 2A child systems are implemented, but Phase 2A remains open until integration, performance, coverage, strict TypeScript, rollback, and handoff gates in GitHub issue #59 pass.
+- Phase 2B (KidnappersGame) has not substantively started. Its work must be broken into dependency-ordered child issues under #30 before implementation begins.
+- Phase 3 and Phase 4 are blocked until both Phase 2 tracks complete their exit gates.
+- Do not repeat historical claims that strict TypeScript has zero errors. The current checkout must pass `npm run types`; the current known failures are documented in the status report.
+
+### Controlling Engineering Principles
+
+- Durable state changes go through DI-managed services and `GameStateMutationService`; do not write game state directly from command handlers or feature systems.
+- Prefer event-driven triggers, monitors, and idempotent actions. Do not introduce polling for state changes when an event or lifecycle signal is available.
+- Treat persistence as an explicit contract: validate boundaries, version mutations, emit audit events, support retry semantics, and prove rollback/recovery behavior.
+- Cross-system subscribers must isolate failures, preserve observability, and deduplicate deliveries.
+- A completed issue is not an exit gate by itself. Require executable tests, coverage, documentation, migration notes, and rollback/recovery evidence.
+- When documentation conflicts with a command result or current GitHub issue state, report the discrepancy and update the current status source rather than copying the historical claim.
+
 ### Casino Venue System
 
 Casino venue configuration and services are provided through the DI container.
