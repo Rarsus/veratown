@@ -51,6 +51,7 @@ import {
     GameStateMutationServiceImpl,
 } from "./shared/gameStateMutationService";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
+import { GamePluginCommandRouterImpl } from "./shared/gamePluginCommandRouter";
 import { GamePluginMessageFeatureSystem } from "./shared/gamePluginMessageFeatureSystem";
 import { createLogger } from "../logging";
 import { DIContainer, DIServiceKeys } from "../di/container";
@@ -105,6 +106,8 @@ export class Casino implements GamePlugin {
 
     private game: Game;
     private commandParser?: CommandParser;
+    private commandRouter?: GamePluginCommandRouter;
+    private gameSwitchInProgress = false;
     public unifiedStore: UnifiedCharacterStore;
     private mutationService: GameStateMutationService;
     private readonly bioManager: BioManager;
@@ -200,10 +203,11 @@ export class Casino implements GamePlugin {
             },
             async () => {},
         );
-        this.commandParser.register("game", this.routeCasinoCommand("game"));
-
-        // Register game-specific commands (separate from constructor to follow plugin architecture)
-        this.game.registerCommands(this.commandParser!);
+        this.commandRouter = new GamePluginCommandRouterImpl(
+            this.commandParser!,
+            this.key,
+        );
+        this.registerCommands(this.commandRouter);
 
         this.forfeitService = new ForfeitService(this.mutationService);
 
@@ -381,6 +385,7 @@ export class Casino implements GamePlugin {
      * Called during Veratown plugin initialization.
      */
     public registerCommands(router: GamePluginCommandRouter): void {
+        this.commandRouter = router;
         router.registerRoot(async (sender, msg, args) => {
             const command = args[0]?.toLowerCase();
             if (!command) return;
@@ -393,6 +398,13 @@ export class Casino implements GamePlugin {
                 return;
             await this.routeCasinoCommand(command)(sender, msg, args.slice(1));
         });
+        for (const command of Object.keys(this.casinoCommandHandlers)) {
+            router.registerRootCommand(
+                command,
+                this.routeCasinoCommand(command),
+            );
+        }
+        this.game?.registerCommands(router);
     }
 
     private routeCasinoCommand =
@@ -616,14 +628,14 @@ export class Casino implements GamePlugin {
                     "Chat",
                     `This is the last round, the game ends after.`,
                 );
+                this.game.unregisterCommands(this.commandRouter!);
                 this.game.endGame().then(() => {
-                    if (!this.conn || !this.commandParser) return;
+                    if (!this.conn || !this.commandRouter) return;
                     this.conn.AccountBeep(beep.MemberNumber, "", "Game ended.");
                     this.conn.SendMessage(
                         "Chat",
                         `The game has ended, thank you for playing!`,
                     );
-                    this.commandParser.unregisterAll();
                 });
             } else {
                 logger.debug(
@@ -1205,45 +1217,49 @@ ${forfeitsString()}
             this.conn.reply(msg, "Sorry, you need to be an admin");
             return;
         }
+        if (this.gameSwitchInProgress) {
+            this.conn.reply(msg, "A game switch is already in progress.");
+            return;
+        }
         if (args.length < 1) {
             this.conn.reply(msg, "Usage: /bot game <game>");
             return;
         }
         const game = args[0].toLowerCase();
-        if (game === "roulette" && !(this.game instanceof RouletteGame)) {
-            this.conn.SendMessage(
-                "Chat",
-                "After this round the game will switch to roulette.",
-            );
-            await this.game.endGame();
-            this.game = new RouletteGame(this.conn, this);
-            this.game.registerCommands(this.commandParser!);
-            this.conn.reply(msg, "Switched to roulette.");
-            this.conn.SendMessage(
-                "Chat",
-                `The game has switched to roulette, please place your bets!`,
-            );
-        } else if (
-            game === "blackjack" &&
-            !(this.game instanceof BlackjackGame)
-        ) {
-            this.conn.SendMessage(
-                "Chat",
-                "After this round the game will switch to blackjack.",
-            );
-            await this.game.endGame();
-            this.game = new BlackjackGame(this.conn, this);
-            this.game.registerCommands(this.commandParser!);
-            this.conn.reply(msg, "Switched to blackjack.");
-            this.conn.SendMessage(
-                "Chat",
-                `The game has switched to blackjack, please place your bets!`,
-            );
-        } else {
+        if (game !== "roulette" && game !== "blackjack") {
             this.conn.reply(msg, `Unknown game: ${game}`);
             return;
         }
-        this.setBio();
+        if (
+            (game === "roulette" && this.game instanceof RouletteGame) ||
+            (game === "blackjack" && this.game instanceof BlackjackGame)
+        ) {
+            this.conn.reply(msg, `The game is already ${game}.`);
+            return;
+        }
+
+        this.gameSwitchInProgress = true;
+        try {
+            this.conn.SendMessage(
+                "Chat",
+                `After this round the game will switch to ${game}.`,
+            );
+            this.game.unregisterCommands(this.commandRouter!);
+            await this.game.endGame();
+            this.game =
+                game === "roulette"
+                    ? new RouletteGame(this.conn, this)
+                    : new BlackjackGame(this.conn, this);
+            this.game.registerCommands(this.commandRouter!);
+            this.conn.reply(msg, `Switched to ${game}.`);
+            this.conn.SendMessage(
+                "Chat",
+                `The game has switched to ${game}, please place your bets!`,
+            );
+            this.setBio();
+        } finally {
+            this.gameSwitchInProgress = false;
+        }
     };
 
     private onCommandEscape = async (

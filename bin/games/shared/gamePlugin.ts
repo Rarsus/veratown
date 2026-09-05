@@ -172,8 +172,9 @@ export interface GamePlugin {
  * Abstraction for plugins to register commands without needing direct
  * access to CommandParser or worrying about /bot vs ! syntax differences.
  *
- * All commands are automatically scoped to the plugin's key. The router
- * handles routing both `/bot {key} {command}` and `!{key} {command}` to the same handlers.
+ * Commands registered with registerCommand/registerGroup are automatically
+ * scoped to the plugin's key. The router handles routing both
+ * `/bot {key} {command}` and `!{key} {command}` to the same handlers.
  */
 export interface GamePluginCommandRouter {
     /**
@@ -184,6 +185,20 @@ export interface GamePluginCommandRouter {
      * router.registerRoot(async (sender, msg, args) => {...});
      */
     registerRoot(handler: GamePluginCommandHandler): void;
+
+    /**
+     * Register a command at the parser root without the plugin key.
+     *
+     * @example
+     * // Responds to: /bot help, !help
+     * router.registerRootCommand("help", async (sender, msg, args) => {...});
+     */
+    registerRootCommand(name: string, handler: GamePluginCommandHandler): void;
+
+    /**
+     * Remove a command registered at the parser root.
+     */
+    unregisterRootCommand(name: string): void;
 
     /**
      * Register a single command that responds to both /bot and ! syntax.

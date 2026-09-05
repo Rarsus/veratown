@@ -20,7 +20,6 @@ import {
     BC_Server_ChatRoomMessage,
     API_AppearanceItem,
     AssetGet,
-    CommandParser,
 } from "bc-bot";
 import { FORFEITS } from "./forfeits";
 import { Bet, Game } from "./game";
@@ -28,6 +27,7 @@ import { ROULETTE_WHEEL } from "./rouletteWheelBundle";
 import { BetValidator } from "./betValidator";
 import { GameTimer } from "./gameTimer";
 import { CommandValidator } from "../shared/commandValidator";
+import type { GamePluginCommandRouter } from "../shared/gamePlugin";
 
 import { createLogger } from "../../logging";
 import { getXpRewardForSource } from "../shared/progressionRules";
@@ -187,14 +187,14 @@ export class RouletteGame implements Game {
     private casino: Casino;
 
     /**
-     * Register Roulette-specific commands with the CommandParser.
+     * Register Roulette-specific commands with the command router.
      * Called by Casino after instantiation (follows plugin architecture principles).
      */
-    public registerCommands(commandParser: CommandParser): void {
-        commandParser.register("cancel", this.onCommandCancel);
-        commandParser.register("bet", this.onCommandBet);
-        commandParser.register("rrole", this.onCommandSetRole);
-        commandParser.register(
+    public registerCommands(router: GamePluginCommandRouter): void {
+        router.registerRootCommand("cancel", this.onCommandCancel);
+        router.registerRootCommand("bet", this.onCommandBet);
+        router.registerRootCommand("rrole", this.onCommandSetRole);
+        router.registerRootCommand(
             "sign",
             (
                 sender: API_Character,
@@ -209,7 +209,7 @@ export class RouletteGame implements Game {
                 this.casino.setTextColor("#ffffff");
             },
         );
-        commandParser.register(
+        router.registerRootCommand(
             "wheel",
             (
                 sender: API_Character,
@@ -219,6 +219,12 @@ export class RouletteGame implements Game {
                 this.getWheel();
             },
         );
+    }
+
+    public unregisterCommands(router: GamePluginCommandRouter): void {
+        for (const command of ["cancel", "bet", "rrole", "sign", "wheel"]) {
+            router.unregisterRootCommand(command);
+        }
     }
 
     public constructor(
@@ -991,15 +997,6 @@ export class RouletteGame implements Game {
     async endGame(): Promise<void> {
         await waitForCondition(() => this.willSpinAt === undefined);
         await wait(2000);
-        const commandParser = (this.casino as any).commandParser as
-            CommandParser | undefined;
-        if (commandParser) {
-            commandParser.unregister("cancel");
-            commandParser.unregister("bet");
-            commandParser.unregister("sign");
-            commandParser.unregister("wheel");
-            commandParser.unregister("rrole");
-        }
         this.clear();
     }
 }
