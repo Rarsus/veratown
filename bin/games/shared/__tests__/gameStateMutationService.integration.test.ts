@@ -84,4 +84,64 @@ describe("GameStateMutationService MongoDB integration", () => {
         assert.equal(sender.chips, 0);
         assert.equal(recipient.chips, 100);
     });
+
+    test("persists idempotent, quantity-safe inventory mutations and audit events", async (t) => {
+        if (skipIfMongoUnavailable(t)) return;
+
+        assert.deepEqual(
+            await service.addToInventory(
+                3,
+                {
+                    itemKey: "casino.reward.token",
+                    quantity: 3,
+                    ownerMemberNumber: 3,
+                    metadata: { source: "blackjack" },
+                },
+                "blackjack:round-1:3:token",
+            ),
+            { applied: true, duplicate: false, availableQuantity: 3 },
+        );
+        assert.equal(
+            (
+                await service.addToInventory(
+                    3,
+                    {
+                        itemKey: "casino.reward.token",
+                        quantity: 3,
+                        ownerMemberNumber: 3,
+                        metadata: { source: "blackjack" },
+                    },
+                    "blackjack:round-1:3:token",
+                )
+            ).duplicate,
+            true,
+        );
+        assert.deepEqual(
+            await service.removeFromInventory(
+                3,
+                "casino.reward.token",
+                2,
+                "casino:consume:1",
+            ),
+            { applied: true, duplicate: false, availableQuantity: 1 },
+        );
+
+        const profile = await store.getProfile(3);
+        assert.deepEqual(profile.crossSystem.inventory, [
+            {
+                itemKey: "casino.reward.token",
+                quantity: 1,
+                ownerMemberNumber: 3,
+                metadata: { source: "blackjack" },
+            },
+        ]);
+        const events = await db!
+            .collection("gameEvents")
+            .find({
+                target: 3,
+                type: { $in: ["inventory_added", "inventory_removed"] },
+            })
+            .toArray();
+        assert.equal(events.length, 2);
+    });
 });

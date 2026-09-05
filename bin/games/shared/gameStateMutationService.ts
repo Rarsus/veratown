@@ -16,6 +16,7 @@ import {
     GameEvent,
     KeypadAccessRecord,
     MutationInventoryItem,
+    InventoryMutationResult,
     VeratownState,
     CharacterBioUpdate,
     ProgressionAwardResult,
@@ -64,13 +65,16 @@ export interface GameStateMutationService {
     addToInventory(
         memberNumber: number,
         item: MutationInventoryItem,
+        mutationKey: string,
         actor?: number,
-    ): Promise<void>;
+    ): Promise<InventoryMutationResult>;
     removeFromInventory(
         memberNumber: number,
         itemKey: string,
+        quantity: number,
+        mutationKey: string,
         actor?: number,
-    ): Promise<void>;
+    ): Promise<InventoryMutationResult>;
     applyEffect(
         memberNumber: number,
         effect: AppliedEffect,
@@ -196,6 +200,7 @@ type MutationStore = Pick<
     | "transferChipsAtomically"
     | "awardProgressionXp"
     | "rollbackProgressionXp"
+    | "mutateInventory"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -372,51 +377,75 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
     public async addToInventory(
         memberNumber: number,
         item: MutationInventoryItem,
+        mutationKey: string,
         actor = memberNumber,
-    ): Promise<void> {
+    ): Promise<InventoryMutationResult> {
         this.validateMember(memberNumber);
         if (
             !item?.itemKey ||
             !Number.isInteger(item.quantity) ||
-            item.quantity <= 0
+            item.quantity <= 0 ||
+            item.ownerMemberNumber !== memberNumber ||
+            !mutationKey
         )
             throw new ValidationError("valid inventory item is required", {
                 field: "item",
             });
-        await this.withRetry(async () => {
-            const profile = await this.unifiedStore.getProfile(memberNumber);
-            const inventory = [...(profile.crossSystem.inventory ?? []), item];
-            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
-                inventory,
-            });
-            await this.audit(memberNumber, "addToInventory", { item }, actor);
+        return this.withRetry(async () => {
+            const result = await this.unifiedStore.mutateInventory(
+                memberNumber,
+                { operation: "add", item, mutationKey },
+                actor,
+            );
+            if (result.applied) {
+                await this.audit(
+                    memberNumber,
+                    "addToInventory",
+                    { item, mutationKey, ...result },
+                    actor,
+                );
+            }
+            return result;
         }, "addToInventory");
     }
 
     public async removeFromInventory(
         memberNumber: number,
         itemKey: string,
+        quantity: number,
+        mutationKey: string,
         actor = memberNumber,
-    ): Promise<void> {
+    ): Promise<InventoryMutationResult> {
         this.validateMember(memberNumber);
-        if (!itemKey)
+        if (
+            !itemKey ||
+            !Number.isInteger(quantity) ||
+            quantity <= 0 ||
+            !mutationKey
+        )
             throw new ValidationError("itemKey is required", {
                 field: "itemKey",
             });
-        await this.withRetry(async () => {
-            const profile = await this.unifiedStore.getProfile(memberNumber);
-            const inventory = (profile.crossSystem.inventory ?? []).filter(
-                (item) => item.itemKey !== itemKey,
-            );
-            await this.unifiedStore.updateCrossSystemStats(memberNumber, {
-                inventory,
-            });
-            await this.audit(
+        return this.withRetry(async () => {
+            const result = await this.unifiedStore.mutateInventory(
                 memberNumber,
-                "removeFromInventory",
-                { itemKey },
+                {
+                    operation: "remove",
+                    itemKey,
+                    quantity,
+                    mutationKey,
+                },
                 actor,
             );
+            if (result.applied) {
+                await this.audit(
+                    memberNumber,
+                    "removeFromInventory",
+                    { itemKey, quantity, mutationKey, ...result },
+                    actor,
+                );
+            }
+            return result;
         }, "removeFromInventory");
     }
 

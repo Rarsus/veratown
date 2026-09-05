@@ -5,13 +5,14 @@ import { GameStateMutationServiceImpl } from "../gameStateMutationService";
 
 function createStore() {
     const calls: string[] = [];
+    const mutationKeys = new Set<string>();
     const profile = {
         name: "Player",
         version: 0,
         casino: { chips: 100, recentWinnings: 0 },
         dare: { activeBondage: [] },
         veratown: { cageIncarcerations: [] },
-        crossSystem: { inventory: [], effects: [], bondageLevel: 0 },
+        crossSystem: { inventory: [] as any[], effects: [], bondageLevel: 0 },
     };
     return {
         calls,
@@ -80,6 +81,51 @@ function createStore() {
         rollbackProgressionXp: async (...args: unknown[]) => {
             calls.push(`progression-rollback:${args[1]}`);
             return { applied: true, totalXp: 0, level: 0 };
+        },
+        mutateInventory: async (_member: number, mutation: any) => {
+            const inventory = profile.crossSystem.inventory;
+            const itemKey =
+                mutation.operation === "add"
+                    ? mutation.item.itemKey
+                    : mutation.itemKey;
+            const existing = inventory.find(
+                (item: any) => item.itemKey === itemKey,
+            );
+            if (mutationKeys.has(mutation.mutationKey)) {
+                return {
+                    applied: false,
+                    duplicate: true,
+                    availableQuantity: existing?.quantity ?? 0,
+                };
+            }
+            if (mutation.operation === "add") {
+                mutationKeys.add(mutation.mutationKey);
+                if (existing) existing.quantity += mutation.item.quantity;
+                else inventory.push(mutation.item);
+                return {
+                    applied: true,
+                    duplicate: false,
+                    availableQuantity:
+                        existing?.quantity ?? mutation.item.quantity,
+                };
+            }
+            if (!existing) {
+                return {
+                    applied: false,
+                    duplicate: false,
+                    availableQuantity: 0,
+                };
+            }
+            mutationKeys.add(mutation.mutationKey);
+            existing.quantity -= Math.min(existing.quantity, mutation.quantity);
+            profile.crossSystem.inventory = inventory.filter(
+                (item: any) => item.quantity > 0,
+            );
+            return {
+                applied: true,
+                duplicate: false,
+                availableQuantity: existing.quantity,
+            };
         },
     };
 }
@@ -158,18 +204,24 @@ test("GameStateMutationService covers core property and progression mutations", 
     );
 
     await service.updateCharacterProperty(1, "lastPosition", { X: 1, Y: 2 });
-    await service.addToInventory(1, { itemKey: "key", quantity: 1 });
+    await service.addToInventory(
+        1,
+        { itemKey: "key", quantity: 2, ownerMemberNumber: 1 },
+        "grant:key:1",
+    );
     await service.applyEffect(1, {
         effectKey: "stunned",
         appliedAt: Date.now(),
     });
     await service.updateBondageLevel(1, 3);
-    await service.removeFromInventory(1, "key");
+    await service.removeFromInventory(1, "key", 1, "remove:key:1");
     await service.awardChips(1, 10, "award");
     await service.deductChips(1, 4, "deduct");
 
     assert.equal(store.profile.crossSystem.bondageLevel, 3);
-    assert.deepEqual(store.profile.crossSystem.inventory, []);
+    assert.deepEqual(store.profile.crossSystem.inventory, [
+        { itemKey: "key", quantity: 1, ownerMemberNumber: 1 },
+    ]);
     assert.equal(store.profile.crossSystem.effects.length, 1);
     assert.ok(store.calls.includes("cross-system"));
     assert.ok(store.calls.includes("audit:awardChips"));
@@ -187,6 +239,39 @@ test("GameStateMutationService claims daily chips through the atomic store API",
     assert.equal(await service.claimDailyFreeChips(1, 20), true);
     assert.ok(store.calls.includes("daily:20"));
     assert.ok(store.calls.includes("audit:claimDailyFreeChips"));
+});
+
+test("GameStateMutationService inventories items by key and supports partial idempotent removal", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+    const item = { itemKey: "reward.badge", quantity: 3, ownerMemberNumber: 1 };
+
+    assert.deepEqual(await service.addToInventory(1, item, "grant:badge"), {
+        applied: true,
+        duplicate: false,
+        availableQuantity: 3,
+    });
+    assert.deepEqual(await service.addToInventory(1, item, "grant:badge"), {
+        applied: false,
+        duplicate: true,
+        availableQuantity: 3,
+    });
+    assert.deepEqual(
+        await service.removeFromInventory(1, "reward.badge", 2, "remove:badge"),
+        { applied: true, duplicate: false, availableQuantity: 1 },
+    );
+    await assert.rejects(
+        () =>
+            service.addToInventory(
+                1,
+                { ...item, ownerMemberNumber: 2 },
+                "invalid-owner",
+            ),
+        { code: "VALIDATION_ERROR" },
+    );
 });
 
 test("GameStateMutationService awards and rolls back progression XP idempotently", async () => {
@@ -293,9 +378,15 @@ test("GameStateMutationService validates remaining inputs and handles failed aud
     await assert.rejects(() => service.updateCharacterName(1, ""));
     await assert.rejects(() => service.updateCharacterProperty(1, "$bad", 1));
     await assert.rejects(() =>
-        service.addToInventory(1, { itemKey: "", quantity: 1 }),
+        service.addToInventory(
+            1,
+            { itemKey: "", quantity: 1, ownerMemberNumber: 1 },
+            "invalid",
+        ),
     );
-    await assert.rejects(() => service.removeFromInventory(1, ""));
+    await assert.rejects(() =>
+        service.removeFromInventory(1, "", 1, "invalid"),
+    );
     await assert.rejects(() => service.applyEffect(1, {} as any));
     await assert.rejects(() => service.updateBondageLevel(1, -1));
     await assert.rejects(() => service.transferChips(1, 1, 1, "same"));

@@ -31,6 +31,8 @@ import {
     SuspendedGame,
     CharacterBio,
     CharacterBioUpdate,
+    InventoryMutationResult,
+    MutationInventoryItem,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 import {
@@ -1768,6 +1770,160 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+    }
+
+    public async mutateInventory(
+        memberNumber: number,
+        mutation:
+            | {
+                  operation: "add";
+                  item: MutationInventoryItem;
+                  mutationKey: string;
+              }
+            | {
+                  operation: "remove";
+                  itemKey: string;
+                  quantity: number;
+                  mutationKey: string;
+              },
+        actor = memberNumber,
+    ): Promise<InventoryMutationResult> {
+        await this.init();
+        const now = asTimestamp(Date.now());
+        let event: GameEvent | undefined;
+        let result: InventoryMutationResult = {
+            applied: false,
+            duplicate: false,
+            availableQuantity: 0,
+        };
+
+        await this.withTransaction(async (session) => {
+            await this.getProfile(memberNumber);
+            const profile = await this.profiles.findOne(
+                { _id: memberNumber },
+                { session },
+            );
+            if (!profile) throw new Error("character profile was not found");
+            const keys = profile.crossSystem.inventoryMutationKeys ?? [];
+            const existing = profile.crossSystem.inventory ?? [];
+            const itemKey =
+                mutation.operation === "add"
+                    ? mutation.item.itemKey
+                    : mutation.itemKey;
+            const current = existing.find((item) => item.itemKey === itemKey);
+
+            if (keys.includes(mutation.mutationKey)) {
+                result = {
+                    applied: false,
+                    duplicate: true,
+                    availableQuantity: current?.quantity ?? 0,
+                };
+                return;
+            }
+
+            let inventory: MutationInventoryItem[];
+            if (mutation.operation === "add") {
+                if (mutation.item.ownerMemberNumber !== memberNumber) {
+                    throw new Error("inventory item owner must match member");
+                }
+                if (
+                    current &&
+                    (current.ownerMemberNumber !== memberNumber ||
+                        JSON.stringify(current.metadata ?? {}) !==
+                            JSON.stringify(mutation.item.metadata ?? {}))
+                ) {
+                    throw new Error(
+                        "inventory item metadata or owner conflicts",
+                    );
+                }
+                inventory = current
+                    ? existing.map((item) =>
+                          item.itemKey === itemKey
+                              ? {
+                                    ...item,
+                                    quantity:
+                                        item.quantity + mutation.item.quantity,
+                                }
+                              : item,
+                      )
+                    : [...existing, mutation.item];
+                result = {
+                    applied: true,
+                    duplicate: false,
+                    availableQuantity:
+                        (current?.quantity ?? 0) + mutation.item.quantity,
+                };
+            } else {
+                if (!current) {
+                    result = {
+                        applied: false,
+                        duplicate: false,
+                        availableQuantity: 0,
+                    };
+                    return;
+                }
+                const removed = Math.min(mutation.quantity, current.quantity);
+                inventory = existing
+                    .map((item) =>
+                        item.itemKey === itemKey
+                            ? { ...item, quantity: item.quantity - removed }
+                            : item,
+                    )
+                    .filter((item) => item.quantity > 0);
+                result = {
+                    applied: removed > 0,
+                    duplicate: false,
+                    availableQuantity: current.quantity - removed,
+                };
+            }
+
+            const updated = await this.profiles.updateOne(
+                {
+                    _id: memberNumber,
+                    "crossSystem.inventoryMutationKeys": {
+                        $ne: mutation.mutationKey,
+                    },
+                },
+                {
+                    $set: {
+                        "crossSystem.inventory": inventory,
+                        "crossSystem.inventoryMutationKeys": [
+                            ...keys,
+                            mutation.mutationKey,
+                        ],
+                        "crossSystem.updatedAt": now,
+                        updatedAt: now,
+                        lastAccessedAt: now,
+                    },
+                    $inc: { version: 1 },
+                },
+                { session },
+            );
+            if (updated.matchedCount === 0) {
+                result = {
+                    applied: false,
+                    duplicate: true,
+                    availableQuantity: current?.quantity ?? 0,
+                };
+                return;
+            }
+            event = {
+                timestamp: now,
+                type:
+                    mutation.operation === "add"
+                        ? "inventory_added"
+                        : "inventory_removed",
+                source: "admin",
+                actor,
+                target: memberNumber,
+                data: { itemKey, mutationKey: mutation.mutationKey, ...result },
+                processed: false,
+            };
+            await this.events.insertOne(event, { session });
+        });
+
+        if (event) await this.eventBus.publish(event);
+        return result;
     }
 
     // ===== CROSS-SYSTEM QUERIES
