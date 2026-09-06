@@ -16,6 +16,9 @@ const tests = [
     "bin/games/__tests__/unifiedCharacterStore.test.ts",
     "bin/games/__tests__/integration/crossSystemIntegration.test.ts",
     "bin/games/__tests__/integration/phase2aIntegration.test.ts",
+    "bin/games/kidnappers/__tests__/kidnappersGameStateMachine.test.ts",
+    "bin/games/kidnappers/__tests__/kidnappersGameSession.test.ts",
+    "bin/games/kidnappers/__tests__/kidnappersGameLifecycleService.test.ts",
 ];
 
 const args = [

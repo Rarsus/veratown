@@ -237,4 +237,5 @@ export const DIServiceKeys = {
     KEYPAD_ACCESS_SERVICE: "keypadAccessService",
     KEYPAD_ACCESS_GROUP_MANAGER: "keypadAccessGroupManager",
     KEYPAD_DOOR_SYSTEM: "keypadDoorSystem",
+    KIDNAPPERS_GAME_LIFECYCLE_SERVICE: "kidnappersGameLifecycleService",
 } as const;
