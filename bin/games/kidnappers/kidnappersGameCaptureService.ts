@@ -68,6 +68,7 @@ export class KidnappersGameCaptureService {
     public async dispatch(
         command: KidnappersGameCommand,
     ): Promise<KidnappersSessionCommandResult> {
+        const pendingCapture = this.session.getSnapshot().turn?.pendingCapture;
         const result = await this.session.dispatchPersisted(
             command,
             this.persistence,
@@ -76,6 +77,26 @@ export class KidnappersGameCaptureService {
             switch (result.event.type) {
                 case "CAPTURE_RESOLVED":
                     await this.applyCaptureOutcome(result.event);
+                    break;
+                case "TURN_TIMED_OUT":
+                    if (result.event.outcome === "captured" && pendingCapture) {
+                        await this.applyPendingCapture(
+                            pendingCapture,
+                            result.event,
+                        );
+                    }
+                    break;
+                case "PLAYER_DISCONNECTED":
+                    if (
+                        result.event.captureResolved === "captured" &&
+                        pendingCapture?.targetMemberNumber ===
+                            result.event.memberNumber
+                    ) {
+                        await this.applyPendingCapture(
+                            pendingCapture,
+                            result.event,
+                        );
+                    }
                     break;
                 case "ESCAPE_FAILED":
                     await this.applyRestraint(
@@ -126,27 +147,70 @@ export class KidnappersGameCaptureService {
         event: Extract<KidnappersGameEvent, { type: "CAPTURE_RESOLVED" }>,
     ): Promise<void> {
         if (event.outcome !== "captured") return;
-        await this.mutationService.applyEffect(
+        await this.applyCaptureEffect(
             event.targetMemberNumber,
+            event.attackerMemberNumber,
+            event.turnId,
+            event.emittedAt,
+            event.containment,
+            event.restraintLevel,
+        );
+    }
+
+    private async applyPendingCapture(
+        pendingCapture: {
+            readonly attackerMemberNumber: number;
+            readonly targetMemberNumber: number;
+            readonly turnId: string;
+        },
+        event: { readonly emittedAt: number },
+    ): Promise<void> {
+        const progression = this.session
+            .getSnapshot()
+            .progressions?.find(
+                ({ memberNumber }) =>
+                    memberNumber === pendingCapture.targetMemberNumber,
+            );
+        if (!progression) return;
+        await this.applyCaptureEffect(
+            pendingCapture.targetMemberNumber,
+            pendingCapture.attackerMemberNumber,
+            pendingCapture.turnId,
+            event.emittedAt,
+            progression.containment,
+            progression.restraintLevel,
+        );
+    }
+
+    private async applyCaptureEffect(
+        targetMemberNumber: number,
+        attackerMemberNumber: number,
+        turnId: string,
+        emittedAt: number,
+        containment: KidnappersContainment | undefined,
+        restraintLevel = 1,
+    ): Promise<void> {
+        await this.mutationService.applyEffect(
+            targetMemberNumber,
             {
                 effectKey: "kidnappers:capture",
-                applicationKey: `kidnappers:capture:${this.session.sessionId}:${event.targetMemberNumber}`,
+                applicationKey: `kidnappers:capture:${this.session.sessionId}:${targetMemberNumber}`,
                 source: "veratown",
                 stacking: "replace",
                 status: "active",
-                appliedAt: event.emittedAt,
+                appliedAt: emittedAt,
                 metadata: {
-                    attackerMemberNumber: event.attackerMemberNumber,
-                    turnId: event.turnId,
+                    attackerMemberNumber,
+                    turnId,
                 },
             },
-            event.attackerMemberNumber,
+            attackerMemberNumber,
         );
         await this.applyRestraint(
-            event.targetMemberNumber,
-            event.restraintLevel ?? 1,
-            event.emittedAt,
-            event.containment,
+            targetMemberNumber,
+            restraintLevel,
+            emittedAt,
+            containment,
         );
     }
 

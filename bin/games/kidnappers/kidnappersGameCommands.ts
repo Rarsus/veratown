@@ -26,6 +26,8 @@ import {
 } from "./kidnappersGameMessaging";
 import { KidnappersGameLifecycleService } from "./kidnappersGameLifecycleService";
 import type { KidnappersGamePersistence } from "./kidnappersGamePersistence";
+import { KidnappersGameCaptureService } from "./kidnappersGameCaptureService";
+import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import type {
     KidnappersGameCommand,
     KidnappersGameEvent,
@@ -95,6 +97,7 @@ export interface KidnappersGameCommandOptions {
     ) => boolean;
     readonly now?: () => number;
     readonly eventRouter?: KidnappersGameEventRouter;
+    readonly mutationService?: GameStateMutationService;
 }
 
 const COMMAND_ALIASES: Readonly<Record<string, string>> = {
@@ -322,7 +325,7 @@ export class KidnappersGameCommandController {
         switch (command) {
             case "join": {
                 this.assertArgumentCount(command, args, 0, 1);
-                const session = this.findOrCreateLobby(args[0]);
+                const session = await this.findOrCreateLobby(args[0]);
                 if (
                     this.memberSession(sender.MemberNumber, session.sessionId)
                 ) {
@@ -743,18 +746,29 @@ export class KidnappersGameCommandController {
             correlationId: randomUUID(),
             issuedAt: this.options.now?.() ?? Date.now(),
         } as KidnappersGameCommand;
-        if (this.persistence && this.options.eventRouter) {
-            return session.dispatchPersistedAndPublish(
+        let result: KidnappersSessionCommandResult;
+        if (this.persistence && this.options.mutationService) {
+            result = await new KidnappersGameCaptureService(
+                session,
+                this.persistence,
+                this.options.mutationService,
+            ).dispatch(fullCommand);
+        } else if (this.persistence && this.options.eventRouter) {
+            result = await session.dispatchPersistedAndPublish(
                 fullCommand,
                 this.persistence,
                 (id, event) =>
                     this.options.eventRouter!.publishGameEvent(id, event),
             );
+            return result;
+        } else if (this.persistence) {
+            result = await session.dispatchPersisted(
+                fullCommand,
+                this.persistence,
+            );
+        } else {
+            result = session.dispatch(fullCommand);
         }
-        if (this.persistence) {
-            return session.dispatchPersisted(fullCommand, this.persistence);
-        }
-        const result = session.dispatch(fullCommand);
         if (this.options.eventRouter) {
             await this.options.eventRouter.publishGameEvent(
                 sessionId,
@@ -786,13 +800,15 @@ export class KidnappersGameCommandController {
         };
     }
 
-    private findOrCreateLobby(requestedSessionId?: string) {
+    private async findOrCreateLobby(requestedSessionId?: string) {
         if (requestedSessionId) {
             return this.requireSession(requestedSessionId, "join");
         }
         const existing = this.findActiveSession();
         if (existing) return existing;
-        const session = this.lifecycle.createSession();
+        const session = this.persistence
+            ? await this.lifecycle.createPersistedSession()
+            : this.lifecycle.createSession();
         this.activeSessionId = session.sessionId;
         return session;
     }
