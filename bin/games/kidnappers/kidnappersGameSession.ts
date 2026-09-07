@@ -23,6 +23,7 @@ import type {
     KidnappersGameCommand,
     KidnappersGameEvent,
     KidnappersContainment,
+    KidnappersGameOutcome,
     KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
 import { KidnappersGameError } from "./kidnappersGameErrors";
@@ -57,6 +58,7 @@ export type KidnappersGameEventPublisher = (
 export class KidnappersGameSession {
     private readonly stateMachine: KidnappersGameStateMachine;
     private readonly logger: Logger;
+    private readonly readOnly: boolean;
     private persistenceVersion: number;
     private persistedQueue: Promise<void> = Promise.resolve();
     private readonly inFlightOperations = new Map<
@@ -72,6 +74,7 @@ export class KidnappersGameSession {
         snapshot?: KidnappersSessionSnapshot,
         version = 0,
         containment: KidnappersContainment = "bondage",
+        readOnly = false,
     ) {
         this.sessionId = sessionId;
         this.stateMachine = new KidnappersGameStateMachine(
@@ -80,6 +83,7 @@ export class KidnappersGameSession {
             containment,
         );
         this.persistenceVersion = version;
+        this.readOnly = readOnly;
         if (snapshot) this.stateMachine.restore(snapshot);
         this.logger = createLogger(`KidnappersGameSession:${sessionId}`);
     }
@@ -92,6 +96,14 @@ export class KidnappersGameSession {
         return this.persistenceVersion;
     }
 
+    public getOutcome(): KidnappersGameOutcome | null {
+        return this.getSnapshot().outcome ?? null;
+    }
+
+    public getTerminalSummary(): string | null {
+        return this.getOutcome()?.summary ?? null;
+    }
+
     /**
      * Dispatch a command that already carries a correlation id (e.g. one
      * propagated from an inbound chat command or Discord interaction).
@@ -99,6 +111,7 @@ export class KidnappersGameSession {
     public dispatch(
         command: KidnappersGameCommand,
     ): KidnappersSessionCommandResult {
+        if (this.readOnly) return this.readOnlyResult(command);
         const result = this.stateMachine.dispatch(command);
         if (!result.ok) {
             this.logger.warn("KidnappersGame command rejected", {
@@ -207,6 +220,7 @@ export class KidnappersGameSession {
         command: KidnappersGameCommand,
         persistence: KidnappersGamePersistence,
     ): Promise<KidnappersSessionCommandResult> {
+        if (this.readOnly) return this.readOnlyResult(command);
         const existing = await persistence.findOperation(
             this.sessionId,
             command.correlationId,
@@ -220,6 +234,7 @@ export class KidnappersGameSession {
                     event: existing.event,
                 };
             }
+
             return { ok: true, event: existing.event as KidnappersGameEvent };
         }
         const before = this.getSnapshot();
@@ -260,6 +275,33 @@ export class KidnappersGameSession {
             this.stateMachine.restore(before);
             throw error;
         }
+    }
+
+    private readOnlyResult(
+        command: KidnappersGameCommand,
+    ): KidnappersSessionCommandResult {
+        const error = new KidnappersGameError(
+            "Recovered terminal sessions are read-only",
+            {
+                reason: "SESSION_READ_ONLY",
+                phase: this.getSnapshot().phase,
+                command: command.type,
+                correlationId: command.correlationId,
+            },
+        );
+        return {
+            ok: false,
+            error,
+            event: {
+                type: "ACTION_REJECTED",
+                command: command.type,
+                reason: error.reason,
+                message: error.message,
+                correlationId: command.correlationId,
+                emittedAt: command.issuedAt,
+                deliveryId: `kidnappers:${this.sessionId}:${command.correlationId}:ACTION_REJECTED`,
+            },
+        };
     }
 
     private enqueuePersisted<T>(operation: () => Promise<T>): Promise<T> {

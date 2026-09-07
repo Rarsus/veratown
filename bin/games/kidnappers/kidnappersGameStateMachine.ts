@@ -25,7 +25,9 @@ import {
     type KidnappersCaptureTurn,
     type KidnappersGameCommand,
     type KidnappersGameCommandType,
+    type KidnappersGameEndReason,
     type KidnappersGameEvent,
+    type KidnappersGameOutcome,
     type KidnappersGamePhase,
     type KidnappersContainment,
     type KidnappersCleanupContainment,
@@ -34,6 +36,7 @@ import {
     type KidnappersPlayerProgression,
     type KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
+import { calculateKidnappersGameOutcome } from "./kidnappersGameOutcome";
 
 /** Result of dispatching a single command into the state machine. */
 export type KidnappersGameTransitionResult =
@@ -75,6 +78,7 @@ interface InternalState {
     startedAt: number | null;
     completedAt: number | null;
     winner: KidnappersSessionSnapshot["winner"];
+    outcome: KidnappersGameOutcome | null;
     players: Map<number, KidnappersPlayerState>;
     turn: KidnappersCaptureTurn | null;
     turnSequence: number;
@@ -113,6 +117,7 @@ export class KidnappersGameStateMachine {
             startedAt: null,
             completedAt: null,
             winner: null,
+            outcome: null,
             players: new Map(),
             turn: null,
             turnSequence: 0,
@@ -143,6 +148,7 @@ export class KidnappersGameStateMachine {
             startedAt: snapshot.startedAt,
             completedAt: snapshot.completedAt,
             winner: snapshot.winner,
+            outcome: snapshot.outcome ?? null,
             players: new Map(
                 snapshot.players.map((player) => [
                     player.memberNumber,
@@ -651,6 +657,30 @@ export class KidnappersGameStateMachine {
                 );
             }
 
+            case "END_GAME": {
+                const guardError = this.guardEnd(command);
+                if (guardError) return this.reject(guardError, before);
+                const outcome = this.finishGame(
+                    command.reason,
+                    command.winner ?? null,
+                    command.issuedAt,
+                );
+                return this.accept(
+                    {
+                        type: "GAME_ENDED",
+                        winner: outcome.winner,
+                        reason: command.reason,
+                        outcome,
+                        cleanupMemberNumbers: this.cleanupMemberNumbers(before),
+                        cleanupContainments:
+                            this.cleanupContainmentsFrom(before),
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
             case "COMPLETE_GAME": {
                 const guardError = this.guardComplete(command);
                 if (guardError) return this.reject(guardError, before);
@@ -658,14 +688,17 @@ export class KidnappersGameStateMachine {
                 const cleanupMemberNumbers = cleanupContainments.map(
                     ({ memberNumber }) => memberNumber,
                 );
-                this.state.progressions.clear();
-                this.state.phase = "completed";
-                this.state.completedAt = command.issuedAt;
-                this.state.winner = command.winner;
+                const outcome = this.finishGame(
+                    command.reason ?? "normal",
+                    command.winner,
+                    command.issuedAt,
+                );
                 return this.accept(
                     {
                         type: "GAME_COMPLETED",
                         winner: command.winner,
+                        reason: command.reason ?? "normal",
+                        outcome,
                         cleanupMemberNumbers,
                         cleanupContainments,
                         correlationId: command.correlationId,
@@ -682,13 +715,16 @@ export class KidnappersGameStateMachine {
                 const cleanupMemberNumbers = cleanupContainments.map(
                     ({ memberNumber }) => memberNumber,
                 );
-                this.state.progressions.clear();
-                this.state.phase = "aborted";
-                this.state.completedAt = command.issuedAt;
+                const outcome = this.finishGame(
+                    "administrative",
+                    null,
+                    command.issuedAt,
+                );
                 return this.accept(
                     {
                         type: "SESSION_ABORTED",
                         reason: command.reason,
+                        outcome,
                         cleanupMemberNumbers,
                         cleanupContainments,
                         correlationId: command.correlationId,
@@ -707,13 +743,20 @@ export class KidnappersGameStateMachine {
                     ({ memberNumber }) => memberNumber,
                 );
                 if (!isTerminalPhase(this.state.phase)) {
-                    this.state.progressions.clear();
-                    this.state.phase = "aborted";
-                    this.state.completedAt = command.issuedAt;
+                    this.finishGame("shutdown", null, command.issuedAt);
+                } else if (!this.state.outcome) {
+                    this.state.outcome = calculateKidnappersGameOutcome(
+                        this.toSnapshot(),
+                        "shutdown",
+                        command.issuedAt,
+                        this.state.winner,
+                    );
                 }
                 return this.accept(
                     {
                         type: "SESSION_SHUT_DOWN",
+                        reason: "shutdown",
+                        outcome: this.state.outcome ?? undefined,
                         cleanupMemberNumbers,
                         cleanupContainments,
                         correlationId: command.correlationId,
@@ -786,6 +829,45 @@ export class KidnappersGameStateMachine {
             memberNumber: progression.memberNumber,
             containment: progression.containment,
         }));
+    }
+
+    private cleanupContainmentsFrom(
+        snapshot: KidnappersSessionSnapshot,
+    ): KidnappersCleanupContainment[] {
+        return (snapshot.progressions ?? []).map(
+            ({ memberNumber, containment }) => ({
+                memberNumber,
+                containment,
+            }),
+        );
+    }
+
+    private cleanupMemberNumbers(
+        snapshot: KidnappersSessionSnapshot,
+    ): number[] {
+        return this.cleanupContainmentsFrom(snapshot).map(
+            ({ memberNumber }) => memberNumber,
+        );
+    }
+
+    private finishGame(
+        reason: KidnappersGameEndReason,
+        winner: KidnappersSessionSnapshot["winner"],
+        completedAt: number,
+    ): KidnappersGameOutcome {
+        const outcome = calculateKidnappersGameOutcome(
+            this.toSnapshot(),
+            reason,
+            completedAt,
+            winner,
+        );
+        this.state.phase = reason === "normal" ? "completed" : "aborted";
+        this.state.completedAt = completedAt;
+        this.state.winner = outcome.winner;
+        this.state.outcome = outcome;
+        this.state.turn = null;
+        this.state.progressions.clear();
+        return outcome;
     }
 
     private guardLeave(
@@ -1296,6 +1378,25 @@ export class KidnappersGameStateMachine {
         return null;
     }
 
+    private guardEnd(
+        command: Extract<KidnappersGameCommand, { type: "END_GAME" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (command.reason === "normal" && this.state.phase === "lobby") {
+            return new KidnappersGameError(
+                "Game cannot complete before it has started",
+                {
+                    reason: "INVALID_TRANSITION",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        return null;
+    }
+
     private guardAbort(
         command: Extract<KidnappersGameCommand, { type: "ABORT_SESSION" }>,
     ): KidnappersGameError | null {
@@ -1474,6 +1575,14 @@ export class KidnappersGameStateMachine {
             startedAt: this.state.startedAt,
             completedAt: this.state.completedAt,
             winner: this.state.winner,
+            outcome: this.state.outcome
+                ? {
+                      ...this.state.outcome,
+                      scores: this.state.outcome.scores.map((score) => ({
+                          ...score,
+                      })),
+                  }
+                : null,
             players: Array.from(this.state.players.values()).map((player) => ({
                 ...player,
             })),

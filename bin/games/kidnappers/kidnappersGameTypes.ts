@@ -102,7 +102,38 @@ export interface KidnappersPlayerState {
 }
 
 /** Which side has won, once the session reaches `completed`. */
-export type KidnappersWinner = "captors" | "victims";
+export type KidnappersWinner = "captors" | "victims" | "tie";
+
+/** Why a session reached a terminal state. */
+export type KidnappersGameEndReason =
+    "normal" | "timeout" | "abandonment" | "administrative" | "shutdown";
+
+export type KidnappersGameResult = KidnappersWinner | "partial";
+
+export interface KidnappersPlayerScore {
+    readonly memberNumber: number;
+    readonly side: "captors" | "victims";
+    readonly score: number;
+    readonly reward: number;
+    readonly penalty: number;
+}
+
+/**
+ * Immutable terminal result. It is stored with the terminal snapshot so a
+ * recovered session never needs to recalculate or re-award an outcome.
+ */
+export interface KidnappersGameOutcome {
+    readonly reason: KidnappersGameEndReason;
+    readonly result: KidnappersGameResult;
+    readonly winner: KidnappersWinner | null;
+    readonly completedAt: number;
+    readonly durationMs: number;
+    readonly round: number;
+    readonly captorScore: number;
+    readonly victimScore: number;
+    readonly scores: readonly KidnappersPlayerScore[];
+    readonly summary: string;
+}
 
 /** Outcomes that can resolve an in-progress capture attempt. */
 export type KidnappersCaptureOutcome = "captured" | "resisted" | "escaped";
@@ -169,6 +200,7 @@ export interface KidnappersSessionSnapshot {
     readonly startedAt: number | null;
     readonly completedAt: number | null;
     readonly winner: KidnappersWinner | null;
+    readonly outcome?: KidnappersGameOutcome | null;
     readonly players: readonly KidnappersPlayerState[];
     /**
      * The current capture turn. It is optional for backwards-compatible
@@ -213,6 +245,7 @@ export type KidnappersGameErrorReason =
     | "ESCAPE_COOLDOWN"
     | "NOT_CAPTURED"
     | "PROGRESSION_TERMINAL"
+    | "SESSION_READ_ONLY"
     | "UNKNOWN_COMMAND";
 
 /** Base fields shared by every command dispatched into the state machine. */
@@ -293,6 +326,12 @@ export type KidnappersGameCommand =
     | (KidnappersGameCommandBase & {
           readonly type: "COMPLETE_GAME";
           readonly winner: KidnappersWinner;
+          readonly reason?: "normal";
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "END_GAME";
+          readonly reason: KidnappersGameEndReason;
+          readonly winner?: KidnappersWinner;
       })
     | (KidnappersGameCommandBase & {
           readonly type: "ABORT_SESSION";
@@ -416,17 +455,30 @@ export type KidnappersGameEvent =
     | (KidnappersGameEventBase & {
           readonly type: "GAME_COMPLETED";
           readonly winner: KidnappersWinner;
+          readonly reason?: KidnappersGameEndReason;
+          readonly outcome?: KidnappersGameOutcome;
+          readonly cleanupMemberNumbers?: readonly number[];
+          readonly cleanupContainments?: readonly KidnappersCleanupContainment[];
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "GAME_ENDED";
+          readonly reason: KidnappersGameEndReason;
+          readonly winner: KidnappersWinner | null;
+          readonly outcome: KidnappersGameOutcome;
           readonly cleanupMemberNumbers?: readonly number[];
           readonly cleanupContainments?: readonly KidnappersCleanupContainment[];
       })
     | (KidnappersGameEventBase & {
           readonly type: "SESSION_ABORTED";
           readonly reason?: string;
+          readonly outcome?: KidnappersGameOutcome;
           readonly cleanupMemberNumbers?: readonly number[];
           readonly cleanupContainments?: readonly KidnappersCleanupContainment[];
       })
     | (KidnappersGameEventBase & {
           readonly type: "SESSION_SHUT_DOWN";
+          readonly reason?: KidnappersGameEndReason;
+          readonly outcome?: KidnappersGameOutcome;
           readonly cleanupMemberNumbers?: readonly number[];
           readonly cleanupContainments?: readonly KidnappersCleanupContainment[];
       })

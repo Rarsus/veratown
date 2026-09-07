@@ -154,14 +154,31 @@ describe("KidnappersGame persistence and recovery", () => {
             },
             persistence,
         );
-        await session.dispatchPersisted(
-            {
-                type: "COMPLETE_GAME",
-                winner: "victims",
-                correlationId: "complete:close-session",
-                issuedAt: 301,
-            },
+        const completion = {
+            type: "COMPLETE_GAME" as const,
+            winner: "victims" as const,
+            correlationId: "complete:close-session",
+            issuedAt: 301,
+        };
+        const completed = await session.dispatchPersisted(
+            completion,
             persistence,
+        );
+        const retried = await session.dispatchPersisted(
+            completion,
+            persistence,
+        );
+        assert.equal(completed.ok, true);
+        assert.equal(retried.ok, true);
+        assert.equal(session.getSnapshot().outcome?.reason, "normal");
+        assert.equal(
+            await db!
+                .collection(KIDNAPPERS_GAME_EVENTS_COLLECTION)
+                .countDocuments({
+                    sessionId: "close-session",
+                    operationKey: "complete:close-session",
+                }),
+            1,
         );
 
         const closed = await persistence.closeSession(
@@ -179,6 +196,9 @@ describe("KidnappersGame persistence and recovery", () => {
             (await persistence.loadSession("close-session"))?.status,
             "closed",
         );
+        const recoveredTerminal =
+            await persistence.recoverTerminalSession("close-session");
+        assert.equal(recoveredTerminal?.snapshot.outcome?.winner, "victims");
 
         await db!.collection(KIDNAPPERS_GAME_SESSIONS_COLLECTION).insertOne({
             _id: "invalid-session",
