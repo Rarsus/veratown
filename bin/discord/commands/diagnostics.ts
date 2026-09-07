@@ -28,6 +28,7 @@ import type {
 } from "../types";
 import { createLogger } from "../../logging";
 import { getBotRecoveryStatuses } from "../../botConnections";
+import { getContainmentRecoveryDiagnostics } from "../../games/veratown/cageSystem";
 
 const logger = createLogger("Discord:Diagnostics");
 const botStartTime = Date.now();
@@ -187,6 +188,7 @@ function getSystemDiagnostics(
             (status) => status.state === "connected",
         ).length,
         connectionRecovery: recovery,
+        containmentRecovery: getContainmentRecoveryDiagnostics(),
         memoryUsage: {
             heapUsed: memUsage.heapUsed,
             heapTotal: memUsage.heapTotal,

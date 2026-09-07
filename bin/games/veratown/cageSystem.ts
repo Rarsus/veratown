@@ -27,10 +27,153 @@ import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
+import type { CageSession } from "../shared/unifiedCharacterTypes";
 
 export interface CageTimer {
     now(): number;
     wait(milliseconds: number): Promise<void>;
+}
+
+export type ContainmentRecoveryClassification =
+    | "not-contained"
+    | "contained-persisted-expiry"
+    | "contained-live-expiry"
+    | "contained-missing-expiry"
+    | "conflicting-state"
+    | "reconciliation-failed";
+
+export interface ContainmentRecoveryAssessment {
+    classification: ContainmentRecoveryClassification;
+    persistenceState: "active-session" | "no-session";
+    liveAppearanceState:
+        | "futuristic-crate-with-expiry"
+        | "futuristic-crate-missing-expiry"
+        | "no-futuristic-crate";
+    candidateExpiries: {
+        persisted?: number;
+        live?: number;
+    };
+    selectedExpiry?: number;
+    selectedAction: string;
+    operatorAction?: string;
+}
+
+export interface ContainmentRecoveryStatus extends ContainmentRecoveryAssessment {
+    memberNumber: number;
+    observedAtMs: number;
+}
+
+const containmentRecoveryStatuses = new Map<
+    number,
+    ContainmentRecoveryStatus
+>();
+
+function validExpiry(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/**
+ * Classifies persistence and live appearance independently. A missing expiry
+ * is only unsafe when either source proves that a containment device/session
+ * exists; it is never evidence of containment by itself.
+ */
+export function classifyContainmentRecovery(input: {
+    activeSession?: Pick<CageSession, "expiresAt"> | null;
+    liveCrateExpiry?: unknown;
+    liveCratePresent?: boolean;
+}): ContainmentRecoveryAssessment {
+    const persistedExpiry = input.activeSession?.expiresAt;
+    const hasPersistedSession =
+        input.activeSession !== undefined && input.activeSession !== null;
+    const hasLiveCrate =
+        input.liveCratePresent ??
+        (input.liveCrateExpiry !== null && input.liveCrateExpiry !== undefined);
+    const liveExpiry = validExpiry(input.liveCrateExpiry)
+        ? input.liveCrateExpiry
+        : undefined;
+    const persistedExpiryValue = validExpiry(persistedExpiry)
+        ? persistedExpiry
+        : undefined;
+
+    if (!hasPersistedSession && !hasLiveCrate) {
+        return {
+            classification: "not-contained",
+            persistenceState: "no-session",
+            liveAppearanceState: "no-futuristic-crate",
+            candidateExpiries: {},
+            selectedAction: "ignore",
+        };
+    }
+
+    if (hasPersistedSession && persistedExpiryValue !== undefined) {
+        if (hasLiveCrate && liveExpiry !== undefined) {
+            if (persistedExpiryValue !== liveExpiry) {
+                return {
+                    classification: "conflicting-state",
+                    persistenceState: "active-session",
+                    liveAppearanceState: "futuristic-crate-with-expiry",
+                    candidateExpiries: {
+                        persisted: persistedExpiryValue,
+                        live: liveExpiry,
+                    },
+                    selectedExpiry: Math.max(persistedExpiryValue, liveExpiry),
+                    selectedAction:
+                        "retain the crate and use the later candidate expiry",
+                    operatorAction:
+                        "Reconcile the persisted session and live crate expiry",
+                };
+            }
+            return {
+                classification: "contained-persisted-expiry",
+                persistenceState: "active-session",
+                liveAppearanceState: "futuristic-crate-with-expiry",
+                candidateExpiries: {
+                    persisted: persistedExpiryValue,
+                    live: liveExpiry,
+                },
+                selectedExpiry: persistedExpiryValue,
+                selectedAction: "restore or retain the crate and arm release",
+            };
+        }
+        return {
+            classification: "contained-persisted-expiry",
+            persistenceState: "active-session",
+            liveAppearanceState: hasLiveCrate
+                ? "futuristic-crate-missing-expiry"
+                : "no-futuristic-crate",
+            candidateExpiries: { persisted: persistedExpiryValue },
+            selectedExpiry: persistedExpiryValue,
+            selectedAction: "restore or retain the crate and arm release",
+        };
+    }
+
+    if (!hasPersistedSession && liveExpiry !== undefined) {
+        return {
+            classification: "contained-live-expiry",
+            persistenceState: "no-session",
+            liveAppearanceState: "futuristic-crate-with-expiry",
+            candidateExpiries: { live: liveExpiry },
+            selectedExpiry: liveExpiry,
+            selectedAction:
+                "retain the crate and create durable containment state",
+        };
+    }
+
+    return {
+        classification: "contained-missing-expiry",
+        persistenceState: hasPersistedSession ? "active-session" : "no-session",
+        liveAppearanceState: hasLiveCrate
+            ? "futuristic-crate-missing-expiry"
+            : "no-futuristic-crate",
+        candidateExpiries: {},
+        selectedAction: "keep containment in place and defer recovery",
+        operatorAction:
+            "Inspect and repair the persisted cage expiry or remove the crate manually",
+    };
+}
+
+export function getContainmentRecoveryDiagnostics(): ContainmentRecoveryStatus[] {
+    return [...containmentRecoveryStatuses.values()];
 }
 
 const systemTimer: CageTimer = {
@@ -570,40 +713,154 @@ export class CageSystem extends AbstractTileFeatureSystem {
         character: API_Character,
     ): Promise<void> {
         await this.monitor.run(character, async () => {
-            const session = await this.mutationService?.getActiveCageSession(
+            let session = await this.mutationService?.getActiveCageSession(
                 character.MemberNumber,
             );
-            const authoritativeExpiry =
-                session?.expiresAt ?? this.getCageLockExpiry(character);
-            if (authoritativeExpiry === undefined) {
+            let assessment = classifyContainmentRecovery({
+                activeSession: session,
+                liveCrateExpiry: this.getLiveCageExpiry(character),
+                liveCratePresent: this.isWearingCage(character),
+            });
+            this.recordRecoveryStatus(character.MemberNumber, assessment);
+
+            if (assessment.classification === "not-contained") {
+                return;
+            }
+
+            if (assessment.classification === "contained-live-expiry") {
+                const enteredAt = this.timer.now();
+                let persisted: boolean | undefined;
+                try {
+                    persisted = await this.mutationService?.enterCage(
+                        character.MemberNumber,
+                        "Recovered cage",
+                        Math.max(0, assessment.selectedExpiry! - enteredAt),
+                        character.MemberNumber,
+                        enteredAt,
+                    );
+                } catch {
+                    assessment = {
+                        ...assessment,
+                        classification: "reconciliation-failed",
+                        selectedAction:
+                            "retain the live crate and retry durable reconciliation",
+                        operatorAction:
+                            "Inspect the persistence failure before changing the device",
+                    };
+                    this.recordRecoveryStatus(
+                        character.MemberNumber,
+                        assessment,
+                    );
+                    this.logger.error(
+                        "Cage recovery reconciliation failed",
+                        undefined,
+                        this.recoveryContext(
+                            character.MemberNumber,
+                            assessment,
+                        ),
+                    );
+                    return;
+                }
+                if (persisted === false) {
+                    session = await this.mutationService?.getActiveCageSession(
+                        character.MemberNumber,
+                    );
+                    assessment = classifyContainmentRecovery({
+                        activeSession: session,
+                        liveCrateExpiry: this.getLiveCageExpiry(character),
+                        liveCratePresent: this.isWearingCage(character),
+                    });
+                    this.recordRecoveryStatus(
+                        character.MemberNumber,
+                        assessment,
+                    );
+                    if (!session) {
+                        assessment = {
+                            ...assessment,
+                            classification: "reconciliation-failed",
+                            selectedAction:
+                                "retain the live crate and retry durable reconciliation",
+                            operatorAction:
+                                "Inspect the concurrent cage mutation before changing the device",
+                        };
+                        this.recordRecoveryStatus(
+                            character.MemberNumber,
+                            assessment,
+                        );
+                    }
+                } else if (persisted === true) {
+                    session = await this.mutationService?.getActiveCageSession(
+                        character.MemberNumber,
+                    );
+                    assessment = classifyContainmentRecovery({
+                        activeSession: session,
+                        liveCrateExpiry: this.getLiveCageExpiry(character),
+                        liveCratePresent: this.isWearingCage(character),
+                    });
+                    this.recordRecoveryStatus(
+                        character.MemberNumber,
+                        assessment,
+                    );
+                } else if (persisted === undefined) {
+                    assessment = {
+                        ...assessment,
+                        classification: "reconciliation-failed",
+                        selectedAction:
+                            "retain the live crate and retry durable reconciliation",
+                        operatorAction:
+                            "Restore the mutation service and reconcile the live crate session",
+                    };
+                    this.recordRecoveryStatus(
+                        character.MemberNumber,
+                        assessment,
+                    );
+                }
+                if (
+                    assessment.classification === "contained-live-expiry" ||
+                    assessment.classification === "reconciliation-failed"
+                ) {
+                    if (assessment.classification === "reconciliation-failed") {
+                        this.logger.error(
+                            "Cage recovery reconciliation failed",
+                            undefined,
+                            this.recoveryContext(
+                                character.MemberNumber,
+                                assessment,
+                            ),
+                        );
+                    } else {
+                        this.logger.warn(
+                            "Cage recovery reconciled live containment",
+                            this.recoveryContext(
+                                character.MemberNumber,
+                                assessment,
+                            ),
+                        );
+                    }
+                }
+            }
+
+            if (assessment.classification === "contained-missing-expiry") {
                 this.logger.warn(
                     "Cage recovery deferred because no authoritative expiry is available",
-                    {
-                        memberNumber: character.MemberNumber,
-                        observedAtMs: this.timer.now(),
-                        operatorAction:
-                            "Inspect and repair the persisted cage expiry or remove the crate manually",
-                    },
+                    this.recoveryContext(character.MemberNumber, assessment),
                 );
                 this.logger.error("Cage recovery is fail-closed", undefined, {
-                    memberNumber: character.MemberNumber,
-                    observedAtMs: this.timer.now(),
-                    operatorAction:
-                        "Inspect and repair the persisted cage expiry or remove the crate manually",
+                    ...this.recoveryContext(character.MemberNumber, assessment),
                 });
                 return;
             }
+
             if (
-                !session &&
-                character.Appearance.getItemData("ItemDevices")?.Name !==
-                    "FuturisticCrate"
-            )
-                return;
-            if (
-                session &&
-                character.Appearance.getItemData("ItemDevices")?.Name !==
-                    "FuturisticCrate"
+                assessment.classification === "reconciliation-failed" ||
+                assessment.selectedExpiry === undefined
             ) {
+                return;
+            }
+
+            const authoritativeExpiry = assessment.selectedExpiry;
+            const liveCrate = this.isWearingCage(character);
+            if (!liveCrate) {
                 await syncAppearanceMutation(
                     character,
                     () => {
@@ -653,6 +910,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 memberNumber: character.MemberNumber,
                 cageName: session?.cageName,
                 authoritativeExpiryMs: authoritativeExpiry,
+                classification: assessment.classification,
                 recoveredAtMs: this.timer.now(),
             });
             await this.releaseWhenExpired(
@@ -662,6 +920,34 @@ export class CageSystem extends AbstractTileFeatureSystem {
         });
     }
 
+    private recordRecoveryStatus(
+        memberNumber: number,
+        assessment: ContainmentRecoveryAssessment,
+    ): void {
+        containmentRecoveryStatuses.set(memberNumber, {
+            ...assessment,
+            memberNumber,
+            observedAtMs: this.timer.now(),
+        });
+    }
+
+    private recoveryContext(
+        memberNumber: number,
+        assessment: ContainmentRecoveryAssessment,
+    ): Record<string, unknown> {
+        return {
+            memberNumber,
+            persistenceState: assessment.persistenceState,
+            liveAppearanceState: assessment.liveAppearanceState,
+            candidateExpiries: assessment.candidateExpiries,
+            selectedExpiryMs: assessment.selectedExpiry,
+            selectedAction: assessment.selectedAction,
+            operatorAction: assessment.operatorAction,
+            classification: assessment.classification,
+            observedAtMs: this.timer.now(),
+        };
+    }
+
     /**
      * Reads the actual RemoveTimer from the character's currently worn
      * ItemDevices item (the Futuristic Crate), so that any extensions or
@@ -669,12 +955,23 @@ export class CageSystem extends AbstractTileFeatureSystem {
      * Returns undefined if the character is no longer wearing a locked crate.
      */
     private getCageLockExpiry(character: API_Character): number | undefined {
-        const expiry =
-            character.Appearance.getItemData("ItemDevices")?.Property
-                ?.RemoveTimer;
+        const expiry = this.getLiveCageExpiry(character);
         return typeof expiry === "number" && Number.isFinite(expiry)
             ? expiry
             : undefined;
+    }
+
+    private getLiveCageExpiry(character: API_Character): number | undefined {
+        if (!this.isWearingCage(character)) return undefined;
+        return character.Appearance.getItemData("ItemDevices")?.Property
+            ?.RemoveTimer;
+    }
+
+    private isWearingCage(character: API_Character): boolean {
+        return (
+            character.Appearance.getItemData("ItemDevices")?.Name ===
+            "FuturisticCrate"
+        );
     }
 
     private onCharacterViewCageInformation = async (
