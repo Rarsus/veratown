@@ -97,21 +97,22 @@ export class KidnappersGameCaptureService {
                 case "SESSION_ABORTED":
                 case "SESSION_SHUT_DOWN":
                     await Promise.all(
-                        (result.event.cleanupContainments ??
+                        (
+                            result.event.cleanupContainments ??
                             (result.event.cleanupMemberNumbers ?? []).map(
                                 (memberNumber) => ({
                                     memberNumber,
-                                    containment: this.options.containment ??
-                                        "bondage",
+                                    containment:
+                                        this.options.containment ?? "bondage",
                                 }),
-                            )).map(
-                            ({ memberNumber, containment }) =>
-                                this.release(
-                                    memberNumber,
-                                    result.event.emittedAt,
-                                    false,
-                                    containment,
-                                ),
+                            )
+                        ).map(({ memberNumber, containment }) =>
+                            this.release(
+                                memberNumber,
+                                result.event.emittedAt,
+                                false,
+                                containment,
+                            ),
                         ),
                     );
                     break;
