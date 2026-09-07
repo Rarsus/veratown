@@ -83,6 +83,12 @@ movement and interactions, and at a bounded 60-second interval. Appearance mutat
 `syncAppearanceMutation`; the helper persists the normalized appearance and
 restraint snapshot after the external appearance API update has propagated.
 
+For a reacquired device, `Appearance.getItemData()` is read-only raw appearance
+data and does not expose mutation methods. Use `Appearance.InventoryGet()` for
+the `API_AppearanceItem` wrapper and its `setProperty()` method, then run the
+mutation through `syncAppearanceMutation` so the live bundle and persisted
+`currentAppearance` remain synchronized.
+
 Reconciliation retries on the next interaction or interval after a store/API
 failure. `UnifiedCharacterStore.syncVeratownState()` is idempotent, so an
 unchanged observation does not update timestamps or versions. Use
