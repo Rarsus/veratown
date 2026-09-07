@@ -314,8 +314,12 @@ export class Casino implements GamePlugin {
         if (player.score !== undefined) {
             await this.mutationService.updateCasinoStats(player.memberNumber, {
                 score: player.score,
-                totalWins: player.totalWins || 0,
-                totalLosses: player.totalLosses || 0,
+                ...(player.totalWins !== undefined
+                    ? { totalWins: player.totalWins }
+                    : {}),
+                ...(player.totalLosses !== undefined
+                    ? { totalLosses: player.totalLosses }
+                    : {}),
             });
         }
     }

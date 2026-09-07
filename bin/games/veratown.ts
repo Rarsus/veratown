@@ -53,6 +53,7 @@ import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
 import { DIContainer, DIServiceKeys } from "../di/container";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
+import { LiveCharacterStateSync } from "./veratown/liveCharacterStateSync";
 import {
     syncAppearanceMutation,
     filterOwnerLocked,
@@ -182,6 +183,7 @@ export class Veratown {
     private appearanceAuditTrail?: AppearanceAuditTrail;
     private locationEventSystem?: LocationEventSystem;
     private playerRoleSystem?: PlayerRoleSystem;
+    private liveCharacterStateSync?: LiveCharacterStateSync;
 
     // Every successfully-initialized room feature, in registration order.
     // Backs the "/bot feature list|enable|disable" command; systems that
@@ -288,6 +290,11 @@ export class Veratown {
                       DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                   )
                 : undefined;
+            this.liveCharacterStateSync = new LiveCharacterStateSync(
+                this.conn,
+                unifiedStore,
+            );
+            this.liveCharacterStateSync.start();
             this.locationEventSystem = new LocationEventSystem(db, {
                 eventBus: unifiedStore.getEventBus(),
                 mutationService,
@@ -316,6 +323,10 @@ export class Veratown {
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
                 ),
         );
         this.kennelSystem = this.initFeature(
@@ -329,12 +340,33 @@ export class Veratown {
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
                 ),
         );
         this.showerSystem = this.initFeature(
-            () => new ShowerSystem(this.conn, this.conn2),
+            () =>
+                new ShowerSystem(
+                    this.conn,
+                    this.conn2,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
+                ),
         );
-        this.bedSystem = this.initFeature(() => new BedSystem(this.conn));
+        this.bedSystem = this.initFeature(
+            () =>
+                new BedSystem(
+                    this.conn,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
+                ),
+        );
         this.bunnyParkSystem = this.initFeature(
             () => new BunnyParkSystem(this.conn),
         );
@@ -363,7 +395,14 @@ export class Veratown {
                 ),
         );
         this.furnitureBondageSystem = this.initFeature(
-            () => new FurnitureBondageSystem(this.conn),
+            () =>
+                new FurnitureBondageSystem(
+                    this.conn,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
+                ),
         );
         this.releaseSystem = this.initFeature(
             () =>
@@ -606,6 +645,7 @@ export class Veratown {
     private setupCharacter = async () => {
         this.conn.moveOnMap(RECEPTIONIST_POSITION.X, RECEPTIONIST_POSITION.Y);
         this.conn.Player.SetActivePose(["Kneel"]);
+        await this.liveCharacterStateSync?.reconcile();
 
         if (this.conn2) {
             this.conn2.moveOnMap(

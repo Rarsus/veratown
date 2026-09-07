@@ -37,6 +37,8 @@ import {
     MutationInventoryItem,
     AppliedEffect,
     EffectMutationResult,
+    ChatRoomMapPos,
+    CurrentRestraint,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 import {
@@ -339,11 +341,17 @@ export class UnifiedCharacterStore {
             winStreak: profile.casino.winStreak,
             lossStreak: profile.casino.lossStreak,
             cheatStrikes: profile.casino.cheatStrikes,
+            totalWins: profile.casino.totalWins,
+            totalLosses: profile.casino.totalLosses,
             lastDailyClaimAt: profile.casino.lastDailyClaimAt,
+            lastGamePlayedAt: profile.casino.lastGamePlayedAt,
             // Phase 3: Chip locking
             lockedChips: profile.casino.lockedChips,
             chipLockReason: profile.casino.chipLockReason,
             chipLockUntil: profile.casino.chipLockUntil,
+            recentWinnings: profile.casino.recentWinnings,
+            version: profile.casino.version,
+            updatedAt: profile.casino.updatedAt,
         };
     }
 
@@ -770,12 +778,16 @@ export class UnifiedCharacterStore {
     ): Promise<void> {
         await this.init();
 
-        const profile = await this.getProfile(memberNumber);
-        const now = Date.now();
+        await this.getProfile(memberNumber);
+        const now = asTimestamp(Date.now());
 
         const updateDoc: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(updates)) {
-            if (value !== undefined) {
+            if (
+                value !== undefined &&
+                key !== "version" &&
+                key !== "updatedAt"
+            ) {
                 updateDoc[`casino.${key}`] = value;
             }
         }
@@ -786,11 +798,13 @@ export class UnifiedCharacterStore {
                 $set: {
                     ...updateDoc,
                     "casino.updatedAt": now,
-                    "casino.version": profile.casino.version + 1,
                     lastAccessedAt: now,
                     lastAccessedBy: "casino",
                     updatedAt: now,
-                    version: profile.version + 1,
+                },
+                $inc: {
+                    "casino.version": asVersion(1),
+                    version: asVersion(1),
                 },
             },
         );
@@ -1513,7 +1527,9 @@ export class UnifiedCharacterStore {
             memberNumber: profile._id,
             name: profile.name,
             lastPosition: profile.veratown.lastPosition,
+            lastPositionAt: profile.veratown.lastPositionAt,
             currentAppearance: profile.veratown.currentAppearance,
+            lastAppearanceAt: profile.veratown.lastAppearanceAt,
             currentRestraints: profile.veratown.currentRestraints,
             cageIncarcerations: profile.veratown.cageIncarcerations ?? [],
             kennelSessions: profile.veratown.kennelSessions ?? [],
@@ -1535,24 +1551,31 @@ export class UnifiedCharacterStore {
     ): Promise<void> {
         await this.init();
 
-        const profile = await this.getProfile(memberNumber);
-        const now = Date.now();
+        await this.getProfile(memberNumber);
+        const now = asTimestamp(Date.now());
 
-        await this.profiles.updateOne(
-            { _id: memberNumber },
+        const result = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.lastPosition": { $ne: position },
+            },
             {
                 $set: {
                     "veratown.lastPosition": position,
                     "veratown.lastPositionAt": now,
                     "veratown.updatedAt": now,
-                    "veratown.version": profile.veratown.version + 1,
                     lastAccessedAt: now,
                     lastAccessedBy: "veratown",
                     updatedAt: now,
-                    version: profile.version + 1,
+                },
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
                 },
             },
         );
+
+        if (result.modifiedCount === 0) return;
 
         // Emit event
         const event: GameEvent = {
@@ -1569,6 +1592,102 @@ export class UnifiedCharacterStore {
 
         await this.recordEvent(event);
         await this.eventBus.publish(event);
+    }
+
+    /**
+     * Atomically persist the observed live map and appearance state. An
+     * identical observation is a no-op, so retries and periodic
+     * reconciliation do not churn versions or timestamps.
+     */
+    public async syncVeratownState(
+        memberNumber: number,
+        position: ChatRoomMapPos,
+        appearance: VeratownState["currentAppearance"],
+        restraints: CurrentRestraint[],
+    ): Promise<boolean> {
+        await this.getProfile(memberNumber);
+        const now = asTimestamp(Date.now());
+        const result = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                $or: [
+                    { "veratown.lastPosition": { $ne: position } },
+                    { "veratown.currentAppearance": { $ne: appearance } },
+                    { "veratown.currentRestraints": { $ne: restraints } },
+                ],
+            },
+            {
+                $set: {
+                    "veratown.lastPosition": position,
+                    "veratown.lastPositionAt": now,
+                    "veratown.currentAppearance": appearance,
+                    "veratown.lastAppearanceAt": now,
+                    "veratown.currentRestraints": restraints,
+                    "veratown.updatedAt": now,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                },
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+            },
+        );
+        return result.modifiedCount > 0;
+    }
+
+    /**
+     * Reports stale or incomplete live-state projections without mutating
+     * profiles, so an operator can safely run it during incident recovery.
+     */
+    public async getSynchronizationDiagnostics(
+        memberNumber: number,
+        staleAfterMs: number,
+    ): Promise<{
+        positionStale: boolean;
+        appearanceStale: boolean;
+        missingAppearanceSnapshot: boolean;
+        missingRestraintSnapshot: boolean;
+        missingCasinoFields: string[];
+    }> {
+        const profile = await this.getProfile(memberNumber);
+        const now = Date.now();
+        const veratown = profile.veratown;
+        const casinoFields: Array<keyof CasinoState> = [
+            "chips",
+            "score",
+            "winStreak",
+            "lossStreak",
+            "cheatStrikes",
+            "totalWins",
+            "totalLosses",
+            "lockedChips",
+            "recentWinnings",
+            "version",
+            "updatedAt",
+        ];
+        return {
+            positionStale:
+                !veratown.lastPosition ||
+                now - veratown.lastPositionAt > staleAfterMs,
+            appearanceStale:
+                !Array.isArray(veratown.currentAppearance) ||
+                now - veratown.lastAppearanceAt > staleAfterMs,
+            missingAppearanceSnapshot: !Array.isArray(
+                veratown.currentAppearance,
+            ),
+            missingRestraintSnapshot: !Array.isArray(
+                veratown.currentRestraints,
+            ),
+            missingCasinoFields: casinoFields.filter(
+                (field) =>
+                    !Object.prototype.hasOwnProperty.call(
+                        profile.casino,
+                        field,
+                    ),
+            ),
+        };
     }
 
     /**

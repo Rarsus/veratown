@@ -30,7 +30,11 @@ import {
     RELEASE_PAROLE_DURATION_MS,
     RELEASE_COOLDOWN_MS,
 } from "./veratownConfig";
-import { createIdempotentMonitor, PosturePreserver } from "./shared";
+import {
+    createIdempotentMonitor,
+    PosturePreserver,
+    syncAppearanceMutation,
+} from "./shared";
 
 import { createLogger } from "../../logging";
 
@@ -783,6 +787,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
+        await syncAppearanceMutation(character, () => undefined, 0);
     }
 
     private sendParoleNotification(
@@ -1157,6 +1162,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         this.logger?.info(
             `[ReleaseSystem] Strip summary: removed ${removedItems.length} clothing/bondage items, preserved ${ownerLockedItems.length} owner-locked + ${preservedCosplayItems.length} cosmetic items`,
         );
+        await syncAppearanceMutation(character, () => undefined, 0);
 
         // Restore character's posture after stripping (Golden Rule #12)
         // This ensures the character maintains their pose/kneeling state
@@ -1231,6 +1237,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         await wait(100);
+        await syncAppearanceMutation(character, () => undefined, 0);
 
         this.logger?.info(
             `[ReleaseSystem] Item restoration complete: ${successCount} success, ${failedCount} failed`,

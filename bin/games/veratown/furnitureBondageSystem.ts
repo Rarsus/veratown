@@ -17,6 +17,7 @@ import { wait } from "../../hub/utils";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 interface BondageRestraint {
     group: string;
@@ -93,7 +94,12 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
         "FurnitureBondageSystem",
     );
 
-    public constructor(conn: API_Connector) {
+    public constructor(
+        conn: API_Connector,
+        private readonly stateSync?: (
+            character: API_Character,
+        ) => Promise<void>,
+    ) {
         super(conn, "furnitureBondage", "Bondage furniture");
         this.furnitureTrigger = this.guardTileHandler(
             this.onCharacterEnterFurniture,
@@ -323,48 +329,62 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
         tile: FurnitureTile,
     ): Promise<void> => {
         try {
-            // Add furniture item
-            const furniture = character.Appearance.AddItem(
-                AssetGet(
-                    (tile.config.furnitureGroup ?? "ItemDevices") as any,
-                    tile.config.furnitureAsset as any,
-                ),
+            await syncAppearanceMutation(
+                character,
+                async () => {
+                    // Add furniture item
+                    const furniture = character.Appearance.AddItem(
+                        AssetGet(
+                            (tile.config.furnitureGroup ??
+                                "ItemDevices") as any,
+                            tile.config.furnitureAsset as any,
+                        ),
+                    );
+
+                    if (
+                        tile.config.furnitureExtendedType &&
+                        furniture?.Extended
+                    ) {
+                        furniture.Extended.SetType(
+                            tile.config.furnitureExtendedType as any,
+                        );
+                    }
+
+                    if (tile.config.furnitureColor) {
+                        furniture?.SetColor(tile.config.furnitureColor as any);
+                    }
+
+                    furniture?.SetCraft({
+                        Name: tile.config.furnitureAsset,
+                        Description: tile.config.craftDescription ?? "",
+                    });
+
+                    // Apply furniture-specific properties
+                    if (tile.config.furnitureProperties) {
+                        furniture?.setProperty(
+                            "TypeRecord",
+                            tile.config.furnitureProperties as any,
+                        );
+                    }
+
+                    // Apply restraints after optional delay
+                    if (
+                        tile.config.restraints &&
+                        tile.config.restraints.length > 0
+                    ) {
+                        const applyDelay = tile.config.applyDelayMs ?? 0;
+                        if (applyDelay > 0) {
+                            await wait(applyDelay);
+                        }
+
+                        for (const restraint of tile.config.restraints) {
+                            this.applyRestraint(character, restraint);
+                        }
+                    }
+                },
+                50,
+                this.stateSync,
             );
-
-            if (tile.config.furnitureExtendedType && furniture?.Extended) {
-                furniture.Extended.SetType(
-                    tile.config.furnitureExtendedType as any,
-                );
-            }
-
-            if (tile.config.furnitureColor) {
-                furniture?.SetColor(tile.config.furnitureColor as any);
-            }
-
-            furniture?.SetCraft({
-                Name: tile.config.furnitureAsset,
-                Description: tile.config.craftDescription ?? "",
-            });
-
-            // Apply furniture-specific properties
-            if (tile.config.furnitureProperties) {
-                furniture?.setProperty(
-                    "TypeRecord",
-                    tile.config.furnitureProperties as any,
-                );
-            }
-
-            // Apply restraints after optional delay
-            if (tile.config.restraints && tile.config.restraints.length > 0) {
-                const applyDelay = tile.config.applyDelayMs ?? 0;
-                if (applyDelay > 0) {
-                    await wait(applyDelay);
-                }
-
-                for (const restraint of tile.config.restraints) {
-                    this.applyRestraint(character, restraint);
-                }
-            }
 
             // Set up duration timer if configured
             if (tile.config.durationMs && tile.config.durationMs > 0) {
@@ -376,23 +396,34 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
 
                 // Create new timer
                 const timer = setTimeout(() => {
-                    try {
-                        this.removeRestraints(character, tile.config);
-                        this.activeTimers.delete(character.MemberNumber);
-                        this.logger.info("Restraints removed after duration", {
-                            memberNumber: character.MemberNumber,
-                            location: tile.location.name,
+                    void syncAppearanceMutation(
+                        character,
+                        () => {
+                            this.removeRestraints(character, tile.config);
+                        },
+                        50,
+                        this.stateSync,
+                    )
+                        .then(() => {
+                            this.activeTimers.delete(character.MemberNumber);
+                            this.logger.info(
+                                "Restraints removed after duration",
+                                {
+                                    memberNumber: character.MemberNumber,
+                                    location: tile.location.name,
+                                },
+                            );
+                        })
+                        .catch((e) => {
+                            this.logger.error(
+                                "Error removing restraints after duration",
+                                e as Error,
+                                {
+                                    memberNumber: character.MemberNumber,
+                                    location: tile.location.name,
+                                },
+                            );
                         });
-                    } catch (e) {
-                        this.logger.error(
-                            "Error removing restraints after duration",
-                            e as Error,
-                            {
-                                memberNumber: character.MemberNumber,
-                                location: tile.location.name,
-                            },
-                        );
-                    }
                 }, tile.config.durationMs);
 
                 // Store the timer with config for later cleanup

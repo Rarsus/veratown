@@ -20,6 +20,7 @@ export {
 // Appearance synchronization
 export {
     syncAppearanceMutation,
+    registerAppearanceStateSynchronizer,
     removeItems,
     addItems,
     refreshAppearance,

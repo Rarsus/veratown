@@ -28,6 +28,7 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
 import type { ReleaseSystem } from "./veratownReleaseSystem";
 import { createIdempotentMonitor } from "./shared";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -46,6 +47,9 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private conn2?: API_Connector,
+        private readonly stateSync?: (
+            character: API_Character,
+        ) => Promise<void>,
     ) {
         super(conn, "shower", "Showers");
         this.showerTrigger = this.guardTileHandler(this.onCharacterEnterShower);
@@ -61,6 +65,19 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
 
     public registerTriggers(): void {
         // Location-backed triggers are registered by reloadLocations().
+    }
+
+    private async syncMutation(
+        character: API_Character,
+        mutation: () => void | Promise<void>,
+        delayMs?: number,
+    ): Promise<void> {
+        await syncAppearanceMutation(
+            character,
+            mutation,
+            delayMs,
+            this.stateSync,
+        );
     }
 
     public async reloadLocations(
@@ -154,7 +171,8 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                 this.conn2 ? this.showerBotHomePos : undefined,
             );
 
-            const abortShower = () => {
+            const abortShower = async () => {
+                await this.syncMutation(character, () => undefined, 0);
                 character.Tell(
                     "Whisper",
                     "(You left the shower before finishing! Your clothes will not be returned to you.",
@@ -178,12 +196,14 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             const clothingItems =
                 character.Appearance.getAppearanceData().filter(isClothing);
             for (const item of clothingItems) {
-                if (!isInShower()) return abortShower();
-                character.Appearance.RemoveItem(item.Group);
+                if (!isInShower()) return await abortShower();
+                await this.syncMutation(character, () => {
+                    character.Appearance.RemoveItem(item.Group);
+                });
                 await wait(SHOWER_STEP_DELAY_MS);
             }
 
-            if (!isInShower()) return abortShower();
+            if (!isInShower()) return await abortShower();
             narrator.sayAt(
                 broadcastPos,
                 "Emote",
@@ -191,7 +211,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             );
 
             await wait(SHOWER_STEP_DELAY_MS);
-            if (!isInShower()) return abortShower();
+            if (!isInShower()) return await abortShower();
 
             const song =
                 SHOWER_SONGS[Math.floor(Math.random() * SHOWER_SONGS.length)];
@@ -202,7 +222,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             );
 
             await wait(SHOWER_SING_DELAY_MS);
-            if (!isInShower()) return abortShower();
+            if (!isInShower()) return await abortShower();
 
             narrator.sayAt(
                 broadcastPos,
@@ -211,11 +231,13 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             );
 
             await wait(SHOWER_STEP_DELAY_MS);
-            if (!isInShower()) return abortShower();
+            if (!isInShower()) return await abortShower();
 
             for (const item of savedClothingItems) {
-                if (!isInShower()) return abortShower();
-                character.Appearance.AddItem(item);
+                if (!isInShower()) return await abortShower();
+                await this.syncMutation(character, () => {
+                    character.Appearance.AddItem(item);
+                });
                 await wait(SHOWER_STEP_DELAY_MS);
             }
 

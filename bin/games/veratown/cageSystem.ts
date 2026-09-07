@@ -26,6 +26,7 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
@@ -68,6 +69,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
+        private readonly stateSync?: (
+            character: API_Character,
+        ) => Promise<void>,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -232,7 +236,14 @@ export class CageSystem extends AbstractTileFeatureSystem {
         ) {
             await this.mutationService?.exitCage(character.MemberNumber);
             this.cagedCharacters.delete(character.MemberNumber);
-            character.Appearance.RemoveItem("ItemDevices");
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    character.Appearance.RemoveItem("ItemDevices");
+                },
+                50,
+                this.stateSync,
+            );
         }
     }
 
@@ -300,30 +311,41 @@ export class CageSystem extends AbstractTileFeatureSystem {
             }
 
             if (persisted !== false) {
-                const crate = character.Appearance.AddItem(
-                    AssetGet("ItemDevices", "FuturisticCrate"),
-                );
-                crate.SetCraft({
-                    Name: `Veratown Futuristic Crate`,
-                    Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
-                });
-                crate.setProperty("TypeRecord", {
-                    w: 2, // Big window
-                    l: 3,
-                    a: 3,
-                    d: 1,
-                    t: 1,
-                    h: 4,
-                });
-                crate.setProperty("Mode", "Deny");
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        const crate = character.Appearance.AddItem(
+                            AssetGet("ItemDevices", "FuturisticCrate"),
+                        );
+                        crate.SetCraft({
+                            Name: `Veratown Futuristic Crate`,
+                            Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+                        });
+                        crate.setProperty("TypeRecord", {
+                            w: 2, // Big window
+                            l: 3,
+                            a: 3,
+                            d: 1,
+                            t: 1,
+                            h: 4,
+                        });
+                        crate.setProperty("Mode", "Deny");
 
-                crate.lock("TimerPasswordPadlock", character.MemberNumber, {
-                    Password: CRATE_LOCK_PASSWORD,
-                    RemoveItem: true,
-                    RemoveTimer: lockExpiry,
-                    ShowTimer: true,
-                    LockSet: true,
-                });
+                        crate.lock(
+                            "TimerPasswordPadlock",
+                            character.MemberNumber,
+                            {
+                                Password: CRATE_LOCK_PASSWORD,
+                                RemoveItem: true,
+                                RemoveTimer: lockExpiry,
+                                ShowTimer: true,
+                                LockSet: true,
+                            },
+                        );
+                    },
+                    50,
+                    this.stateSync,
+                );
             }
             this.cagedCharacters.set(character.MemberNumber, {
                 character,
@@ -354,7 +376,14 @@ export class CageSystem extends AbstractTileFeatureSystem {
             if (!this.cagedCharacters.has(character.MemberNumber)) return;
             await this.mutationService?.exitCage(character.MemberNumber);
             this.cagedCharacters.delete(character.MemberNumber);
-            character.Appearance.RemoveItem("ItemDevices");
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    character.Appearance.RemoveItem("ItemDevices");
+                },
+                50,
+                this.stateSync,
+            );
             character.Tell(
                 "Whisper",
                 "(The Futuristic Crate unlocks and releases you.",
