@@ -72,6 +72,41 @@ test("LiveCharacterStateSync reconciles movement, reconnects, and completed muta
     assert.deepEqual(snapshots.at(-1).position, { X: 5, Y: 6 });
 });
 
+test("LiveCharacterStateSync retains a visible bunny sign through reconciliation and reconnect", async () => {
+    const sign = {
+        Group: "ItemMisc",
+        Name: "WoodenSign",
+        Property: { Text: "I step on", Text2: "Bunnies" },
+    };
+    const character = createCharacter(4, { X: 7, Y: 8 }, [sign]);
+    const snapshots: unknown[][] = [];
+    const connector: any = {
+        chatRoom: { characters: [character] },
+        on: () => {},
+    };
+    const store: any = {
+        getVeratownView: async () => ({ currentRestraints: [] }),
+        syncVeratownState: async (
+            _memberNumber: number,
+            _position: unknown,
+            appearance: unknown[],
+        ) => {
+            snapshots.push(appearance);
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(connector, store, 60_000);
+
+    await sync.reconcile();
+    const reconnectedCharacter = createCharacter(4, { X: 9, Y: 10 }, [sign]);
+    connector.chatRoom.characters = [reconnectedCharacter];
+    await sync.reconcile();
+
+    for (const appearance of snapshots) {
+        assert.deepEqual(appearance, [sign]);
+    }
+});
+
 test("syncAppearanceMutation keeps completed mutations retryable when projection persistence fails", async () => {
     let mutated = false;
     const character = createCharacter(2, { X: 1, Y: 1 }, []);
