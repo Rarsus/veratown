@@ -40,6 +40,8 @@ import { getLifecycleObjectId } from "./featureSystem";
 export class KennelSystem extends AbstractTileFeatureSystem {
     private kennelPositions: Array<{ X: number; Y: number }> = [];
     private triggersReady = false;
+    private recoveryReady = false;
+    private recoveryReadinessReason = "kennel recovery has not completed";
     private readonly kennelTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -108,6 +110,8 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         this.boundMap = undefined;
         this.boundRoomListenerAttached = false;
         this.triggersReady = false;
+        this.recoveryReady = false;
+        this.recoveryReadinessReason = "kennel room or map is unavailable";
     }
 
     private boundRoomListenerAttached = false;
@@ -131,11 +135,17 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
         this.triggersReady = false;
+        this.recoveryReady = false;
+        this.recoveryReadinessReason = "kennel recovery has not completed";
         try {
             this.attachToRoom();
             const room = this.boundRoom;
             const map = this.boundMap;
-            if (!room || !map) return;
+            if (!room || !map) {
+                this.recoveryReadinessReason =
+                    "kennel room or map is unavailable";
+                return;
+            }
             this.unregisterMapTriggers(map);
             this.kennelPositions = locations
                 .filter((loc) => loc.type === "kennel" && loc.enabled)
@@ -189,9 +199,11 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     }),
                 )
             ).filter((character): character is API_Character => !!character);
+            let recoveryFailed = false;
             await Promise.all(
                 occupants.map((character) =>
                     this.reconcileCharacter(character).catch((error) => {
+                        recoveryFailed = true;
                         this.logger.error("Kennel recovery failed", error, {
                             memberNumber: character.MemberNumber,
                             position: character.MapPos,
@@ -200,6 +212,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 ),
             );
             this.lastSuccessfulReconciliationAt = Date.now();
+            this.recoveryReady = !recoveryFailed;
+            this.recoveryReadinessReason = recoveryFailed
+                ? "kennel character recovery failed"
+                : "kennel recovery reconciled";
 
             this.logger?.info(
                 `[KennelSystem] Registered ${this.kennelPositions.length} kennel location(s)`,
@@ -218,12 +234,22 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         return this.triggersReady;
     }
 
+    public isRecoveryReady(): boolean {
+        return this.recoveryReady;
+    }
+
+    public getRecoveryReadinessReason(): string {
+        return this.recoveryReadinessReason;
+    }
+
     public getDiagnostics(): Record<string, unknown> {
         return {
             roomIdentity: getLifecycleObjectId(this.boundRoom),
             mapIdentity: getLifecycleObjectId(this.boundMap),
             mapReady: !!this.boundMap,
             triggersReady: this.triggersReady,
+            recoveryReady: this.recoveryReady,
+            recoveryReadinessReason: this.recoveryReadinessReason,
             tileTriggerCount: this.boundKennelTrigger
                 ? this.kennelPositions.length
                 : 0,
@@ -240,7 +266,13 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     }
 
     private onCharacterEnterKennel = async (character: API_Character) => {
-        if (!this.enabled) return;
+        if (!this.enabled) {
+            character.Tell(
+                "Whisper",
+                "(Kennel containment is currently unavailable. Please contact staff.)",
+            );
+            return;
+        }
 
         // Use idempotent monitor to prevent duplicate execution
         await this.monitor.run(character, () =>

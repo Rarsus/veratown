@@ -522,11 +522,20 @@ async function initializeVeratownGame(
     await subscribers.initialize();
     logger.info("Cross-system event subscriptions activated");
 
+    const containmentReadiness = game.getContainmentReadiness();
     if (game.isContainmentReady()) {
-        logger.info("Veratown initialized with all systems and map loaded");
+        logger.info(
+            "Veratown initialized with all containment capabilities ready",
+            {
+                containmentReadiness,
+            },
+        );
     } else {
         logger.warn(
-            "Veratown initialized in degraded mode; containment features remain unavailable until bot map positions recover",
+            "Veratown initialized with capability-level degraded readiness",
+            {
+                containmentReadiness,
+            },
         );
     }
     connections.main.setBotDescription(Veratown.description);

@@ -456,3 +456,16 @@ test("CageSystem rebinds map triggers without retaining stale room callbacks", a
     assert.equal(system.isReady(), true);
     assert.equal(system.getDiagnostics().tileTriggerCount, 2);
 });
+
+test("CageSystem reports when containment is unavailable", async () => {
+    const created = createCharacter();
+    const system = new CageSystem({} as any);
+    system.enabled = false;
+
+    await (system as any).onCharacterEnterCage(created.character);
+
+    assert.match(
+        created.messages[0],
+        /Cage containment is currently unavailable/,
+    );
+});
