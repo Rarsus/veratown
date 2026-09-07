@@ -190,6 +190,10 @@ export class KidnappersGameLifecycleService {
         return Array.from(this.sessions.keys());
     }
 
+    public isShutDown(): boolean {
+        return this.shutDown;
+    }
+
     /**
      * Shut down and remove a single session. Idempotent: shutting down an
      * unknown or already-removed session id is a no-op, not an error, so

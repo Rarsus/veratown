@@ -62,6 +62,10 @@ export class GamePluginCommandRouterImpl implements GamePluginCommandRouter {
         this.commandParser.register(this.pluginKey, handler);
     }
 
+    public unregisterRoot(): void {
+        this.commandParser.unregister(this.pluginKey);
+    }
+
     /**
      * Register a command at the parser root without the plugin key.
      *
@@ -100,6 +104,10 @@ export class GamePluginCommandRouterImpl implements GamePluginCommandRouter {
         // bc-bot's CommandParser treats this as a single command token
         const fullCommand = `${this.pluginKey} ${name}`;
         this.commandParser.register(fullCommand, handler);
+    }
+
+    public unregisterCommand(name: string): void {
+        this.commandParser.unregister(`${this.pluginKey} ${name}`);
     }
 
     /**

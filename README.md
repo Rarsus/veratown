@@ -190,3 +190,5 @@ stored in MongoDB, so `mongo_uri`/`mongo_db` must be configured (see "Running wi
 Compose" above). Players receive the daily free-chip grant or cooldown status only when
 they enter the configured casino region. They can bet chips or forfeits, and can `/bot
 give`/admins can `/bot grant` chips to other players.
+
+Kidnappers command reference: [docs/KIDNAPPERS_COMMANDS.md](docs/KIDNAPPERS_COMMANDS.md).
