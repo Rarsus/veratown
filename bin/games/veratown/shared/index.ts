@@ -31,7 +31,14 @@ export {
     isOwnerLocked,
     filterUnlocked,
     filterOwnerLocked,
+    isValidAppearanceItem,
+    filterValidAppearanceItems,
 } from "./appearanceSync";
+
+export {
+    LiveAppearanceRemovalCoordinator,
+    type LiveRemovalTarget,
+} from "./liveAppearanceRemovalCoordinator";
 
 // Database retry patterns
 export {

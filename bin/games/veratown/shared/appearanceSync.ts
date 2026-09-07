@@ -9,7 +9,7 @@
  *   const item = getAppearanceItem(character, "ItemDevices");
  */
 
-import { API_Character } from "bc-bot";
+import { API_Character, BC_AppearanceItem } from "bc-bot";
 import { createLogger } from "../../../logging";
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
@@ -207,4 +207,23 @@ export function filterUnlocked(items: any[]): any[] {
  */
 export function filterOwnerLocked(items: any[]): any[] {
     return items.filter((item) => isOwnerLocked(item));
+}
+
+export function isValidAppearanceItem(
+    item: unknown,
+): item is BC_AppearanceItem {
+    if (!item || typeof item !== "object") return false;
+    const candidate = item as { Group?: unknown; Name?: unknown };
+    return (
+        typeof candidate.Group === "string" &&
+        candidate.Group.trim().length > 0 &&
+        typeof candidate.Name === "string" &&
+        candidate.Name.trim().length > 0
+    );
+}
+
+export function filterValidAppearanceItems(
+    items: unknown[],
+): BC_AppearanceItem[] {
+    return items.filter(isValidAppearanceItem);
 }

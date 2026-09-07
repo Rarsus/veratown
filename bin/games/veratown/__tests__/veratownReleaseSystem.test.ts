@@ -3,9 +3,11 @@ import { test } from "node:test";
 import { isClothing } from "../../../../src/assetHelpers";
 import { ReleaseSystem } from "../veratownReleaseSystem";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
+import { LiveAppearanceRemovalCoordinator } from "../shared";
 
 function createCharacter(initialAppearance: any[], failingGroup?: string) {
     let appearance = structuredClone(initialAppearance);
+    const removeCalls: string[] = [];
     const character: any = {
         MemberNumber: 145,
         MapPos: { X: 1, Y: 1 },
@@ -13,19 +15,26 @@ function createCharacter(initialAppearance: any[], failingGroup?: string) {
             MakeAppearanceBundle: () => structuredClone(appearance),
             slowlyStripBulk: async (config: any) => {
                 if (config.clothing) {
-                    appearance = appearance.filter((item) => !isClothing(item));
+                    appearance = appearance.filter(
+                        (item) => !item || !isClothing(item),
+                    );
                 }
             },
             stripBulk: (config: any) => {
                 if (config.clothing) {
-                    appearance = appearance.filter((item) => !isClothing(item));
+                    appearance = appearance.filter(
+                        (item) => !item || !isClothing(item),
+                    );
                 }
             },
             RemoveItem: (group: string) => {
+                removeCalls.push(group);
                 if (group === failingGroup) {
                     throw new Error(`failed to remove ${group}`);
                 }
-                appearance = appearance.filter((item) => item.Group !== group);
+                appearance = appearance.filter(
+                    (item) => !item || item.Group !== group,
+                );
             },
         },
     };
@@ -33,6 +42,7 @@ function createCharacter(initialAppearance: any[], failingGroup?: string) {
     return {
         character,
         appearance: () => structuredClone(appearance),
+        removeCalls,
     };
 }
 
@@ -176,4 +186,95 @@ test("release flow does not grant access until verified restraints are persisted
         })),
         [{ group: "ItemDevices", itemName: "OwnerDevice" }],
     );
+});
+
+test("release ignores empty and malformed appearance placeholders", async () => {
+    const created = createCharacter([
+        { Group: "ItemArms", Name: "Cuffs", Property: {} },
+        { Group: "ArmsLeft", Name: "", Property: {} },
+        { Group: "", Name: "MissingGroup", Property: {} },
+        { Name: "MissingGroup", Property: {} },
+        null,
+    ]);
+    const system = new ReleaseSystem(createConnection());
+
+    const removed = await (system as any).stripNonOwnerItems(created.character);
+
+    assert.deepEqual(
+        removed.map((item: any) => `${item.group}/${item.name}`),
+        ["ItemArms/Cuffs"],
+    );
+    assert.deepEqual(
+        created.appearance().filter((item) => item?.Group === "ItemArms"),
+        [],
+    );
+});
+
+test("release does not remove an owner lock sharing a target group", async () => {
+    const created = createCharacter([
+        { Group: "ItemArms", Name: "ReleaseCuffs", Property: {} },
+        {
+            Group: "ItemArms",
+            Name: "OwnerCuffs",
+            Property: { Lock: "OwnerPadlock", LockedBy: 145 },
+        },
+    ]);
+    const system = new ReleaseSystem(createConnection());
+
+    await assert.rejects(
+        () => (system as any).stripNonOwnerItems(created.character),
+        /Release appearance verification failed/,
+    );
+    assert.deepEqual(
+        created.appearance().map((item) => `${item.Group}/${item.Name}`),
+        ["ItemArms/ReleaseCuffs", "ItemArms/OwnerCuffs"],
+    );
+});
+
+test("release coalesces duplicate live groups while removing each target", async () => {
+    const created = createCharacter([
+        { Group: "ItemArms", Name: "FirstCuffs", Property: {} },
+        { Group: "ItemArms", Name: "SecondCuffs", Property: {} },
+    ]);
+    const system = new ReleaseSystem(createConnection());
+
+    const removed = await (system as any).stripNonOwnerItems(created.character);
+
+    assert.deepEqual(
+        removed.map((item: any) => `${item.group}/${item.name}`).sort(),
+        ["ItemArms/FirstCuffs", "ItemArms/SecondCuffs"],
+    );
+    assert.deepEqual(created.removeCalls, ["ItemArms"]);
+});
+
+test("live removal retries a partial mutation and is idempotent after success", async () => {
+    let appearance: any[] = [
+        { Group: "ItemArms", Name: "RetryCuffs", Property: {} },
+    ];
+    let attempts = 0;
+    const character: any = {
+        MemberNumber: 145,
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+            RemoveItem: (group: string) => {
+                attempts++;
+                if (attempts === 1)
+                    throw new Error("temporary removal failure");
+                appearance = appearance.filter((item) => item.Group !== group);
+            },
+        },
+    };
+    const coordinator = new LiveAppearanceRemovalCoordinator(2);
+
+    await coordinator.remove(character, "release-145-1", {
+        group: "ItemArms",
+        name: "RetryCuffs",
+    });
+    await coordinator.remove(character, "release-145-1", {
+        group: "ItemArms",
+        name: "RetryCuffs",
+    });
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(appearance, []);
 });

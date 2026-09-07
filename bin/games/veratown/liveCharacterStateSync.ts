@@ -21,7 +21,10 @@ import {
 import { createLogger } from "../../logging";
 import { CurrentRestraint } from "../shared/unifiedCharacterTypes";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
-import { registerAppearanceStateSynchronizer } from "./shared/appearanceSync";
+import {
+    filterValidAppearanceItems,
+    registerAppearanceStateSynchronizer,
+} from "./shared/appearanceSync";
 
 const logger = createLogger("LiveCharacterStateSync");
 const RECONCILIATION_INTERVAL_MS = 60_000;
@@ -226,8 +229,8 @@ export class LiveCharacterStateSync {
     private normalizedAppearance(
         character: API_Character,
     ): BC_AppearanceItem[] {
-        return character.Appearance.MakeAppearanceBundle().filter((item) =>
-            Boolean(item.Group && item.Name),
+        return filterValidAppearanceItems(
+            character.Appearance.MakeAppearanceBundle(),
         );
     }
 
