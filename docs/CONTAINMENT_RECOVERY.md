@@ -36,3 +36,16 @@ verified through the room's observed character position. A verified
 `unifiedCharacterProfiles` record. Requested, observed, persisted, and
 verification-source values are retained in live synchronization diagnostics;
 an unsuccessful movement never persists the requested target.
+
+## Room and map rebinding
+
+Cage and kennel handlers are bound to the active room and map as a single
+lifecycle. On room creation, room join, reconnect, or map replacement, the
+systems detach the previous tile, region, and room-event handlers before
+attaching the new ones. Binding is idempotent, location configuration is
+reloaded before readiness is restored, and characters already present in the
+room are reconciled during the reload.
+
+The containment diagnostics expose the active room/map identities, trigger and
+listener counts, readiness, and the timestamps of the last successful bind and
+reconciliation. Events or callbacks retained by an old room/map are ignored.

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import { KennelSystem } from "../kennelSystem";
 
@@ -78,6 +79,60 @@ function createConnector(characters: any[]) {
                 on: () => {},
             },
             on: () => {},
+        },
+    };
+}
+
+function createLifecycleConnector() {
+    const createRoom = () => {
+        const room = new EventEmitter() as any;
+        const tileTriggers: any[] = [];
+        const leaveTriggers: any[] = [];
+        room.characters = [];
+        room.map = {
+            addTileTrigger: (position: any, callback: any) => {
+                tileTriggers.push({ position, callback });
+            },
+            removeTileTrigger: (_x: number, _y: number, callback: any) => {
+                for (let index = tileTriggers.length - 1; index >= 0; index--) {
+                    if (tileTriggers[index].callback === callback) {
+                        tileTriggers.splice(index, 1);
+                    }
+                }
+            },
+            addLeaveRegionTrigger: (region: any, callback: any) => {
+                leaveTriggers.push({ region, callback });
+            },
+            removeLeaveRegionTrigger: (callback: any) => {
+                for (
+                    let index = leaveTriggers.length - 1;
+                    index >= 0;
+                    index--
+                ) {
+                    if (leaveTriggers[index].callback === callback) {
+                        leaveTriggers.splice(index, 1);
+                    }
+                }
+            },
+            tileTriggers,
+            leaveTriggers,
+        };
+        return room;
+    };
+
+    let room = createRoom();
+    const connector = new EventEmitter() as any;
+    Object.defineProperty(connector, "chatRoom", {
+        get: () => room,
+    });
+    return {
+        connector,
+        get room() {
+            return room;
+        },
+        replaceRoom() {
+            room = createRoom();
+            return room;
         },
     };
 }
@@ -275,4 +330,58 @@ test("KennelSystem rolls back both mutations when live-state sync fails", async 
     assert.equal(created.device, undefined);
     assert.deepEqual(mutations.entries, [10]);
     assert.deepEqual(mutations.exits, [10]);
+});
+
+test("KennelSystem rebinds idempotently and ignores stale room triggers", async () => {
+    const mutations = createMutationService();
+    const lifecycle = createLifecycleConnector();
+    const system = new KennelSystem(
+        lifecycle.connector,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+    const location = {
+        key: "kennel",
+        name: "Kennel",
+        type: "kennel" as const,
+        x: 4,
+        y: 38,
+        enabled: true,
+        createdAt: 0,
+        updatedAt: 0,
+    };
+
+    await system.reloadLocations([location]);
+    const oldRoom = lifecycle.room;
+    const oldTileTrigger = oldRoom.map.tileTriggers[0].callback;
+    assert.equal(oldRoom.listenerCount("ItemRemove"), 1);
+
+    const newRoom = lifecycle.replaceRoom();
+    system.attachToRoom();
+    await system.reloadLocations([location]);
+    system.attachToRoom();
+
+    assert.equal(oldRoom.map.tileTriggers.length, 0);
+    assert.equal(oldRoom.listenerCount("ItemRemove"), 0);
+    assert.equal(newRoom.map.tileTriggers.length, 1);
+    assert.equal(newRoom.map.leaveTriggers.length, 1);
+    assert.equal(newRoom.listenerCount("ItemRemove"), 1);
+    assert.equal(lifecycle.connector.listenerCount("CharacterSync"), 1);
+    assert.equal(system.getDiagnostics().tileTriggerCount, 1);
+
+    oldTileTrigger(createCharacter(14).character);
+    oldRoom.emit("ItemRemove", createCharacter(14).character, [
+        { Group: "ItemDevices", Name: "Kennel" },
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(mutations.entries, []);
+
+    const currentCharacter = createCharacter(15);
+    newRoom.map.tileTriggers[0].callback(currentCharacter.character, {
+        X: 3,
+        Y: 38,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(mutations.entries, [15]);
 });
