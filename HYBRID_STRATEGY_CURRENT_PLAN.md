@@ -8,24 +8,22 @@
 ## Current Position
 
 - **Phase 1:** Complete.
-- **Phase 2A:** Core child systems complete; integration, performance, quality gates, and handoff remain in #59.
-- **Phase 2B:** Not substantively started; begin from the GitHub breakdown under #30.
+- **Phase 2A:** Handoff #59 is closed through merged PR #109.
+- **Phase 2B:** Child issues #30.1 through #30.8 are complete; documentation and
+  the Phase 3 handoff remain in #106.
 - **Phase 3:** Blocked until Phase 2A handoff and Phase 2B completion.
 - **Phase 4:** Blocked until Phase 3 integration and deployment-readiness approval.
 
 ## Immediate Work
 
-### 1. Close Phase 2A handoff risk: #59
+### 1. Preserve the Phase 2A handoff evidence: #59
 
-Resolve and document the current executable failures before calling Phase 2A complete:
+The Phase 2A handoff is recorded in [PHASE_2A_HANDOFF.md](PHASE_2A_HANDOFF.md).
+Re-run its strict TypeScript, formatting, unit, integration, coverage, and
+performance gates on the combined Phase 2A/2B checkout, and preserve its
+rollback contract.
 
-- Restore strict TypeScript compilation.
-- Fix the Location Event unique-index/idempotency failure.
-- Restore the UnifiedCharacterStore coverage threshold.
-- Run the full unit and integration suites successfully.
-- Capture performance baselines, rollback notes, deferred reliability work, and cross-system handoff evidence.
-
-### 2. Execute Phase 2B: #30
+### 2. Complete Phase 2B documentation and handoff: #106
 
 Work in this order, with each child issue requiring implementation, tests, documentation, and a rollback or recovery note:
 
@@ -39,7 +37,7 @@ Work in this order, with each child issue requiring implementation, tests, docum
 8. [#103](https://github.com/Rarsus/veratown/issues/103) Unit, integration, failure-recovery, and coverage gates.
 9. [#106](https://github.com/Rarsus/veratown/issues/106) Player/developer documentation and Phase 3 handoff package.
 
-Phase 2B must use the Phase 1 DI and mutation boundaries, avoid polling-driven control flow, and keep game state authoritative and recoverable.
+Phase 2B must use the Phase 1 DI and mutation boundaries, avoid polling-driven control flow, and keep game state authoritative and recoverable. The current package and its remaining integration gates are listed in [PHASE_2B_HANDOFF.md](PHASE_2B_HANDOFF.md).
 
 ## Phase Gates
 

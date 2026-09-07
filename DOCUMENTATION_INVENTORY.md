@@ -1,12 +1,12 @@
 # Repository Documentation Inventory
 
-**Generated:** 2026-09-02  
+**Generated:** 2026-09-07
 **Total Documentation Files:** 200+  
 **Analysis Scope:** Complete repository structure
 
 ---
 
-## ROOT-LEVEL DOCUMENTATION (17 files)
+## ROOT-LEVEL DOCUMENTATION (20 files)
 
 | Path                                           | Type           | Purpose                               | Lines | Size | Status |
 | ---------------------------------------------- | -------------- | ------------------------------------- | ----- | ---- | ------ |
@@ -28,6 +28,9 @@
 | LOGGER_MIGRATION_COMPLETE.md                   | Status         | Logger migration completion report    | 240   | 7.2K | Live   |
 | DOCUMENTATION_UPDATE_SUMMARY.md                | Status         | Documentation update summary          | 294   | 9.3K | Live   |
 | BACKUP_MANIFEST.md                             | Reference      | Backup manifest reference             | 163   | 4.6K | Live   |
+| KIDNAPPERS_GAME_PLAYER_GUIDE.md                | Guide          | KidnappersGame player/admin guide     | 99    | 7.0K | Live   |
+| KIDNAPPERS_GAME_DEVELOPER_GUIDE.md             | Implementation | KidnappersGame developer/ops guide    | 157   | 7.5K | Live   |
+| PHASE_2B_HANDOFF.md                            | Phase          | Phase 2B and Phase 3 handoff          | 88    | 7.4K | Live   |
 
 ---
 

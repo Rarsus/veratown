@@ -18,6 +18,7 @@ Step-by-step guides for common tasks and getting started with Ropeybot.
 - **[Asset Sync Workflow](BC_ASSETS_SYNC_WORKFLOW.md)** - Sync assets from BC repository
 - **[Repository Sync Guide](BC_REPO_SYNC_GUIDE.md)** - Sync code and content
 - **[Migration Guide](MIGRATION_GUIDE.md)** - Migrate between versions
+- **[KidnappersGame recovery guide](../../KIDNAPPERS_GAME_DEVELOPER_GUIDE.md#rollback-and-recovery)** - Recover sessions and roll back safely
 
 ## Reference & Help
 

@@ -1,5 +1,9 @@
 # Kidnappers commands
 
+This is the compact reference for the Phase 2B command controller. For
+lifecycle, outcomes, recovery, and exact admin argument rules, see the
+[player and room-admin guide](../KIDNAPPERS_GAME_PLAYER_GUIDE.md).
+
 Commands are sent in the active game room with the `!kidnappers` prefix.
 Aliases are accepted where shown.
 
@@ -13,15 +17,16 @@ Aliases are accepted where shown.
 - `capture <member> [session]` (`kidnap`) attempts a capture.
 - `accept [session]` (`surrender`), `resist [session]` (`defend`), and
   `escape [session]` (`flee`) respond to a capture.
+- `accuse <member> [session]` (`vote`) raises an accusation during voting.
 - `help` (`commands`) displays command help.
 
 ## Room administrators
 
 Administrators may also use `assign`, `phase` (`advance`), `release`,
-`complete`, `end` (`stop`, `abort`), `sessions` (`games`), and
-`recover` (`resume`). These commands require the relevant arguments shown by
-`help`; `sessions` lists active sessions and `recover <session>` restores a
-persisted session.
+`complete`, `end` (`stop`, `abort`), `timeout`, `abandon`, `sessions` (`games`),
+and `recover` (`resume`). `complete` takes `captors`, `victims`, or `tie`;
+`assign` takes a member and role; `release` takes a member; `recover` takes a
+session; and `sessions` takes no arguments.
 
 Commands are validated against room membership, participant membership, game
 phase, turn ownership, and administrator permissions. Repeating an in-flight
