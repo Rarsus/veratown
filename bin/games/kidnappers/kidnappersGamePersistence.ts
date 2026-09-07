@@ -146,6 +146,9 @@ function validateSnapshot(
         !Number.isInteger(snapshot.round) ||
         (snapshot.round as number) < 0 ||
         !Number.isSafeInteger(snapshot.createdAt) ||
+        (snapshot.turnSequence !== undefined &&
+            (!Number.isSafeInteger(snapshot.turnSequence) ||
+                (snapshot.turnSequence as number) < 0)) ||
         (snapshot.startedAt !== null &&
             !Number.isSafeInteger(snapshot.startedAt)) ||
         (snapshot.completedAt !== null &&
@@ -190,6 +193,27 @@ function validateSnapshot(
             throw new Error("snapshot contains an invalid or duplicate player");
         }
         members.add(player.memberNumber as number);
+    }
+    if (snapshot.turn !== undefined && snapshot.turn !== null) {
+        const turn = snapshot.turn as unknown as Record<string, unknown>;
+        const pending = turn.pendingCapture as Record<string, unknown> | null;
+        if (
+            typeof turn.turnId !== "string" ||
+            !Number.isSafeInteger(turn.ownerMemberNumber) ||
+            !Number.isSafeInteger(turn.startedAt) ||
+            !Number.isSafeInteger(turn.deadlineAt) ||
+            (turn.deadlineAt as number) < (turn.startedAt as number) ||
+            !members.has(turn.ownerMemberNumber as number) ||
+            (pending !== null &&
+                (typeof pending !== "object" ||
+                    !Number.isSafeInteger(pending.attackerMemberNumber) ||
+                    !Number.isSafeInteger(pending.targetMemberNumber) ||
+                    !Number.isSafeInteger(pending.attemptedAt) ||
+                    !members.has(pending.attackerMemberNumber as number) ||
+                    !members.has(pending.targetMemberNumber as number)))
+        ) {
+            throw new Error("snapshot capture turn is invalid");
+        }
     }
 }
 
@@ -465,6 +489,86 @@ export class KidnappersGamePersistence {
                     };
                 }),
             "kidnappers_update_transition",
+            { maxRetries: 2, initialDelayMs: 10 },
+        );
+    }
+
+    /**
+     * Record a rejected command without changing the authoritative snapshot.
+     * Rejections use the same operation-key uniqueness contract as accepted
+     * transitions, so retrying an invalid command returns its original audit
+     * record instead of creating another event.
+     */
+    public async recordRejected(
+        sessionId: string,
+        expectedVersion: number,
+        operationKey: string,
+        snapshot: KidnappersSessionSnapshot,
+        event: Extract<KidnappersGameEvent, { type: "ACTION_REJECTED" }>,
+    ): Promise<KidnappersPersistedTransition> {
+        validateSnapshot(snapshot);
+        if (snapshot.sessionId !== sessionId) {
+            throw new KidnappersInvalidDocumentError(
+                sessionId,
+                "rejection sessionId does not match",
+            );
+        }
+        await this.initialize();
+        const previous = await this.findOperation(sessionId, operationKey);
+        if (previous) return previous;
+
+        return executeWithRetry(
+            () =>
+                this.withTransaction(async (session) => {
+                    const existingAudit = await this.events.findOne(
+                        { sessionId, operationKey },
+                        { session },
+                    );
+                    if (existingAudit) {
+                        return {
+                            snapshot: existingAudit.snapshot,
+                            version: existingAudit.versionAfter,
+                            event: existingAudit.event,
+                            duplicate: true,
+                        };
+                    }
+                    const current = await this.sessions.findOne(
+                        { _id: sessionId },
+                        { session },
+                    );
+                    if (!current) {
+                        throw new BusinessLogicError(
+                            `Session '${sessionId}' does not exist`,
+                            { sessionId },
+                        );
+                    }
+                    this.assertDocument(current);
+                    if (current.version !== expectedVersion) {
+                        throw new KidnappersVersionConflictError(
+                            sessionId,
+                            expectedVersion,
+                            current.version,
+                        );
+                    }
+                    const audit: KidnappersGameAuditDocument = {
+                        _id: `${sessionId}:${operationKey}`,
+                        sessionId,
+                        operationKey,
+                        event: { ...event, sessionId },
+                        snapshot: current.snapshot,
+                        versionBefore: expectedVersion,
+                        versionAfter: expectedVersion,
+                        recordedAt: Date.now(),
+                    };
+                    await this.events.insertOne(audit, { session });
+                    return {
+                        snapshot: current.snapshot,
+                        version: expectedVersion,
+                        event: audit.event,
+                        duplicate: false,
+                    };
+                }),
+            "kidnappers_record_rejection",
             { maxRetries: 2, initialDelayMs: 10 },
         );
     }

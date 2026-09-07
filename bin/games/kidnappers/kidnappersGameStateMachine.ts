@@ -16,12 +16,16 @@ import { KidnappersGameError } from "./kidnappersGameErrors";
 import {
     KIDNAPPERS_MAX_PLAYERS,
     KIDNAPPERS_MIN_PLAYERS,
+    KIDNAPPERS_CAPTURE_TIMEOUT_MS,
     isTerminalPhase,
+    type KidnappersCaptureOutcome,
+    type KidnappersCaptureTurn,
     type KidnappersGameCommand,
     type KidnappersGameCommandType,
     type KidnappersGameEvent,
     type KidnappersGamePhase,
     type KidnappersPlayerState,
+    type KidnappersPlayerRole,
     type KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
 
@@ -35,6 +39,7 @@ export type KidnappersGameTransitionResult =
     | {
           readonly ok: false;
           readonly error: KidnappersGameError;
+          readonly event: KidnappersGameEvent;
           /** State is always the *unchanged* snapshot from before dispatch. */
           readonly state: KidnappersSessionSnapshot;
       };
@@ -65,6 +70,8 @@ interface InternalState {
     completedAt: number | null;
     winner: KidnappersSessionSnapshot["winner"];
     players: Map<number, KidnappersPlayerState>;
+    turn: KidnappersCaptureTurn | null;
+    turnSequence: number;
 }
 
 /**
@@ -95,6 +102,8 @@ export class KidnappersGameStateMachine {
             completedAt: null,
             winner: null,
             players: new Map(),
+            turn: null,
+            turnSequence: 0,
         };
     }
 
@@ -126,6 +135,10 @@ export class KidnappersGameStateMachine {
                     { ...player },
                 ]),
             ),
+            turn: snapshot.turn ?? null,
+            turnSequence:
+                snapshot.turnSequence ??
+                this.sequenceFromTurnId(snapshot.turn?.turnId),
         };
     }
 
@@ -180,12 +193,49 @@ export class KidnappersGameStateMachine {
             case "START_GAME": {
                 const guardError = this.guardStart(command);
                 if (guardError) return this.reject(guardError, before);
+                const roles = this.assignRoles(command.roles);
+                for (const [memberNumber, role] of roles) {
+                    const player = this.state.players.get(memberNumber);
+                    if (player) {
+                        this.state.players.set(memberNumber, {
+                            ...player,
+                            role,
+                        });
+                    }
+                }
                 this.state.phase = "night";
                 this.state.round = 1;
                 this.state.startedAt = command.issuedAt;
+                this.state.turn = this.createTurn(command.issuedAt);
                 return this.accept(
                     {
                         type: "GAME_STARTED",
+                        roles: Array.from(roles, ([memberNumber, role]) => ({
+                            memberNumber,
+                            role,
+                        })),
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "ASSIGN_ROLE": {
+                const guardError = this.guardAssignRole(command);
+                if (guardError) return this.reject(guardError, before);
+                const player = this.state.players.get(command.memberNumber);
+                if (player) {
+                    this.state.players.set(command.memberNumber, {
+                        ...player,
+                        role: command.role,
+                    });
+                }
+                return this.accept(
+                    {
+                        type: "ROLE_ASSIGNED",
+                        memberNumber: command.memberNumber,
+                        role: command.role,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
                     },
@@ -201,12 +251,245 @@ export class KidnappersGameStateMachine {
                 this.state.phase = to;
                 if (to === "night") {
                     this.state.round += 1;
+                    this.state.turn = this.createTurn(command.issuedAt);
+                } else if (from === "night") {
+                    this.state.turn = null;
                 }
                 return this.accept(
                     {
                         type: "PHASE_CHANGED",
                         from,
                         to,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "ATTEMPT_CAPTURE": {
+                const guardError = this.guardAttemptCapture(command);
+                if (guardError) return this.reject(guardError, before);
+                const turn = this.state.turn;
+                if (!turn) {
+                    return this.reject(
+                        this.captureError(
+                            "No capture turn is active",
+                            "INVALID_TRANSITION",
+                            command,
+                        ),
+                        before,
+                    );
+                }
+                const actorMemberNumber =
+                    command.actorMemberNumber ?? command.memberNumber;
+                if (actorMemberNumber === undefined) {
+                    return this.reject(
+                        this.captureError(
+                            "A capture actor is required",
+                            "PLAYER_NOT_FOUND",
+                            command,
+                        ),
+                        before,
+                    );
+                }
+                this.state.turn = {
+                    ...turn,
+                    pendingCapture: {
+                        attackerMemberNumber: actorMemberNumber,
+                        targetMemberNumber: command.targetMemberNumber,
+                        attemptedAt: command.issuedAt,
+                    },
+                };
+                return this.accept(
+                    {
+                        type: "CAPTURE_ATTEMPTED",
+                        attackerMemberNumber: actorMemberNumber,
+                        targetMemberNumber: command.targetMemberNumber,
+                        turnId: turn.turnId,
+                        deadlineAt: turn.deadlineAt,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "RESIST_CAPTURE":
+            case "ESCAPE_CAPTURE":
+            case "ACCEPT_CAPTURE":
+            case "RESOLVE_CAPTURE": {
+                const outcome: KidnappersCaptureOutcome =
+                    command.type === "RESIST_CAPTURE"
+                        ? "resisted"
+                        : command.type === "ESCAPE_CAPTURE"
+                          ? "escaped"
+                          : command.type === "ACCEPT_CAPTURE"
+                            ? "captured"
+                            : (
+                                  command as Extract<
+                                      KidnappersGameCommand,
+                                      { type: "RESOLVE_CAPTURE" }
+                                  >
+                              ).outcome;
+                const guardError = this.guardResolveCapture(command, outcome);
+                if (guardError) return this.reject(guardError, before);
+                const turn = this.state.turn;
+                const pending = turn?.pendingCapture;
+                if (!turn || !pending) {
+                    return this.reject(
+                        this.captureError(
+                            "There is no pending capture to resolve",
+                            "NO_PENDING_CAPTURE",
+                            command,
+                        ),
+                        before,
+                    );
+                }
+                if (outcome === "captured") {
+                    const target = this.state.players.get(
+                        pending.targetMemberNumber,
+                    );
+                    if (target) {
+                        this.state.players.set(target.memberNumber, {
+                            ...target,
+                            status: "captured",
+                        });
+                    }
+                }
+                const nextTurn = this.advanceCaptureTurn(command.issuedAt);
+                return this.accept(
+                    {
+                        type: "CAPTURE_RESOLVED",
+                        attackerMemberNumber: pending.attackerMemberNumber,
+                        targetMemberNumber: pending.targetMemberNumber,
+                        outcome,
+                        turnId: turn.turnId,
+                        nextTurnMemberNumber:
+                            nextTurn?.ownerMemberNumber ?? null,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "TIMEOUT_TURN":
+            case "RESOLVE_TURN": {
+                const turn = this.state.turn;
+                const memberNumber =
+                    command.memberNumber ?? turn?.ownerMemberNumber;
+                const turnId = command.turnId ?? turn?.turnId;
+                if (memberNumber === undefined || turnId === undefined) {
+                    return this.reject(
+                        this.captureError(
+                            "A turn owner and turn id are required",
+                            "TURN_NOT_OWNED",
+                            command,
+                        ),
+                        before,
+                    );
+                }
+                const timeoutCommand = {
+                    ...command,
+                    type: "TIMEOUT_TURN" as const,
+                    memberNumber,
+                    turnId,
+                };
+                const guardError = this.guardTimeout(timeoutCommand);
+                if (guardError) return this.reject(guardError, before);
+                const pending = turn?.pendingCapture;
+                const outcome = pending ? "captured" : "skipped";
+                if (pending && outcome === "captured") {
+                    const target = this.state.players.get(
+                        pending.targetMemberNumber,
+                    );
+                    if (target) {
+                        this.state.players.set(target.memberNumber, {
+                            ...target,
+                            status: "captured",
+                        });
+                    }
+                }
+                const nextTurn = this.advanceCaptureTurn(command.issuedAt);
+                return this.accept(
+                    {
+                        type: "TURN_TIMED_OUT",
+                        memberNumber,
+                        turnId,
+                        outcome,
+                        nextTurnMemberNumber:
+                            nextTurn?.ownerMemberNumber ?? null,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "PLAYER_DISCONNECTED": {
+                const guardError = this.guardPlayerStatus(command, false);
+                if (guardError) return this.reject(guardError, before);
+                const player = this.state.players.get(command.memberNumber);
+                if (!player) {
+                    return this.reject(
+                        this.captureError(
+                            "Player is not part of this session",
+                            "PLAYER_NOT_FOUND",
+                            command,
+                        ),
+                        before,
+                    );
+                }
+                this.state.players.set(command.memberNumber, {
+                    ...player,
+                    status: "disconnected",
+                });
+                const turn = this.state.turn;
+                const pending = turn?.pendingCapture;
+                let captureResolved: KidnappersCaptureOutcome | null = null;
+                let nextTurn: KidnappersCaptureTurn | null = turn;
+                if (
+                    pending &&
+                    pending.targetMemberNumber === command.memberNumber
+                ) {
+                    captureResolved = "captured";
+                    this.state.players.set(command.memberNumber, {
+                        ...player,
+                        status: "captured",
+                    });
+                    nextTurn = this.advanceCaptureTurn(command.issuedAt);
+                } else if (turn?.ownerMemberNumber === command.memberNumber) {
+                    nextTurn = this.advanceCaptureTurn(command.issuedAt);
+                }
+                return this.accept(
+                    {
+                        type: "PLAYER_DISCONNECTED",
+                        memberNumber: command.memberNumber,
+                        captureResolved,
+                        nextTurnMemberNumber:
+                            nextTurn?.ownerMemberNumber ?? null,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "PLAYER_RECONNECTED": {
+                const guardError = this.guardPlayerStatus(command, true);
+                if (guardError) return this.reject(guardError, before);
+                const player = this.state.players.get(command.memberNumber);
+                if (player) {
+                    this.state.players.set(command.memberNumber, {
+                        ...player,
+                        status: "active",
+                    });
+                }
+                return this.accept(
+                    {
+                        type: "PLAYER_RECONNECTED",
+                        memberNumber: command.memberNumber,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
                     },
@@ -386,6 +669,84 @@ export class KidnappersGameStateMachine {
                 },
             );
         }
+        const roles = command.roles
+            ? new Map(
+                  Object.entries(command.roles).map(([member, role]) => [
+                      Number(member),
+                      role,
+                  ]),
+              )
+            : new Map(
+                  Array.from(this.state.players.entries())
+                      .filter(([, player]) => player.role !== null)
+                      .map(([member, player]) => [
+                          member,
+                          player.role as KidnappersPlayerRole,
+                      ]),
+              );
+        if (
+            command.roles &&
+            (roles.size !== this.state.players.size ||
+                Array.from(this.state.players.keys()).some(
+                    (memberNumber) => !roles.has(memberNumber),
+                ))
+        ) {
+            return new KidnappersGameError(
+                "Role assignments must include every participant",
+                {
+                    reason: "INVALID_ROLE_ASSIGNMENT",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        if (
+            roles.size === this.state.players.size &&
+            roles.size > 0 &&
+            !Array.from(roles.values()).some((role) => role === "kidnapper")
+        ) {
+            return new KidnappersGameError(
+                "At least one participant must be a kidnapper",
+                {
+                    reason: "INVALID_ROLE_ASSIGNMENT",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        return null;
+    }
+
+    private guardAssignRole(
+        command: Extract<KidnappersGameCommand, { type: "ASSIGN_ROLE" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (this.state.phase !== "lobby") {
+            return new KidnappersGameError(
+                "Roles can only be assigned in the lobby",
+                {
+                    reason: "GAME_ALREADY_STARTED",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        if (!this.state.players.has(command.memberNumber)) {
+            return new KidnappersGameError(
+                "Player is not part of this session",
+                {
+                    reason: "PLAYER_NOT_FOUND",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                    context: { memberNumber: command.memberNumber },
+                },
+            );
+        }
         return null;
     }
 
@@ -403,6 +764,245 @@ export class KidnappersGameStateMachine {
                     command: command.type,
                     correlationId: command.correlationId,
                 },
+            );
+        }
+        if (this.state.turn?.pendingCapture) {
+            return new KidnappersGameError(
+                "The pending capture must be resolved before the phase advances",
+                {
+                    reason: "CAPTURE_PENDING",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        return null;
+    }
+
+    private guardAttemptCapture(
+        command: Extract<KidnappersGameCommand, { type: "ATTEMPT_CAPTURE" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (this.state.phase !== "night") {
+            return this.captureError(
+                "Capture attempts are only legal during night",
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        const turn = this.state.turn;
+        const actorMemberNumber =
+            command.actorMemberNumber ?? command.memberNumber;
+        if (actorMemberNumber === undefined) {
+            return this.captureError(
+                "A capture actor is required",
+                "PLAYER_NOT_FOUND",
+                command,
+            );
+        }
+        const actor = this.state.players.get(actorMemberNumber);
+        const target = this.state.players.get(command.targetMemberNumber);
+        if (!actor || !target) {
+            return this.captureError(
+                "Capture participants must be in the session",
+                "PLAYER_NOT_FOUND",
+                command,
+            );
+        }
+        if (actor.role !== "kidnapper") {
+            return this.captureError(
+                "Only a kidnapper may attempt a capture",
+                "NOT_IN_ROLE",
+                command,
+            );
+        }
+        if (actor.status !== "active" || target.status !== "active") {
+            return this.captureError(
+                "Capture participants must be active",
+                "PLAYER_DISCONNECTED",
+                command,
+            );
+        }
+        if (target.memberNumber === actor.memberNumber) {
+            return this.captureError(
+                "A kidnapper cannot capture themself",
+                "INVALID_CAPTURE_TARGET",
+                command,
+            );
+        }
+        if (target.role === "kidnapper") {
+            return this.captureError(
+                "A kidnapper cannot capture another kidnapper",
+                "INVALID_CAPTURE_TARGET",
+                command,
+            );
+        }
+        if (!turn || turn.ownerMemberNumber !== actorMemberNumber) {
+            return this.captureError(
+                "The actor does not own the current capture turn",
+                "TURN_NOT_OWNED",
+                command,
+            );
+        }
+        if (command.issuedAt > turn.deadlineAt) {
+            return this.captureError(
+                "The capture turn has expired",
+                "ACTION_EXPIRED",
+                command,
+            );
+        }
+        if (command.turnId && command.turnId !== turn.turnId) {
+            return this.captureError(
+                "The capture turn id is stale",
+                "TURN_NOT_OWNED",
+                command,
+            );
+        }
+        if (turn.pendingCapture) {
+            return this.captureError(
+                "A capture is already awaiting a response",
+                "CAPTURE_PENDING",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private guardResolveCapture(
+        command: Extract<
+            KidnappersGameCommand,
+            {
+                type:
+                    | "RESIST_CAPTURE"
+                    | "ESCAPE_CAPTURE"
+                    | "ACCEPT_CAPTURE"
+                    | "RESOLVE_CAPTURE";
+            }
+        >,
+        outcome: KidnappersCaptureOutcome,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (this.state.phase !== "night") {
+            return this.captureError(
+                "Capture responses are only legal during night",
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        const turn = this.state.turn;
+        const pending = turn?.pendingCapture;
+        if (!turn || !pending) {
+            return this.captureError(
+                "There is no pending capture to resolve",
+                "NO_PENDING_CAPTURE",
+                command,
+            );
+        }
+        if (command.turnId && command.turnId !== turn.turnId) {
+            return this.captureError(
+                "The capture turn id is stale",
+                "TURN_NOT_OWNED",
+                command,
+            );
+        }
+        if (command.memberNumber !== pending.targetMemberNumber) {
+            return this.captureError(
+                "Only the capture target may respond",
+                "TURN_NOT_OWNED",
+                command,
+            );
+        }
+        if (command.issuedAt > turn.deadlineAt) {
+            return this.captureError(
+                "The capture response window has expired",
+                "ACTION_EXPIRED",
+                command,
+            );
+        }
+        const target = this.state.players.get(command.memberNumber);
+        if (!target || target.status !== "active") {
+            return this.captureError(
+                "The capture target is not active",
+                "PLAYER_DISCONNECTED",
+                command,
+            );
+        }
+        if (
+            outcome === "captured" &&
+            command.type === "RESOLVE_CAPTURE" &&
+            command.issuedAt < pending.attemptedAt
+        ) {
+            return this.captureError(
+                "Capture resolution predates the attempt",
+                "ACTION_EXPIRED",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private guardTimeout(
+        command: Extract<KidnappersGameCommand, { type: "TIMEOUT_TURN" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        const turn = this.state.turn;
+        if (!turn || turn.turnId !== command.turnId) {
+            return this.captureError(
+                "The capture turn id is stale",
+                "TURN_NOT_OWNED",
+                command,
+            );
+        }
+        if (turn.ownerMemberNumber !== command.memberNumber) {
+            return this.captureError(
+                "Only the current turn owner can time out",
+                "TURN_NOT_OWNED",
+                command,
+            );
+        }
+        if (command.issuedAt < turn.deadlineAt) {
+            return this.captureError(
+                "The capture turn has not expired",
+                "ACTION_EXPIRED",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private guardPlayerStatus(
+        command: Extract<
+            KidnappersGameCommand,
+            { type: "PLAYER_DISCONNECTED" | "PLAYER_RECONNECTED" }
+        >,
+        reconnect: boolean,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        const player = this.state.players.get(command.memberNumber);
+        if (!player) {
+            return this.captureError(
+                "Player is not part of this session",
+                "PLAYER_NOT_FOUND",
+                command,
+            );
+        }
+        if (reconnect && player.status !== "disconnected") {
+            return this.captureError(
+                "Player is not disconnected",
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        if (!reconnect && player.status === "disconnected") {
+            return this.captureError(
+                "Player is already disconnected",
+                "PLAYER_DISCONNECTED",
+                command,
             );
         }
         return null;
@@ -481,6 +1081,107 @@ export class KidnappersGameStateMachine {
         return null;
     }
 
+    private assignRoles(
+        requested?: Readonly<Record<number, KidnappersPlayerRole>>,
+    ): Map<number, KidnappersPlayerRole> {
+        if (requested) {
+            return new Map(
+                Object.entries(requested).map(([memberNumber, role]) => [
+                    Number(memberNumber),
+                    role,
+                ]),
+            );
+        }
+        const assigned = new Map<number, KidnappersPlayerRole>();
+        const players = Array.from(this.state.players.values()).sort(
+            (left, right) => left.memberNumber - right.memberNumber,
+        );
+        const hasAssignedRole = players.some((player) => player.role !== null);
+        let assignedKidnapper = false;
+        for (const player of players) {
+            const role =
+                player.role ?? (!assignedKidnapper ? "kidnapper" : "bystander");
+            if (role === "kidnapper") assignedKidnapper = true;
+            assigned.set(player.memberNumber, role);
+        }
+        if (hasAssignedRole && !assignedKidnapper) {
+            const firstUnassigned = players.find(
+                (player) => player.role === null,
+            );
+            if (firstUnassigned) {
+                assigned.set(firstUnassigned.memberNumber, "kidnapper");
+            }
+        }
+        return assigned;
+    }
+
+    private createTurn(now: number): KidnappersCaptureTurn | null {
+        const owner = Array.from(this.state.players.values())
+            .filter(
+                (player) =>
+                    player.role === "kidnapper" && player.status === "active",
+            )
+            .sort((left, right) => left.memberNumber - right.memberNumber)[0];
+        if (!owner) return null;
+        this.state.turnSequence += 1;
+        return {
+            turnId: `${this.sessionId}:${this.state.round}:${this.state.turnSequence}`,
+            ownerMemberNumber: owner.memberNumber,
+            startedAt: now,
+            deadlineAt: now + KIDNAPPERS_CAPTURE_TIMEOUT_MS,
+            pendingCapture: null,
+        };
+    }
+
+    private advanceCaptureTurn(now: number): KidnappersCaptureTurn | null {
+        const current = this.state.turn;
+        if (!current) return null;
+        const kidnappers = Array.from(this.state.players.values())
+            .filter(
+                (player) =>
+                    player.role === "kidnapper" && player.status === "active",
+            )
+            .sort((left, right) => left.memberNumber - right.memberNumber);
+        const currentIndex = kidnappers.findIndex(
+            (player) => player.memberNumber === current.ownerMemberNumber,
+        );
+        const next = kidnappers
+            .slice(currentIndex + 1)
+            .find((player) => player.status === "active");
+        if (!next) {
+            this.state.turn = null;
+            return null;
+        }
+        this.state.turnSequence += 1;
+        this.state.turn = {
+            turnId: `${this.sessionId}:${this.state.round}:${this.state.turnSequence}`,
+            ownerMemberNumber: next.memberNumber,
+            startedAt: now,
+            deadlineAt: now + KIDNAPPERS_CAPTURE_TIMEOUT_MS,
+            pendingCapture: null,
+        };
+        return this.state.turn;
+    }
+
+    private sequenceFromTurnId(turnId?: string): number {
+        if (!turnId) return 0;
+        const value = Number(turnId.split(":").at(-1));
+        return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    }
+
+    private captureError(
+        message: string,
+        reason: KidnappersGameError["reason"],
+        command: KidnappersGameCommand,
+    ): KidnappersGameError {
+        return new KidnappersGameError(message, {
+            reason,
+            phase: this.state.phase,
+            command: command.type,
+            correlationId: command.correlationId,
+        });
+    }
+
     private accept(
         event: KidnappersGameEvent,
         _command: KidnappersGameCommand,
@@ -492,7 +1193,19 @@ export class KidnappersGameStateMachine {
         error: KidnappersGameError,
         before: KidnappersSessionSnapshot,
     ): KidnappersGameTransitionResult {
-        return { ok: false, error, state: before };
+        return {
+            ok: false,
+            error,
+            event: {
+                type: "ACTION_REJECTED",
+                command: error.command,
+                reason: error.reason,
+                message: error.message,
+                correlationId: error.correlationId,
+                emittedAt: Date.now(),
+            },
+            state: before,
+        };
     }
 
     private toSnapshot(): KidnappersSessionSnapshot {
@@ -507,6 +1220,15 @@ export class KidnappersGameStateMachine {
             players: Array.from(this.state.players.values()).map((player) => ({
                 ...player,
             })),
+            turn: this.state.turn
+                ? {
+                      ...this.state.turn,
+                      pendingCapture: this.state.turn.pendingCapture
+                          ? { ...this.state.turn.pendingCapture }
+                          : null,
+                  }
+                : null,
+            turnSequence: this.state.turnSequence,
         };
     }
 }
