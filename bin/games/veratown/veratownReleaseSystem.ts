@@ -157,6 +157,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         private characterProfileStore?: any,
         private unifiedStore?: UnifiedCharacterStore,
         private mutationService?: GameStateMutationService,
+        private appearanceStateSync?: (
+            character: API_Character,
+        ) => Promise<void>,
     ) {
         if (unifiedStore) {
             this.mutationService ??= new GameStateMutationServiceImpl(
@@ -461,8 +464,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         } catch (e) {
             this.logger?.error(`[ReleaseSystem] Release failed:`, e);
+            this.recordStage(character.MemberNumber, "failed", "start");
             this.whisper(character, "Release sequence encountered an error.");
-            await this.recordReleaseEvent(character, "release_error");
+            try {
+                await this.recordReleaseEvent(character, "release_error");
+            } finally {
+                this.recordStage(character.MemberNumber, "failed", "end");
+            }
             this.stageTimings.delete(character.MemberNumber);
         }
     }
@@ -1065,10 +1073,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Stripping operations can reset pose/kneeling state; we'll restore it after
         const posturePreserver = new PosturePreserver(character);
 
-        const appearance = (character.Appearance as any).Items || [];
+        const appearance = character.Appearance.MakeAppearanceBundle() as any[];
         const removedItems: RemovedBondageItem[] = [];
         const ownerLockedItems: RemovedBondageItem[] = [];
         const preservedCosplayItems: RemovedBondageItem[] = [];
+        const failedRemovals: RemovedBondageItem[] = [];
 
         // Separate items into categories based on their actual asset definitions:
         // - Owner-locked: preserved due to lock type (OwnerPadlock/OwnerTimerPadlock)
@@ -1111,6 +1120,30 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
+        this.log("info", "release_appearance_classified", {
+            memberId: character.MemberNumber,
+            classifiedItems: appearance.map((item) => ({
+                group: item.Group,
+                name: item.Name,
+                lockType: item.Property?.Lock,
+                ownerLocked:
+                    item.Property?.Lock === "OwnerPadlock" ||
+                    item.Property?.Lock === "OwnerTimerPadlock",
+                bondage: isBind(item),
+                clothing: isClothing(item),
+                cosplay: isCosplay(item),
+            })),
+            attemptedRemovals: removedItems.map((item) => ({
+                group: item.group,
+                name: item.name,
+            })),
+            preservedOwnerLockedItems: ownerLockedItems.map((item) => ({
+                group: item.group,
+                name: item.name,
+                lockType: item.lockType,
+            })),
+        });
+
         // Strip clothing using slowlyStripBulk to avoid WCE anti-cheat detection
         // Clothing never has locks, so this is safe
         try {
@@ -1141,14 +1174,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             for (const item of removedItems) {
                 try {
-                    const asset = (AssetGet as any)(item.group, item.name);
-                    if (asset) {
-                        character.Appearance.RemoveItem(item.group as any);
-                        this.logger?.info(
-                            `[ReleaseSystem] Removed unlocked item: ${item.name}`,
-                        );
-                    }
+                    character.Appearance.RemoveItem(item.group as any);
+                    this.logger?.info(
+                        `[ReleaseSystem] Removed unlocked item: ${item.name}`,
+                    );
                 } catch (e) {
+                    failedRemovals.push(item);
                     this.logger?.error(
                         `[ReleaseSystem] Error removing item ${item.name}:`,
                         e,
@@ -1162,7 +1193,97 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         this.logger?.info(
             `[ReleaseSystem] Strip summary: removed ${removedItems.length} clothing/bondage items, preserved ${ownerLockedItems.length} owner-locked + ${preservedCosplayItems.length} cosmetic items`,
         );
-        await syncAppearanceMutation(character, () => undefined, 0);
+
+        // Re-read the live bundle after every removal phase. A failed or ignored
+        // RemoveItem must stop release before parole or door access is granted.
+        const finalAppearance =
+            character.Appearance.MakeAppearanceBundle() as any[];
+        const removedKeys = new Set(
+            removedItems.map((item) => `${item.group}/${item.name}`),
+        );
+        const remainingExpectedItems = finalAppearance.filter((item) =>
+            removedKeys.has(`${item.Group}/${item.Name}`),
+        );
+        const remainingNonOwnerBondage = finalAppearance.filter(
+            (item) =>
+                isBind(item) &&
+                item.Property?.Lock !== "OwnerPadlock" &&
+                item.Property?.Lock !== "OwnerTimerPadlock",
+        );
+        const missingOwnerLockedItems = ownerLockedItems.filter(
+            (item) =>
+                !finalAppearance.some(
+                    (current) =>
+                        current.Group === item.group &&
+                        current.Name === item.name &&
+                        (current.Property?.Lock === "OwnerPadlock" ||
+                            current.Property?.Lock === "OwnerTimerPadlock"),
+                ),
+        );
+
+        this.log("info", "release_appearance_verified", {
+            memberId: character.MemberNumber,
+            successfulRemovals: removedItems
+                .filter(
+                    (item) =>
+                        !remainingExpectedItems.some(
+                            (remaining) =>
+                                remaining.Group === item.group &&
+                                remaining.Name === item.name,
+                        ),
+                )
+                .map((item) => ({ group: item.group, name: item.name })),
+            failedRemovals: failedRemovals.map((item) => ({
+                group: item.group,
+                name: item.name,
+            })),
+            preservedOwnerLockedItems: ownerLockedItems.map((item) => ({
+                group: item.group,
+                name: item.name,
+                lockType: item.lockType,
+            })),
+            finalVerification: {
+                remainingExpectedItems: remainingExpectedItems.map((item) => ({
+                    group: item.Group,
+                    name: item.Name,
+                })),
+                remainingNonOwnerBondage: remainingNonOwnerBondage.map(
+                    (item) => ({
+                        group: item.Group,
+                        name: item.Name,
+                        lockType: item.Property?.Lock,
+                    }),
+                ),
+                missingOwnerLockedItems: missingOwnerLockedItems.map(
+                    (item) => ({
+                        group: item.group,
+                        name: item.name,
+                        lockType: item.lockType,
+                    }),
+                ),
+            },
+        });
+
+        if (
+            failedRemovals.length > 0 ||
+            remainingExpectedItems.length > 0 ||
+            remainingNonOwnerBondage.length > 0 ||
+            missingOwnerLockedItems.length > 0
+        ) {
+            throw new Error(
+                `Release appearance verification failed for ${character.MemberNumber}`,
+            );
+        }
+
+        // Persist only the verified live appearance. The synchronizer also
+        // derives and persists currentRestraints from this final bundle.
+        await syncAppearanceMutation(
+            character,
+            () => undefined,
+            0,
+            this.appearanceStateSync,
+            { throwOnSyncFailure: true },
+        );
 
         // Restore character's posture after stripping (Golden Rule #12)
         // This ensures the character maintains their pose/kneeling state
