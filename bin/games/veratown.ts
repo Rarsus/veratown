@@ -1016,6 +1016,24 @@ export class Veratown {
             });
             return true;
         }
+        if (
+            observation.state !== "room-not-ready" &&
+            observation.state !== "map-not-ready"
+        ) {
+            logger.warn(
+                "Bot map position command dispatched; observation pending",
+                {
+                    role,
+                    movementTimedOut,
+                    movementError:
+                        movementError instanceof Error
+                            ? movementError.name
+                            : undefined,
+                    ...observation,
+                },
+            );
+            return true;
+        }
         logger.error("Bot map position unavailable", movementError, {
             role,
             ...observation,
@@ -1152,14 +1170,24 @@ export class Veratown {
         >) {
             const previousStatus = previous.get(feature);
             if (previousStatus?.state === status.state) continue;
-            const log = status.ready ? logger.info : logger.warn;
-            log(`Veratown ${feature} capability ${status.state}`, {
+            const context = {
                 feature,
                 state: status.state,
                 reason: status.reason,
                 recoveryAction: status.recoveryAction,
                 checkedAt: status.checkedAt,
-            });
+            };
+            if (status.ready) {
+                logger.info(
+                    `Veratown ${feature} capability ${status.state}`,
+                    context,
+                );
+            } else {
+                logger.warn(
+                    `Veratown ${feature} capability ${status.state}`,
+                    context,
+                );
+            }
         }
     }
 
