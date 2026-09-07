@@ -562,12 +562,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private async recoverCagedCharacter(
         character: API_Character,
     ): Promise<void> {
-        if (
-            character.Appearance.getItemData("ItemDevices")?.Name !==
-            "FuturisticCrate"
-        )
-            return;
-
         await this.monitor.run(character, async () => {
             const session = await this.mutationService?.getActiveCageSession(
                 character.MemberNumber,
@@ -584,6 +578,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 );
                 return;
             }
+            if (
+                !session &&
+                character.Appearance.getItemData("ItemDevices")?.Name !==
+                    "FuturisticCrate"
+            )
+                return;
             this.cagedCharacters.set(character.MemberNumber, {
                 character,
                 cageName: session?.cageName ?? "Unknown cage",
@@ -620,15 +620,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private onCharacterViewCageInformation = async (
         character: API_Character,
     ) => {
-        // Drop anyone who is no longer actually locked in a crate (e.g. they
-        // were freed by other means) before reporting on cage occupancy.
-        for (const [memberNumber, occupant] of this.cagedCharacters) {
-            if (this.getCageLockExpiry(occupant.character) === undefined) {
-                this.cagedCharacters.delete(memberNumber);
-                await this.mutationService?.exitCage(memberNumber);
-            }
-        }
-
         if (this.cagedCharacters.size === 0) {
             character.Tell("Whisper", "All cages are currently empty.");
             return;
@@ -636,8 +627,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
         const info = Array.from(this.cagedCharacters.values())
             .map((c) => {
-                const expiry = this.getCageLockExpiry(c.character)!;
-                return `${c.cageName}: ${c.character} - ${remainingTimeString(expiry)} remaining`;
+                return `${c.cageName}: ${c.character} - ${remainingTimeString(c.authoritativeExpiry)} remaining`;
             })
             .join("\n");
 
