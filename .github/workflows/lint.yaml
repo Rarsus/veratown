@@ -64,9 +64,24 @@ jobs:
             - name: Run Phase 2A integration tests
               run: "pnpm run test:integration"
 
+            - name: Run Phase 2B coverage and reliability tests
+              run: "pnpm run test:phase2b:coverage"
+
+            - name: Record Phase 2B performance baseline
+              run: "pnpm run performance:phase2b"
+
             - name: Upload Phase 1 coverage
               if: always()
               uses: actions/upload-artifact@v4
               with:
                   name: phase1-coverage
                   path: coverage/
+
+            - name: Upload Phase 2B evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: phase2b-evidence
+                  path: |
+                      coverage/phase2b-summary.json
+                      coverage/phase2b-performance.json
