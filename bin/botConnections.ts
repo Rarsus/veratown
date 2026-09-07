@@ -102,6 +102,16 @@ function superviseBotConnection(
                             position.X,
                             position.Y,
                         );
+                        const mapPosition = connection.Player?.MapPos;
+                        if (
+                            !mapPosition ||
+                            mapPosition.X !== position.X ||
+                            mapPosition.Y !== position.Y
+                        ) {
+                            throw new Error(
+                                `Bot map position not verified (${position.X}, ${position.Y})`,
+                            );
+                        }
                     }
                     if (stopped || currentEpoch !== epoch) return;
 

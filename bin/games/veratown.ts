@@ -312,6 +312,22 @@ export class Veratown {
         this.conn.on("RoomJoin", this.onChatRoomJoined);
         this.conn.on("Connected", this.onBotConnected);
         this.conn.on("Disconnected", this.onBotDisconnected);
+        this.conn2?.on("Connected", () =>
+            void this.onAuxiliaryBotConnected(
+                this.conn2!,
+                "shower",
+                SHOWER_BOT2_HOME_POSITION,
+            ),
+        );
+        this.conn2?.on("Disconnected", this.onBotDisconnected);
+        this.conn3?.on("Connected", () =>
+            void this.onAuxiliaryBotConnected(
+                this.conn3!,
+                "casino",
+                GAME_MISTRESS_POSITION,
+            ),
+        );
+        this.conn3?.on("Disconnected", this.onBotDisconnected);
 
         // Each system is constructed and registered independently: if one
         // fails (eg. a bug in a single feature), the others are unaffected
@@ -634,11 +650,13 @@ export class Veratown {
         await this.setupRoom();
         await this.setupCharacter();
         await this.reloadLocations();
+        this.updateContainmentReadiness();
     };
 
     private onChatRoomJoined = async () => {
         await this.setupCharacter();
         await this.reloadLocations();
+        this.updateContainmentReadiness();
     };
 
     private onBotConnected = async () => {
@@ -646,6 +664,7 @@ export class Veratown {
             await this.setupRoom();
             await this.setupCharacter();
             await this.reloadLocations();
+            this.updateContainmentReadiness();
         } catch (error) {
             logger.error("Bot reconnect setup failed", error);
             this.setContainmentReady(false);
@@ -655,6 +674,43 @@ export class Veratown {
     private onBotDisconnected = () => {
         this.setContainmentReady(false);
     };
+
+    private onAuxiliaryBotConnected = async (
+        connection: API_Connector,
+        role: string,
+        position: { X: number; Y: number },
+    ): Promise<void> => {
+        const recovered = await this.waitForBotRecovery(connection);
+        if (!recovered) {
+            this.updateContainmentReadiness();
+            logger.warn("Auxiliary bot recovery remains degraded", {
+                role,
+                position,
+            });
+            return;
+        }
+
+        try {
+            await this.reloadLocations();
+        } catch (error) {
+            logger.error("Auxiliary bot location reconciliation failed", error, {
+                role,
+                position,
+            });
+        }
+        this.updateContainmentReadiness();
+    };
+
+    private async waitForBotRecovery(
+        connection: API_Connector,
+    ): Promise<boolean> {
+        for (let attempt = 0; attempt < 50; attempt++) {
+            if (isBotRecoveryReady(connection)) return true;
+            if (!connection.isConnected()) return false;
+            await wait(100);
+        }
+        return isBotRecoveryReady(connection);
+    }
 
     private setupRoom = async () => {
         try {
@@ -732,13 +788,22 @@ export class Veratown {
             !this.conn2 || atPosition(this.conn2, SHOWER_BOT2_HOME_POSITION);
         const casinoReady =
             !this.conn3 || atPosition(this.conn3, GAME_MISTRESS_POSITION);
-        const ready = mainReady && showerReady && casinoReady;
+        const kennelTriggersReady = this.kennelSystem?.isReady() ?? false;
+        const cageTriggersReady = this.cageSystem?.isReady() ?? false;
+        const ready =
+            mainReady &&
+            showerReady &&
+            casinoReady &&
+            kennelTriggersReady &&
+            cageTriggersReady;
         this.setContainmentReady(ready);
 
         const roles = {
             main: mainReady,
             shower: showerReady,
             casino: casinoReady,
+            kennelTriggers: kennelTriggersReady,
+            cageTriggers: cageTriggersReady,
         };
         if (ready && casinoReady) {
             logger.info("Veratown containment readiness confirmed", { roles });

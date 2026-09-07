@@ -251,9 +251,14 @@ function createConnection() {
 function createRecoveryConnection(error?: Error | Error[]) {
     const listeners = new Map<string, Set<() => void>>();
     const moves: Array<{ X: number; Y: number }> = [];
+    const player = {
+        Name: "test-bot",
+        MemberNumber: 1,
+        MapPos: { X: 0, Y: 0 },
+    };
     let descriptions = 0;
     return {
-        Player: { Name: "test-bot", MemberNumber: 1 },
+        Player: player,
         moves,
         get descriptions() {
             return descriptions;
@@ -280,6 +285,7 @@ function createRecoveryConnection(error?: Error | Error[]) {
             } else if (error) {
                 throw error;
             }
+            player.MapPos = { X, Y };
         },
         setBotDescription: () => {
             descriptions += 1;

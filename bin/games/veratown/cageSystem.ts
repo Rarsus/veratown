@@ -46,6 +46,7 @@ const systemTimer: CageTimer = {
 //   const narrator = new NarratorBot(this.conn, undefined, this.conn.Player.MapPos);
 //   narrator.sayAt(cagePos, "Emote", `*Cage door slams shut with a click*`);
 export class CageSystem extends AbstractTileFeatureSystem {
+    private triggersReady = false;
     private cagedCharacters = new Map<
         number,
         {
@@ -114,6 +115,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
     public async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
+        this.triggersReady = false;
         try {
             for (const posKey of this.cagesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
@@ -229,6 +231,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     this.cageEntryTrigger,
                 );
             }
+            this.triggersReady = true;
             for (const character of this.conn.chatRoom?.characters ?? []) {
                 void this.recoverCagedCharacter(character).catch((error) => {
                     this.logger.error("Cage recovery failed", {
@@ -248,6 +251,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 e,
             );
         }
+    }
+
+    public isReady(): boolean {
+        return this.triggersReady;
     }
 
     // Removes a caged character's crate immediately, regardless of the

@@ -31,6 +31,7 @@ import { syncAppearanceMutation } from "./shared/appearanceSync";
 //   narrator.sayAt(kennelPos, "Emote", `*The kennel door clicks shut*`);
 export class KennelSystem extends AbstractTileFeatureSystem {
     private kennelPositions: Array<{ X: number; Y: number }> = [];
+    private triggersReady = false;
     private readonly kennelTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -55,6 +56,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     public async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
+        this.triggersReady = false;
         try {
             for (const kennelPos of this.kennelPositions) {
                 this.conn.chatRoom!.map.removeTileTrigger(
@@ -96,12 +98,17 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 `[KennelSystem] Registered ${this.kennelPositions.length} kennel location(s)`,
                 { occupantCount: occupants.length },
             );
+            this.triggersReady = true;
         } catch (e) {
             this.logger?.error(
                 "[KennelSystem] Unexpected error during initialization",
                 e,
             );
         }
+    }
+
+    public isReady(): boolean {
+        return this.triggersReady;
     }
 
     private onCharacterEnterKennel = async (character: API_Character) => {
@@ -153,10 +160,21 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                         },
                         50,
                         this.stateSync,
+                        { throwOnSyncFailure: true },
                     );
+                } else if (createdSession) {
+                    await this.stateSync?.(character);
                 }
             } catch (error) {
                 if (createdSession) {
+                    if (
+                        !wearingKennel &&
+                        character.Appearance.getItemData("ItemDevices")
+                            ?.Name === "Kennel"
+                    ) {
+                        character.Appearance.RemoveItem("ItemDevices" as any);
+                        character.Appearance.MakeAppearanceBundle();
+                    }
                     await this.mutationService?.exitKennel(
                         character.MemberNumber,
                     );

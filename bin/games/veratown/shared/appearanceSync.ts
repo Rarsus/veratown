@@ -42,6 +42,7 @@ export async function syncAppearanceMutation(
     mutation: () => void | Promise<void>,
     delayMs: number = DEFAULT_SYNC_DELAY_MS,
     onSynchronized?: (character: API_Character) => Promise<void>,
+    options?: { throwOnSyncFailure?: boolean },
 ): Promise<void> {
     try {
         // Execute the mutation
@@ -64,6 +65,7 @@ export async function syncAppearanceMutation(
                 `[AppearanceSync] Failed to persist appearance for ${character.MemberNumber}:`,
                 error,
             );
+            if (options?.throwOnSyncFailure) throw error;
         }
     } catch (error) {
         logger.error(
