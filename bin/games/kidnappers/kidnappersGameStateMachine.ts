@@ -103,6 +103,33 @@ export class KidnappersGameStateMachine {
     }
 
     /**
+     * Replace the in-memory state with a validated persisted snapshot.
+     * Persistence callers use this to roll back a failed write or resume a
+     * session after a process restart.
+     */
+    public restore(snapshot: KidnappersSessionSnapshot): void {
+        if (snapshot.sessionId !== this.sessionId) {
+            throw new Error(
+                `Cannot restore session '${snapshot.sessionId}' into '${this.sessionId}'`,
+            );
+        }
+        this.state = {
+            phase: snapshot.phase,
+            round: snapshot.round,
+            createdAt: snapshot.createdAt,
+            startedAt: snapshot.startedAt,
+            completedAt: snapshot.completedAt,
+            winner: snapshot.winner,
+            players: new Map(
+                snapshot.players.map((player) => [
+                    player.memberNumber,
+                    { ...player },
+                ]),
+            ),
+        };
+    }
+
+    /**
      * Dispatch a single command. Always returns a result; never throws for
      * expected domain rejections. Guards run first and are side-effect free;
      * the returned `state` on rejection is identical to the pre-dispatch

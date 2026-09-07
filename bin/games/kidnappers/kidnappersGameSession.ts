@@ -15,6 +15,10 @@
 import { randomUUID } from "node:crypto";
 import { createLogger, Logger } from "../../logging";
 import { KidnappersGameStateMachine } from "./kidnappersGameStateMachine";
+import {
+    KidnappersGamePersistence,
+    type KidnappersPersistedTransition,
+} from "./kidnappersGamePersistence";
 import type {
     KidnappersGameCommand,
     KidnappersGameEvent,
@@ -43,17 +47,29 @@ export type KidnappersSessionCommandResult =
 export class KidnappersGameSession {
     private readonly stateMachine: KidnappersGameStateMachine;
     private readonly logger: Logger;
+    private persistenceVersion: number;
 
     public readonly sessionId: string;
 
-    constructor(sessionId: string, now: number = Date.now()) {
+    constructor(
+        sessionId: string,
+        now: number = Date.now(),
+        snapshot?: KidnappersSessionSnapshot,
+        version = 0,
+    ) {
         this.sessionId = sessionId;
         this.stateMachine = new KidnappersGameStateMachine(sessionId, now);
+        this.persistenceVersion = version;
+        if (snapshot) this.stateMachine.restore(snapshot);
         this.logger = createLogger(`KidnappersGameSession:${sessionId}`);
     }
 
     public getSnapshot(): KidnappersSessionSnapshot {
         return this.stateMachine.getSnapshot();
+    }
+
+    public getVersion(): number {
+        return this.persistenceVersion;
     }
 
     /**
@@ -91,5 +107,53 @@ export class KidnappersGameSession {
             issuedAt: command.issuedAt ?? Date.now(),
         } as KidnappersGameCommand;
         return this.dispatch(fullCommand);
+    }
+
+    /**
+     * Dispatch and durably record a transition. The state machine is restored
+     * when the database write fails, so callers never observe an uncommitted
+     * in-memory transition.
+     */
+    public async dispatchPersisted(
+        command: KidnappersGameCommand,
+        persistence: KidnappersGamePersistence,
+    ): Promise<KidnappersSessionCommandResult> {
+        const existing = await persistence.findOperation(
+            this.sessionId,
+            command.correlationId,
+        );
+        if (existing) {
+            this.applyPersistedTransition(existing);
+            return { ok: true, event: existing.event as KidnappersGameEvent };
+        }
+
+        const before = this.getSnapshot();
+        const result = this.dispatch(command);
+        if (!result.ok) return result;
+
+        try {
+            const persisted = await persistence.updateTransition(
+                this.sessionId,
+                this.persistenceVersion,
+                command.correlationId,
+                this.getSnapshot(),
+                result.event,
+            );
+            this.applyPersistedTransition(persisted);
+            return {
+                ok: true,
+                event: persisted.event as KidnappersGameEvent,
+            };
+        } catch (error) {
+            this.stateMachine.restore(before);
+            throw error;
+        }
+    }
+
+    private applyPersistedTransition(
+        transition: KidnappersPersistedTransition,
+    ): void {
+        this.stateMachine.restore(transition.snapshot);
+        this.persistenceVersion = transition.version;
     }
 }
