@@ -279,7 +279,7 @@ export class KidnappersGamePersistence {
             schemaVersion: KIDNAPPERS_GAME_SCHEMA_VERSION,
             snapshot,
             version: 0,
-            status: "active",
+            status: statusForSnapshot(snapshot),
             createdAt: snapshot.createdAt,
             updatedAt: now,
         };
@@ -481,6 +481,18 @@ export class KidnappersGamePersistence {
         return executeWithRetry(
             () =>
                 this.withTransaction(async (session) => {
+                    const existingAudit = await this.events.findOne(
+                        { sessionId, operationKey },
+                        { session },
+                    );
+                    if (existingAudit) {
+                        return {
+                            snapshot: existingAudit.snapshot,
+                            version: existingAudit.versionAfter,
+                            event: existingAudit.event,
+                            duplicate: true,
+                        };
+                    }
                     const current = await this.sessions.findOne(
                         { _id: sessionId },
                         { session },
