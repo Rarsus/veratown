@@ -346,6 +346,18 @@ test("UnifiedCharacterStore - live snapshots are idempotent and casino updates p
     );
     const afterRetry = await store.getProfile(memberNumber);
     assert.equal(afterRetry.version, afterFirstSnapshot.version);
+    assert.equal(
+        await store.syncVeratownState(
+            memberNumber,
+            position,
+            appearance,
+            restraints,
+            true,
+        ),
+        true,
+    );
+    const afterForcedSelfSync = await store.getProfile(memberNumber);
+    assert.ok(afterForcedSelfSync.version > afterRetry.version);
 
     await Promise.all([
         store.updateCasinoStats(memberNumber, {
