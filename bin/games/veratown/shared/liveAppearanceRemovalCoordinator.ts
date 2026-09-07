@@ -3,23 +3,18 @@ import {
     syncAppearanceMutation,
     filterValidAppearanceItems,
 } from "./appearanceSync";
+import { isEffectivelyUnlockedBondageItem } from "./releaseRemovalPolicy";
 
 export interface LiveRemovalTarget {
     group: string;
     name: string;
     lockType?: string;
     lockedBy?: string;
-}
-
-function isOwnerLock(item: any): boolean {
-    return (
-        item?.Property?.Lock === "OwnerPadlock" ||
-        item?.Property?.Lock === "OwnerTimerPadlock"
-    );
+    lockFingerprint?: string;
 }
 
 function targetKey(target: LiveRemovalTarget): string {
-    return `${target.group}/${target.name}/${target.lockType ?? ""}/${target.lockedBy ?? ""}`;
+    return `${target.group}/${target.name}/${target.lockFingerprint ?? `${target.lockType ?? ""}/${target.lockedBy ?? ""}`}`;
 }
 
 function matchesTarget(item: any, target: LiveRemovalTarget): boolean {
@@ -80,7 +75,7 @@ export class LiveAppearanceRemovalCoordinator {
             if (
                 current
                     .filter((item) => item.Group === target.group)
-                    .some(isOwnerLock)
+                    .some((item) => !isEffectivelyUnlockedBondageItem(item))
             ) {
                 return;
             }

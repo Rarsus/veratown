@@ -614,6 +614,13 @@ When uncertain, prioritize:
 - **Recoverability** over speed
 - **Observability** over simplicity
 
+### Release removal invariant
+
+Release removal must fail closed: only normalized, valid, completely unlocked
+bondage items may be removed. The live appearance is authoritative for each
+mutation and final verification, while UnifiedCharacterStore owns the durable
+operation checkpoint used to resume after retries, reconnects, and restarts.
+
 ---
 
 **See Also**:

@@ -136,8 +136,42 @@ export interface RemovedBondageItem {
     name: string;
     lockType?: string;
     lockedBy?: string;
+    lockFingerprint?: string;
     color?: string;
     difficulty?: number;
+}
+
+export type ReleaseRemovalStatus =
+    "planned" | "removing" | "verification_failed" | "completed" | "aborted";
+
+export interface ReleaseRemovalOperation {
+    operationId: string;
+    status: ReleaseRemovalStatus;
+    startedAt: number;
+    updatedAt: number;
+    attempt: number;
+    plannedUnlockedItems: RemovedBondageItem[];
+    preservedLockedItems: RemovedBondageItem[];
+    completedRemovals: RemovedBondageItem[];
+    remainingItems: RemovedBondageItem[];
+    lastError?: string;
+    completedAt?: number;
+}
+
+export interface ReleaseRemovalPlan {
+    plannedUnlockedItems: RemovedBondageItem[];
+    preservedLockedItems: RemovedBondageItem[];
+}
+
+export interface ReleaseRemovalAttemptResult {
+    success: boolean;
+    error?: string;
+}
+
+export interface ReleaseRemovalFinalSnapshot {
+    currentAppearance?: BC_AppearanceItem[];
+    currentRestraints?: CurrentRestraint[];
+    remainingItems?: RemovedBondageItem[];
 }
 
 export interface ReleaseParoleState {
@@ -145,6 +179,7 @@ export interface ReleaseParoleState {
     paroleStartedAt?: number;
     paroleExpiresAt?: number;
     removedBondageItems?: RemovedBondageItem[];
+    releaseRemovalOperation?: ReleaseRemovalOperation;
     releasedFromLocation?: ChatRoomMapPos;
 }
 

@@ -164,6 +164,25 @@ This stage is NOT a discrete step but rather an ongoing enforcement period:
 
 ## Parole System: Post-Release Restrictions
 
+### Release-removal safety contract
+
+Stage 4 uses the live Bondage Club appearance as the removal authority. It
+normalizes and discards empty slots, classifies only `isBind` bondage items,
+strips clothing separately, and removes only items with an explicitly
+unlocked effective lock state. Every effective or ambiguous lock is preserved,
+including owner, timer, password, exclusive, unknown, `LockedBy`, active timer,
+malformed, and collar items.
+
+`UnifiedCharacterStore` persists one
+`veratown.releaseParoleState.releaseRemovalOperation` per active release.
+The operation records its stable item identities, plan, preserved locks,
+completed removals, remaining items, attempts, errors, and status. A retry,
+reconnect, or restart resumes the active operation and never creates a second
+plan. Completion is persisted only after a fresh live appearance verification;
+nudity and keypad stages are gated on that completion. `verification_failed`
+operations remain available for recovery and must be surfaced as an
+actionable release failure.
+
 After successfully passing Stage 5 (nudity confirmation), character enters a **10-minute parole period** with automatic enforcement.
 
 ### **Parole State Database Storage**
