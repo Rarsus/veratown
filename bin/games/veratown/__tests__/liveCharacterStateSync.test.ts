@@ -119,3 +119,81 @@ test("LiveCharacterStateSync serializes overlapping observations by arrival orde
         { X: 2, Y: 2 },
     ]);
 });
+
+test("LiveCharacterStateSync reconciles every owned bot when room characters omit them", async () => {
+    const persisted: Array<{ memberNumber: number; position: unknown }> = [];
+    const ownedBots = [10, 20, 30].map((memberNumber, index) =>
+        createCharacter(memberNumber, { X: index + 1, Y: index + 2 }, []),
+    );
+    const connections = ownedBots.map((Player) => ({
+        Player,
+        chatRoom: {
+            characters: [],
+            findMember: () => undefined,
+        },
+        on: () => {},
+    }));
+    const store: any = {
+        getVeratownView: async () => ({ currentRestraints: [] }),
+        syncVeratownState: async (
+            memberNumber: number,
+            position: { X: number; Y: number },
+        ) => {
+            persisted.push({ memberNumber, position });
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(
+        connections[0] as any,
+        store,
+        60_000,
+        connections as any,
+    );
+
+    await sync.reconcile();
+
+    assert.deepEqual(
+        persisted
+            .sort((a, b) => a.memberNumber - b.memberNumber)
+            .map(({ memberNumber, position }) => ({ memberNumber, position })),
+        [
+            { memberNumber: 10, position: { X: 1, Y: 2 } },
+            { memberNumber: 20, position: { X: 2, Y: 3 } },
+            { memberNumber: 30, position: { X: 3, Y: 4 } },
+        ],
+    );
+});
+
+test("self synchronization persists observed position and diagnostics", async () => {
+    const player = createCharacter(42, { X: 0, Y: 0 }, []);
+    const observed = createCharacter(42, { X: 10, Y: 8 }, []);
+    const calls: unknown[][] = [];
+    const connector: any = {
+        Player: player,
+        chatRoom: {
+            characters: [],
+            findMember: () => observed,
+        },
+        on: () => {},
+    };
+    const store: any = {
+        getVeratownView: async () => ({
+            currentRestraints: [],
+            lastPosition: { X: 10, Y: 8 },
+            lastPositionAt: 123,
+        }),
+        syncVeratownState: async (...args: unknown[]) => {
+            calls.push(args);
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(connector, store, 60_000);
+
+    const diagnostic = await sync.syncSelfPosition(connector, { X: 10, Y: 8 });
+
+    assert.deepEqual(calls[0]?.[1], { X: 10, Y: 8 });
+    assert.equal(calls[0]?.[4], true);
+    assert.deepEqual(diagnostic?.observedPosition, { X: 10, Y: 8 });
+    assert.deepEqual(diagnostic?.persistedPosition, { X: 10, Y: 8 });
+    assert.equal(diagnostic?.verificationSource, "chatRoom.findMember");
+});

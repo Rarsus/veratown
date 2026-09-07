@@ -27,3 +27,12 @@ For `contained-missing-expiry` or `reconciliation-failed`, inspect the
 character's persisted `cageIncarcerations` state and live appearance. Repair
 the persisted expiry or remove the device manually only after operator
 verification. This runbook addresses [Rarsus/veratown#132](https://github.com/Rarsus/veratown/issues/132).
+
+## Bot self-position verification
+
+Before containment readiness is restored, each configured bot role is moved and
+verified through the room's observed character position. A verified
+`syncSelfPosition()` call persists that observed position to the bot's own
+`unifiedCharacterProfiles` record. Requested, observed, persisted, and
+verification-source values are retained in live synchronization diagnostics;
+an unsuccessful movement never persists the requested target.

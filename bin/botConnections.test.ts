@@ -4,6 +4,7 @@ import {
     getBotAccountRoles,
     isBotRecoveryReady,
     getBotRecoveryStatuses,
+    recordBotPositionPersistence,
     stopSupervisingBotConnections,
     superviseBotConnections,
     validateBotAccountConfiguration,
@@ -257,6 +258,31 @@ test("recovery verifies a position reached after MapPositionTimeout", async () =
     assert.equal(status.state, "connected");
     assert.equal(status.position?.state, "verified-after-timeout");
     assert.deepEqual(status.position?.observedPosition, { X: 10, Y: 8 });
+    stopSupervisingBotConnections(connections as never);
+});
+
+test("recovery diagnostics include persisted self-position metadata", () => {
+    const main = createRecoveryConnection();
+    const connections = { main };
+    superviseBotConnections(connections as never, config({}));
+    const observedAt = new Date();
+    const persistedAt = new Date(observedAt.getTime() + 1);
+
+    recordBotPositionPersistence(main as never, {
+        requestedPosition: { X: 10, Y: 8 },
+        observedPosition: { X: 10, Y: 8 },
+        persistedPosition: { X: 10, Y: 8 },
+        observedAt,
+        persistedAt,
+        verificationSource: "chatRoom.findMember",
+    });
+
+    const position = getBotRecoveryStatuses(connections as never)[0].position;
+    assert.deepEqual(position?.expectedPosition, { X: 10, Y: 8 });
+    assert.deepEqual(position?.observedPosition, { X: 10, Y: 8 });
+    assert.deepEqual(position?.persistedPosition, { X: 10, Y: 8 });
+    assert.equal(position?.observedAt, observedAt);
+    assert.equal(position?.persistedAt, persistedAt);
     stopSupervisingBotConnections(connections as never);
 });
 
