@@ -24,7 +24,7 @@ import type {
     KidnappersGameEvent,
     KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
-import type { KidnappersGameError } from "./kidnappersGameErrors";
+import { KidnappersGameError } from "./kidnappersGameErrors";
 
 /**
  * Correlated result of a single command dispatched through a session.
@@ -33,7 +33,11 @@ import type { KidnappersGameError } from "./kidnappersGameErrors";
  */
 export type KidnappersSessionCommandResult =
     | { readonly ok: true; readonly event: KidnappersGameEvent }
-    | { readonly ok: false; readonly error: KidnappersGameError };
+    | {
+          readonly ok: false;
+          readonly error: KidnappersGameError;
+          readonly event: KidnappersGameEvent;
+      };
 
 /**
  * Thin, DI-friendly owner of a single `KidnappersGameStateMachine`.
@@ -48,6 +52,11 @@ export class KidnappersGameSession {
     private readonly stateMachine: KidnappersGameStateMachine;
     private readonly logger: Logger;
     private persistenceVersion: number;
+    private persistedQueue: Promise<void> = Promise.resolve();
+    private readonly inFlightOperations = new Map<
+        string,
+        Promise<KidnappersSessionCommandResult>
+    >();
 
     public readonly sessionId: string;
 
@@ -87,7 +96,11 @@ export class KidnappersGameSession {
                 reason: result.error.reason,
                 correlationId: command.correlationId,
             });
-            return { ok: false, error: result.error };
+            return {
+                ok: false,
+                error: result.error,
+                event: result.event,
+            };
         }
         return { ok: true, event: result.event };
     }
@@ -118,18 +131,59 @@ export class KidnappersGameSession {
         command: KidnappersGameCommand,
         persistence: KidnappersGamePersistence,
     ): Promise<KidnappersSessionCommandResult> {
+        const inFlight = this.inFlightOperations.get(command.correlationId);
+        if (inFlight) return inFlight;
+
+        const operation = this.enqueuePersisted(() =>
+            this.dispatchPersistedOnce(command, persistence),
+        );
+        this.inFlightOperations.set(command.correlationId, operation);
+        try {
+            return await operation;
+        } finally {
+            this.inFlightOperations.delete(command.correlationId);
+        }
+    }
+
+    private async dispatchPersistedOnce(
+        command: KidnappersGameCommand,
+        persistence: KidnappersGamePersistence,
+    ): Promise<KidnappersSessionCommandResult> {
         const existing = await persistence.findOperation(
             this.sessionId,
             command.correlationId,
         );
         if (existing) {
             this.applyPersistedTransition(existing);
+            if (existing.event.type === "ACTION_REJECTED") {
+                return {
+                    ok: false,
+                    error: this.errorFromRejectedEvent(existing.event),
+                    event: existing.event,
+                };
+            }
             return { ok: true, event: existing.event as KidnappersGameEvent };
         }
-
         const before = this.getSnapshot();
         const result = this.dispatch(command);
-        if (!result.ok) return result;
+        if (!result.ok) {
+            const persisted = await persistence.recordRejected(
+                this.sessionId,
+                this.persistenceVersion,
+                command.correlationId,
+                before,
+                result.event as Extract<
+                    KidnappersGameEvent,
+                    { type: "ACTION_REJECTED" }
+                >,
+            );
+            this.applyPersistedTransition(persisted);
+            return {
+                ok: false,
+                error: result.error,
+                event: persisted.event as KidnappersGameEvent,
+            };
+        }
 
         try {
             const persisted = await persistence.updateTransition(
@@ -148,6 +202,26 @@ export class KidnappersGameSession {
             this.stateMachine.restore(before);
             throw error;
         }
+    }
+
+    private enqueuePersisted<T>(operation: () => Promise<T>): Promise<T> {
+        const run = this.persistedQueue.then(operation, operation);
+        this.persistedQueue = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
+
+    private errorFromRejectedEvent(
+        event: Extract<KidnappersGameEvent, { type: "ACTION_REJECTED" }>,
+    ): KidnappersGameError {
+        return new KidnappersGameError(event.message, {
+            reason: event.reason,
+            phase: this.getSnapshot().phase,
+            command: event.command,
+            correlationId: event.correlationId,
+        });
     }
 
     private applyPersistedTransition(

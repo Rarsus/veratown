@@ -93,4 +93,93 @@ describe("KidnappersGameSession", () => {
         );
         assert.deepEqual(session.getSnapshot(), before);
     });
+
+    test("serializes concurrent retries for one correlation id", async () => {
+        const session = new KidnappersGameSession("session-1");
+        let updates = 0;
+        const persistence = {
+            findOperation: async () => null,
+            updateTransition: async (
+                _sessionId: string,
+                _version: number,
+                _operationKey: string,
+                snapshot: ReturnType<KidnappersGameSession["getSnapshot"]>,
+                event: unknown,
+            ) => {
+                updates += 1;
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                return {
+                    snapshot,
+                    event,
+                    version: 1,
+                    duplicate: false,
+                };
+            },
+        } as unknown as KidnappersGamePersistence;
+        const command = {
+            type: "JOIN_SESSION" as const,
+            memberNumber: 1,
+            memberName: "Alice",
+            correlationId: "same-operation",
+            issuedAt: 1,
+        };
+
+        const [first, second] = await Promise.all([
+            session.dispatchPersisted(command, persistence),
+            session.dispatchPersisted(command, persistence),
+        ]);
+        assert.equal(first.ok, true);
+        assert.deepEqual(second, first);
+        assert.equal(updates, 1);
+        assert.equal(session.getVersion(), 1);
+    });
+
+    test("persists rejected actions without advancing the session version", async () => {
+        const session = new KidnappersGameSession("session-1");
+        let rejectionAudit:
+            | {
+                  snapshot: ReturnType<KidnappersGameSession["getSnapshot"]>;
+                  version: number;
+                  event: unknown;
+                  duplicate: boolean;
+              }
+            | undefined;
+        let rejectionWrites = 0;
+        const persistence = {
+            findOperation: async () => rejectionAudit ?? null,
+            recordRejected: async (
+                _sessionId: string,
+                version: number,
+                _operationKey: string,
+                snapshot: ReturnType<KidnappersGameSession["getSnapshot"]>,
+                event: unknown,
+            ) => {
+                rejectionWrites += 1;
+                rejectionAudit = {
+                    snapshot,
+                    version,
+                    event,
+                    duplicate: false,
+                };
+                return rejectionAudit;
+            },
+        } as unknown as KidnappersGamePersistence;
+        const command = {
+            type: "LEAVE_SESSION" as const,
+            memberNumber: 999,
+            correlationId: "rejected-operation",
+            issuedAt: 1,
+        };
+
+        const first = await session.dispatchPersisted(command, persistence);
+        const retry = await session.dispatchPersisted(command, persistence);
+        assert.equal(first.ok, false);
+        assert.equal(retry.ok, false);
+        if (!first.ok && !retry.ok) {
+            assert.equal(first.event.type, "ACTION_REJECTED");
+            assert.deepEqual(retry.event, first.event);
+        }
+        assert.equal(rejectionWrites, 1);
+        assert.equal(session.getVersion(), 0);
+    });
 });

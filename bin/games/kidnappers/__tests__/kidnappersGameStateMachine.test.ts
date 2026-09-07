@@ -343,4 +343,154 @@ describe("KidnappersGameStateMachine", () => {
         });
         assert.equal(machine.getSnapshot().players.length, 1);
     });
+
+    test("capture attempts require the current kidnapper turn and target an active victim", () => {
+        const machine = new KidnappersGameStateMachine("session-1");
+        joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
+        machine.dispatch(cmd({ type: "START_GAME" }, 100));
+        const turn = machine.getSnapshot().turn;
+        assert.ok(turn);
+
+        const rejected = machine.dispatch(
+            cmd(
+                {
+                    type: "ATTEMPT_CAPTURE",
+                    actorMemberNumber: 101,
+                    targetMemberNumber: 102,
+                    turnId: turn.turnId,
+                },
+                101,
+            ),
+        );
+        assert.equal(rejected.ok, false);
+        if (!rejected.ok) {
+            assert.equal(rejected.error.reason, "NOT_IN_ROLE");
+            assert.equal(rejected.event.type, "ACTION_REJECTED");
+        }
+        assert.equal(machine.getSnapshot().turn?.pendingCapture, null);
+
+        const accepted = machine.dispatch(
+            cmd(
+                {
+                    type: "ATTEMPT_CAPTURE",
+                    actorMemberNumber: 100,
+                    targetMemberNumber: 101,
+                    turnId: turn.turnId,
+                },
+                102,
+            ),
+        );
+        assert.equal(accepted.ok, true);
+        if (!accepted.ok) return;
+        assert.equal(accepted.event.type, "CAPTURE_ATTEMPTED");
+        assert.deepEqual(machine.getSnapshot().turn?.pendingCapture, {
+            attackerMemberNumber: 100,
+            targetMemberNumber: 101,
+            attemptedAt: 102,
+        });
+    });
+
+    test("resistance resolves a capture once and advances the turn", () => {
+        const machine = new KidnappersGameStateMachine("session-1");
+        joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
+        machine.dispatch(
+            cmd({
+                type: "START_GAME",
+                roles: {
+                    100: "kidnapper",
+                    101: "bystander",
+                    102: "bystander",
+                    103: "bystander",
+                    104: "bystander",
+                },
+            }),
+        );
+        const turn = machine.getSnapshot().turn;
+        assert.ok(turn);
+        machine.dispatch(
+            cmd({
+                type: "ATTEMPT_CAPTURE",
+                actorMemberNumber: 100,
+                targetMemberNumber: 101,
+                turnId: turn.turnId,
+            }),
+        );
+
+        const result = machine.dispatch(
+            cmd({
+                type: "RESIST_CAPTURE",
+                memberNumber: 101,
+                turnId: turn.turnId,
+            }),
+        );
+        assert.equal(result.ok, true);
+        if (!result.ok) return;
+        assert.equal(result.event.type, "CAPTURE_RESOLVED");
+        assert.equal(
+            machine
+                .getSnapshot()
+                .players.find((player) => player.memberNumber === 101)?.status,
+            "active",
+        );
+        assert.equal(machine.getSnapshot().turn, null);
+
+        const duplicate = machine.dispatch(
+            cmd({
+                type: "RESIST_CAPTURE",
+                memberNumber: 101,
+                turnId: turn.turnId,
+            }),
+        );
+        assert.equal(duplicate.ok, false);
+        if (!duplicate.ok) {
+            assert.equal(duplicate.error.reason, "NO_PENDING_CAPTURE");
+        }
+    });
+
+    test("timeout and disconnect resolve pending captures without polling", () => {
+        const machine = new KidnappersGameStateMachine("session-1");
+        joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
+        machine.dispatch(cmd({ type: "START_GAME" }, 100));
+        const turn = machine.getSnapshot().turn;
+        assert.ok(turn);
+        machine.dispatch(
+            cmd(
+                {
+                    type: "ATTEMPT_CAPTURE",
+                    actorMemberNumber: 100,
+                    targetMemberNumber: 101,
+                    turnId: turn.turnId,
+                },
+                101,
+            ),
+        );
+        const timedOut = machine.dispatch(
+            cmd(
+                {
+                    type: "TIMEOUT_TURN",
+                    memberNumber: 100,
+                    turnId: turn.turnId,
+                },
+                turn.deadlineAt,
+            ),
+        );
+        assert.equal(timedOut.ok, true);
+        assert.equal(
+            machine
+                .getSnapshot()
+                .players.find((player) => player.memberNumber === 101)?.status,
+            "captured",
+        );
+
+        const second = new KidnappersGameStateMachine("session-2");
+        joinPlayers(second, KIDNAPPERS_MIN_PLAYERS);
+        second.dispatch(cmd({ type: "START_GAME" }, 100));
+        const secondTurn = second.getSnapshot().turn;
+        assert.ok(secondTurn);
+        const disconnected = second.dispatch(
+            cmd({ type: "PLAYER_DISCONNECTED", memberNumber: 100 }, 101),
+        );
+        assert.equal(disconnected.ok, true);
+        assert.equal(second.getSnapshot().turn, null);
+    });
 });

@@ -104,6 +104,24 @@ export interface KidnappersPlayerState {
 /** Which side has won, once the session reaches `completed`. */
 export type KidnappersWinner = "captors" | "victims";
 
+/** Outcomes that can resolve an in-progress capture attempt. */
+export type KidnappersCaptureOutcome = "captured" | "resisted" | "escaped";
+
+/** The authoritative capture turn, including its retry-safe identity. */
+export interface KidnappersCaptureTurn {
+    readonly turnId: string;
+    readonly ownerMemberNumber: number;
+    readonly startedAt: number;
+    readonly deadlineAt: number;
+    readonly pendingCapture: {
+        readonly attackerMemberNumber: number;
+        readonly targetMemberNumber: number;
+        readonly attemptedAt: number;
+    } | null;
+}
+
+export const KIDNAPPERS_CAPTURE_TIMEOUT_MS = 30_000;
+
 /**
  * Immutable, serializable snapshot of a session at a point in time.
  *
@@ -121,6 +139,13 @@ export interface KidnappersSessionSnapshot {
     readonly completedAt: number | null;
     readonly winner: KidnappersWinner | null;
     readonly players: readonly KidnappersPlayerState[];
+    /**
+     * The current capture turn. It is optional for backwards-compatible
+     * recovery of Phase 2B.1/2 snapshots that predate capture mechanics.
+     */
+    readonly turn?: KidnappersCaptureTurn | null;
+    /** Monotonic turn identity counter retained across completed turns. */
+    readonly turnSequence?: number;
 }
 
 /** Minimum number of players required to legally start a game. */
@@ -145,6 +170,13 @@ export type KidnappersGameErrorReason =
     | "GAME_ALREADY_STARTED"
     | "INSUFFICIENT_PLAYERS"
     | "NOT_IN_ROLE"
+    | "INVALID_ROLE_ASSIGNMENT"
+    | "TURN_NOT_OWNED"
+    | "CAPTURE_PENDING"
+    | "NO_PENDING_CAPTURE"
+    | "INVALID_CAPTURE_TARGET"
+    | "ACTION_EXPIRED"
+    | "PLAYER_DISCONNECTED"
     | "UNKNOWN_COMMAND";
 
 /** Base fields shared by every command dispatched into the state machine. */
@@ -166,12 +198,51 @@ export type KidnappersGameCommand =
       })
     | (KidnappersGameCommandBase & {
           readonly type: "START_GAME";
+          readonly roles?: Readonly<Record<number, KidnappersPlayerRole>>;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "ASSIGN_ROLE";
+          readonly memberNumber: number;
+          readonly role: KidnappersPlayerRole;
       })
     | (KidnappersGameCommandBase & {
           readonly type: "ADVANCE_PHASE";
       })
     | (KidnappersGameCommandBase & {
           readonly type: "RAISE_ACCUSATION";
+          readonly memberNumber: number;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "ATTEMPT_CAPTURE";
+          readonly actorMemberNumber?: number;
+          /** Backwards-compatible alias for actorMemberNumber. */
+          readonly memberNumber?: number;
+          readonly targetMemberNumber: number;
+          readonly turnId?: string;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "RESIST_CAPTURE" | "ESCAPE_CAPTURE" | "ACCEPT_CAPTURE";
+          readonly memberNumber: number;
+          readonly turnId?: string;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "RESOLVE_CAPTURE";
+          readonly memberNumber: number;
+          readonly outcome: KidnappersCaptureOutcome;
+          readonly turnId?: string;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "TIMEOUT_TURN";
+          readonly memberNumber: number;
+          readonly turnId: string;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "RESOLVE_TURN";
+          readonly memberNumber?: number;
+          readonly turnId?: string;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "PLAYER_DISCONNECTED" | "PLAYER_RECONNECTED";
           readonly memberNumber: number;
       })
     | (KidnappersGameCommandBase & {
@@ -205,6 +276,15 @@ export type KidnappersGameEvent =
       })
     | (KidnappersGameEventBase & {
           readonly type: "GAME_STARTED";
+          readonly roles: readonly {
+              readonly memberNumber: number;
+              readonly role: KidnappersPlayerRole;
+          }[];
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "ROLE_ASSIGNED";
+          readonly memberNumber: number;
+          readonly role: KidnappersPlayerRole;
       })
     | (KidnappersGameEventBase & {
           readonly type: "PHASE_CHANGED";
@@ -213,6 +293,57 @@ export type KidnappersGameEvent =
       })
     | (KidnappersGameEventBase & {
           readonly type: "ACCUSATION_RAISED";
+          readonly memberNumber: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "CAPTURE_ATTEMPTED";
+          readonly attackerMemberNumber: number;
+          readonly targetMemberNumber: number;
+          readonly turnId: string;
+          readonly deadlineAt: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "CAPTURE_RESOLVED";
+          readonly attackerMemberNumber: number;
+          readonly targetMemberNumber: number;
+          readonly outcome: KidnappersCaptureOutcome;
+          readonly turnId: string;
+          readonly nextTurnMemberNumber: number | null;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "RESISTANCE_OFFERED";
+          readonly memberNumber: number;
+          readonly targetMemberNumber: number;
+          readonly turnId: string;
+          readonly nextTurnMemberNumber: number | null;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "TURN_TIMED_OUT";
+          readonly memberNumber: number;
+          readonly turnId: string;
+          readonly outcome: "captured" | "skipped";
+          readonly nextTurnMemberNumber: number | null;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "TURN_TIMEOUT";
+          readonly memberNumber: number;
+          readonly turnId: string;
+          readonly nextTurnMemberNumber: number | null;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "TURN_ADVANCED";
+          readonly fromMemberNumber: number;
+          readonly toMemberNumber: number | null;
+          readonly turnId: string;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "PLAYER_DISCONNECTED";
+          readonly memberNumber: number;
+          readonly captureResolved: KidnappersCaptureOutcome | null;
+          readonly nextTurnMemberNumber: number | null;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "PLAYER_RECONNECTED";
           readonly memberNumber: number;
       })
     | (KidnappersGameEventBase & {
@@ -225,6 +356,12 @@ export type KidnappersGameEvent =
       })
     | (KidnappersGameEventBase & {
           readonly type: "SESSION_SHUT_DOWN";
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "ACTION_REJECTED";
+          readonly command: KidnappersGameCommandType;
+          readonly reason: KidnappersGameErrorReason;
+          readonly message: string;
       });
 
 export type KidnappersGameEventType = KidnappersGameEvent["type"];

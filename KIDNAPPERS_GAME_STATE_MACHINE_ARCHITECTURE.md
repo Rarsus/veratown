@@ -112,11 +112,23 @@ audit records — the same correlation pattern already used by
 `bin/games/shared/gameStateMutationService.ts`,
 `bin/games/shared/eventBus.ts`).
 
-Commands: `JOIN_SESSION`, `LEAVE_SESSION`, `START_GAME`, `ADVANCE_PHASE`,
-`RAISE_ACCUSATION`, `COMPLETE_GAME`, `ABORT_SESSION`, `SHUTDOWN_SESSION`.
+Commands: `JOIN_SESSION`, `LEAVE_SESSION`, `ASSIGN_ROLE`, `START_GAME`,
+`ADVANCE_PHASE`, `ATTEMPT_CAPTURE`, `RESIST_CAPTURE`, `ESCAPE_CAPTURE`,
+`ACCEPT_CAPTURE`, `RESOLVE_CAPTURE`, `TIMEOUT_TURN`, `RESOLVE_TURN`,
+`PLAYER_DISCONNECTED`, `PLAYER_RECONNECTED`, `RAISE_ACCUSATION`,
+`COMPLETE_GAME`, `ABORT_SESSION`, `SHUTDOWN_SESSION`.
 
 Events: `PLAYER_JOINED`, `PLAYER_LEFT`, `GAME_STARTED`, `PHASE_CHANGED`,
-`ACCUSATION_RAISED`, `GAME_COMPLETED`, `SESSION_ABORTED`, `SESSION_SHUT_DOWN`.
+`ROLE_ASSIGNED`, `ACCUSATION_RAISED`, `CAPTURE_ATTEMPTED`,
+`CAPTURE_RESOLVED`, `TURN_TIMED_OUT`, `PLAYER_DISCONNECTED`,
+`PLAYER_RECONNECTED`, `ACTION_REJECTED`, `GAME_COMPLETED`,
+`SESSION_ABORTED`, `SESSION_SHUT_DOWN`.
+
+Capture turns are owned by an active kidnapper and carry a stable `turnId` and
+persisted deadline. A target can resist, escape, or accept exactly once; an
+explicit timeout or disconnect command resolves the turn without a polling
+loop. Accepted capture effects are delegated to `GameStateMutationService` by
+`KidnappersGameCaptureService`, outside the state machine command handlers.
 
 ## Deterministic transitions and typed errors
 
@@ -146,8 +158,10 @@ callers can switch on:
 
 `INVALID_TRANSITION`, `SESSION_TERMINAL`, `PLAYER_NOT_FOUND`,
 `PLAYER_ALREADY_JOINED`, `SESSION_FULL`, `GAME_ALREADY_STARTED`,
-`INSUFFICIENT_PLAYERS`, `NOT_IN_ROLE` (reserved for role-gated commands in a
-later phase), `UNKNOWN_COMMAND`.
+`INSUFFICIENT_PLAYERS`, `NOT_IN_ROLE`, `INVALID_ROLE_ASSIGNMENT`,
+`TURN_NOT_OWNED`, `CAPTURE_PENDING`, `NO_PENDING_CAPTURE`,
+`INVALID_CAPTURE_TARGET`, `ACTION_EXPIRED`, `PLAYER_DISCONNECTED`,
+`UNKNOWN_COMMAND`.
 
 ## DI lifecycle: minimal playable session
 
