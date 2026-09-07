@@ -74,6 +74,33 @@ test("UnifiedCharacterStore - Profile creation and retrieval", async (t) => {
     assert.strictEqual(profile.veratown.auditLog.length, 0);
 });
 
+test("UnifiedCharacterStore repairs legacy audit logs atomically", async (t) => {
+    const db = getTestDb(t, "test_audit_log_repair");
+    if (!db) return;
+    const store = new UnifiedCharacterStore(db);
+    const memberNumber = 1357;
+    await store.getProfile(memberNumber, "Legacy");
+    const profiles = db.collection<any>("unifiedCharacterProfiles");
+    await profiles.updateOne(
+        { _id: memberNumber },
+        { $set: { "veratown.auditLog": { legacy: true } } },
+    );
+
+    await Promise.all([
+        store.recordAuditEntry(memberNumber, "updateCharacterName", {
+            name: "Repaired",
+        }),
+        store.recordVeratownAuditEntry(memberNumber, "casino_entry"),
+    ]);
+
+    const profile = await store.getProfile(memberNumber);
+    assert.equal(profile.veratown.auditLog.length, 2);
+    assert.deepEqual(
+        profile.veratown.auditLog.map((entry) => entry.action).sort(),
+        ["casino_entry", "updateCharacterName"],
+    );
+});
+
 test("UnifiedCharacterStore - Casino view and chip updates", async (t) => {
     const db = getTestDb(t, "test_casino");
     if (!db) return;

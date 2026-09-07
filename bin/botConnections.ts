@@ -25,15 +25,34 @@ export interface DatabaseConnection {
 export type BotRecoveryState =
     "connected" | "disconnected" | "recovering" | "failed";
 
+export type BotPositionVerificationState =
+    | "room-not-ready"
+    | "map-not-ready"
+    | "position-mismatch"
+    | "verified"
+    | "verified-after-timeout";
+
+export interface BotMapPositionObservation {
+    state: BotPositionVerificationState;
+    expectedPosition: { X: number; Y: number };
+    observedPosition?: { X: number; Y: number };
+    roomName?: string;
+    mapReady: boolean;
+    observedAt: Date;
+    source: "chatRoom.findMember";
+}
+
 export interface BotRecoveryStatus {
     role: string;
     state: BotRecoveryState;
     recoveryAttempts: number;
     lastFailure?: string;
     lastRecoveredAt?: Date;
+    position?: BotMapPositionObservation;
 }
 
 const RECOVERY_BACKOFF_MS = [0, 100, 250] as const;
+const POSITION_VERIFICATION_BACKOFF_MS = [0, 100, 250] as const;
 
 const recoveryStatuses = new WeakMap<API_Connector, BotRecoveryStatus>();
 const recoverySupervisors = new WeakMap<API_Connector, () => void>();
@@ -54,6 +73,72 @@ function recoveryPosition(
         default:
             return undefined;
     }
+}
+
+export async function verifyBotMapPosition(
+    connection: API_Connector,
+    expectedPosition: { X: number; Y: number },
+    expectedRoomName?: string,
+    maxAttempts: number = POSITION_VERIFICATION_BACKOFF_MS.length,
+): Promise<BotMapPositionObservation> {
+    let observation: BotMapPositionObservation | undefined;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const room = connection.chatRoom;
+        const observedPosition = room?.findMember(
+            connection.Player.MemberNumber,
+        )?.MapPos;
+        const mapReady = !!room?.map;
+        const roomName = room?.Name;
+        const roomReady =
+            !!room &&
+            (!expectedRoomName || roomName === expectedRoomName) &&
+            !!observedPosition;
+        observation = {
+            state: !roomReady
+                ? "room-not-ready"
+                : !mapReady
+                  ? "map-not-ready"
+                  : observedPosition.X === expectedPosition.X &&
+                      observedPosition.Y === expectedPosition.Y
+                    ? "verified"
+                    : "position-mismatch",
+            expectedPosition,
+            observedPosition,
+            roomName,
+            mapReady,
+            observedAt: new Date(),
+            source: "chatRoom.findMember",
+        };
+        if (observation.state === "verified") return observation;
+
+        const backoffMs =
+            attempt + 1 < maxAttempts
+                ? POSITION_VERIFICATION_BACKOFF_MS[attempt + 1]
+                : undefined;
+        if (backoffMs !== undefined) {
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        }
+    }
+    return observation!;
+}
+
+function positionVerificationError(
+    observation: BotMapPositionObservation,
+    movementError?: unknown,
+): Error {
+    if (
+        movementError instanceof Error &&
+        movementError.name !== "MapPositionTimeout"
+    ) {
+        return movementError;
+    }
+    const detail =
+        observation.state === "position-mismatch"
+            ? `expected (${observation.expectedPosition.X}, ${observation.expectedPosition.Y}), observed (${observation.observedPosition?.X}, ${observation.observedPosition?.Y})`
+            : observation.state;
+    const movementDetail =
+        movementError instanceof Error ? ` after ${movementError.name}` : "";
+    return new Error(`Bot map position ${detail}${movementDetail}`);
 }
 
 function superviseBotConnection(
@@ -98,27 +183,51 @@ function superviseBotConnection(
                 });
                 try {
                     if (position) {
-                        await connection.moveOnMapAndWait(
-                            position.X,
-                            position.Y,
-                        );
-                        const mapPosition = connection.Player?.MapPos;
-                        const roomName = config.room?.Name;
-                        if (
-                            !connection.chatRoom?.map ||
-                            (roomName && connection.chatRoom.Name !== roomName)
-                        ) {
-                            throw new Error(
-                                `Bot room/map not verified${roomName ? ` (${roomName})` : ""}`,
+                        let movementError: unknown;
+                        try {
+                            await connection.moveOnMapAndWait(
+                                position.X,
+                                position.Y,
                             );
+                        } catch (error) {
+                            movementError = error;
                         }
+                        const movementTimedOut =
+                            movementError instanceof Error &&
+                            movementError.name === "MapPositionTimeout";
+                        const observation = await verifyBotMapPosition(
+                            connection,
+                            position,
+                            config.room?.Name,
+                            movementTimedOut
+                                ? POSITION_VERIFICATION_BACKOFF_MS.length
+                                : 1,
+                        );
                         if (
-                            !mapPosition ||
-                            mapPosition.X !== position.X ||
-                            mapPosition.Y !== position.Y
+                            observation.state === "verified" &&
+                            movementTimedOut
                         ) {
-                            throw new Error(
-                                `Bot map position not verified (${position.X}, ${position.Y})`,
+                            observation.state = "verified-after-timeout";
+                        }
+                        status.position = observation;
+                        logger.info("Bot map position verification", {
+                            role,
+                            epoch: currentEpoch,
+                            attempt,
+                            movementTimedOut,
+                            movementError:
+                                movementError instanceof Error
+                                    ? movementError.name
+                                    : undefined,
+                            ...observation,
+                        });
+                        if (
+                            observation.state !== "verified" &&
+                            observation.state !== "verified-after-timeout"
+                        ) {
+                            throw positionVerificationError(
+                                observation,
+                                movementError,
                             );
                         }
                     }
