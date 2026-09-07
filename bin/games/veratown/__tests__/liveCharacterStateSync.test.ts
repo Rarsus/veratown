@@ -71,3 +71,51 @@ test("LiveCharacterStateSync reconciles movement, reconnects, and completed muta
     await sync.reconcile();
     assert.deepEqual(snapshots.at(-1).position, { X: 5, Y: 6 });
 });
+
+test("syncAppearanceMutation keeps completed mutations retryable when projection persistence fails", async () => {
+    let mutated = false;
+    const character = createCharacter(2, { X: 1, Y: 1 }, []);
+
+    await syncAppearanceMutation(
+        character as any,
+        () => {
+            mutated = true;
+        },
+        0,
+        async () => {
+            throw new Error("temporary database failure");
+        },
+    );
+
+    assert.equal(mutated, true);
+});
+
+test("LiveCharacterStateSync serializes overlapping observations by arrival order", async () => {
+    const positions: Array<{ X: number; Y: number }> = [];
+    const character = createCharacter(3, { X: 1, Y: 1 }, []);
+    const connector: any = {
+        chatRoom: { characters: [character] },
+        on: () => {},
+    };
+    const store: any = {
+        getVeratownView: async () => ({ currentRestraints: [] }),
+        syncVeratownState: async (
+            _memberNumber: number,
+            position: { X: number; Y: number },
+        ) => {
+            positions.push(position);
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(connector, store, 60_000);
+
+    const first = sync.syncCharacter(character as any);
+    character.MapPos = { X: 2, Y: 2 };
+    const second = sync.syncCharacter(character as any);
+    await Promise.all([first, second]);
+
+    assert.deepEqual(positions, [
+        { X: 1, Y: 1 },
+        { X: 2, Y: 2 },
+    ]);
+});

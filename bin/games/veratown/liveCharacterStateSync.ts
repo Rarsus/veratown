@@ -33,6 +33,7 @@ const RECONCILIATION_INTERVAL_MS = 60_000;
  */
 export class LiveCharacterStateSync {
     private reconciliationTimer?: NodeJS.Timeout;
+    private syncChains = new Map<number, Promise<void>>();
 
     public constructor(
         private readonly conn: API_Connector,
@@ -75,15 +76,34 @@ export class LiveCharacterStateSync {
             await this.syncCharacter(current);
         });
         const appearance = this.normalizedAppearance(character);
-        const persisted = await this.store.getVeratownView(
-            character.MemberNumber,
+        const memberNumber = character.MemberNumber;
+        const previous = this.syncChains.get(memberNumber) ?? Promise.resolve();
+        const next = previous
+            .catch(() => undefined)
+            .then(async () => {
+                const persisted =
+                    await this.store.getVeratownView(memberNumber);
+                return this.store.syncVeratownState(
+                    memberNumber,
+                    { ...position },
+                    appearance,
+                    this.restraints(
+                        appearance,
+                        persisted.currentRestraints ?? [],
+                    ),
+                );
+            });
+        const settled = next.then(
+            () => undefined,
+            () => undefined,
         );
-        return this.store.syncVeratownState(
-            character.MemberNumber,
-            { ...position },
-            appearance,
-            this.restraints(appearance, persisted.currentRestraints),
-        );
+        this.syncChains.set(memberNumber, settled);
+        void settled.finally(() => {
+            if (this.syncChains.get(memberNumber) === settled) {
+                this.syncChains.delete(memberNumber);
+            }
+        });
+        return next;
     }
 
     private onInteraction = (message: API_Message): void => {

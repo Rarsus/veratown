@@ -55,9 +55,16 @@ export async function syncAppearanceMutation(
             await wait(delayMs);
         }
 
-        await (onSynchronized ?? appearanceStateSynchronizers.get(character))?.(
-            character,
-        );
+        try {
+            await (
+                onSynchronized ?? appearanceStateSynchronizers.get(character)
+            )?.(character);
+        } catch (error) {
+            logger.error(
+                `[AppearanceSync] Failed to persist appearance for ${character.MemberNumber}:`,
+                error,
+            );
+        }
     } catch (error) {
         logger.error(
             `[AppearanceSync] Failed to sync appearance for ${character.MemberNumber}:`,
