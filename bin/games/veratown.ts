@@ -59,7 +59,12 @@ import {
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
 import { createLogger } from "../logging";
-import { isBotRecoveryReady, verifyBotMapPosition } from "../botConnections";
+import {
+    getBotRecoveryEpoch,
+    isBotRecoveryReady,
+    recordBotPositionPersistence,
+    verifyBotMapPosition,
+} from "../botConnections";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -295,6 +300,11 @@ export class Veratown {
             this.liveCharacterStateSync = new LiveCharacterStateSync(
                 this.conn,
                 unifiedStore,
+                undefined,
+                [this.conn2, this.conn3].filter(
+                    (connection): connection is API_Connector =>
+                        connection !== undefined,
+                ),
             );
             this.liveCharacterStateSync.start();
             this.locationEventSystem = new LocationEventSystem(db, {
@@ -664,12 +674,19 @@ export class Veratown {
     };
 
     private onBotConnected = async () => {
+        const recoveryEpoch = getBotRecoveryEpoch(this.conn);
         try {
-            if (!(await this.waitForBotRecovery(this.conn))) {
+            if (!(await this.waitForBotRecovery(this.conn, recoveryEpoch))) {
                 this.setContainmentReady(false);
                 logger.warn("Main bot recovery remains degraded", {
                     position: RECEPTIONIST_POSITION,
                 });
+                return;
+            }
+            if (
+                recoveryEpoch !== undefined &&
+                getBotRecoveryEpoch(this.conn) !== recoveryEpoch
+            ) {
                 return;
             }
             await this.setupRoom();
@@ -691,7 +708,11 @@ export class Veratown {
         role: string,
         position: { X: number; Y: number },
     ): Promise<void> => {
-        const recovered = await this.waitForBotRecovery(connection);
+        const recoveryEpoch = getBotRecoveryEpoch(connection);
+        const recovered = await this.waitForBotRecovery(
+            connection,
+            recoveryEpoch,
+        );
         if (!recovered) {
             this.updateContainmentReadiness();
             logger.warn("Auxiliary bot recovery remains degraded", {
@@ -700,8 +721,22 @@ export class Veratown {
             });
             return;
         }
+        if (
+            recoveryEpoch !== undefined &&
+            getBotRecoveryEpoch(connection) !== recoveryEpoch
+        ) {
+            return;
+        }
 
         try {
+            const diagnostic =
+                await this.liveCharacterStateSync?.syncSelfPosition(
+                    connection,
+                    position,
+                );
+            if (diagnostic) {
+                recordBotPositionPersistence(connection, diagnostic);
+            }
             await this.reloadLocations();
         } catch (error) {
             logger.error(
@@ -718,13 +753,24 @@ export class Veratown {
 
     private async waitForBotRecovery(
         connection: API_Connector,
+        expectedEpoch?: number,
     ): Promise<boolean> {
         for (let attempt = 0; attempt < 50; attempt++) {
+            if (
+                expectedEpoch !== undefined &&
+                getBotRecoveryEpoch(connection) !== expectedEpoch
+            ) {
+                return false;
+            }
             if (isBotRecoveryReady(connection)) return true;
             if (!connection.isConnected()) return false;
             await wait(100);
         }
-        return isBotRecoveryReady(connection);
+        return (
+            (expectedEpoch === undefined ||
+                getBotRecoveryEpoch(connection) === expectedEpoch) &&
+            isBotRecoveryReady(connection)
+        );
     }
 
     private setupRoom = async () => {
@@ -745,26 +791,61 @@ export class Veratown {
     };
 
     private setupCharacter = async () => {
-        await this.moveBotToPosition(this.conn, RECEPTIONIST_POSITION, "main");
+        const mainPositioned = await this.moveBotToPosition(
+            this.conn,
+            RECEPTIONIST_POSITION,
+            "main",
+        );
         this.conn.Player.SetActivePose(["Kneel"]);
-        await this.liveCharacterStateSync?.reconcile();
+        if (mainPositioned) {
+            await this.syncVerifiedBotPosition(
+                this.conn,
+                RECEPTIONIST_POSITION,
+            );
+        }
 
         if (this.conn2) {
-            await this.moveBotToPosition(
+            const showerPositioned = await this.moveBotToPosition(
                 this.conn2,
                 SHOWER_BOT2_HOME_POSITION,
                 "shower",
             );
+            if (showerPositioned) {
+                await this.syncVerifiedBotPosition(
+                    this.conn2,
+                    SHOWER_BOT2_HOME_POSITION,
+                );
+            }
         }
         if (this.conn3) {
-            await this.moveBotToPosition(
+            const casinoPositioned = await this.moveBotToPosition(
                 this.conn3,
                 GAME_MISTRESS_POSITION,
                 "casino",
             );
+            if (casinoPositioned) {
+                await this.syncVerifiedBotPosition(
+                    this.conn3,
+                    GAME_MISTRESS_POSITION,
+                );
+            }
         }
+        await this.liveCharacterStateSync?.reconcile();
         this.updateContainmentReadiness();
     };
+
+    private async syncVerifiedBotPosition(
+        connection: API_Connector,
+        requestedPosition: { X: number; Y: number },
+    ): Promise<void> {
+        const diagnostic = await this.liveCharacterStateSync?.syncSelfPosition(
+            connection,
+            requestedPosition,
+        );
+        if (diagnostic) {
+            recordBotPositionPersistence(connection, diagnostic);
+        }
+    }
 
     private async moveBotToPosition(
         connection: API_Connector,

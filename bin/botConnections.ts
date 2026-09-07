@@ -36,10 +36,12 @@ export interface BotMapPositionObservation {
     state: BotPositionVerificationState;
     expectedPosition: { X: number; Y: number };
     observedPosition?: { X: number; Y: number };
+    persistedPosition?: { X: number; Y: number };
+    persistedAt?: Date;
     roomName?: string;
     mapReady: boolean;
     observedAt: Date;
-    source: "chatRoom.findMember";
+    source: "chatRoom.findMember" | "Player.MapPos";
 }
 
 export interface BotRecoveryStatus {
@@ -49,6 +51,7 @@ export interface BotRecoveryStatus {
     lastFailure?: string;
     lastRecoveredAt?: Date;
     position?: BotMapPositionObservation;
+    recoveryEpoch: number;
 }
 
 const RECOVERY_BACKOFF_MS = [0, 100, 250] as const;
@@ -154,6 +157,7 @@ function superviseBotConnection(
         state: "connected",
         recoveryAttempts: 0,
         lastRecoveredAt: new Date(),
+        recoveryEpoch: 0,
     };
     let epoch = 0;
     let stopped = false;
@@ -279,6 +283,7 @@ function superviseBotConnection(
 
     const onDisconnected = () => {
         epoch += 1;
+        status.recoveryEpoch = epoch;
         needsRecovery = true;
         status.state = "disconnected";
         logger.warn("Bot connection disconnected", { role, epoch });
@@ -287,10 +292,12 @@ function superviseBotConnection(
         if (!needsRecovery) return;
         needsRecovery = false;
         epoch += 1;
+        status.recoveryEpoch = epoch;
         void recover(epoch);
     };
     const onReconnectFailed = () => {
         epoch += 1;
+        status.recoveryEpoch = epoch;
         needsRecovery = false;
         status.state = "failed";
         status.lastFailure = "Reconnect attempts exhausted";
@@ -316,6 +323,42 @@ function superviseBotConnection(
     });
 }
 
+export function getBotRecoveryEpoch(
+    connection: API_Connector,
+): number | undefined {
+    return recoveryStatuses.get(connection)?.recoveryEpoch;
+}
+
+export function recordBotPositionPersistence(
+    connection: API_Connector,
+    diagnostic: {
+        requestedPosition?: { X: number; Y: number };
+        observedPosition: { X: number; Y: number };
+        persistedPosition?: { X: number; Y: number };
+        persistedAt?: Date;
+        observedAt: Date;
+        verificationSource: "chatRoom.findMember" | "Player.MapPos";
+    },
+): void {
+    const status = recoveryStatuses.get(connection);
+    if (!status) return;
+
+    status.position = {
+        ...(status.position ?? {
+            state: "verified",
+            expectedPosition:
+                diagnostic.requestedPosition ?? diagnostic.observedPosition,
+            roomName: connection.chatRoom?.Name,
+            mapReady: !!connection.chatRoom?.map,
+            observedAt: diagnostic.observedAt,
+            source: diagnostic.verificationSource,
+        }),
+        observedPosition: diagnostic.observedPosition,
+        persistedPosition: diagnostic.persistedPosition,
+        persistedAt: diagnostic.persistedAt,
+    };
+}
+
 export function superviseBotConnections(
     connections: BotConnections,
     config: ConfigFile,
@@ -337,6 +380,7 @@ export function getBotRecoveryStatuses(
                 role,
                 state: connection.isConnected() ? "connected" : "disconnected",
                 recoveryAttempts: 0,
+                recoveryEpoch: 0,
             },
         ];
     });

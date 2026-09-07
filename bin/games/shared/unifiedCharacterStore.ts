@@ -1649,25 +1649,38 @@ export class UnifiedCharacterStore {
     /**
      * Atomically persist the observed live map and appearance state. An
      * identical observation is a no-op, so retries and periodic
-     * reconciliation do not churn versions or timestamps.
+     * reconciliation do not churn versions or timestamps. Verified
+     * connector-owned self-position syncs can force the metadata refresh
+     * required after startup or recovery.
      */
     public async syncVeratownState(
         memberNumber: number,
         position: ChatRoomMapPos,
         appearance: VeratownState["currentAppearance"],
         restraints: CurrentRestraint[],
+        forcePositionPersistence = false,
     ): Promise<boolean> {
         await this.getProfile(memberNumber);
         const now = asTimestamp(Date.now());
         const result = await this.profiles.updateOne(
-            {
-                _id: memberNumber,
-                $or: [
-                    { "veratown.lastPosition": { $ne: position } },
-                    { "veratown.currentAppearance": { $ne: appearance } },
-                    { "veratown.currentRestraints": { $ne: restraints } },
-                ],
-            },
+            forcePositionPersistence
+                ? { _id: memberNumber }
+                : {
+                      _id: memberNumber,
+                      $or: [
+                          { "veratown.lastPosition": { $ne: position } },
+                          {
+                              "veratown.currentAppearance": {
+                                  $ne: appearance,
+                              },
+                          },
+                          {
+                              "veratown.currentRestraints": {
+                                  $ne: restraints,
+                              },
+                          },
+                      ],
+                  },
             {
                 $set: {
                     "veratown.lastPosition": position,

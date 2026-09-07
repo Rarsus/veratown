@@ -26,6 +26,17 @@ import { registerAppearanceStateSynchronizer } from "./shared/appearanceSync";
 const logger = createLogger("LiveCharacterStateSync");
 const RECONCILIATION_INTERVAL_MS = 60_000;
 
+export interface SelfPositionSyncDiagnostic {
+    memberNumber: number;
+    requestedPosition?: { X: number; Y: number };
+    observedPosition: { X: number; Y: number };
+    persistedPosition?: { X: number; Y: number };
+    observedAt: Date;
+    persistedAt?: Date;
+    verificationSource: "chatRoom.findMember" | "Player.MapPos";
+    persisted: boolean;
+}
+
 /**
  * Maintains the recoverable profile projection for every character currently
  * visible in the Veratown room. Interaction and mutation hooks provide prompt
@@ -34,17 +45,29 @@ const RECONCILIATION_INTERVAL_MS = 60_000;
 export class LiveCharacterStateSync {
     private reconciliationTimer?: NodeJS.Timeout;
     private syncChains = new Map<number, Promise<void>>();
+    private readonly ownedConnections: API_Connector[];
+    private readonly selfPositionDiagnostics = new Map<
+        number,
+        SelfPositionSyncDiagnostic
+    >();
 
     public constructor(
         private readonly conn: API_Connector,
         private readonly store: UnifiedCharacterStore,
         private readonly intervalMs: number = RECONCILIATION_INTERVAL_MS,
-    ) {}
+        ownedConnections: API_Connector[] = [conn],
+    ) {
+        this.ownedConnections = [...new Set([this.conn, ...ownedConnections])];
+    }
 
     public start(): void {
         if (this.reconciliationTimer) return;
         this.conn.on("Message", this.onInteraction);
-        this.conn.on("MapPosition", this.onMovement);
+        for (const connection of this.ownedConnections) {
+            connection.on("MapPosition", (memberNumber, position) =>
+                this.onMovement(connection, memberNumber, position),
+            );
+        }
         this.reconciliationTimer = setInterval(() => {
             void this.reconcile();
         }, this.intervalMs);
@@ -52,9 +75,18 @@ export class LiveCharacterStateSync {
     }
 
     public async reconcile(): Promise<void> {
-        const characters = this.conn.chatRoom?.characters ?? [];
+        const characters = new Map<number, API_Character>();
+        for (const connection of this.ownedConnections) {
+            const self = this.observedSelf(connection);
+            if (self) characters.set(self.MemberNumber, self);
+        }
+        for (const character of this.conn.chatRoom?.characters ?? []) {
+            if (!characters.has(character.MemberNumber)) {
+                characters.set(character.MemberNumber, character);
+            }
+        }
         await Promise.all(
-            characters.map((character) =>
+            [...characters.values()].map((character) =>
                 this.syncCharacter(character).catch((error) => {
                     logger.error(
                         "Failed to reconcile live character state",
@@ -71,6 +103,7 @@ export class LiveCharacterStateSync {
     public async syncCharacter(
         character: API_Character,
         position = character.MapPos,
+        forcePositionPersistence = false,
     ): Promise<boolean> {
         registerAppearanceStateSynchronizer(character, async (current) => {
             await this.syncCharacter(current);
@@ -91,6 +124,7 @@ export class LiveCharacterStateSync {
                         appearance,
                         persisted.currentRestraints ?? [],
                     ),
+                    forcePositionPersistence,
                 );
             });
         const settled = next.then(
@@ -106,6 +140,55 @@ export class LiveCharacterStateSync {
         return next;
     }
 
+    public async syncSelfPosition(
+        connection: API_Connector = this.conn,
+        requestedPosition?: { X: number; Y: number },
+        observedPosition?: { X: number; Y: number },
+    ): Promise<SelfPositionSyncDiagnostic | undefined> {
+        const character = this.observedSelf(connection);
+        if (!character) return undefined;
+
+        const position = observedPosition ?? character.MapPos;
+        const observedAt = new Date();
+        const verificationSource = connection.chatRoom?.findMember?.(
+            connection.Player.MemberNumber,
+        )
+            ? "chatRoom.findMember"
+            : "Player.MapPos";
+        const persisted = await this.syncCharacter(
+            character,
+            { ...position },
+            true,
+        );
+        const view = await this.store.getVeratownView(
+            connection.Player.MemberNumber,
+        );
+        const diagnostic: SelfPositionSyncDiagnostic = {
+            memberNumber: connection.Player.MemberNumber,
+            requestedPosition,
+            observedPosition: { ...position },
+            persistedPosition: view.lastPosition
+                ? { ...view.lastPosition }
+                : undefined,
+            observedAt,
+            persistedAt:
+                typeof view.lastPositionAt === "number"
+                    ? new Date(view.lastPositionAt)
+                    : undefined,
+            verificationSource,
+            persisted,
+        };
+        this.selfPositionDiagnostics.set(
+            connection.Player.MemberNumber,
+            diagnostic,
+        );
+        return diagnostic;
+    }
+
+    public getSelfPositionDiagnostics(): SelfPositionSyncDiagnostic[] {
+        return [...this.selfPositionDiagnostics.values()];
+    }
+
     private onInteraction = (message: API_Message): void => {
         void this.syncCharacter(message.sender).catch((error) => {
             logger.error("Failed to synchronize interaction state", error, {
@@ -115,10 +198,15 @@ export class LiveCharacterStateSync {
     };
 
     private onMovement = (
+        connection: API_Connector,
         memberNumber: number,
         position: { X: number; Y: number },
     ): void => {
-        const character = this.conn.chatRoom?.getCharacter(memberNumber);
+        const character =
+            connection.chatRoom?.getCharacter?.(memberNumber) ??
+            (connection.Player?.MemberNumber === memberNumber
+                ? connection.Player
+                : undefined);
         if (!character) return;
         void this.syncCharacter(character, position).catch((error) => {
             logger.error("Failed to synchronize movement state", error, {
@@ -126,6 +214,14 @@ export class LiveCharacterStateSync {
             });
         });
     };
+
+    private observedSelf(connection: API_Connector): API_Character | undefined {
+        if (!connection.Player) return undefined;
+        return (
+            connection.chatRoom?.findMember?.(connection.Player.MemberNumber) ??
+            connection.Player
+        );
+    }
 
     private normalizedAppearance(
         character: API_Character,

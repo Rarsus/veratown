@@ -31,6 +31,22 @@ All three major systems (Casino, Dare, Veratown) now share a unified character s
 
 ---
 
+## Veratown bot self-position synchronization
+
+`LiveCharacterStateSync` treats each configured Veratown connector's observed
+self character as live state, even when the connector-owned character is absent
+from `chatRoom.characters`. Startup, room recreation, and reconnect recovery
+must call `syncSelfPosition()` only after `verifyBotMapPosition()` succeeds.
+That method persists the observed map position (rather than the requested
+destination), refreshes the profile timestamps/access metadata, and records
+requested, observed, and persisted values for diagnostics.
+
+Periodic reconciliation and `MapPosition` events use the same connector-owned
+character path. Recovery epochs are checked before setup continues so an older
+reconnect handler cannot persist a position after a newer recovery has started.
+
+---
+
 ## Kennel lifecycle ownership
 
 `KennelSystem` owns live containment detection. It listens for kennel-tile
