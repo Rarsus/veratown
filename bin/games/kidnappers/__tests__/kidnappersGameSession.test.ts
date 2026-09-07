@@ -15,6 +15,7 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
 import { KidnappersGameSession } from "../kidnappersGameSession";
+import type { KidnappersGamePersistence } from "../kidnappersGamePersistence";
 
 describe("KidnappersGameSession", () => {
     test("dispatchCommand auto-generates correlationId and issuedAt", () => {
@@ -65,5 +66,31 @@ describe("KidnappersGameSession", () => {
         assert.equal(result.ok, false);
         if (result.ok) return;
         assert.equal(result.error.reason, "PLAYER_NOT_FOUND");
+    });
+
+    test("restores the previous snapshot when a persisted write fails", async () => {
+        const session = new KidnappersGameSession("session-1");
+        const before = session.getSnapshot();
+        const persistence = {
+            findOperation: async () => null,
+            updateTransition: async () => {
+                throw new Error("write failed");
+            },
+        } as unknown as KidnappersGamePersistence;
+
+        await assert.rejects(
+            session.dispatchPersisted(
+                {
+                    type: "JOIN_SESSION",
+                    memberNumber: 1,
+                    memberName: "Alice",
+                    correlationId: "failed-write",
+                    issuedAt: 1,
+                },
+                persistence,
+            ),
+            /write failed/,
+        );
+        assert.deepEqual(session.getSnapshot(), before);
     });
 });
