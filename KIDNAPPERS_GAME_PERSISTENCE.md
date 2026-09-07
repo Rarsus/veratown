@@ -27,6 +27,13 @@ a mismatch raises a non-retryable optimistic-concurrency error. The
 retries return the original snapshot/event instead of applying a second
 transition.
 
+Terminal snapshots include a deterministic `outcome` containing the end reason,
+winner/result, per-player scores, rewards, penalties, and a player-facing
+summary. `END_GAME` records timeout and abandonment explicitly; normal,
+administrative, and shutdown paths use the same terminal outcome contract.
+`listAuditEvents` can be used with `calculateKidnappersGameOutcome` to audit or
+replay the calculation without mutating the session.
+
 The persistence service creates these indexes:
 
 - `kidnappersGameSessions`: `{ status: 1, updatedAt: -1 }`
@@ -48,6 +55,9 @@ versioned, idempotent by operation key, and audited. Schema version changes
 must add a migration before accepting a new `schemaVersion`; there is no
 implicit migration because silently changing authoritative game state could
 resume a session incorrectly.
+
+`recoverTerminalSession` returns a terminal snapshot for read-only inspection;
+it does not resume an active session or permit new game actions.
 
 ## Restart runbook
 

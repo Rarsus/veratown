@@ -132,9 +132,32 @@ export class KidnappersGameLifecycleService {
             document.snapshot.createdAt,
             document.snapshot,
             document.version,
+            "bondage",
+            isTerminalPhase(document.snapshot.phase),
         );
         this.sessions.set(sessionId, session);
         return session;
+    }
+
+    public async recoverTerminalSession(
+        sessionId: string,
+    ): Promise<KidnappersGameSession | undefined> {
+        if (!this.persistence) {
+            throw new BusinessLogicError(
+                "KidnappersGame persistence is not configured",
+            );
+        }
+        const document =
+            await this.persistence.recoverTerminalSession(sessionId);
+        if (!document) return undefined;
+        return new KidnappersGameSession(
+            sessionId,
+            document.snapshot.createdAt,
+            document.snapshot,
+            document.version,
+            "bondage",
+            true,
+        );
     }
 
     public async recoverActiveSessions(): Promise<KidnappersGameSession[]> {

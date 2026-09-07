@@ -22,6 +22,7 @@ import { executeWithRetry } from "../veratown/shared/executeWithRetry";
 import {
     isTerminalPhase,
     type KidnappersGameEvent,
+    type KidnappersGameOutcome,
     type KidnappersGamePhase,
     type KidnappersPlayerProgression,
     type KidnappersSessionSnapshot,
@@ -125,6 +126,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
+function validateOutcome(
+    outcome: unknown,
+): asserts outcome is KidnappersGameOutcome {
+    if (!isRecord(outcome)) throw new Error("outcome is not an object");
+    if (
+        ![
+            "normal",
+            "timeout",
+            "abandonment",
+            "administrative",
+            "shutdown",
+        ].includes(outcome.reason as string) ||
+        !["captors", "victims", "tie", "partial"].includes(
+            outcome.result as string,
+        ) ||
+        (outcome.winner !== null &&
+            !["captors", "victims", "tie"].includes(
+                outcome.winner as string,
+            )) ||
+        !Number.isSafeInteger(outcome.completedAt) ||
+        !Number.isSafeInteger(outcome.durationMs) ||
+        !Number.isSafeInteger(outcome.round) ||
+        !Number.isSafeInteger(outcome.captorScore) ||
+        !Number.isSafeInteger(outcome.victimScore) ||
+        typeof outcome.summary !== "string" ||
+        !Array.isArray(outcome.scores)
+    ) {
+        throw new Error("outcome fields are invalid");
+    }
+    for (const score of outcome.scores) {
+        if (
+            !isRecord(score) ||
+            !Number.isSafeInteger(score.memberNumber) ||
+            !["captors", "victims"].includes(score.side as string) ||
+            !Number.isSafeInteger(score.score) ||
+            !Number.isSafeInteger(score.reward) ||
+            !Number.isSafeInteger(score.penalty)
+        ) {
+            throw new Error("outcome score is invalid");
+        }
+    }
+}
+
 function validateSnapshot(
     snapshot: unknown,
 ): asserts snapshot is KidnappersSessionSnapshot {
@@ -161,9 +205,13 @@ function validateSnapshot(
     if (
         snapshot.winner !== null &&
         snapshot.winner !== "captors" &&
-        snapshot.winner !== "victims"
+        snapshot.winner !== "victims" &&
+        snapshot.winner !== "tie"
     ) {
         throw new Error("snapshot winner is invalid");
+    }
+    if (snapshot.outcome !== undefined && snapshot.outcome !== null) {
+        validateOutcome(snapshot.outcome);
     }
     if (snapshot.players.length > 9) {
         throw new Error("snapshot contains too many players");
@@ -421,6 +469,16 @@ export class KidnappersGamePersistence {
             event: audit.event,
             duplicate: true,
         };
+    }
+
+    public async listAuditEvents(
+        sessionId: string,
+    ): Promise<readonly KidnappersGameAuditDocument[]> {
+        await this.initialize();
+        return this.events
+            .find({ sessionId })
+            .sort({ recordedAt: 1, _id: 1 })
+            .toArray();
     }
 
     public async updateSession(
@@ -715,6 +773,23 @@ export class KidnappersGamePersistence {
                 sessionId,
                 document.updatedAt,
                 staleAfterMs,
+            );
+        }
+        return document;
+    }
+
+    public async recoverTerminalSession(
+        sessionId: string,
+    ): Promise<KidnappersGameDocument | null> {
+        const document = await this.loadSession(sessionId);
+        if (
+            document &&
+            !isTerminalPhase(document.snapshot.phase) &&
+            document.status !== "closed"
+        ) {
+            throw new BusinessLogicError(
+                `Session '${sessionId}' is not terminal`,
+                { sessionId, phase: document.snapshot.phase },
             );
         }
         return document;

@@ -122,6 +122,8 @@ const ADMIN_COMMANDS = new Set([
     "assign",
     "complete",
     "end",
+    "timeout",
+    "abandon",
     "phase",
     "recover",
     "release",
@@ -167,7 +169,7 @@ const HELP = [
     "Room admins:",
     "!kidnappers sessions|recover <session>",
     "!kidnappers assign <member> <role> [session]",
-    "!kidnappers phase|end|release|complete [args] [session]",
+    "!kidnappers phase|end|timeout|abandon|release|complete [args] [session]",
 ].join("\n");
 
 /**
@@ -624,9 +626,13 @@ export class KidnappersGameCommandController {
             case "complete": {
                 this.assertArgumentCount(command, args, 1, 2);
                 const winner = args[0];
-                if (winner !== "captors" && winner !== "victims") {
+                if (
+                    winner !== "captors" &&
+                    winner !== "victims" &&
+                    winner !== "tie"
+                ) {
                     throw this.commandError(
-                        "Winner must be 'captors' or 'victims'.",
+                        "Winner must be 'captors', 'victims', or 'tie'.",
                         "MALFORMED_COMMAND",
                         command,
                     );
@@ -662,6 +668,25 @@ export class KidnappersGameCommandController {
                     result,
                     session.sessionId,
                     `Kidnappers session '${session.sessionId}' ended.`,
+                );
+            }
+            case "timeout":
+            case "abandon": {
+                this.assertArgumentCount(command, args, 0, 1);
+                const session = this.requireSession(args[0], command);
+                const reason =
+                    command === "timeout" ? "timeout" : "abandonment";
+                const result = await this.dispatchSessionCommand(
+                    session.sessionId,
+                    {
+                        type: "END_GAME",
+                        reason,
+                    },
+                );
+                return this.resultFromTransition(
+                    result,
+                    session.sessionId,
+                    `Kidnappers session '${session.sessionId}' ended (${reason}).`,
                 );
             }
             case "sessions":
@@ -933,6 +958,7 @@ export class KidnappersGameCommandController {
             snapshot.turn
                 ? `Current turn: #${snapshot.turn.ownerMemberNumber} until ${new Date(snapshot.turn.deadlineAt).toISOString()}`
                 : "Current turn: none",
+            snapshot.outcome?.summary ?? "",
         ].join("\n");
     }
 

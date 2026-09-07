@@ -94,6 +94,7 @@ export class KidnappersGameCaptureService {
                     );
                     break;
                 case "GAME_COMPLETED":
+                case "GAME_ENDED":
                 case "SESSION_ABORTED":
                 case "SESSION_SHUT_DOWN":
                     await Promise.all(
