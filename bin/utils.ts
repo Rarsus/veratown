@@ -23,6 +23,15 @@ export function remainingTimeString(until: number): string {
     return `${seconds} seconds`;
 }
 
+export function durationString(duration: number): string {
+    if (duration <= 0) return "0 seconds";
+    if (duration % (1000 * 60 * 60) === 0)
+        return `${duration / (1000 * 60 * 60)} hours`;
+    if (duration % (1000 * 60) === 0)
+        return `${duration / (1000 * 60)} minutes`;
+    return `${Math.ceil(duration / 1000)} seconds`;
+}
+
 export function generatePassword(): string {
     const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let retVal = "";

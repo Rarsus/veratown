@@ -1699,6 +1699,7 @@ export class UnifiedCharacterStore {
         cageName: string,
         duration: number,
         detailedBy?: number,
+        enteredAt = Date.now(),
     ): Promise<boolean> {
         await this.init();
 
@@ -1707,7 +1708,7 @@ export class UnifiedCharacterStore {
         if (currentSessions.some((session) => !session.releasedAt)) {
             return false;
         }
-        const now = Date.now();
+        const now = enteredAt;
 
         const cageSession: CageSession = {
             enteredAt: now,

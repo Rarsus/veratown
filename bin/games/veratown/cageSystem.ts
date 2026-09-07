@@ -14,7 +14,7 @@
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
-import { remainingTimeString } from "../../utils";
+import { durationString, remainingTimeString } from "../../utils";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { guardHandler } from "./featureSystem";
 import {
@@ -28,6 +28,16 @@ import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 
+export interface CageTimer {
+    now(): number;
+    wait(milliseconds: number): Promise<void>;
+}
+
+const systemTimer: CageTimer = {
+    now: () => Date.now(),
+    wait,
+};
+
 // Owns the containment cages (the entry-warning tiles, the cages
 // themselves, and the Futuristic Crate lock lifecycle), and the cage
 // information screen showing current occupancy.
@@ -38,7 +48,11 @@ import { syncAppearanceMutation } from "./shared/appearanceSync";
 export class CageSystem extends AbstractTileFeatureSystem {
     private cagedCharacters = new Map<
         number,
-        { character: API_Character; cageName: string }
+        {
+            character: API_Character;
+            cageName: string;
+            authoritativeExpiry: number;
+        }
     >();
 
     // Monitor for preventing duplicate cage entry handlers
@@ -72,6 +86,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         private readonly stateSync?: (
             character: API_Character,
         ) => Promise<void>,
+        private readonly timer: CageTimer = systemTimer,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -214,6 +229,15 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     this.cageEntryTrigger,
                 );
             }
+            for (const character of this.conn.chatRoom?.characters ?? []) {
+                void this.recoverCagedCharacter(character).catch((error) => {
+                    this.logger.error("Cage recovery failed", {
+                        memberNumber: character.MemberNumber,
+                        observedAtMs: this.timer.now(),
+                        error,
+                    });
+                });
+            }
 
             this.logger?.info(
                 `[CageSystem] Registered ${this.cagesByPos.size} cage location(s)`,
@@ -234,8 +258,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
             character.Appearance.getItemData("ItemDevices")?.Name ===
             "FuturisticCrate"
         ) {
-            await this.mutationService?.exitCage(character.MemberNumber);
-            this.cagedCharacters.delete(character.MemberNumber);
             await syncAppearanceMutation(
                 character,
                 () => {
@@ -244,6 +266,21 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 50,
                 this.stateSync,
             );
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name ===
+                "FuturisticCrate"
+            ) {
+                this.logger.error(
+                    "Manual cage release is pending crate removal",
+                    {
+                        memberNumber: character.MemberNumber,
+                        observedAtMs: this.timer.now(),
+                    },
+                );
+                return;
+            }
+            await this.mutationService?.exitCage(character.MemberNumber);
+            this.cagedCharacters.delete(character.MemberNumber);
         }
     }
 
@@ -289,18 +326,21 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 character.MapPos.X === cagePos.X &&
                 character.MapPos.Y === cagePos.Y;
 
-            await wait(100);
+            await this.timer.wait(100);
             if (!stillInCage()) return;
 
             const posKey = this.getTileKey(cagePos.X, cagePos.Y);
             const cage = this.cagesByPos.get(posKey);
             const cageName = cage?.doc.name ?? "Unknown cage";
-            const lockExpiry =
-                Date.now() + (cage?.durationMs ?? 30 * 60 * 1000);
+            const enteredAt = this.timer.now();
+            const durationMs = cage?.durationMs ?? 30 * 60 * 1000;
+            const lockExpiry = enteredAt + durationMs;
             const persisted = await this.mutationService?.enterCage(
                 character.MemberNumber,
                 cageName,
-                lockExpiry - Date.now(),
+                durationMs,
+                character.MemberNumber,
+                enteredAt,
             );
             if (
                 persisted === false &&
@@ -310,7 +350,25 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 return;
             }
 
-            if (persisted !== false) {
+            let authoritativeExpiry = lockExpiry;
+            if (persisted === false) {
+                const session =
+                    await this.mutationService?.getActiveCageSession(
+                        character.MemberNumber,
+                    );
+                if (!session?.expiresAt) {
+                    this.logger.warn(
+                        "Cage recovery deferred because no persisted expiry is available",
+                        {
+                            memberNumber: character.MemberNumber,
+                            cageName,
+                            observedAtMs: this.timer.now(),
+                        },
+                    );
+                    return;
+                }
+                authoritativeExpiry = session.expiresAt;
+            } else {
                 await syncAppearanceMutation(
                     character,
                     () => {
@@ -350,51 +408,199 @@ export class CageSystem extends AbstractTileFeatureSystem {
             this.cagedCharacters.set(character.MemberNumber, {
                 character,
                 cageName,
+                authoritativeExpiry,
             });
 
-            this.logger.info("Character caged", {
+            this.logger.info("Cage entry persisted", {
                 memberNumber: character.MemberNumber,
                 cageName,
-                durationDescription: cage?.durationDescription,
+                enteredAtMs: enteredAt,
+                durationMs,
+                lockExpiryMs: authoritativeExpiry,
             });
 
-            character.Tell(
-                "Whisper",
-                `(You are locked in the Futuristic Crate for ${remainingTimeString(lockExpiry)}.`,
-            );
-
-            // Wait for the lock to actually expire, re-reading the crate's lock
-            // data each time in case it has been extended (or shortened) since
-            // it was first applied.
-            let expiry = this.getCageLockExpiry(character);
-            while (expiry !== undefined && Date.now() < expiry) {
-                await wait(Math.min(expiry - Date.now(), 10 * 1000));
-                if (!this.cagedCharacters.has(character.MemberNumber)) return;
-                expiry = this.getCageLockExpiry(character);
+            if (persisted !== false) {
+                character.Tell(
+                    "Whisper",
+                    `(You are locked in the Futuristic Crate for ${durationString(durationMs)}.`,
+                );
+                this.logger.info("Cage entry notified", {
+                    memberNumber: character.MemberNumber,
+                    cageName,
+                    notifiedAtMs: this.timer.now(),
+                    durationMs,
+                    lockExpiryMs: authoritativeExpiry,
+                });
             }
 
-            if (!this.cagedCharacters.has(character.MemberNumber)) return;
-            await this.mutationService?.exitCage(character.MemberNumber);
-            this.cagedCharacters.delete(character.MemberNumber);
-            await syncAppearanceMutation(
-                character,
-                () => {
-                    character.Appearance.RemoveItem("ItemDevices");
-                },
-                50,
-                this.stateSync,
-            );
-            character.Tell(
-                "Whisper",
-                "(The Futuristic Crate unlocks and releases you.",
-            );
-
-            this.logger.info("Character released from cage", {
-                memberNumber: character.MemberNumber,
-                cageName,
-            });
+            await this.releaseWhenExpired(character, cageName);
         });
     };
+
+    private async releaseWhenExpired(
+        character: API_Character,
+        cageName: string,
+    ): Promise<void> {
+        const memberNumber = character.MemberNumber;
+        let lastObservedLiveExpiry: number | undefined;
+        while (this.cagedCharacters.has(memberNumber)) {
+            const cage = this.cagedCharacters.get(memberNumber)!;
+            const liveExpiry = this.getCageLockExpiry(character);
+            if (
+                liveExpiry !== undefined &&
+                liveExpiry > cage.authoritativeExpiry
+            ) {
+                cage.authoritativeExpiry = liveExpiry;
+                this.logger.info("Cage expiry extended", {
+                    memberNumber,
+                    cageName,
+                    authoritativeExpiryMs: cage.authoritativeExpiry,
+                    observedAtMs: this.timer.now(),
+                });
+            } else if (
+                liveExpiry !== undefined &&
+                liveExpiry < cage.authoritativeExpiry &&
+                liveExpiry !== lastObservedLiveExpiry
+            ) {
+                this.logger.warn("Ignoring shortened or stale cage timer", {
+                    memberNumber,
+                    cageName,
+                    authoritativeExpiryMs: cage.authoritativeExpiry,
+                    liveExpiryMs: liveExpiry,
+                    observedAtMs: this.timer.now(),
+                });
+            } else if (
+                liveExpiry === undefined &&
+                lastObservedLiveExpiry !== undefined
+            ) {
+                this.logger.warn(
+                    "Cage timer is missing; retaining persisted expiry",
+                    {
+                        memberNumber,
+                        cageName,
+                        authoritativeExpiryMs: cage.authoritativeExpiry,
+                        observedAtMs: this.timer.now(),
+                    },
+                );
+            }
+            lastObservedLiveExpiry = liveExpiry;
+
+            const now = this.timer.now();
+            if (now < cage.authoritativeExpiry) {
+                await this.timer.wait(
+                    Math.min(cage.authoritativeExpiry - now, 10 * 1000),
+                );
+                continue;
+            }
+
+            this.logger.info("Cage expiry detected", {
+                memberNumber,
+                cageName,
+                authoritativeExpiryMs: cage.authoritativeExpiry,
+                detectedExpiryAtMs: now,
+            });
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name ===
+                "FuturisticCrate"
+            ) {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        character.Appearance.RemoveItem("ItemDevices");
+                    },
+                    50,
+                    this.stateSync,
+                );
+            }
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name ===
+                "FuturisticCrate"
+            ) {
+                this.logger.error("Cage release is pending crate removal", {
+                    memberNumber,
+                    cageName,
+                    authoritativeExpiryMs: cage.authoritativeExpiry,
+                    observedAtMs: this.timer.now(),
+                });
+                await this.timer.wait(10 * 1000);
+                continue;
+            }
+
+            const removedAtMs = this.timer.now();
+            this.logger.info("Cage crate removed", {
+                memberNumber,
+                cageName,
+                removedAtMs,
+                authoritativeExpiryMs: cage.authoritativeExpiry,
+            });
+            const persisted =
+                await this.mutationService?.exitCage(memberNumber);
+            this.cagedCharacters.delete(memberNumber);
+            if (persisted !== false) {
+                const persistedAtMs = this.timer.now();
+                this.logger.info("Cage release persisted", {
+                    memberNumber,
+                    cageName,
+                    removedAtMs,
+                    persistedAtMs,
+                    authoritativeExpiryMs: cage.authoritativeExpiry,
+                });
+                character.Tell(
+                    "Whisper",
+                    "(The Futuristic Crate unlocks and releases you.",
+                );
+                this.logger.info("Cage release notified", {
+                    memberNumber,
+                    cageName,
+                    notifiedAtMs: this.timer.now(),
+                    authoritativeExpiryMs: cage.authoritativeExpiry,
+                });
+            }
+        }
+    }
+
+    private async recoverCagedCharacter(
+        character: API_Character,
+    ): Promise<void> {
+        if (
+            character.Appearance.getItemData("ItemDevices")?.Name !==
+            "FuturisticCrate"
+        )
+            return;
+
+        await this.monitor.run(character, async () => {
+            const session = await this.mutationService?.getActiveCageSession(
+                character.MemberNumber,
+            );
+            const authoritativeExpiry =
+                session?.expiresAt ?? this.getCageLockExpiry(character);
+            if (authoritativeExpiry === undefined) {
+                this.logger.warn(
+                    "Cage recovery deferred because no authoritative expiry is available",
+                    {
+                        memberNumber: character.MemberNumber,
+                        observedAtMs: this.timer.now(),
+                    },
+                );
+                return;
+            }
+            this.cagedCharacters.set(character.MemberNumber, {
+                character,
+                cageName: session?.cageName ?? "Unknown cage",
+                authoritativeExpiry,
+            });
+            this.logger.info("Cage recovery armed", {
+                memberNumber: character.MemberNumber,
+                cageName: session?.cageName,
+                authoritativeExpiryMs: authoritativeExpiry,
+                recoveredAtMs: this.timer.now(),
+            });
+            await this.releaseWhenExpired(
+                character,
+                session?.cageName ?? "Unknown cage",
+            );
+        });
+    }
 
     /**
      * Reads the actual RemoveTimer from the character's currently worn
@@ -403,8 +609,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
      * Returns undefined if the character is no longer wearing a locked crate.
      */
     private getCageLockExpiry(character: API_Character): number | undefined {
-        return character.Appearance.getItemData("ItemDevices")?.Property
-            ?.RemoveTimer;
+        const expiry =
+            character.Appearance.getItemData("ItemDevices")?.Property
+                ?.RemoveTimer;
+        return typeof expiry === "number" && Number.isFinite(expiry)
+            ? expiry
+            : undefined;
     }
 
     private onCharacterViewCageInformation = async (
