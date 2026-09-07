@@ -236,6 +236,10 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
             description: "Active restraints",
             required: true,
         },
+        "veratown.bunnyPunishmentArtifact": {
+            type: "object",
+            description: "Durable bunny sign retention artifact",
+        },
         "veratown.roleplayFlags": {
             type: "object",
             description: "Roleplay state flags",

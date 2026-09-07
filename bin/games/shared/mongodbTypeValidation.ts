@@ -61,6 +61,9 @@ export const SCHEMA_TYPE_SPECS = {
         "veratown.updatedAt",
         "veratown.lastPositionAt",
         "veratown.lastAppearanceAt",
+        "veratown.bunnyPunishmentArtifact.appliedAt",
+        "veratown.bunnyPunishmentArtifact.degradedAt",
+        "veratown.bunnyPunishmentArtifact.cleanedAt",
         "crossSystem.updatedAt",
         "progression.updatedAt",
     ],
@@ -330,6 +333,7 @@ export function createVeratownState(
         kennelSessions: [],
         totalTimeInKennels: 0,
         currentRestraints: [],
+        bunnyPunishmentArtifact: undefined,
         roleplayFlags: {
             lastFlagChange: now,
         },

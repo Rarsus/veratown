@@ -205,6 +205,7 @@ export class Veratown {
     private locationEventSystem?: LocationEventSystem;
     private playerRoleSystem?: PlayerRoleSystem;
     private liveCharacterStateSync?: LiveCharacterStateSync;
+    private unifiedCharacterStore?: UnifiedCharacterStore;
 
     // Every successfully-initialized room feature, in registration order.
     // Backs the "/bot feature list|enable|disable" command; systems that
@@ -308,6 +309,7 @@ export class Veratown {
                       DIServiceKeys.UNIFIED_CHARACTER_STORE,
                   )
                 : new UnifiedCharacterStore(db);
+            this.unifiedCharacterStore = unifiedStore;
             const mutationService = this.container.has(
                 DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
             )
@@ -459,6 +461,12 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
+                    undefined,
+                    undefined,
+                    async (artifact) =>
+                        this.unifiedCharacterStore?.recordBunnyPunishmentArtifact(
+                            artifact,
+                        ) ?? Promise.resolve(),
                 ),
         );
         this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
@@ -517,6 +525,20 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
+                    async (character, releaseOperation) => {
+                        const view =
+                            await this.unifiedCharacterStore?.getVeratownView(
+                                character.MemberNumber,
+                            );
+                        const artifact = view?.bunnyPunishmentArtifact;
+                        if (artifact) {
+                            await this.unifiedCharacterStore!.cleanupBunnyPunishment(
+                                character.MemberNumber,
+                                artifact.operationId,
+                                `release_cleanup:${releaseOperation}`,
+                            );
+                        }
+                    },
                 ),
         );
 

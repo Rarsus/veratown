@@ -13,6 +13,7 @@
  */
 
 import { ClientSession, Collection, Db, ObjectId } from "mongodb";
+import { BC_AppearanceItem } from "bc-bot";
 import {
     UnifiedCharacterProfile,
     GameEvent,
@@ -40,8 +41,14 @@ import {
     ChatRoomMapPos,
     CurrentRestraint,
     AuditLogEntry,
+    BunnyPunishmentArtifact,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
+import {
+    AppearanceMutationContext,
+    diffAppearance,
+    getBunnySignState,
+} from "../veratown/shared/appearanceLifecycle";
 import {
     validateCharacterProfileTypes,
     createCasinoState,
@@ -1583,6 +1590,7 @@ export class UnifiedCharacterStore {
             currentAppearance: profile.veratown.currentAppearance,
             lastAppearanceAt: profile.veratown.lastAppearanceAt,
             currentRestraints: profile.veratown.currentRestraints,
+            bunnyPunishmentArtifact: profile.veratown.bunnyPunishmentArtifact,
             cageIncarcerations: profile.veratown.cageIncarcerations ?? [],
             kennelSessions: profile.veratown.kennelSessions ?? [],
             totalTimeInCages: profile.veratown.totalTimeInCages ?? 0,
@@ -1700,6 +1708,301 @@ export class UnifiedCharacterStore {
             },
         );
         return result.modifiedCount > 0;
+    }
+
+    public async recordBunnyPunishmentArtifact(
+        artifact: BunnyPunishmentArtifact,
+    ): Promise<void> {
+        await this.getProfile(artifact.memberNumber);
+        await this.profiles.updateOne(
+            { _id: artifact.memberNumber },
+            {
+                $set: {
+                    "veratown.bunnyPunishmentArtifact": artifact,
+                    "veratown.updatedAt": artifact.appliedAt,
+                    updatedAt: artifact.appliedAt,
+                    lastAccessedAt: artifact.appliedAt,
+                    lastAccessedBy: "veratown",
+                },
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+            },
+        );
+        await this.recordAppearanceLifecycleEvent({
+            timestamp: artifact.appliedAt,
+            type: "bunny_sign_added",
+            source: "veratown",
+            actor: artifact.memberNumber,
+            target: artifact.memberNumber,
+            data: {
+                operationId: artifact.operationId,
+                sign: artifact.sign,
+                appliedAt: artifact.appliedAt,
+                cleanupPolicy: artifact.cleanupPolicy,
+                reason: "bunny_punishment_applied",
+            },
+            processed: false,
+            correlationId: artifact.operationId,
+            deliveryId: `bunny-sign-added:${artifact.operationId}`,
+        });
+    }
+
+    public async cleanupBunnyPunishment(
+        memberNumber: number,
+        operationId: string,
+        reason: string,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        const profile = await this.getProfile(memberNumber);
+        const artifact = profile.veratown.bunnyPunishmentArtifact;
+        if (
+            !artifact ||
+            artifact.operationId !== operationId ||
+            artifact.status === "cleaned"
+        ) {
+            return false;
+        }
+        const cleanedAt = Date.now();
+        await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.bunnyPunishmentArtifact.operationId": operationId,
+            },
+            {
+                $set: {
+                    "veratown.bunnyPunishmentArtifact.status": "cleaned",
+                    "veratown.bunnyPunishmentArtifact.cleanedAt": cleanedAt,
+                    "veratown.bunnyPunishmentArtifact.cleanupReason": reason,
+                    "veratown.updatedAt": cleanedAt,
+                    updatedAt: cleanedAt,
+                    lastAccessedAt: cleanedAt,
+                    lastAccessedBy: "veratown",
+                },
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+            },
+        );
+        await this.recordAppearanceLifecycleEvent({
+            timestamp: cleanedAt,
+            type: "bunny_sign_cleanup",
+            source: "veratown",
+            actor,
+            target: memberNumber,
+            data: {
+                operationId,
+                reason,
+                cleanupPolicy: artifact.cleanupPolicy,
+            },
+            processed: false,
+            correlationId: operationId,
+            deliveryId: `bunny-sign-cleanup:${operationId}:${cleanedAt}`,
+        });
+        return true;
+    }
+
+    public async recordAppearanceMutation(
+        memberNumber: number,
+        before: readonly BC_AppearanceItem[],
+        after: readonly BC_AppearanceItem[],
+        context: AppearanceMutationContext,
+    ): Promise<void> {
+        const diff = diffAppearance(before, after);
+        const profile = await this.getProfile(memberNumber);
+        const artifact = profile.veratown.bunnyPunishmentArtifact;
+        const withinBunnyDiagnosticWindow =
+            artifact?.status === "active" &&
+            context.timestamp - artifact.appliedAt <= 1000 &&
+            context.timestamp >= artifact.appliedAt;
+        if (
+            diff.added.length === 0 &&
+            diff.removed.length === 0 &&
+            diff.replaced.length === 0 &&
+            diff.visibilityChanged.length === 0 &&
+            !withinBunnyDiagnosticWindow
+        ) {
+            return;
+        }
+
+        const previousSign = getBunnySignState(before);
+        const currentSign = getBunnySignState(after);
+        const events: GameEvent[] = [
+            {
+                timestamp: context.timestamp,
+                type: "appearance_mutation",
+                source: "veratown",
+                actor: memberNumber,
+                target: memberNumber,
+                data: {
+                    operationId: context.operationId,
+                    source: context.source,
+                    reason: context.reason,
+                    before,
+                    after,
+                    added: diff.added,
+                    removed: diff.removed,
+                    replaced: diff.replaced,
+                    visibilityChanged: diff.visibilityChanged,
+                },
+                processed: false,
+                correlationId: context.operationId,
+            },
+        ];
+
+        const bunnyData = {
+            operationId: context.operationId,
+            source: context.source,
+            reason: context.reason,
+            previousAppearance: before,
+            currentAppearance: after,
+            previousSign,
+            sign: currentSign,
+        };
+        const tracksBunnySign = Boolean(artifact) || context.source === "bunny";
+        if (
+            tracksBunnySign &&
+            !previousSign.present &&
+            currentSign.present &&
+            context.source !== "bunny"
+        ) {
+            events.push({
+                timestamp: context.timestamp,
+                type:
+                    artifact?.status === "degraded"
+                        ? "bunny_sign_restored"
+                        : "bunny_sign_added",
+                source: "veratown",
+                actor: memberNumber,
+                target: memberNumber,
+                data: bunnyData,
+                processed: false,
+                correlationId: context.operationId,
+            });
+        } else if (
+            tracksBunnySign &&
+            previousSign.present &&
+            !currentSign.present
+        ) {
+            events.push({
+                timestamp: context.timestamp,
+                type: "bunny_sign_removed",
+                source: "veratown",
+                actor: memberNumber,
+                target: memberNumber,
+                data: bunnyData,
+                processed: false,
+                correlationId: context.operationId,
+            });
+            if (context.cleanupAllowed && artifact) {
+                events.push({
+                    timestamp: context.timestamp,
+                    type: "bunny_sign_cleanup",
+                    source: "veratown",
+                    actor: memberNumber,
+                    target: memberNumber,
+                    data: {
+                        ...bunnyData,
+                        cleanupPolicy: artifact?.cleanupPolicy,
+                    },
+                    processed: false,
+                    correlationId: context.operationId,
+                });
+            }
+        } else if (
+            tracksBunnySign &&
+            previousSign.present &&
+            previousSign.visible &&
+            currentSign.present &&
+            !currentSign.visible
+        ) {
+            events.push({
+                timestamp: context.timestamp,
+                type: "bunny_sign_hidden",
+                source: "veratown",
+                actor: memberNumber,
+                target: memberNumber,
+                data: bunnyData,
+                processed: false,
+                correlationId: context.operationId,
+            });
+        } else if (
+            tracksBunnySign &&
+            previousSign.present &&
+            !previousSign.visible &&
+            currentSign.visible
+        ) {
+            events.push({
+                timestamp: context.timestamp,
+                type: "bunny_sign_restored",
+                source: "veratown",
+                actor: memberNumber,
+                target: memberNumber,
+                data: bunnyData,
+                processed: false,
+                correlationId: context.operationId,
+            });
+        }
+
+        const unexpectedBunnyDegradation =
+            artifact &&
+            artifact.status === "active" &&
+            previousSign.present &&
+            (!currentSign.present || !currentSign.visible) &&
+            !context.cleanupAllowed;
+        if (unexpectedBunnyDegradation) {
+            const degradedAt = Date.now();
+            await this.profiles.updateOne(
+                {
+                    _id: memberNumber,
+                    "veratown.bunnyPunishmentArtifact.operationId":
+                        artifact.operationId,
+                },
+                {
+                    $set: {
+                        "veratown.bunnyPunishmentArtifact.status": "degraded",
+                        "veratown.bunnyPunishmentArtifact.degradedAt":
+                            degradedAt,
+                    },
+                },
+            );
+            console.warn("Bunny punishment sign appearance degraded", {
+                memberNumber,
+                operationId: context.operationId,
+                reason: context.reason,
+                before,
+                after,
+            });
+        }
+
+        for (const event of events) {
+            await this.recordAppearanceLifecycleEvent(event);
+        }
+        await this.recordVeratownAuditEntry(
+            memberNumber,
+            "appearance_mutation",
+            memberNumber,
+            {
+                operationId: context.operationId,
+                source: context.source,
+                reason: context.reason,
+                before,
+                after,
+                added: diff.added,
+                removed: diff.removed,
+                replaced: diff.replaced,
+                visibilityChanged: diff.visibilityChanged,
+            },
+        );
+    }
+
+    private async recordAppearanceLifecycleEvent(
+        event: GameEvent,
+    ): Promise<void> {
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
     }
 
     /**

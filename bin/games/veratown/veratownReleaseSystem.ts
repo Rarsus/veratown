@@ -165,6 +165,10 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         private appearanceStateSync?: (
             character: API_Character,
         ) => Promise<void>,
+        private readonly recordBunnyCleanup?: (
+            character: API_Character,
+            releaseOperation: string,
+        ) => Promise<void>,
     ) {
         if (unifiedStore) {
             this.mutationService ??= new GameStateMutationServiceImpl(
@@ -1195,6 +1199,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         releaseOperation,
                         item,
                     );
+                    if (
+                        item.group === "ItemMisc" &&
+                        item.name === "WoodenSign"
+                    ) {
+                        await this.recordBunnyCleanup?.(
+                            character,
+                            releaseOperation,
+                        );
+                    }
                     this.logger?.info(
                         `[ReleaseSystem] Removed unlocked item: ${item.name}`,
                     );

@@ -148,6 +148,23 @@ export interface ReleaseParoleState {
     releasedFromLocation?: ChatRoomMapPos;
 }
 
+export interface BunnyPunishmentArtifact {
+    memberNumber: number;
+    operationId: string;
+    sign: {
+        group: "ItemMisc";
+        asset: "WoodenSign";
+        text: string;
+        text2: string;
+    };
+    appliedAt: number;
+    cleanupPolicy: "explicit_cleanup_only";
+    status: "active" | "degraded" | "cleaned";
+    degradedAt?: number;
+    cleanedAt?: number;
+    cleanupReason?: string;
+}
+
 export interface AuditLogEntry {
     action: string;
     performedBy?: number;
@@ -166,6 +183,7 @@ export interface VeratownState {
     totalTimeInKennels: number;
     currentRestraints: CurrentRestraint[];
     releaseParoleState?: ReleaseParoleState;
+    bunnyPunishmentArtifact?: BunnyPunishmentArtifact;
     roleplayFlags: RoleplayFlags;
     auditLog: AuditLogEntry[];
     roles: string[];
@@ -333,6 +351,12 @@ export interface GameEvent {
         | "effect_applied"
         | "effect_cancelled"
         | "effect_expired"
+        | "appearance_mutation"
+        | "bunny_sign_added"
+        | "bunny_sign_removed"
+        | "bunny_sign_hidden"
+        | "bunny_sign_restored"
+        | "bunny_sign_cleanup"
         | "kidnappers_game_event"
         | "kidnappers_player_message";
     source:
@@ -407,6 +431,7 @@ export interface VeratownView {
     totalTimeInCages: number;
     totalTimeInKennels: number;
     releaseParoleState?: ReleaseParoleState;
+    bunnyPunishmentArtifact?: BunnyPunishmentArtifact;
     roles: string[];
     auditLog: AuditLogEntry[];
 }

@@ -34,6 +34,7 @@ import {
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
+import { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
 
 const BUNNY_SIGN = { group: "ItemMisc", asset: "WoodenSign" } as const;
 const BUNNY_SIGN_TEXT = "I step on";
@@ -58,6 +59,7 @@ export interface BunnyPunishmentResult {
     signFailureReason?: string;
     failureReason?: string;
     rollbackError?: string;
+    operationId?: string;
 }
 
 function verifyBunnySign(
@@ -159,6 +161,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
     private readonly parkTrigger: ReturnType<typeof guardHandler>;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("BunnyParkSystem");
+    private punishmentSequence = 0;
     public constructor(
         conn: API_Connector,
         private readonly stateSync?: (
@@ -166,6 +169,9 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         ) => Promise<void>,
         private readonly random: () => number = Math.random,
         private readonly syncDelayMs = 100,
+        private readonly recordPunishmentArtifact?: (
+            artifact: BunnyPunishmentArtifact,
+        ) => Promise<void>,
     ) {
         super(conn, "bunnyPark", "Bunny park");
         this.bunnyTrigger = this.guardTileHandler(this.onCharacterStepOnBunny);
@@ -309,6 +315,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         ];
         const context = {
             memberNumber: character.MemberNumber,
+            operationId: `bunny-${character.MemberNumber}-${Date.now()}-${++this.punishmentSequence}`,
             bunnyLocation: location,
             configuration: config.name,
             attemptedPieces,
@@ -510,7 +517,12 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         );
                     }
                 },
-                { throwOnSyncFailure: true },
+                {
+                    throwOnSyncFailure: true,
+                    source: "bunny",
+                    reason: "bunny_punishment_applied",
+                    operationId: context.operationId,
+                },
             );
 
             const finalAppearance = character.Appearance.MakeAppearanceBundle();
@@ -528,6 +540,20 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     finalSign.reason ?? "final appearance verification failed",
                 );
             }
+            const appliedAt = Date.now();
+            await this.recordPunishmentArtifact?.({
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                sign: {
+                    group: BUNNY_SIGN.group,
+                    asset: BUNNY_SIGN.asset,
+                    text: BUNNY_SIGN_TEXT,
+                    text2: BUNNY_SIGN_TEXT2,
+                },
+                appliedAt,
+                cleanupPolicy: "explicit_cleanup_only",
+                status: "active",
+            });
 
             const result: BunnyPunishmentResult = {
                 success: true,
@@ -538,6 +564,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 finalVerification,
                 signPresent: finalSign.present,
                 signVisible: finalSign.visible,
+                operationId: context.operationId,
             };
             this.logger.info("Bunny punishment applied", {
                 ...context,
@@ -569,7 +596,12 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         },
                         0,
                         this.stateSync,
-                        { throwOnSyncFailure: true },
+                        {
+                            throwOnSyncFailure: true,
+                            source: "bunny",
+                            reason: "bunny_punishment_rollback",
+                            operationId: context.operationId,
+                        },
                     );
                 } catch (rollbackFailure) {
                     rollbackError =
