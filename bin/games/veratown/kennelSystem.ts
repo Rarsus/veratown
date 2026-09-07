@@ -73,10 +73,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     kennelPos.Y,
                     this.kennelTrigger,
                 );
-                this.conn.chatRoom!.map.removeLeaveRegionTrigger(
-                    this.kennelExitTrigger,
-                );
             }
+            this.conn.chatRoom!.map.removeLeaveRegionTrigger(
+                this.kennelExitTrigger,
+            );
             this.kennelPositions = locations
                 .filter((loc) => loc.type === "kennel" && loc.enabled)
                 .map((kennel) => ({ X: kennel.x!, Y: kennel.y! }));
