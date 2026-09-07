@@ -39,6 +39,7 @@ import {
     EffectMutationResult,
     ChatRoomMapPos,
     CurrentRestraint,
+    AuditLogEntry,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 import {
@@ -57,6 +58,17 @@ import {
     computeProgressionSummary,
     deriveEventSourceFromRewardSource,
 } from "./progressionRules";
+
+export function normalizeVeratownAuditLog(value: unknown): AuditLogEntry[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter(
+        (entry): entry is AuditLogEntry =>
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof (entry as AuditLogEntry).action === "string" &&
+            typeof (entry as AuditLogEntry).performedAt === "number",
+    );
+}
 
 /**
  * Unified character state store with system-specific views and cross-system events.
@@ -2024,23 +2036,89 @@ export class UnifiedCharacterStore {
             details,
         };
 
-        // Keep only last 100 audit entries
-        const auditLog = [...profile.veratown.auditLog, entry].slice(-100);
+        const existingAuditLog = profile.veratown?.auditLog;
+        const normalizedAuditLog = normalizeVeratownAuditLog(existingAuditLog);
+        if (
+            !Array.isArray(existingAuditLog) ||
+            normalizedAuditLog.length !== existingAuditLog.length
+        ) {
+            console.warn("Normalized invalid Veratown audit log", {
+                memberNumber,
+                originalType:
+                    existingAuditLog === null
+                        ? "null"
+                        : Array.isArray(existingAuditLog)
+                          ? "array"
+                          : typeof existingAuditLog,
+                discardedEntries: Array.isArray(existingAuditLog)
+                    ? existingAuditLog.length - normalizedAuditLog.length
+                    : 0,
+            });
+        }
 
-        await this.profiles.updateOne(
-            { _id: memberNumber },
+        await this.profiles.updateOne({ _id: memberNumber }, [
             {
                 $set: {
-                    "veratown.auditLog": auditLog,
+                    "veratown.auditLog": {
+                        $slice: [
+                            {
+                                $concatArrays: [
+                                    {
+                                        $filter: {
+                                            input: {
+                                                $cond: [
+                                                    {
+                                                        $isArray:
+                                                            "$veratown.auditLog",
+                                                    },
+                                                    "$veratown.auditLog",
+                                                    [],
+                                                ],
+                                            },
+                                            as: "audit",
+                                            cond: {
+                                                $and: [
+                                                    {
+                                                        $eq: [
+                                                            {
+                                                                $type: "$$audit",
+                                                            },
+                                                            "object",
+                                                        ],
+                                                    },
+                                                    {
+                                                        $eq: [
+                                                            {
+                                                                $type: "$$audit.action",
+                                                            },
+                                                            "string",
+                                                        ],
+                                                    },
+                                                    {
+                                                        $isNumber:
+                                                            "$$audit.performedAt",
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                    [entry],
+                                ],
+                            },
+                            -100,
+                        ],
+                    },
                     "veratown.updatedAt": now,
-                    "veratown.version": profile.veratown.version + 1,
+                    "veratown.version": {
+                        $add: [{ $ifNull: ["$veratown.version", 0] }, 1],
+                    },
                     lastAccessedAt: now,
                     lastAccessedBy: "veratown",
                     updatedAt: now,
-                    version: profile.version + 1,
+                    version: { $add: [{ $ifNull: ["$version", 0] }, 1] },
                 },
             },
-        );
+        ]);
     }
 
     /**

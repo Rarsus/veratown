@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
 import { EventBus } from "../eventBus";
-import { UnifiedCharacterStore } from "../unifiedCharacterStore";
+import {
+    normalizeVeratownAuditLog,
+    UnifiedCharacterStore,
+} from "../unifiedCharacterStore";
+import { GameStateMutationServiceImpl } from "../gameStateMutationService";
 import {
     createCasinoState,
     createCrossSystemState,
@@ -84,6 +88,26 @@ function createStore() {
         },
     };
 }
+
+test("normalizeVeratownAuditLog repairs legacy shapes and preserves valid entries", () => {
+    const entry = { action: "entered", performedAt: 1, performedBy: 2 };
+    assert.deepEqual(normalizeVeratownAuditLog(undefined), []);
+    assert.deepEqual(normalizeVeratownAuditLog(null), []);
+    assert.deepEqual(normalizeVeratownAuditLog({}), []);
+    assert.deepEqual(normalizeVeratownAuditLog("invalid"), []);
+    assert.deepEqual(
+        normalizeVeratownAuditLog([entry, { action: "invalid" }]),
+        [entry],
+    );
+});
+
+test("audited mutations tolerate a legacy Veratown audit log", async () => {
+    const { store, profile } = createStore();
+    profile.veratown.auditLog = null;
+    const service = new GameStateMutationServiceImpl(store, new EventBus());
+
+    await service.updateCharacterName(1, "Renamed");
+});
 
 test("UnifiedCharacterStore covers non-Mongo state and event workflows", async () => {
     const { store, profile, events } = createStore();

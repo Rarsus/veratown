@@ -59,7 +59,7 @@ import {
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
 import { createLogger } from "../logging";
-import { isBotRecoveryReady } from "../botConnections";
+import { isBotRecoveryReady, verifyBotMapPosition } from "../botConnections";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -771,20 +771,44 @@ export class Veratown {
         position: { X: number; Y: number },
         role: string,
     ): Promise<boolean> {
+        let movementError: unknown;
         try {
             await connection.moveOnMapAndWait(position.X, position.Y);
+        } catch (error) {
+            movementError = error;
+        }
+        const movementTimedOut =
+            movementError instanceof Error &&
+            movementError.name === "MapPositionTimeout";
+        const observation = await verifyBotMapPosition(
+            connection,
+            position,
+            this.conn.chatRoom?.Name,
+            movementTimedOut ? 3 : 1,
+        );
+        if (observation.state === "verified" && movementTimedOut) {
+            observation.state = "verified-after-timeout";
+        }
+        if (
+            observation.state === "verified" ||
+            observation.state === "verified-after-timeout"
+        ) {
             logger.info("Bot map position ready", {
                 role,
-                position,
+                movementTimedOut,
+                movementError:
+                    movementError instanceof Error
+                        ? movementError.name
+                        : undefined,
+                ...observation,
             });
             return true;
-        } catch (error) {
-            logger.error("Bot map position unavailable", error, {
-                role,
-                position,
-            });
-            return false;
         }
+        logger.error("Bot map position unavailable", movementError, {
+            role,
+            ...observation,
+        });
+        return false;
     }
 
     private updateContainmentReadiness(): void {
@@ -792,14 +816,16 @@ export class Veratown {
             connection: API_Connector | undefined,
             position: { X: number; Y: number },
         ): boolean => {
-            const mapPosition = connection?.Player?.MapPos;
+            const observedPosition = connection?.chatRoom?.findMember(
+                connection.Player.MemberNumber,
+            )?.MapPos;
             return (
                 !!connection &&
                 isBotRecoveryReady(connection) &&
                 connection.chatRoom?.Name === this.conn.chatRoom?.Name &&
                 !!connection.chatRoom?.map &&
-                mapPosition?.X === position.X &&
-                mapPosition?.Y === position.Y
+                observedPosition?.X === position.X &&
+                observedPosition.Y === position.Y
             );
         };
 

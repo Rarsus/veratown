@@ -233,8 +233,49 @@ test("recovery fails when the requested map position cannot be verified", async 
     );
     assert.match(
         getBotRecoveryStatuses(connections as never)[0].lastFailure ?? "",
-        /not verified/,
+        /map position/,
     );
+    stopSupervisingBotConnections(connections as never);
+});
+
+test("recovery verifies a position reached after MapPositionTimeout", async () => {
+    const timeout = Object.assign(
+        new Error("movement acknowledgement delayed"),
+        {
+            name: "MapPositionTimeout",
+        },
+    );
+    const main = createRecoveryConnection(timeout, true, true);
+    const connections = { main };
+
+    superviseBotConnections(connections as never, config({}));
+    main.emit("Disconnected");
+    main.emit("Connected");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const status = getBotRecoveryStatuses(connections as never)[0];
+    assert.equal(status.state, "connected");
+    assert.equal(status.position?.state, "verified-after-timeout");
+    assert.deepEqual(status.position?.observedPosition, { X: 10, Y: 8 });
+    stopSupervisingBotConnections(connections as never);
+});
+
+test("recovery remains degraded when the observed room is stale", async () => {
+    const main = createRecoveryConnection(undefined, true, false, "stale-room");
+    const connections = { main };
+
+    superviseBotConnections(
+        connections as never,
+        config({ room: { Name: "expected-room" } as ConfigFile["room"] }),
+    );
+    main.emit("Disconnected");
+    main.emit("Connected");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    const status = getBotRecoveryStatuses(connections as never)[0];
+    assert.equal(status.state, "failed");
+    assert.equal(status.position?.state, "room-not-ready");
+    assert.equal(status.position?.roomName, "stale-room");
     stopSupervisingBotConnections(connections as never);
 });
 
@@ -271,6 +312,8 @@ function createConnection() {
 function createRecoveryConnection(
     error?: Error | Error[],
     updatePosition = true,
+    updatePositionBeforeError = false,
+    roomName?: string,
 ) {
     const listeners = new Map<string, Set<() => void>>();
     const moves: Array<{ X: number; Y: number }> = [];
@@ -279,10 +322,18 @@ function createRecoveryConnection(
         MemberNumber: 1,
         MapPos: { X: 0, Y: 0 },
     };
+    const observedPlayer = {
+        MemberNumber: 1,
+        MapPos: { X: 0, Y: 0 },
+    };
     let descriptions = 0;
     return {
         Player: player,
-        chatRoom: { map: {} },
+        chatRoom: {
+            map: {},
+            Name: roomName,
+            findMember: () => observedPlayer,
+        },
         moves,
         get descriptions() {
             return descriptions;
@@ -305,11 +356,24 @@ function createRecoveryConnection(
             moves.push({ X, Y });
             if (Array.isArray(error)) {
                 const nextError = error.shift();
-                if (nextError) throw nextError;
+                if (nextError) {
+                    if (updatePositionBeforeError) {
+                        player.MapPos = { X, Y };
+                        observedPlayer.MapPos = { X, Y };
+                    }
+                    throw nextError;
+                }
             } else if (error) {
+                if (updatePositionBeforeError) {
+                    player.MapPos = { X, Y };
+                    observedPlayer.MapPos = { X, Y };
+                }
                 throw error;
             }
-            if (updatePosition) player.MapPos = { X, Y };
+            if (updatePosition) {
+                player.MapPos = { X, Y };
+                observedPlayer.MapPos = { X, Y };
+            }
         },
         setBotDescription: () => {
             descriptions += 1;

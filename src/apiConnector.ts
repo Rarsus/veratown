@@ -915,7 +915,10 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         y: number,
         timeoutMs: number = 5_000,
     ): Promise<void> {
-        if (this.Player.MapPos.X === x && this.Player.MapPos.Y === y) return;
+        const observedPosition =
+            this.chatRoom?.findMember(this.Player.MemberNumber)?.MapPos ??
+            this.Player.MapPos;
+        if (observedPosition.X === x && observedPosition.Y === y) return;
 
         await new Promise<void>((resolve, reject) => {
             const onMapPosition = (
