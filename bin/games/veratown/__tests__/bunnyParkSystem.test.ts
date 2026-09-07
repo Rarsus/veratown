@@ -122,6 +122,8 @@ test("bunny punishment applies and persists each configured restraint set", asyn
 
         assert.equal(result.success, true, config.name);
         assert.equal(result.finalVerification, true, config.name);
+        assert.equal(result.signPresent, true, config.name);
+        assert.equal(result.signVisible, true, config.name);
         assert.equal(persisted.length, 1, config.name);
         for (const piece of config.pieces) {
             assert.ok(
@@ -132,14 +134,77 @@ test("bunny punishment applies and persists each configured restraint set", asyn
                 `${config.name}: ${piece.group}/${piece.asset}`,
             );
         }
-        assert.equal(
-            persisted[0].some(
+        const sign = persisted[0].find(
+            (item: any) =>
+                item.Group === "ItemMisc" && item.Name === "WoodenSign",
+        );
+        assert.equal(sign?.Property?.Text, "I step on", config.name);
+        assert.equal(sign?.Property?.Text2, "Bunnies", config.name);
+    }
+});
+
+test("bunny punishment restores a sign omitted after ropes were retained", async () => {
+    const config = BUNNY_RESTRAINT_CONFIGS[1];
+    const created = createCharacter(15, {
+        initialAppearance: config.pieces.map((piece) => ({
+            Group: piece.group,
+            Name: piece.asset,
+            Property: {},
+        })),
+    });
+    const persisted: any[] = [];
+    const system = new BunnyParkSystem(
+        {} as any,
+        async (character) => {
+            persisted.push(character.Appearance.MakeAppearanceBundle());
+        },
+        deterministicRandom(1),
+        0,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        config,
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.finalVerification, true);
+    assert.equal(result.signPresent, true);
+    assert.equal(result.signVisible, true);
+    assert.equal(
+        persisted
+            .at(-1)
+            .some(
                 (item: any) =>
                     item.Group === "ItemMisc" && item.Name === "WoodenSign",
             ),
-            true,
-        );
-    }
+        true,
+    );
+});
+
+test("bunny punishment fails when synchronization removes or hides the sign", async () => {
+    const created = createCharacter(16);
+    let syncCount = 0;
+    const system = new BunnyParkSystem(
+        {} as any,
+        async (character) => {
+            syncCount += 1;
+            if (syncCount === 1) character.Appearance.RemoveItem("ItemMisc");
+        },
+        deterministicRandom(0),
+        0,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.finalVerification, false);
+    assert.equal(result.signPresent, false);
+    assert.equal(result.signVisible, false);
+    assert.match(result.failureReason, /WoodenSign/);
 });
 
 test("bunny punishment reports failures and rolls back partial appearance changes", async () => {

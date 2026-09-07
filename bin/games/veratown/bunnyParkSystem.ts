@@ -36,6 +36,14 @@ import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 const BUNNY_SIGN = { group: "ItemMisc", asset: "WoodenSign" } as const;
+const BUNNY_SIGN_TEXT = "I step on";
+const BUNNY_SIGN_TEXT2 = "Bunnies";
+
+interface BunnySignVerification {
+    present: boolean;
+    visible: boolean;
+    reason?: string;
+}
 
 export interface BunnyPunishmentResult {
     success: boolean;
@@ -45,8 +53,60 @@ export interface BunnyPunishmentResult {
     appliedPieces: string[];
     failedPieces: string[];
     finalVerification: boolean;
+    signPresent: boolean;
+    signVisible: boolean;
+    signFailureReason?: string;
     failureReason?: string;
     rollbackError?: string;
+}
+
+function verifyBunnySign(
+    appearance: readonly {
+        Group: string;
+        Name: string;
+        Property?: unknown;
+    }[],
+): BunnySignVerification {
+    const sign = appearance.find(
+        (item) =>
+            item.Group === BUNNY_SIGN.group && item.Name === BUNNY_SIGN.asset,
+    );
+    if (!sign) {
+        return {
+            present: false,
+            visible: false,
+            reason: "WoodenSign is missing from the appearance bundle",
+        };
+    }
+
+    const extended = getExtendedAssetDef(
+        AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
+    );
+    const property = (sign.Property ?? {}) as {
+        Text?: unknown;
+        Text2?: unknown;
+    };
+    const text = property.Text;
+    const text2 = property.Text2;
+    const textConfig =
+        extended?.Archetype === "text" ? extended.MaxLength : undefined;
+    const textFits =
+        typeof text === "string" &&
+        typeof text2 === "string" &&
+        (!textConfig?.Text || text.length <= textConfig.Text) &&
+        (!textConfig?.Text2 || text2.length <= textConfig.Text2);
+    const visible =
+        textFits && text === BUNNY_SIGN_TEXT && text2 === BUNNY_SIGN_TEXT2;
+
+    return {
+        present: true,
+        visible,
+        ...(visible
+            ? {}
+            : {
+                  reason: "WoodenSign is present but its render text properties are incomplete or invalid",
+              }),
+    };
 }
 
 export function validateBunnyRestraintConfig(
@@ -254,22 +314,27 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             attemptedPieces,
         };
 
+        const currentAppearance = character.Appearance.MakeAppearanceBundle();
+        const currentSign = verifyBunnySign(currentAppearance);
         if (
             BUNNY_RESTRAINT_CONFIGS.some((candidate) =>
                 candidate.pieces.every((piece) =>
-                    character.Appearance.MakeAppearanceBundle().some(
+                    currentAppearance.some(
                         (item) =>
                             item.Group === piece.group &&
                             item.Name === piece.asset,
                     ),
                 ),
-            )
+            ) &&
+            currentSign.visible
         ) {
             this.logger.info("Bunny punishment already applied", {
                 ...context,
                 appliedPieces: [],
                 failedPieces: [],
                 finalVerification: true,
+                signPresent: currentSign.present,
+                signVisible: currentSign.visible,
             });
             return {
                 success: true,
@@ -279,6 +344,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces: [],
                 failedPieces: [],
                 finalVerification: true,
+                signPresent: currentSign.present,
+                signVisible: currentSign.visible,
             };
         }
 
@@ -316,6 +383,10 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces: [],
                 failedPieces: permissionFailures,
                 finalVerification: false,
+                signPresent: currentSign.present,
+                signVisible: currentSign.visible,
+                signFailureReason:
+                    currentSign.reason ?? "WoodenSign was not applied",
                 failureReason,
             };
             this.logger.error(
@@ -325,6 +396,9 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     ...context,
                     failedPieces: result.failedPieces,
                     finalVerification: false,
+                    signPresent: result.signPresent,
+                    signVisible: result.signVisible,
+                    signFailureReason: result.signFailureReason,
                     failureReason,
                 },
             );
@@ -384,28 +458,75 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                                 `AddItem returned no item for ${signKey}`,
                             );
                         }
-                        sign.setProperty("Text", "I step on");
-                        sign.setProperty("Text2", "Bunnies");
+                        sign.setProperty("Text", BUNNY_SIGN_TEXT);
+                        sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
                         appliedPieces.push(signKey);
+                        this.logger.info("Bunny punishment sign added", {
+                            ...context,
+                            signPresent: true,
+                            signVisible: true,
+                        });
                     } catch (error) {
                         failedPieces.push(signKey);
                         throw error;
                     }
                 },
                 this.syncDelayMs,
-                this.stateSync,
+                async (current) => {
+                    const beforePersistence = verifyBunnySign(
+                        current.Appearance.MakeAppearanceBundle(),
+                    );
+                    this.logger.info(
+                        "Bunny punishment sign post-sync verification",
+                        {
+                            ...context,
+                            signPresent: beforePersistence.present,
+                            signVisible: beforePersistence.visible,
+                            signFailureReason: beforePersistence.reason,
+                        },
+                    );
+                    if (!beforePersistence.visible) {
+                        throw new Error(
+                            beforePersistence.reason ??
+                                "WoodenSign failed pre-persistence verification",
+                        );
+                    }
+
+                    await this.stateSync?.(current);
+
+                    const afterPersistence = verifyBunnySign(
+                        current.Appearance.MakeAppearanceBundle(),
+                    );
+                    this.logger.info("Bunny punishment sign persisted", {
+                        ...context,
+                        signPresent: afterPersistence.present,
+                        signVisible: afterPersistence.visible,
+                        signFailureReason: afterPersistence.reason,
+                    });
+                    if (!afterPersistence.visible) {
+                        throw new Error(
+                            afterPersistence.reason ??
+                                "WoodenSign was removed or normalized after persistence",
+                        );
+                    }
+                },
                 { throwOnSyncFailure: true },
             );
 
             const finalAppearance = character.Appearance.MakeAppearanceBundle();
-            const finalVerification = config.pieces.every((piece) =>
+            const finalRestraintsVerified = config.pieces.every((piece) =>
                 finalAppearance.some(
                     (item) =>
                         item.Group === piece.group && item.Name === piece.asset,
                 ),
             );
+            const finalSign = verifyBunnySign(finalAppearance);
+            const finalVerification =
+                finalRestraintsVerified && finalSign.visible;
             if (!finalVerification) {
-                throw new Error("final appearance verification failed");
+                throw new Error(
+                    finalSign.reason ?? "final appearance verification failed",
+                );
             }
 
             const result: BunnyPunishmentResult = {
@@ -415,12 +536,16 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification,
+                signPresent: finalSign.present,
+                signVisible: finalSign.visible,
             };
             this.logger.info("Bunny punishment applied", {
                 ...context,
                 appliedPieces,
                 failedPieces,
                 finalVerification,
+                signPresent: finalSign.present,
+                signVisible: finalSign.visible,
             });
             return result;
         } catch (error) {
@@ -454,6 +579,9 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 }
             }
 
+            const failureSign = verifyBunnySign(
+                character.Appearance.MakeAppearanceBundle(),
+            );
             const result: BunnyPunishmentResult = {
                 success: false,
                 configuration: config.name,
@@ -461,6 +589,9 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification: false,
+                signPresent: failureSign.present,
+                signVisible: failureSign.visible,
+                signFailureReason: failureSign.reason,
                 failureReason:
                     error instanceof Error ? error.message : String(error),
                 rollbackError,
@@ -470,6 +601,10 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification: false,
+                signPresent: result.signPresent,
+                signVisible: result.signVisible,
+                signFailureReason: result.signFailureReason,
+                failureReason: result.failureReason,
                 rollbackError,
             });
             return result;

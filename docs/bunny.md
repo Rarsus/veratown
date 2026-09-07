@@ -93,12 +93,15 @@ any other asset name that exists for a given group in the game's asset data
 ## Wooden sign
 
 After the restraints are applied, a `WoodenSign` (`ItemMisc`) is also added
-with two lines of text:
+with two lines of text. `WoodenSign` is a `text` extended item with a maximum
+of 12 characters per line and a dynamic after-draw hook, so both properties
+must be present for the sign to render and remain visible after synchronization:
 
 ```ts
 sign.setProperty("Text", "I step on");
 sign.setProperty("Text2", "Bunnies");
 ```
 
-Edit these two strings in `onCharacterStepOnBunny` to change what the sign
-says (each is one line of text on the sign).
+The punishment verification checks the bundle for the sign and checks both
+render text properties, not just the item name. If synchronization removes or
+normalizes the sign, the punishment is rolled back and reported as a failure.
