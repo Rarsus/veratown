@@ -218,6 +218,26 @@ test("recovery retries a transient map-position failure", async () => {
     stopSupervisingBotConnections(connections as never);
 });
 
+test("recovery fails when the requested map position cannot be verified", async () => {
+    const main = createRecoveryConnection(undefined, false);
+    const connections = { main };
+
+    superviseBotConnections(connections as never, config({}));
+    main.emit("Disconnected");
+    main.emit("Connected");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    assert.equal(
+        getBotRecoveryStatuses(connections as never)[0].state,
+        "failed",
+    );
+    assert.match(
+        getBotRecoveryStatuses(connections as never)[0].lastFailure ?? "",
+        /not verified/,
+    );
+    stopSupervisingBotConnections(connections as never);
+});
+
 function createConnection() {
     const listeners = new Map<string, Set<() => void>>();
     const onceListeners = new Map<string, Set<() => void>>();
@@ -248,12 +268,21 @@ function createConnection() {
     };
 }
 
-function createRecoveryConnection(error?: Error | Error[]) {
+function createRecoveryConnection(
+    error?: Error | Error[],
+    updatePosition = true,
+) {
     const listeners = new Map<string, Set<() => void>>();
     const moves: Array<{ X: number; Y: number }> = [];
+    const player = {
+        Name: "test-bot",
+        MemberNumber: 1,
+        MapPos: { X: 0, Y: 0 },
+    };
     let descriptions = 0;
     return {
-        Player: { Name: "test-bot", MemberNumber: 1 },
+        Player: player,
+        chatRoom: { map: {} },
         moves,
         get descriptions() {
             return descriptions;
@@ -280,6 +309,7 @@ function createRecoveryConnection(error?: Error | Error[]) {
             } else if (error) {
                 throw error;
             }
+            if (updatePosition) player.MapPos = { X, Y };
         },
         setBotDescription: () => {
             descriptions += 1;

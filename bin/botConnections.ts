@@ -102,6 +102,25 @@ function superviseBotConnection(
                             position.X,
                             position.Y,
                         );
+                        const mapPosition = connection.Player?.MapPos;
+                        const roomName = config.room?.Name;
+                        if (
+                            !connection.chatRoom?.map ||
+                            (roomName && connection.chatRoom.Name !== roomName)
+                        ) {
+                            throw new Error(
+                                `Bot room/map not verified${roomName ? ` (${roomName})` : ""}`,
+                            );
+                        }
+                        if (
+                            !mapPosition ||
+                            mapPosition.X !== position.X ||
+                            mapPosition.Y !== position.Y
+                        ) {
+                            throw new Error(
+                                `Bot map position not verified (${position.X}, ${position.Y})`,
+                            );
+                        }
                     }
                     if (stopped || currentEpoch !== epoch) return;
 

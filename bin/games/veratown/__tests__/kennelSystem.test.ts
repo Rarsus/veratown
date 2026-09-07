@@ -121,6 +121,35 @@ test("KennelSystem reconciles an occupant after location reload", async () => {
     assert.deepEqual(mutations.entries, []);
 });
 
+test("KennelSystem recovers a live Kennel device outside the tile", async () => {
+    const created = createCharacter(11);
+    created.character.MapPos = { X: 1, Y: 1 };
+    created.character.Appearance.AddItem({});
+    const mutations = createMutationService();
+    const { connector } = createConnector([created.character]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+
+    assert.deepEqual(mutations.entries, [11]);
+});
+
 test("KennelSystem rolls back persistence when appearance mutation fails", async () => {
     const { character } = createCharacter(9);
     character.Appearance.AddItem = () => {
@@ -141,4 +170,26 @@ test("KennelSystem rolls back persistence when appearance mutation fails", async
     );
     assert.deepEqual(mutations.entries, [9]);
     assert.deepEqual(mutations.exits, [9]);
+});
+
+test("KennelSystem rolls back both mutations when live-state sync fails", async () => {
+    const created = createCharacter(10);
+    const mutations = createMutationService();
+    const { connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        async () => {
+            throw new Error("state sync unavailable");
+        },
+        async () => {},
+    );
+
+    await assert.rejects(
+        () => (system as any).onCharacterEnterKennel(created.character),
+        /state sync unavailable/,
+    );
+    assert.equal(created.device, undefined);
+    assert.deepEqual(mutations.entries, [10]);
+    assert.deepEqual(mutations.exits, [10]);
 });

@@ -35,6 +35,7 @@ export interface VeratownFeatureSystem {
     // Refreshes database-backed positions and replaces any dynamic triggers.
     // Features without location-backed triggers may omit this method.
     reloadLocations?(locations: readonly VeratownLocationDoc[]): Promise<void>;
+    isReady?(): boolean;
     // Whether this feature is currently active. Handlers should check this
     // and no-op (optionally telling the character it's disabled) when
     // false, rather than the orchestrator trying to physically add/remove
