@@ -58,6 +58,12 @@ import { LocationEventSystem } from "./veratown/locationEventSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import { LiveCharacterStateSync } from "./veratown/liveCharacterStateSync";
 import {
+    evaluateContainmentReadiness,
+    type ContainmentDependency,
+    type ContainmentFeature,
+    type ContainmentReadinessDiagnostic,
+} from "./veratown/containmentReadiness";
+import {
     syncAppearanceMutation,
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
@@ -202,7 +208,10 @@ export class Veratown {
     private pendingFeatureRegistrations: Promise<void>[] = [];
     private locationSnapshot: VeratownLocationDoc[] = [];
     private locationReload?: Promise<void>;
-    private containmentReady = false;
+    private containmentReadiness = new Map<
+        ContainmentFeature,
+        ContainmentReadinessDiagnostic
+    >();
 
     // Only set when mongo_uri/mongo_db are configured; without it, the map
     // layout falls back to the built-in default (MAP, from veratownConfig.ts)
@@ -334,7 +343,7 @@ export class Veratown {
                     SHOWER_BOT2_HOME_POSITION,
                 ),
         );
-        this.conn2?.on("Disconnected", this.onBotDisconnected);
+        this.conn2?.on("Disconnected", this.onAuxiliaryBotDisconnected);
         this.conn3?.on(
             "Connected",
             () =>
@@ -344,7 +353,7 @@ export class Veratown {
                     GAME_MISTRESS_POSITION,
                 ),
         );
-        this.conn3?.on("Disconnected", this.onBotDisconnected);
+        this.conn3?.on("Disconnected", this.onAuxiliaryBotDisconnected);
 
         // Each system is constructed and registered independently: if one
         // fails (eg. a bug in a single feature), the others are unaffected
@@ -505,6 +514,13 @@ export class Veratown {
 
         this.commandParser.register("help", this.onCommandHelp);
         this.commandParser.register("release", async (sender, msg, args) => {
+            if (!this.isContainmentFeatureReady("release")) {
+                this.conn.reply(
+                    msg,
+                    "(Emergency release is currently unavailable. Please contact staff.)",
+                );
+                return;
+            }
             // Handle confirmation subcommands for release confirmation mechanism
             if (args[0]?.toLowerCase() === "yes") {
                 await this.releaseSystem?.handleConfirmationResponse(
@@ -594,7 +610,7 @@ export class Veratown {
             });
         }
 
-        this.setContainmentReady(false);
+        this.setContainmentFeaturesEnabled(false);
         await this.setupRoom();
         await this.setupCharacter();
         this.attachContainmentFeatures();
@@ -651,16 +667,63 @@ export class Veratown {
                 (feature) => `${feature.key}=${feature.enabled ? "on" : "off"}`,
             )
             .join(", ");
+        const containment = (
+            Object.keys(this.getContainmentReadiness()) as ContainmentFeature[]
+        )
+            .map(
+                (feature) =>
+                    `${feature}=${this.isContainmentFeatureReady(feature) ? "ready" : "unavailable"}`,
+            )
+            .join(", ");
         return [
             `Veratown: ${this.conn.isConnected() ? "connected" : "disconnected"}`,
             `locations=${this.locationSnapshot.length}`,
             `database=${this.locationStore ? "configured" : "fallback"}`,
             `features=${features || "none"}`,
+            `containment=${containment}`,
         ].join("\n");
     }
 
     public isContainmentReady(): boolean {
-        return this.containmentReady;
+        return (
+            this.isContainmentFeatureReady("cage") &&
+            this.isContainmentFeatureReady("kennel")
+        );
+    }
+
+    public isContainmentFeatureReady(feature: ContainmentFeature): boolean {
+        return this.containmentReadiness.get(feature)?.ready ?? false;
+    }
+
+    public getContainmentReadiness(): Record<
+        ContainmentFeature,
+        ContainmentReadinessDiagnostic
+    > {
+        const features: ContainmentFeature[] = [
+            "cage",
+            "kennel",
+            "release",
+            "shower",
+            "casino",
+        ];
+        const readiness = Object.fromEntries(
+            features.map((feature) => [
+                feature,
+                this.containmentReadiness.get(feature) ??
+                    evaluateContainmentReadiness(feature, [
+                        {
+                            name: "Veratown initialization",
+                            ready: false,
+                            reason: "capability readiness has not been evaluated",
+                            recoveryAction:
+                                "complete room, map, and dependency initialization",
+                        },
+                    ]),
+            ]),
+        ) as Record<ContainmentFeature, ContainmentReadinessDiagnostic>;
+        return {
+            ...readiness,
+        };
     }
 
     public getContainmentDiagnostics(): Record<string, unknown> {
@@ -671,15 +734,28 @@ export class Veratown {
             mapIdentity: this.conn.chatRoom?.map
                 ? getLifecycleObjectId(this.conn.chatRoom.map)
                 : undefined,
+            readiness: this.getContainmentReadiness(),
             cage: this.cageSystem?.getDiagnostics(),
             kennel: this.kennelSystem?.getDiagnostics(),
         };
     }
 
-    private setContainmentReady(ready: boolean): void {
-        this.containmentReady = ready;
-        if (this.cageSystem) this.cageSystem.enabled = ready;
-        if (this.kennelSystem) this.kennelSystem.enabled = ready;
+    private setContainmentFeaturesEnabled(enabled: boolean): void {
+        if (this.cageSystem) this.cageSystem.enabled = enabled;
+        if (this.kennelSystem) this.kennelSystem.enabled = enabled;
+    }
+
+    private setContainmentReadiness(
+        readiness: Record<ContainmentFeature, ContainmentReadinessDiagnostic>,
+    ): void {
+        this.containmentReadiness = new Map(
+            Object.entries(readiness) as Array<
+                [ContainmentFeature, ContainmentReadinessDiagnostic]
+            >,
+        );
+        if (this.cageSystem) this.cageSystem.enabled = readiness.cage.ready;
+        if (this.kennelSystem)
+            this.kennelSystem.enabled = readiness.kennel.ready;
     }
 
     public getRegionManager(): RegionManager {
@@ -711,7 +787,8 @@ export class Veratown {
         const recoveryEpoch = getBotRecoveryEpoch(this.conn);
         try {
             if (!(await this.waitForBotRecovery(this.conn, recoveryEpoch))) {
-                this.setContainmentReady(false);
+                this.setContainmentFeaturesEnabled(false);
+                this.updateContainmentReadiness();
                 logger.warn("Main bot recovery remains degraded", {
                     position: RECEPTIONIST_POSITION,
                 });
@@ -731,20 +808,26 @@ export class Veratown {
             this.updateContainmentReadiness();
         } catch (error) {
             logger.error("Bot reconnect setup failed", error);
-            this.setContainmentReady(false);
+            this.setContainmentFeaturesEnabled(false);
+            this.updateContainmentReadiness();
         }
     };
 
     private onBotDisconnected = () => {
         this.detachContainmentFeatures();
-        this.setContainmentReady(false);
+        this.setContainmentFeaturesEnabled(false);
+        this.updateContainmentReadiness();
     };
 
     private detachContainmentFeatures(): void {
-        this.setContainmentReady(false);
+        this.setContainmentFeaturesEnabled(false);
         this.cageSystem?.detachFromRoom?.();
         this.kennelSystem?.detachFromRoom?.();
     }
+
+    private onAuxiliaryBotDisconnected = () => {
+        this.updateContainmentReadiness();
+    };
 
     private attachContainmentFeatures(): void {
         this.cageSystem?.attachToRoom?.();
@@ -965,27 +1048,122 @@ export class Veratown {
             !this.conn3 || atPosition(this.conn3, GAME_MISTRESS_POSITION);
         const kennelTriggersReady = this.kennelSystem?.isReady() ?? false;
         const cageTriggersReady = this.cageSystem?.isReady() ?? false;
-        const ready =
-            mainReady &&
-            showerReady &&
-            casinoReady &&
-            kennelTriggersReady &&
-            cageTriggersReady;
-        this.setContainmentReady(ready);
+        const persistenceReady = this.container.has(
+            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+        );
+        const dependency = (
+            name: string,
+            ready: boolean,
+            reason: string,
+            recoveryAction: string,
+        ): ContainmentDependency => ({
+            name,
+            ready,
+            reason,
+            recoveryAction,
+        });
+        const mainDependency = dependency(
+            "main bot room/map position",
+            mainReady,
+            mainReady
+                ? "verified"
+                : "main bot room, map, recovery, or position is unavailable",
+            "reconnect the main bot and restore the receptionist position",
+        );
+        const persistenceDependency = dependency(
+            "authoritative containment persistence",
+            persistenceReady,
+            persistenceReady
+                ? "mutation service is registered"
+                : "game-state mutation service is unavailable",
+            "restore the mutation service and reconcile active containment",
+        );
+        const cageRecoveryDependency = dependency(
+            "authoritative cage recovery",
+            this.cageSystem?.isRecoveryReady() ?? false,
+            this.cageSystem?.getRecoveryReadinessReason() ??
+                "cage recovery has not completed",
+            "reload cage locations and reconcile active cages",
+        );
+        const kennelRecoveryDependency = dependency(
+            "authoritative kennel recovery",
+            this.kennelSystem?.isRecoveryReady() ?? false,
+            this.kennelSystem?.getRecoveryReadinessReason() ??
+                "kennel recovery has not completed",
+            "reload kennel locations and reconcile active kennels",
+        );
+        const showerDependency = dependency(
+            "shower narrator position",
+            showerReady,
+            this.conn2
+                ? showerReady
+                    ? "verified"
+                    : "shower bot room, map, recovery, or position is unavailable"
+                : "optional shower narrator is not configured; main bot narration is used",
+            "reconnect the shower narrator and restore its home position",
+        );
+        const casinoDependency = dependency(
+            "casino bot position",
+            casinoReady,
+            this.conn3
+                ? casinoReady
+                    ? "verified"
+                    : "casino bot room, map, recovery, or position is unavailable"
+                : "casino bot is not configured",
+            "reconnect the casino bot and restore the game mistress position",
+        );
+        const readiness = {
+            cage: evaluateContainmentReadiness("cage", [
+                mainDependency,
+                dependency(
+                    "cage triggers",
+                    cageTriggersReady,
+                    cageTriggersReady
+                        ? "registered"
+                        : "cage triggers are not registered",
+                    "rebind the cage system to the current room and map",
+                ),
+                persistenceDependency,
+                cageRecoveryDependency,
+            ]),
+            kennel: evaluateContainmentReadiness("kennel", [
+                mainDependency,
+                dependency(
+                    "kennel triggers",
+                    kennelTriggersReady,
+                    kennelTriggersReady
+                        ? "registered"
+                        : "kennel triggers are not registered",
+                    "rebind the kennel system to the current room and map",
+                ),
+                persistenceDependency,
+                kennelRecoveryDependency,
+            ]),
+            release: evaluateContainmentReadiness("release", [
+                mainDependency,
+                persistenceDependency,
+            ]),
+            shower: evaluateContainmentReadiness("shower", [
+                mainDependency,
+                showerDependency,
+            ]),
+            casino: evaluateContainmentReadiness("casino", [casinoDependency]),
+        } satisfies Record<ContainmentFeature, ContainmentReadinessDiagnostic>;
+        const previous = this.containmentReadiness;
+        this.setContainmentReadiness(readiness);
 
-        const roles = {
-            main: mainReady,
-            shower: showerReady,
-            casino: casinoReady,
-            kennelTriggers: kennelTriggersReady,
-            cageTriggers: cageTriggersReady,
-        };
-        if (ready && casinoReady) {
-            logger.info("Veratown containment readiness confirmed", { roles });
-        } else {
-            logger.warn("Veratown running with degraded readiness", {
-                roles,
-                containmentReady: ready,
+        for (const [feature, status] of Object.entries(readiness) as Array<
+            [ContainmentFeature, ContainmentReadinessDiagnostic]
+        >) {
+            const previousStatus = previous.get(feature);
+            if (previousStatus?.state === status.state) continue;
+            const log = status.ready ? logger.info : logger.warn;
+            log(`Veratown ${feature} capability ${status.state}`, {
+                feature,
+                state: status.state,
+                reason: status.reason,
+                recoveryAction: status.recoveryAction,
+                checkedAt: status.checkedAt,
             });
         }
     }

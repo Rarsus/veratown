@@ -5,9 +5,11 @@ import { KennelSystem } from "../kennelSystem";
 
 function createCharacter(memberNumber = 7) {
     let device: any;
+    const messages: string[] = [];
     const character: any = {
         MemberNumber: memberNumber,
         MapPos: { X: 4, Y: 38 },
+        Tell: (_type: string, message: string) => messages.push(message),
         Appearance: {
             AddItem: () => {
                 device = {
@@ -28,6 +30,7 @@ function createCharacter(memberNumber = 7) {
     };
     return {
         character,
+        messages,
         get device() {
             return device;
         },
@@ -384,4 +387,17 @@ test("KennelSystem rebinds idempotently and ignores stale room triggers", async 
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
     assert.deepEqual(mutations.entries, [15]);
+});
+
+test("KennelSystem reports when containment is unavailable", async () => {
+    const created = createCharacter();
+    const system = new KennelSystem({} as any);
+    system.enabled = false;
+
+    await (system as any).onCharacterEnterKennel(created.character);
+
+    assert.match(
+        created.messages[0],
+        /Kennel containment is currently unavailable/,
+    );
 });

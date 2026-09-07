@@ -196,6 +196,8 @@ const systemTimer: CageTimer = {
 //   narrator.sayAt(cagePos, "Emote", `*Cage door slams shut with a click*`);
 export class CageSystem extends AbstractTileFeatureSystem {
     private triggersReady = false;
+    private recoveryReady = false;
+    private recoveryReadinessReason = "cage recovery has not completed";
     private cagedCharacters = new Map<
         number,
         {
@@ -290,6 +292,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
         if (!map) {
             this.boundRoom = undefined;
             this.triggersReady = false;
+            this.recoveryReady = false;
+            this.recoveryReadinessReason = "cage room or map is unavailable";
             return;
         }
         this.unregisterMapTriggers(map);
@@ -300,6 +304,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
         this.boundMap = undefined;
         this.boundCageInformationTrigger = undefined;
         this.triggersReady = false;
+        this.recoveryReady = false;
+        this.recoveryReadinessReason = "cage room or map is unavailable";
     }
 
     private unregisterMapTriggers(map: API_Map): void {
@@ -331,11 +337,17 @@ export class CageSystem extends AbstractTileFeatureSystem {
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
         this.triggersReady = false;
+        this.recoveryReady = false;
+        this.recoveryReadinessReason = "cage recovery has not completed";
         try {
             this.attachToRoom();
             const room = this.boundRoom;
             const map = this.boundMap;
-            if (!room || !map) return;
+            if (!room || !map) {
+                this.recoveryReadinessReason =
+                    "cage room or map is unavailable";
+                return;
+            }
             this.unregisterMapTriggers(map);
             this.cagesByPos.clear();
             this.cageEntriesByPos.clear();
@@ -448,6 +460,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
             this.triggersReady = true;
             for (const character of room.characters) {
                 void this.recoverCagedCharacter(character).catch((error) => {
+                    this.recoveryReady = false;
+                    this.recoveryReadinessReason =
+                        "cage character recovery failed";
+                    this.enabled = false;
                     this.logger.error("Cage recovery failed", {
                         memberNumber: character.MemberNumber,
                         observedAtMs: this.timer.now(),
@@ -455,6 +471,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     });
                 });
             }
+            this.recoveryReady = true;
+            this.recoveryReadinessReason = "cage recovery reconciled";
 
             this.logger?.info(
                 `[CageSystem] Registered ${this.cagesByPos.size} cage location(s)`,
@@ -471,12 +489,22 @@ export class CageSystem extends AbstractTileFeatureSystem {
         return this.triggersReady;
     }
 
+    public isRecoveryReady(): boolean {
+        return this.recoveryReady;
+    }
+
+    public getRecoveryReadinessReason(): string {
+        return this.recoveryReadinessReason;
+    }
+
     public getDiagnostics(): Record<string, unknown> {
         return {
             roomIdentity: getLifecycleObjectId(this.boundRoom),
             mapIdentity: getLifecycleObjectId(this.boundMap),
             mapReady: !!this.boundMap,
             triggersReady: this.triggersReady,
+            recoveryReady: this.recoveryReady,
+            recoveryReadinessReason: this.recoveryReadinessReason,
             tileTriggerCount:
                 (this.boundCageTrigger ? this.cagesByPos.size : 0) +
                 (this.boundCageEntryTrigger ? this.cageEntriesByPos.size : 0),
@@ -525,7 +553,13 @@ export class CageSystem extends AbstractTileFeatureSystem {
     }
 
     private onCharacterEnterCageEntry = async (character: API_Character) => {
-        if (!this.enabled) return;
+        if (!this.enabled) {
+            character.Tell(
+                "Whisper",
+                "(Cage containment is currently unavailable. Please contact staff.)",
+            );
+            return;
+        }
 
         const posKey = this.getTileKey(character.X, character.Y);
         const cage = this.cageEntriesByPos.get(posKey);
@@ -558,7 +592,13 @@ export class CageSystem extends AbstractTileFeatureSystem {
     };
 
     private onCharacterEnterCage = async (character: API_Character) => {
-        if (!this.enabled) return;
+        if (!this.enabled) {
+            character.Tell(
+                "Whisper",
+                "(Cage containment is currently unavailable. Please contact staff.)",
+            );
+            return;
+        }
 
         await this.monitor.run(character, async () => {
             const cagePos = { ...character.MapPos };
