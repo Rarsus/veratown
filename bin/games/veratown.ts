@@ -402,7 +402,14 @@ export class Veratown {
                 ),
         );
         this.bunnyParkSystem = this.initFeature(
-            () => new BunnyParkSystem(this.conn),
+            () =>
+                new BunnyParkSystem(
+                    this.conn,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
+                ),
         );
         this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
         this.trashcanSystem = this.initFeature(
