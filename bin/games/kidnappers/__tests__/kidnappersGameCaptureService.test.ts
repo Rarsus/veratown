@@ -93,4 +93,86 @@ describe("KidnappersGameCaptureService", () => {
         assert.equal(effects.length, 1);
         assert.equal((effects[0] as unknown[])[0], 2);
     });
+
+    test("uses persisted cage containment for release cleanup", async () => {
+        const session = new KidnappersGameSession(
+            "cage-session",
+            Date.now(),
+            undefined,
+            0,
+            "cage",
+        );
+        for (let memberNumber = 1; memberNumber <= 5; memberNumber++) {
+            session.dispatch(
+                command({
+                    type: "JOIN_SESSION",
+                    memberNumber,
+                    memberName: `Player${memberNumber}`,
+                }),
+            );
+        }
+        session.dispatch(command({ type: "START_GAME" }));
+        const turn = session.getSnapshot().turn;
+        assert.ok(turn);
+        session.dispatch(
+            command({
+                type: "ATTEMPT_CAPTURE",
+                actorMemberNumber: 1,
+                targetMemberNumber: 2,
+                turnId: turn.turnId,
+            }),
+        );
+
+        const calls: string[] = [];
+        const persistence = {
+            findOperation: async () => null,
+            updateTransition: async (
+                _sessionId: string,
+                _version: number,
+                _operationKey: string,
+                snapshot: unknown,
+                event: unknown,
+            ) => ({
+                snapshot,
+                event,
+                version: 1,
+                duplicate: false,
+            }),
+        } as unknown as KidnappersGamePersistence;
+        const service = new KidnappersGameCaptureService(session, persistence, {
+            applyEffect: async () => ({
+                applied: true,
+                duplicate: false,
+                effect: {},
+            }),
+            enterCage: async () => {
+                calls.push("enterCage");
+            },
+            exitCage: async () => {
+                calls.push("exitCage");
+            },
+            cancelEffect: async () => {
+                calls.push("cancelEffect");
+            },
+        } as never);
+
+        const captured = await service.dispatch(
+            command({
+                type: "ACCEPT_CAPTURE",
+                memberNumber: 2,
+                turnId: turn.turnId,
+            }),
+        );
+        assert.equal(captured.ok, true);
+        assert.deepEqual(calls, ["enterCage"]);
+
+        const released = await service.dispatch(
+            command({
+                type: "RELEASE_PLAYER",
+                memberNumber: 2,
+            }),
+        );
+        assert.equal(released.ok, true);
+        assert.deepEqual(calls, ["enterCage", "exitCage", "cancelEffect"]);
+    });
 });

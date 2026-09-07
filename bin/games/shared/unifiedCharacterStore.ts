@@ -1027,6 +1027,13 @@ export class UnifiedCharacterStore {
 
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
+        if (
+            profile.dare.activeBondage.some(
+                (item) => item.forfeitKey === forfeitKey,
+            )
+        ) {
+            return;
+        }
 
         const bondageItem = {
             forfeitKey,

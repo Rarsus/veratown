@@ -447,6 +447,153 @@ describe("KidnappersGameStateMachine", () => {
         }
     });
 
+    test("capture creates persisted restraint progression and retries survive restore", () => {
+        const machine = new KidnappersGameStateMachine("session-1");
+        joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
+        machine.dispatch(
+            cmd(
+                {
+                    type: "START_GAME",
+                    roles: {
+                        100: "kidnapper",
+                        101: "bystander",
+                        102: "bystander",
+                        103: "bystander",
+                        104: "bystander",
+                    },
+                },
+                100,
+            ),
+        );
+        const turn = machine.getSnapshot().turn;
+        assert.ok(turn);
+        machine.dispatch(
+            cmd(
+                {
+                    type: "ATTEMPT_CAPTURE",
+                    actorMemberNumber: 100,
+                    targetMemberNumber: 101,
+                    turnId: turn.turnId,
+                },
+                101,
+            ),
+        );
+        const captured = machine.dispatch(
+            cmd(
+                {
+                    type: "ACCEPT_CAPTURE",
+                    memberNumber: 101,
+                    turnId: turn.turnId,
+                },
+                102,
+            ),
+        );
+        assert.equal(captured.ok, true);
+        assert.deepEqual(machine.getSnapshot().progressions, [
+            {
+                memberNumber: 101,
+                phase: "captured",
+                containment: "bondage",
+                restraintLevel: 1,
+                escapeAttempts: 0,
+                capturedAt: 102,
+                nextEscapeAt: null,
+                releasedAt: null,
+            },
+        ]);
+
+        const restarted = new KidnappersGameStateMachine("session-1", 200);
+        restarted.restore(machine.getSnapshot());
+        assert.deepEqual(
+            restarted.getSnapshot().progressions,
+            machine.getSnapshot().progressions,
+        );
+    });
+
+    test("escape failures enforce cooldown and the deterministic third-attempt release", () => {
+        const machine = new KidnappersGameStateMachine("session-1");
+        joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
+        machine.dispatch(
+            cmd(
+                {
+                    type: "START_GAME",
+                    roles: {
+                        100: "kidnapper",
+                        101: "bystander",
+                        102: "bystander",
+                        103: "bystander",
+                        104: "bystander",
+                    },
+                },
+                100,
+            ),
+        );
+        const turn = machine.getSnapshot().turn;
+        assert.ok(turn);
+        machine.dispatch(
+            cmd(
+                {
+                    type: "ATTEMPT_CAPTURE",
+                    actorMemberNumber: 100,
+                    targetMemberNumber: 101,
+                    turnId: turn.turnId,
+                },
+                101,
+            ),
+        );
+        machine.dispatch(
+            cmd(
+                {
+                    type: "ACCEPT_CAPTURE",
+                    memberNumber: 101,
+                    turnId: turn.turnId,
+                },
+                102,
+            ),
+        );
+
+        const first = machine.dispatch(
+            cmd({ type: "ATTEMPT_ESCAPE", memberNumber: 101 }, 103),
+        );
+        assert.equal(first.ok, true);
+        if (!first.ok) return;
+        assert.equal(first.event.type, "ESCAPE_FAILED");
+        assert.equal(first.event.attemptNumber, 1);
+
+        const cooldown = machine.dispatch(
+            cmd({ type: "ATTEMPT_ESCAPE", memberNumber: 101 }, 104),
+        );
+        assert.equal(cooldown.ok, false);
+        if (cooldown.ok) return;
+        assert.equal(cooldown.error.reason, "ESCAPE_COOLDOWN");
+
+        const second = machine.dispatch(
+            cmd(
+                { type: "ATTEMPT_ESCAPE", memberNumber: 101 },
+                first.event.nextEscapeAt,
+            ),
+        );
+        assert.equal(second.ok, true);
+        if (!second.ok) return;
+        assert.equal(second.event.type, "ESCAPE_FAILED");
+        const released = machine.dispatch(
+            cmd(
+                { type: "ATTEMPT_ESCAPE", memberNumber: 101 },
+                second.event.nextEscapeAt,
+            ),
+        );
+        assert.equal(released.ok, true);
+        if (!released.ok) return;
+        assert.equal(released.event.type, "PLAYER_RELEASED");
+        assert.equal(
+            machine
+                .getSnapshot()
+                .players.find((player) => player.memberNumber === 101)?.status,
+            "active",
+        );
+        assert.equal(machine.getSnapshot().progressions?.[0].phase, "released");
+    });
+
     test("timeout and disconnect resolve pending captures without polling", () => {
         const machine = new KidnappersGameStateMachine("session-1");
         joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);

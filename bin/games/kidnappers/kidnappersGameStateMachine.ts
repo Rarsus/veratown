@@ -17,6 +17,9 @@ import {
     KIDNAPPERS_MAX_PLAYERS,
     KIDNAPPERS_MIN_PLAYERS,
     KIDNAPPERS_CAPTURE_TIMEOUT_MS,
+    KIDNAPPERS_ESCAPE_ATTEMPTS_TO_RELEASE,
+    KIDNAPPERS_ESCAPE_COOLDOWN_MS,
+    KIDNAPPERS_MAX_RESTRAINT_LEVEL,
     isTerminalPhase,
     type KidnappersCaptureOutcome,
     type KidnappersCaptureTurn,
@@ -24,8 +27,11 @@ import {
     type KidnappersGameCommandType,
     type KidnappersGameEvent,
     type KidnappersGamePhase,
+    type KidnappersContainment,
+    type KidnappersCleanupContainment,
     type KidnappersPlayerState,
     type KidnappersPlayerRole,
+    type KidnappersPlayerProgression,
     type KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
 
@@ -72,6 +78,7 @@ interface InternalState {
     players: Map<number, KidnappersPlayerState>;
     turn: KidnappersCaptureTurn | null;
     turnSequence: number;
+    progressions: Map<number, KidnappersPlayerProgression>;
 }
 
 /**
@@ -90,9 +97,14 @@ interface InternalState {
  */
 export class KidnappersGameStateMachine {
     private readonly sessionId: string;
+    private readonly containment: KidnappersContainment;
     private state: InternalState;
 
-    constructor(sessionId: string, now: number = Date.now()) {
+    constructor(
+        sessionId: string,
+        now: number = Date.now(),
+        containment: KidnappersContainment = "bondage",
+    ) {
         this.sessionId = sessionId;
         this.state = {
             phase: "lobby",
@@ -104,7 +116,9 @@ export class KidnappersGameStateMachine {
             players: new Map(),
             turn: null,
             turnSequence: 0,
+            progressions: new Map(),
         };
+        this.containment = containment;
     }
 
     public getSnapshot(): KidnappersSessionSnapshot {
@@ -139,6 +153,12 @@ export class KidnappersGameStateMachine {
             turnSequence:
                 snapshot.turnSequence ??
                 this.sequenceFromTurnId(snapshot.turn?.turnId),
+            progressions: new Map(
+                (snapshot.progressions ?? []).map((progression) => [
+                    progression.memberNumber,
+                    { ...progression },
+                ]),
+            ),
         };
     }
 
@@ -358,15 +378,134 @@ export class KidnappersGameStateMachine {
                     }
                 }
                 const nextTurn = this.advanceCaptureTurn(command.issuedAt);
+                if (outcome === "captured") {
+                    this.state.progressions.set(pending.targetMemberNumber, {
+                        memberNumber: pending.targetMemberNumber,
+                        phase: "captured",
+                        containment: this.containment,
+                        restraintLevel: 1,
+                        escapeAttempts: 0,
+                        capturedAt: command.issuedAt,
+                        nextEscapeAt: null,
+                        releasedAt: null,
+                    });
+                }
                 return this.accept(
                     {
                         type: "CAPTURE_RESOLVED",
                         attackerMemberNumber: pending.attackerMemberNumber,
                         targetMemberNumber: pending.targetMemberNumber,
                         outcome,
+                        containment:
+                            outcome === "captured"
+                                ? this.containment
+                                : undefined,
                         turnId: turn.turnId,
                         nextTurnMemberNumber:
                             nextTurn?.ownerMemberNumber ?? null,
+                        restraintLevel:
+                            outcome === "captured"
+                                ? this.state.progressions.get(
+                                      pending.targetMemberNumber,
+                                  )?.restraintLevel
+                                : undefined,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "ATTEMPT_ESCAPE":
+            case "ESCAPE_ATTEMPT": {
+                const guardError = this.guardEscapeAttempt(command);
+                if (guardError) return this.reject(guardError, before);
+                const progression = this.state.progressions.get(
+                    command.memberNumber,
+                )!;
+                const attemptNumber = progression.escapeAttempts + 1;
+                if (attemptNumber >= KIDNAPPERS_ESCAPE_ATTEMPTS_TO_RELEASE) {
+                    this.state.progressions.set(command.memberNumber, {
+                        ...progression,
+                        phase: "released",
+                        escapeAttempts: attemptNumber,
+                        nextEscapeAt: null,
+                        releasedAt: command.issuedAt,
+                    });
+                    const player = this.state.players.get(
+                        command.memberNumber,
+                    )!;
+                    this.state.players.set(command.memberNumber, {
+                        ...player,
+                        status: "active",
+                    });
+                    return this.accept(
+                        {
+                            type: "PLAYER_RELEASED",
+                            memberNumber: command.memberNumber,
+                            attempts: attemptNumber,
+                            reason: "escape",
+                            containment: progression.containment,
+                            correlationId: command.correlationId,
+                            emittedAt: command.issuedAt,
+                        },
+                        command,
+                    );
+                }
+
+                const restraintLevel = Math.min(
+                    KIDNAPPERS_MAX_RESTRAINT_LEVEL,
+                    progression.restraintLevel + 1,
+                );
+                this.state.progressions.set(command.memberNumber, {
+                    ...progression,
+                    phase: "restrained",
+                    restraintLevel,
+                    escapeAttempts: attemptNumber,
+                    nextEscapeAt:
+                        command.issuedAt + KIDNAPPERS_ESCAPE_COOLDOWN_MS,
+                });
+                return this.accept(
+                    {
+                        type: "ESCAPE_FAILED",
+                        memberNumber: command.memberNumber,
+                        attemptNumber,
+                        restraintLevel,
+                        nextEscapeAt:
+                            command.issuedAt + KIDNAPPERS_ESCAPE_COOLDOWN_MS,
+                        containment: progression.containment,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "RELEASE_PLAYER":
+            case "RELEASE_CAPTURE": {
+                const guardError = this.guardReleasePlayer(command);
+                if (guardError) return this.reject(guardError, before);
+                const progression = this.state.progressions.get(
+                    command.memberNumber,
+                )!;
+                this.state.progressions.set(command.memberNumber, {
+                    ...progression,
+                    phase: "released",
+                    nextEscapeAt: null,
+                    releasedAt: command.issuedAt,
+                });
+                const player = this.state.players.get(command.memberNumber)!;
+                this.state.players.set(command.memberNumber, {
+                    ...player,
+                    status: "active",
+                });
+                return this.accept(
+                    {
+                        type: "PLAYER_RELEASED",
+                        memberNumber: command.memberNumber,
+                        attempts: progression.escapeAttempts,
+                        reason: "admin",
+                        containment: progression.containment,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
                     },
@@ -515,6 +654,11 @@ export class KidnappersGameStateMachine {
             case "COMPLETE_GAME": {
                 const guardError = this.guardComplete(command);
                 if (guardError) return this.reject(guardError, before);
+                const cleanupContainments = this.cleanupContainments();
+                const cleanupMemberNumbers = cleanupContainments.map(
+                    ({ memberNumber }) => memberNumber,
+                );
+                this.state.progressions.clear();
                 this.state.phase = "completed";
                 this.state.completedAt = command.issuedAt;
                 this.state.winner = command.winner;
@@ -522,6 +666,8 @@ export class KidnappersGameStateMachine {
                     {
                         type: "GAME_COMPLETED",
                         winner: command.winner,
+                        cleanupMemberNumbers,
+                        cleanupContainments,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
                     },
@@ -532,12 +678,19 @@ export class KidnappersGameStateMachine {
             case "ABORT_SESSION": {
                 const guardError = this.guardAbort(command);
                 if (guardError) return this.reject(guardError, before);
+                const cleanupContainments = this.cleanupContainments();
+                const cleanupMemberNumbers = cleanupContainments.map(
+                    ({ memberNumber }) => memberNumber,
+                );
+                this.state.progressions.clear();
                 this.state.phase = "aborted";
                 this.state.completedAt = command.issuedAt;
                 return this.accept(
                     {
                         type: "SESSION_ABORTED",
                         reason: command.reason,
+                        cleanupMemberNumbers,
+                        cleanupContainments,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
                     },
@@ -549,13 +702,20 @@ export class KidnappersGameStateMachine {
                 // Idempotent from any phase, including terminal phases: DI
                 // lifecycle shutdown must always be safe to call, including
                 // being called twice.
+                const cleanupContainments = this.cleanupContainments();
+                const cleanupMemberNumbers = cleanupContainments.map(
+                    ({ memberNumber }) => memberNumber,
+                );
                 if (!isTerminalPhase(this.state.phase)) {
+                    this.state.progressions.clear();
                     this.state.phase = "aborted";
                     this.state.completedAt = command.issuedAt;
                 }
                 return this.accept(
                     {
                         type: "SESSION_SHUT_DOWN",
+                        cleanupMemberNumbers,
+                        cleanupContainments,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
                     },
@@ -619,6 +779,13 @@ export class KidnappersGameStateMachine {
             });
         }
         return null;
+    }
+
+    private cleanupContainments(): KidnappersCleanupContainment[] {
+        return Array.from(this.state.progressions.values(), (progression) => ({
+            memberNumber: progression.memberNumber,
+            containment: progression.containment,
+        }));
     }
 
     private guardLeave(
@@ -944,6 +1111,77 @@ export class KidnappersGameStateMachine {
         return null;
     }
 
+    private guardEscapeAttempt(
+        command: Extract<
+            KidnappersGameCommand,
+            { type: "ATTEMPT_ESCAPE" | "ESCAPE_ATTEMPT" }
+        >,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        const player = this.state.players.get(command.memberNumber);
+        const progression = this.state.progressions.get(command.memberNumber);
+        if (!player || !progression) {
+            return this.captureError(
+                "The player has no active capture progression",
+                "NOT_CAPTURED",
+                command,
+            );
+        }
+        if (player.status !== "captured") {
+            return this.captureError(
+                "Only a captured player may attempt an escape",
+                "NOT_CAPTURED",
+                command,
+            );
+        }
+        if (progression.phase === "released") {
+            return this.captureError(
+                "The capture progression is already released",
+                "PROGRESSION_TERMINAL",
+                command,
+            );
+        }
+        if (
+            progression.nextEscapeAt !== null &&
+            command.issuedAt < progression.nextEscapeAt
+        ) {
+            return this.captureError(
+                "The escape attempt is on cooldown",
+                "ESCAPE_COOLDOWN",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private guardReleasePlayer(
+        command: Extract<
+            KidnappersGameCommand,
+            { type: "RELEASE_PLAYER" | "RELEASE_CAPTURE" }
+        >,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        const player = this.state.players.get(command.memberNumber);
+        const progression = this.state.progressions.get(command.memberNumber);
+        if (!player || !progression) {
+            return this.captureError(
+                "The player has no active capture progression",
+                "NOT_CAPTURED",
+                command,
+            );
+        }
+        if (progression.phase === "released" || player.status !== "captured") {
+            return this.captureError(
+                "The capture progression is already released",
+                "PROGRESSION_TERMINAL",
+                command,
+            );
+        }
+        return null;
+    }
+
     private guardTimeout(
         command: Extract<KidnappersGameCommand, { type: "TIMEOUT_TURN" }>,
     ): KidnappersGameError | null {
@@ -1229,6 +1467,9 @@ export class KidnappersGameStateMachine {
                   }
                 : null,
             turnSequence: this.state.turnSequence,
+            progressions: Array.from(this.state.progressions.values()).map(
+                (progression) => ({ ...progression }),
+            ),
         };
     }
 }
