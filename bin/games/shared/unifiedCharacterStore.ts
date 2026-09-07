@@ -1931,8 +1931,16 @@ export class UnifiedCharacterStore {
         current.releasedAt = now;
         current.totalTime = now - current.enteredAt;
 
-        await this.profiles.updateOne(
-            { _id: memberNumber },
+        const result = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.kennelSessions": {
+                    $elemMatch: {
+                        enteredAt: current.enteredAt,
+                        releasedAt: { $exists: false },
+                    },
+                },
+            },
             {
                 $set: {
                     "veratown.kennelSessions": sessions,
@@ -1948,6 +1956,7 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+        if (result.modifiedCount !== 1) return false;
 
         const event: GameEvent = {
             timestamp: now,

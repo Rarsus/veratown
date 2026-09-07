@@ -57,15 +57,28 @@ function createMutationService(activeSession?: object) {
 
 function createConnector(characters: any[]) {
     const callbacks: Array<(character: any, previous: any) => void> = [];
+    const leaveCallbacks: Array<(character: any, previous: any) => void> = [];
     const map = {
         addTileTrigger: (_position: any, callback: any) => {
             callbacks.push(callback);
         },
+        addLeaveRegionTrigger: (_region: any, callback: any) => {
+            leaveCallbacks.push(callback);
+        },
         removeTileTrigger: () => {},
+        removeLeaveRegionTrigger: () => {},
     };
     return {
         callbacks,
-        connector: { chatRoom: { map, characters } },
+        leaveCallbacks,
+        connector: {
+            chatRoom: {
+                map,
+                characters,
+                on: () => {},
+            },
+            on: () => {},
+        },
     };
 }
 
@@ -148,6 +161,76 @@ test("KennelSystem recovers a live Kennel device outside the tile", async () => 
     ]);
 
     assert.deepEqual(mutations.entries, [11]);
+});
+
+test("KennelSystem finalizes an exit only after leaving and removing the device", async () => {
+    const created = createCharacter(12);
+    const mutations = createMutationService({
+        enteredAt: Date.now() - 1000,
+        totalTime: 0,
+    });
+    const { leaveCallbacks, connector } = createConnector([created.character]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    created.character.Appearance.AddItem({});
+    created.character.MapPos = { X: 1, Y: 1 };
+    leaveCallbacks[0](created.character, { X: 4, Y: 38 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(mutations.exits, []);
+
+    created.character.Appearance.RemoveItem("ItemDevices");
+    await (system as any).reconcileCharacter(created.character);
+    assert.deepEqual(mutations.exits, [12]);
+    await (system as any).reconcileCharacter(created.character);
+    assert.deepEqual(mutations.exits, [12]);
+});
+
+test("KennelSystem closes a stale open session during reconnect recovery", async () => {
+    const { character } = createCharacter(13);
+    character.MapPos = { X: 1, Y: 1 };
+    const mutations = createMutationService({
+        enteredAt: Date.now() - 1000,
+        totalTime: 0,
+    });
+    const { connector } = createConnector([character]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+
+    assert.deepEqual(mutations.exits, [13]);
 });
 
 test("KennelSystem rolls back persistence when appearance mutation fails", async () => {
