@@ -12,6 +12,26 @@ The Discord bot can now restart only the BC bot connections without restarting t
 
 ## How It Works
 
+## Automatic Disconnect Recovery
+
+Unexpected BC socket disconnects recover without invoking `/bot-restart`. Each
+configured connection is supervised independently. The connector retries with
+bounded exponential backoff and jitter, logs in again, and restores its room
+before emitting `Connected`.
+
+While recovery is in progress, `/bot-status` exposes each role as
+`disconnected`, `recovering`, `connected`, or `failed`, together with the
+attempt count and last failure. For Veratown roles, recovery verifies the
+configured map position before declaring the role connected; the main bot also
+restores its description. Existing game and command listeners stay bound to
+the same connector, so the in-memory game continues without duplicate
+registration.
+
+If retries or position verification fail, that role remains failed and the
+other bot and Discord/database services continue running. Operators should use
+`/bot-status` to identify the role, correct the BC room or network problem,
+then use `/bot-restart` only when a fresh connection is required.
+
 ### Architecture
 
 ```

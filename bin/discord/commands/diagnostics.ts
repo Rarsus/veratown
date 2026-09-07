@@ -27,6 +27,7 @@ import type {
     LogEntry,
 } from "../types";
 import { createLogger } from "../../logging";
+import { getBotRecoveryStatuses } from "../../botConnections";
 
 const logger = createLogger("Discord:Diagnostics");
 const botStartTime = Date.now();
@@ -55,10 +56,21 @@ export async function handleBotStatusCommand(
         }
 
         // Get system diagnostics
-        const diagnostics = getSystemDiagnostics();
+        const recovery = getBotRecoveryStatuses(context.botConnections);
+        const diagnostics = getSystemDiagnostics(context.botConnections);
+        const recoveryState = recovery.some(
+            (status) =>
+                status.state === "failed" || status.state === "disconnected",
+        )
+            ? "disconnected"
+            : recovery.some((status) => status.state === "recovering")
+              ? "connecting"
+              : "connected";
 
         const status: BotStatusInfo = {
-            bcBotStatus: context.botConnections ? "connected" : "disconnected",
+            bcBotStatus: context.botConnections
+                ? recoveryState
+                : "disconnected",
             discordBotStatus: "ready", // We're handling the command, so Discord is ready
             database: databaseConnected ? "connected" : "disconnected",
             uptime: {
@@ -67,6 +79,7 @@ export async function handleBotStatusCommand(
             },
             playerCount: await getPlayerCount(context.db),
             diagnostics,
+            recovery,
         };
 
         logger.info("Bot status retrieved", {
@@ -117,7 +130,7 @@ export async function handleDiagnosticsCommand(
 
         logger.info("Fetching diagnostics", { requested_by: context.userId });
 
-        const diagnostics = getSystemDiagnostics();
+        const diagnostics = getSystemDiagnostics(context.botConnections);
 
         // Get collection statistics
         const collections = await context.db.listCollections().toArray();
@@ -157,15 +170,23 @@ export async function handleDiagnosticsCommand(
 /**
  * Get system diagnostics information
  */
-function getSystemDiagnostics(): SystemDiagnostics {
+function getSystemDiagnostics(
+    connections?: Record<string, import("bc-bot").API_Connector>,
+): SystemDiagnostics {
     const memUsage = process.memoryUsage();
+    const recovery = getBotRecoveryStatuses(connections);
 
     return {
         timestamp: new Date(),
-        botConnected: true, // Will be determined by context
+        botConnected:
+            recovery.length > 0 &&
+            recovery.every((status) => status.state === "connected"),
         databaseConnected: true, // Will be determined by ping
         uptime: Date.now() - botStartTime,
-        activeConnections: 1, // Placeholder
+        activeConnections: recovery.filter(
+            (status) => status.state === "connected",
+        ).length,
+        connectionRecovery: recovery,
         memoryUsage: {
             heapUsed: memUsage.heapUsed,
             heapTotal: memUsage.heapTotal,

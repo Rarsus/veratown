@@ -105,6 +105,8 @@ export interface API_Message {
 interface ConnectorEvents {
     Connected: [];
     Disconnected: [reason: Socket.DisconnectReason];
+    ReconnectFailed: [];
+    MapPosition: [memberNumber: number, position: ChatRoomMapPos];
     PoseChange: [character: API_Character];
     Message: [message: API_Message];
     Beep: [beep: ServerAccountBeepResponse];
@@ -171,6 +173,12 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
             extraHeaders: {
                 Origin: origin,
             },
+            reconnection: true,
+            reconnectionAttempts: 8,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 30_000,
+            randomizationFactor: 0.5,
+            timeout: 10_000,
         });
         this.wrappedSock = new SocketWrapper(this.sock);
 
@@ -178,6 +186,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         this.sock.on("connect_error", this.onSocketConnectError);
         this.sock.io.on("reconnect", this.onSocketReconnect);
         this.sock.io.on("reconnect_attempt", this.onSocketReconnectAttempt);
+        this.sock.io.on("reconnect_failed", this.onSocketReconnectFailed);
         this.sock.on("disconnect", this.onSocketDisconnect);
         this.sock.on("ServerInfo", this.onServerInfo);
         this.sock.on("LoginResponse", this.onLoginResponse);
@@ -319,13 +328,13 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private onSocketConnect = async () => {
         console.log("Socket connected!");
-        this.emit("Connected");
         this.wrappedSock.emit("AccountLogin", {
             AccountName: this.username,
             Password: this.password,
         });
         if (!this.started) await this.start();
         if (this.roomJoined) await this.joinOrCreateRoom(this.roomJoined);
+        this.emit("Connected");
     };
 
     private onSocketConnectError = (err: Error) => {
@@ -338,6 +347,11 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private onSocketReconnectAttempt = () => {
         console.log("Socket reconnect attempt");
+    };
+
+    private onSocketReconnectFailed = () => {
+        console.error("Socket reconnect attempts exhausted");
+        this.emit("ReconnectFailed");
     };
 
     private onSocketDisconnect = (reason: Socket.DisconnectReason) => {
@@ -596,6 +610,9 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private onChatRoomSyncMapData = (update: ServerMapDataResponse) => {
         this._chatRoom?.mapPositionUpdate(update.MemberNumber, update.MapData);
+        if (update.MapData?.Pos) {
+            this.emit("MapPosition", update.MemberNumber, update.MapData.Pos);
+        }
     };
 
     private onChatRoomMessage = (msg: ServerChatRoomMessage) => {
@@ -890,6 +907,47 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
                 Y: y,
             },
             PrivateState: {},
+        });
+    }
+
+    public async moveOnMapAndWait(
+        x: number,
+        y: number,
+        timeoutMs: number = 5_000,
+    ): Promise<void> {
+        if (this.Player.MapPos.X === x && this.Player.MapPos.Y === y) return;
+
+        await new Promise<void>((resolve, reject) => {
+            const onMapPosition = (
+                memberNumber: number,
+                position: ChatRoomMapPos,
+            ) => {
+                if (
+                    memberNumber !== this.Player.MemberNumber ||
+                    position.X !== x ||
+                    position.Y !== y
+                ) {
+                    return;
+                }
+                cleanup();
+                resolve();
+            };
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(
+                    new API_Error(
+                        "MapPositionTimeout",
+                        `Timed out moving bot to map position (${x}, ${y})`,
+                    ),
+                );
+            }, timeoutMs);
+            const cleanup = () => {
+                clearTimeout(timeout);
+                this.off("MapPosition", onMapPosition);
+            };
+
+            this.on("MapPosition", onMapPosition);
+            this.moveOnMap(x, y);
         });
     }
 }
