@@ -23,11 +23,14 @@ import { CurrentRestraint } from "../shared/unifiedCharacterTypes";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import {
     filterValidAppearanceItems,
+    takeAppearanceMutationContext,
     registerAppearanceStateSynchronizer,
 } from "./shared/appearanceSync";
+import { AppearanceMutationContext } from "./shared/appearanceLifecycle";
 
 const logger = createLogger("LiveCharacterStateSync");
 const RECONCILIATION_INTERVAL_MS = 60_000;
+let syncOperationSequence = 0;
 
 export interface SelfPositionSyncDiagnostic {
     memberNumber: number;
@@ -108,10 +111,19 @@ export class LiveCharacterStateSync {
         character: API_Character,
         position = character.MapPos,
         forcePositionPersistence = false,
+        mutationContext?: AppearanceMutationContext,
     ): Promise<boolean> {
-        registerAppearanceStateSynchronizer(character, async (current) => {
-            await this.syncCharacter(current);
-        });
+        registerAppearanceStateSynchronizer(
+            character,
+            async (current, context) => {
+                await this.syncCharacter(
+                    current,
+                    current.MapPos,
+                    false,
+                    context,
+                );
+            },
+        );
         const appearance = this.normalizedAppearance(character);
         const memberNumber = character.MemberNumber;
         const previous = this.syncChains.get(memberNumber) ?? Promise.resolve();
@@ -120,7 +132,19 @@ export class LiveCharacterStateSync {
             .then(async () => {
                 const persisted =
                     await this.store.getVeratownView(memberNumber);
-                return this.store.syncVeratownState(
+                const previousAppearance = filterValidAppearanceItems(
+                    persisted.currentAppearance ?? [],
+                );
+                const activeMutationContext =
+                    mutationContext ??
+                    takeAppearanceMutationContext(character) ??
+                    ({
+                        operationId: `sync-${memberNumber}-${Date.now()}-${++syncOperationSequence}`,
+                        timestamp: Date.now(),
+                        source: "unknown_external_mutation",
+                        reason: "unknown_external_mutation",
+                    } satisfies AppearanceMutationContext);
+                const persistedChanged = await this.store.syncVeratownState(
                     memberNumber,
                     { ...position },
                     appearance,
@@ -130,6 +154,36 @@ export class LiveCharacterStateSync {
                     ),
                     forcePositionPersistence,
                 );
+                if (
+                    persistedChanged &&
+                    typeof (
+                        this.store as UnifiedCharacterStore & {
+                            recordAppearanceMutation?: (
+                                memberNumber: number,
+                                before: BC_AppearanceItem[],
+                                after: BC_AppearanceItem[],
+                                context: AppearanceMutationContext,
+                            ) => Promise<void>;
+                        }
+                    ).recordAppearanceMutation === "function"
+                ) {
+                    await (
+                        this.store as UnifiedCharacterStore & {
+                            recordAppearanceMutation: (
+                                memberNumber: number,
+                                before: BC_AppearanceItem[],
+                                after: BC_AppearanceItem[],
+                                context: AppearanceMutationContext,
+                            ) => Promise<void>;
+                        }
+                    ).recordAppearanceMutation(
+                        memberNumber,
+                        previousAppearance,
+                        appearance,
+                        activeMutationContext,
+                    );
+                }
+                return persistedChanged;
             });
         const settled = next.then(
             () => undefined,

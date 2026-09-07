@@ -42,6 +42,7 @@ import { createLogger } from "../logging";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 import { GamePluginCommandRouterImpl } from "./shared/gamePluginCommandRouter";
 import { GamePluginMessageFeatureSystem } from "./shared/gamePluginMessageFeatureSystem";
+import { syncAppearanceMutation } from "./veratown/shared/appearanceSync";
 
 // Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
 import { TurnOrderManager } from "./dare/turnOrderManager";
@@ -1314,12 +1315,31 @@ Game Overview
             );
             this.pilloriedUntilNextDraw.delete(memberNumber);
 
-            character.Appearance.RemoveItem("ItemMisc");
-            const sign = character.Appearance.AddItem(
-                AssetGet("ItemMisc", "WoodenSign"),
-            );
-            sign.setProperty("Text", "Evades");
-            sign.setProperty("Text2", "Dares");
+            void syncAppearanceMutation(
+                character,
+                () => {
+                    character.Appearance.RemoveItem("ItemMisc");
+                    const sign = character.Appearance.AddItem(
+                        AssetGet("ItemMisc", "WoodenSign"),
+                    );
+                    sign.setProperty("Text", "Evades");
+                    sign.setProperty("Text2", "Dares");
+                },
+                0,
+                undefined,
+                {
+                    source: "dare",
+                    reason: "dare_pillory_sign_replacement",
+                },
+            ).catch((error) => {
+                this.logger.error(
+                    "Failed to synchronize dare sign replacement",
+                    {
+                        memberNumber,
+                        error,
+                    },
+                );
+            });
 
             this.conn.SendMessage(
                 "Emote",

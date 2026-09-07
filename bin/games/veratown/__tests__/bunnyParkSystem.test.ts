@@ -143,6 +143,37 @@ test("bunny punishment applies and persists each configured restraint set", asyn
     }
 });
 
+test("bunny punishment records a durable sign artifact", async () => {
+    const created = createCharacter(18);
+    let artifact: any;
+    const system = new BunnyParkSystem(
+        {} as any,
+        async () => {},
+        deterministicRandom(0),
+        0,
+        async (value) => {
+            artifact = value;
+        },
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(artifact.memberNumber, 18);
+    assert.equal(artifact.operationId, result.operationId);
+    assert.deepEqual(artifact.sign, {
+        group: "ItemMisc",
+        asset: "WoodenSign",
+        text: "I step on",
+        text2: "Bunnies",
+    });
+    assert.equal(artifact.cleanupPolicy, "explicit_cleanup_only");
+    assert.equal(artifact.status, "active");
+});
+
 test("bunny punishment restores a sign omitted after ropes were retained", async () => {
     const config = BUNNY_RESTRAINT_CONFIGS[1];
     const created = createCharacter(15, {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { syncAppearanceMutation } from "../shared/appearanceSync";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
+import { diffAppearance } from "../shared/appearanceLifecycle";
 
 function createCharacter(
     memberNumber: number,
@@ -105,6 +106,82 @@ test("LiveCharacterStateSync retains a visible bunny sign through reconciliation
     for (const appearance of snapshots) {
         assert.deepEqual(appearance, [sign]);
     }
+});
+
+test("LiveCharacterStateSync records an immediate bunny sign disappearance with before/after evidence", async () => {
+    const sign = {
+        Group: "ItemMisc",
+        Name: "WoodenSign",
+        Property: { Text: "I step on", Text2: "Bunnies" },
+    };
+    let appearance: any[] = [sign];
+    let persistedAppearance: any[] = [];
+    const mutations: any[] = [];
+    const character: any = {
+        MemberNumber: 44,
+        MapPos: { X: 1, Y: 1 },
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+        },
+    };
+    const store: any = {
+        getVeratownView: async () => ({
+            currentAppearance: persistedAppearance,
+            currentRestraints: [],
+        }),
+        syncVeratownState: async (
+            _memberNumber: number,
+            _position: unknown,
+            nextAppearance: any[],
+        ) => {
+            persistedAppearance = structuredClone(nextAppearance);
+            return true;
+        },
+        recordAppearanceMutation: async (...args: unknown[]) =>
+            mutations.push(args),
+    };
+    const sync = new LiveCharacterStateSync(
+        { chatRoom: { characters: [character] }, on: () => {} } as any,
+        store,
+        60_000,
+    );
+
+    await sync.reconcile();
+    appearance = [];
+    await sync.syncCharacter(character);
+
+    assert.equal(mutations.length, 2);
+    assert.deepEqual(mutations[1][1], [sign]);
+    assert.deepEqual(mutations[1][2], []);
+    assert.equal(mutations[1][3].reason, "unknown_external_mutation");
+    assert.match(mutations[1][3].operationId, /^sync-44-/);
+});
+
+test("appearance diff identifies replacement and visibility changes", () => {
+    const before = [
+        {
+            Group: "ItemMisc",
+            Name: "WoodenSign",
+            Property: { Visible: true },
+        },
+    ];
+    const after = [
+        {
+            Group: "ItemMisc",
+            Name: "WoodenSign",
+            Property: { Visible: false },
+        },
+    ];
+
+    const diff = diffAppearance(before as any, after as any);
+    assert.equal(diff.visibilityChanged.length, 1);
+    assert.equal(
+        diffAppearance(
+            before as any,
+            [{ Group: "ItemMisc", Name: "OtherSign", Property: {} }] as any,
+        ).replaced.length,
+        1,
+    );
 });
 
 test("syncAppearanceMutation keeps completed mutations retryable when projection persistence fails", async () => {

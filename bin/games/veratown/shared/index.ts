@@ -39,6 +39,14 @@ export {
     LiveAppearanceRemovalCoordinator,
     type LiveRemovalTarget,
 } from "./liveAppearanceRemovalCoordinator";
+export {
+    diffAppearance,
+    getBunnySignState,
+    type AppearanceDiff,
+    type AppearanceMutationContext,
+    type AppearanceMutationSource,
+    type BunnySignState,
+} from "./appearanceLifecycle";
 
 // Database retry patterns
 export {

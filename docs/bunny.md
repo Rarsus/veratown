@@ -105,3 +105,18 @@ sign.setProperty("Text2", "Bunnies");
 The punishment verification checks the bundle for the sign and checks both
 render text properties, not just the item name. If synchronization removes or
 normalizes the sign, the punishment is rolled back and reported as a failure.
+
+## Retention and lifecycle diagnostics
+
+Successful punishment writes a durable `bunnyPunishmentArtifact` containing the
+member, operation ID, sign identity/text, application time, and the
+`explicit_cleanup_only` policy. Live appearance synchronization records
+before/after item diffs, including `ItemMisc/WoodenSign` removal, replacement,
+and visibility changes. Unexpected changes are marked degraded and include an
+`unknown_external_mutation` reason when no feature operation is available.
+
+Only an explicitly attributed cleanup (for example, release stripping the
+sign) may transition the artifact to `cleaned` and emits
+`bunny_sign_cleanup`. Other systems must not silently replace the `ItemMisc`
+slot; their next synchronization emits the structured bunny sign lifecycle
+event and preserves the before/after diagnostic evidence.

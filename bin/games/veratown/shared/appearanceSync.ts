@@ -13,14 +13,90 @@ import { API_Character, BC_AppearanceItem } from "bc-bot";
 import { createLogger } from "../../../logging";
 
 import { wait } from "../../../hub/utils"; // Adjust path as needed
+import {
+    AppearanceMutationContext,
+    AppearanceMutationSource,
+} from "./appearanceLifecycle";
 
 const logger = createLogger("appearanceSync");
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 const appearanceStateSynchronizers = new WeakMap<
     API_Character,
-    (character: API_Character) => Promise<void>
+    (
+        character: API_Character,
+        context?: AppearanceMutationContext,
+    ) => Promise<void>
 >();
+const appearanceMutationContexts = new WeakMap<
+    API_Character,
+    AppearanceMutationContext
+>();
+const deferredAppearanceMutationContexts = new WeakMap<
+    API_Character,
+    AppearanceMutationContext
+>();
+let mutationSequence = 0;
+
+export function getAppearanceMutationContext(
+    character: API_Character,
+): AppearanceMutationContext | undefined {
+    return (
+        appearanceMutationContexts.get(character) ??
+        deferredAppearanceMutationContexts.get(character)
+    );
+}
+
+export function takeAppearanceMutationContext(
+    character: API_Character,
+): AppearanceMutationContext | undefined {
+    const active = appearanceMutationContexts.get(character);
+    if (active) return active;
+    const deferred = deferredAppearanceMutationContexts.get(character);
+    deferredAppearanceMutationContexts.delete(character);
+    return deferred;
+}
+
+function createMutationContext(
+    character: API_Character,
+    options?: {
+        context?: Partial<AppearanceMutationContext>;
+        source?: AppearanceMutationSource;
+        reason?: string;
+        operationId?: string;
+        cleanupAllowed?: boolean;
+    },
+): AppearanceMutationContext {
+    const timestamp = Date.now();
+    const inherited = deferredAppearanceMutationContexts.get(character);
+    return {
+        operationId:
+            options?.operationId ??
+            inherited?.operationId ??
+            `appearance-${character.MemberNumber}-${timestamp}-${++mutationSequence}`,
+        timestamp,
+        source:
+            options?.source ??
+            options?.context?.source ??
+            inherited?.source ??
+            "unknown_external_mutation",
+        reason:
+            options?.reason ??
+            options?.context?.reason ??
+            inherited?.reason ??
+            "unknown_external_mutation",
+        ...(options?.cleanupAllowed !== undefined ||
+        options?.context?.cleanupAllowed !== undefined
+            ? {
+                  cleanupAllowed:
+                      options?.cleanupAllowed ??
+                      options?.context?.cleanupAllowed,
+              }
+            : inherited?.cleanupAllowed !== undefined
+              ? { cleanupAllowed: inherited.cleanupAllowed }
+              : {}),
+    };
+}
 
 /**
  * Registers the store-backed snapshot writer for a live room character.
@@ -28,7 +104,10 @@ const appearanceStateSynchronizers = new WeakMap<
  */
 export function registerAppearanceStateSynchronizer(
     character: API_Character,
-    synchronizer: (character: API_Character) => Promise<void>,
+    synchronizer: (
+        character: API_Character,
+        context?: AppearanceMutationContext,
+    ) => Promise<void>,
 ): void {
     appearanceStateSynchronizers.set(character, synchronizer);
 }
@@ -42,8 +121,18 @@ export async function syncAppearanceMutation(
     mutation: () => void | Promise<void>,
     delayMs: number = DEFAULT_SYNC_DELAY_MS,
     onSynchronized?: (character: API_Character) => Promise<void>,
-    options?: { throwOnSyncFailure?: boolean },
+    options?: {
+        throwOnSyncFailure?: boolean;
+        context?: Partial<AppearanceMutationContext>;
+        source?: AppearanceMutationSource;
+        reason?: string;
+        operationId?: string;
+        cleanupAllowed?: boolean;
+        deferStateSync?: boolean;
+    },
 ): Promise<void> {
+    const context = createMutationContext(character, options);
+    appearanceMutationContexts.set(character, context);
     try {
         // Execute the mutation
         await mutation();
@@ -57,9 +146,14 @@ export async function syncAppearanceMutation(
         }
 
         try {
-            await (
-                onSynchronized ?? appearanceStateSynchronizers.get(character)
-            )?.(character);
+            if (options?.deferStateSync) {
+                deferredAppearanceMutationContexts.set(character, context);
+            } else {
+                await (
+                    onSynchronized ??
+                    appearanceStateSynchronizers.get(character)
+                )?.(character, context);
+            }
         } catch (error) {
             logger.error(
                 `[AppearanceSync] Failed to persist appearance for ${character.MemberNumber}:`,
@@ -73,6 +167,8 @@ export async function syncAppearanceMutation(
             error,
         );
         throw error;
+    } finally {
+        appearanceMutationContexts.delete(character);
     }
 }
 

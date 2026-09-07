@@ -45,7 +45,11 @@ export class LiveAppearanceRemovalCoordinator {
         const existing = this.inFlight.get(operationKey);
         if (existing) return existing;
 
-        const pending = this.removeLiveTarget(character, target);
+        const pending = this.removeLiveTarget(
+            character,
+            releaseOperation,
+            target,
+        );
         this.inFlight.set(operationKey, pending);
         try {
             await pending;
@@ -58,6 +62,7 @@ export class LiveAppearanceRemovalCoordinator {
 
     private async removeLiveTarget(
         character: API_Character,
+        releaseOperation: string,
         target: LiveRemovalTarget,
     ): Promise<void> {
         let lastError: unknown;
@@ -85,8 +90,17 @@ export class LiveAppearanceRemovalCoordinator {
                     character,
                     () => character.Appearance.RemoveItem(target.group as any),
                     0,
-                    async () => undefined,
-                    { throwOnSyncFailure: true },
+                    undefined,
+                    {
+                        throwOnSyncFailure: true,
+                        source: "release",
+                        reason: "release_strip",
+                        operationId: releaseOperation,
+                        cleanupAllowed:
+                            target.group === "ItemMisc" &&
+                            target.name === "WoodenSign",
+                        deferStateSync: true,
+                    },
                 );
                 const remaining = filterValidAppearanceItems(
                     character.Appearance.MakeAppearanceBundle(),
