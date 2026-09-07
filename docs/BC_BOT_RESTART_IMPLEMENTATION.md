@@ -32,6 +32,18 @@ other bot and Discord/database services continue running. Operators should use
 `/bot-status` to identify the role, correct the BC room or network problem,
 then use `/bot-restart` only when a fresh connection is required.
 
+Containment readiness is gated on the confirmed main and shower map positions.
+After a room join or reconnect, Veratown reloads location triggers and
+reconciles occupants already standing on kennel or cage tiles before enabling
+those features. Kennel entry persists the session before applying the device
+and rolls the session back if the appearance mutation fails; repeated triggers
+are safe.
+
+If cage recovery has neither a persisted expiry nor a live crate timer, it
+remains fail-closed and logs the operator action required to repair the expiry
+or remove the crate manually. `/bot-status` and the application logs should be
+checked before treating a degraded initialization as fully ready.
+
 ### Architecture
 
 ```

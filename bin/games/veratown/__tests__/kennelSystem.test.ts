@@ -1,0 +1,144 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { KennelSystem } from "../kennelSystem";
+
+function createCharacter(memberNumber = 7) {
+    let device: any;
+    const character: any = {
+        MemberNumber: memberNumber,
+        MapPos: { X: 4, Y: 38 },
+        Appearance: {
+            AddItem: () => {
+                device = {
+                    Name: "Kennel",
+                    SetCraft: () => {},
+                    setProperty: (_key: string, value: unknown) => {
+                        device.property = value;
+                    },
+                };
+                return device;
+            },
+            getItemData: () => device,
+            RemoveItem: () => {
+                device = undefined;
+            },
+            MakeAppearanceBundle: () => [],
+        },
+    };
+    return {
+        character,
+        get device() {
+            return device;
+        },
+    };
+}
+
+function createMutationService(activeSession?: object) {
+    let session = activeSession;
+    const entries: number[] = [];
+    const exits: number[] = [];
+    return {
+        entries,
+        exits,
+        getActiveKennelSession: async () => session,
+        enterKennel: async (memberNumber: number) => {
+            if (session) return false;
+            session = { enteredAt: Date.now(), totalTime: 0 };
+            entries.push(memberNumber);
+            return true;
+        },
+        exitKennel: async (memberNumber: number) => {
+            exits.push(memberNumber);
+            session = undefined;
+            return true;
+        },
+    };
+}
+
+function createConnector(characters: any[]) {
+    const callbacks: Array<(character: any, previous: any) => void> = [];
+    const map = {
+        addTileTrigger: (_position: any, callback: any) => {
+            callbacks.push(callback);
+        },
+        removeTileTrigger: () => {},
+    };
+    return {
+        callbacks,
+        connector: { chatRoom: { map, characters } },
+    };
+}
+
+test("KennelSystem applies the device and records one session on tile entry", async () => {
+    const created = createCharacter();
+    const { character } = created;
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    callbacks[0](character, { X: 3, Y: 38 });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+
+    assert.equal(created.device?.Name, "Kennel");
+    assert.deepEqual(mutations.entries, [7]);
+});
+
+test("KennelSystem reconciles an occupant after location reload", async () => {
+    const created = createCharacter(8);
+    const { character } = created;
+    const mutations = createMutationService({
+        enteredAt: Date.now() - 1000,
+        totalTime: 0,
+    });
+    const { connector } = createConnector([character]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([]);
+
+    assert.equal(created.device?.Name, "Kennel");
+    assert.deepEqual(mutations.entries, []);
+});
+
+test("KennelSystem rolls back persistence when appearance mutation fails", async () => {
+    const { character } = createCharacter(9);
+    character.Appearance.AddItem = () => {
+        throw new Error("appearance unavailable");
+    };
+    const mutations = createMutationService();
+    const { connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await assert.rejects(
+        () => (system as any).onCharacterEnterKennel(character),
+        /appearance unavailable/,
+    );
+    assert.deepEqual(mutations.entries, [9]);
+    assert.deepEqual(mutations.exits, [9]);
+});

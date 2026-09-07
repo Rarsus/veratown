@@ -574,8 +574,16 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     {
                         memberNumber: character.MemberNumber,
                         observedAtMs: this.timer.now(),
+                        operatorAction:
+                            "Inspect and repair the persisted cage expiry or remove the crate manually",
                     },
                 );
+                this.logger.error("Cage recovery is fail-closed", undefined, {
+                    memberNumber: character.MemberNumber,
+                    observedAtMs: this.timer.now(),
+                    operatorAction:
+                        "Inspect and repair the persisted cage expiry or remove the crate manually",
+                });
                 return;
             }
             if (
@@ -584,6 +592,51 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     "FuturisticCrate"
             )
                 return;
+            if (
+                session &&
+                character.Appearance.getItemData("ItemDevices")?.Name !==
+                    "FuturisticCrate"
+            ) {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        const crate = character.Appearance.AddItem(
+                            AssetGet("ItemDevices", "FuturisticCrate"),
+                        );
+                        crate.SetCraft({
+                            Name: `Veratown Futuristic Crate`,
+                            Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+                        });
+                        crate.setProperty("TypeRecord", {
+                            w: 2,
+                            l: 3,
+                            a: 3,
+                            d: 1,
+                            t: 1,
+                            h: 4,
+                        });
+                        crate.setProperty("Mode", "Deny");
+                        crate.lock(
+                            "TimerPasswordPadlock",
+                            character.MemberNumber,
+                            {
+                                Password: CRATE_LOCK_PASSWORD,
+                                RemoveItem: true,
+                                RemoveTimer: authoritativeExpiry,
+                                ShowTimer: true,
+                                LockSet: true,
+                            },
+                        );
+                    },
+                    50,
+                    this.stateSync,
+                );
+                this.logger.info("Cage appearance reconciled", {
+                    memberNumber: character.MemberNumber,
+                    authoritativeExpiryMs: authoritativeExpiry,
+                    recoveredAtMs: this.timer.now(),
+                });
+            }
             this.cagedCharacters.set(character.MemberNumber, {
                 character,
                 cageName: session?.cageName ?? "Unknown cage",

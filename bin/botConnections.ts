@@ -33,6 +33,8 @@ export interface BotRecoveryStatus {
     lastRecoveredAt?: Date;
 }
 
+const RECOVERY_BACKOFF_MS = [0, 100, 250] as const;
+
 const recoveryStatuses = new WeakMap<API_Connector, BotRecoveryStatus>();
 const recoverySupervisors = new WeakMap<API_Connector, () => void>();
 
@@ -75,30 +77,65 @@ function superviseBotConnection(
     const recover = async (currentEpoch: number): Promise<void> => {
         const position = recoveryPosition(role, config);
         status.state = "recovering";
-        status.recoveryAttempts += 1;
         status.lastFailure = undefined;
-        logger.info("Recovering bot connection", {
-            role,
-            epoch: currentEpoch,
-            attempt: status.recoveryAttempts,
-        });
 
         try {
-            if (position) {
-                await connection.moveOnMapAndWait(position.X, position.Y);
+            let lastError: unknown;
+            for (let retry = 0; retry < RECOVERY_BACKOFF_MS.length; retry++) {
+                if (stopped || currentEpoch !== epoch) return;
+                const backoffMs = RECOVERY_BACKOFF_MS[retry];
+                if (backoffMs > 0)
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, backoffMs),
+                    );
+                status.recoveryAttempts += 1;
+                const attempt = status.recoveryAttempts;
+                logger.info("Recovering bot connection", {
+                    role,
+                    epoch: currentEpoch,
+                    attempt,
+                    backoffMs,
+                });
+                try {
+                    if (position) {
+                        await connection.moveOnMapAndWait(
+                            position.X,
+                            position.Y,
+                        );
+                    }
+                    if (stopped || currentEpoch !== epoch) return;
+
+                    if (role === "main" && config.game === "veratown") {
+                        connection.setBotDescription(Veratown.description);
+                    }
+                    status.state = "connected";
+                    status.lastRecoveredAt = new Date();
+                    logger.info("Bot connection recovered", {
+                        role,
+                        epoch: currentEpoch,
+                        attempt,
+                    });
+                    return;
+                } catch (error) {
+                    lastError = error;
+                    if (retry === RECOVERY_BACKOFF_MS.length - 1) break;
+                    logger.warn("Bot connection recovery attempt failed", {
+                        role,
+                        epoch: currentEpoch,
+                        attempt,
+                        nextRetryInMs:
+                            RECOVERY_BACKOFF_MS[
+                                RECOVERY_BACKOFF_MS.indexOf(backoffMs) + 1
+                            ],
+                        errorMessage:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
             }
             if (stopped || currentEpoch !== epoch) return;
-
-            if (role === "main" && config.game === "veratown") {
-                connection.setBotDescription(Veratown.description);
-            }
-            status.state = "connected";
-            status.lastRecoveredAt = new Date();
-            logger.info("Bot connection recovered", {
-                role,
-                epoch: currentEpoch,
-                attempt: status.recoveryAttempts,
-            });
+            throw lastError;
         } catch (error) {
             if (stopped || currentEpoch !== epoch) return;
             status.state = "failed";
@@ -175,6 +212,14 @@ export function getBotRecoveryStatuses(
             },
         ];
     });
+}
+
+export function isBotRecoveryReady(connection: API_Connector): boolean {
+    const status = recoveryStatuses.get(connection);
+    return (
+        connection.isConnected() &&
+        (status === undefined || status.state === "connected")
+    );
 }
 
 export function stopSupervisingBotConnections(

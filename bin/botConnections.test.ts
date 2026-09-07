@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     getBotAccountRoles,
+    isBotRecoveryReady,
     getBotRecoveryStatuses,
     stopSupervisingBotConnections,
     superviseBotConnections,
@@ -173,7 +174,7 @@ test("recovery failure leaves only the affected role unavailable", async () => {
     superviseBotConnections(connections as never, config({}));
     main.emit("Disconnected");
     main.emit("Connected");
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     assert.deepEqual(
         getBotRecoveryStatuses(connections as never).map(
@@ -188,10 +189,31 @@ test("recovery failure leaves only the affected role unavailable", async () => {
             {
                 role: "main",
                 state: "failed",
-                recoveryAttempts: 1,
+                recoveryAttempts: 3,
                 lastFailure: "movement unavailable",
             },
         ],
+    );
+    assert.equal(isBotRecoveryReady(main as never), false);
+    stopSupervisingBotConnections(connections as never);
+});
+
+test("recovery retries a transient map-position failure", async () => {
+    const main = createRecoveryConnection([new Error("map update delayed")]);
+    const connections = { main };
+
+    superviseBotConnections(connections as never, config({}));
+    main.emit("Disconnected");
+    main.emit("Connected");
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    assert.deepEqual(main.moves, [
+        { X: 10, Y: 8 },
+        { X: 10, Y: 8 },
+    ]);
+    assert.equal(
+        getBotRecoveryStatuses(connections as never)[0].state,
+        "connected",
     );
     stopSupervisingBotConnections(connections as never);
 });
@@ -226,7 +248,7 @@ function createConnection() {
     };
 }
 
-function createRecoveryConnection(error?: Error) {
+function createRecoveryConnection(error?: Error | Error[]) {
     const listeners = new Map<string, Set<() => void>>();
     const moves: Array<{ X: number; Y: number }> = [];
     let descriptions = 0;
@@ -252,7 +274,12 @@ function createRecoveryConnection(error?: Error) {
         },
         moveOnMapAndWait: async (X: number, Y: number) => {
             moves.push({ X, Y });
-            if (error) throw error;
+            if (Array.isArray(error)) {
+                const nextError = error.shift();
+                if (nextError) throw nextError;
+            } else if (error) {
+                throw error;
+            }
         },
         setBotDescription: () => {
             descriptions += 1;

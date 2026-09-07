@@ -37,7 +37,28 @@ function createCharacter(memberNumber = 251024) {
         MemberNumber: memberNumber,
         Tell: (_type: string, message: string) => messages.push(message),
         Appearance: {
-            getItemData: () => crate,
+            AddItem: () => {
+                crate = {
+                    Name: "FuturisticCrate",
+                    Property: {},
+                    SetCraft: () => {},
+                    setProperty: (key: string, value: unknown) => {
+                        crate.Property[key] = value;
+                    },
+                    lock: (
+                        _lock: string,
+                        _memberNumber: number,
+                        properties: Record<string, unknown>,
+                    ) => {
+                        crate.Property = {
+                            ...crate.Property,
+                            ...properties,
+                        };
+                    },
+                };
+                return crate;
+            },
+            getItemData: (_group?: string) => crate,
             RemoveItem: () => {
                 crate = undefined;
             },
@@ -190,6 +211,7 @@ test("CageSystem recovers a persisted cage expiry without duplicate entry notice
             cageName: "Cage 1",
         }),
     });
+
     const character = createCharacter();
     character.setCrate({
         Name: "FuturisticCrate",
@@ -214,5 +236,37 @@ test("CageSystem recovers a persisted cage expiry without duplicate entry notice
         character.messages.filter((message) => message.includes("releases you"))
             .length,
         1,
+    );
+});
+
+test("CageSystem restores a missing crate from persisted containment state", async () => {
+    const timer = new FakeTimer();
+    const mutations = Object.assign(createMutationService(), {
+        getActiveCageSession: async () => ({
+            enteredAt: 0,
+            expiresAt: 300_000,
+            duration: 300_000,
+            cageName: "Cage 1",
+        }),
+    });
+    const character = createCharacter();
+    const system = new CageSystem(
+        {} as any,
+        mutations as any,
+        undefined,
+        timer,
+    );
+
+    void (system as any).recoverCagedCharacter(character.character);
+    await new Promise((resolve) => setTimeout(resolve, 75));
+
+    assert.equal(
+        character.character.Appearance.getItemData("ItemDevices")?.Name,
+        "FuturisticCrate",
+    );
+    assert.equal(
+        character.character.Appearance.getItemData("ItemDevices")?.Property
+            ?.RemoveTimer,
+        300_000,
     );
 });

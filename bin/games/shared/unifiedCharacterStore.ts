@@ -1839,8 +1839,17 @@ export class UnifiedCharacterStore {
         };
         const sessions = [...currentSessions, kennelSession].slice(-10);
 
-        await this.profiles.updateOne(
-            { _id: memberNumber },
+        const result = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.kennelSessions": {
+                    $not: {
+                        $elemMatch: {
+                            releasedAt: { $exists: false },
+                        },
+                    },
+                },
+            },
             {
                 $set: {
                     "veratown.kennelSessions": sessions,
@@ -1853,6 +1862,7 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+        if (result.modifiedCount !== 1) return false;
 
         const event: GameEvent = {
             timestamp: now,
