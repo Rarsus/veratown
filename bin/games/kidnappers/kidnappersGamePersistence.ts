@@ -23,6 +23,7 @@ import {
     isTerminalPhase,
     type KidnappersGameEvent,
     type KidnappersGamePhase,
+    type KidnappersPlayerProgression,
     type KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
 
@@ -193,6 +194,47 @@ function validateSnapshot(
             throw new Error("snapshot contains an invalid or duplicate player");
         }
         members.add(player.memberNumber as number);
+    }
+    if (
+        snapshot.progressions !== undefined &&
+        !Array.isArray(snapshot.progressions)
+    ) {
+        throw new Error("snapshot progressions are invalid");
+    }
+    const progressionMembers = new Set<number>();
+    for (const progression of (snapshot.progressions ??
+        []) as readonly KidnappersPlayerProgression[]) {
+        const memberNumber = isRecord(progression)
+            ? progression.memberNumber
+            : undefined;
+        const player = snapshot.players.find(
+            (candidate) => candidate.memberNumber === memberNumber,
+        );
+        if (
+            !isRecord(progression) ||
+            !player ||
+            progressionMembers.has(progression.memberNumber) ||
+            !["captured", "restrained", "released"].includes(
+                progression.phase,
+            ) ||
+            !["bondage", "cage", "kennel"].includes(progression.containment) ||
+            !Number.isSafeInteger(progression.restraintLevel) ||
+            progression.restraintLevel < 1 ||
+            progression.restraintLevel > 3 ||
+            !Number.isSafeInteger(progression.escapeAttempts) ||
+            progression.escapeAttempts < 0 ||
+            !Number.isSafeInteger(progression.capturedAt) ||
+            (progression.nextEscapeAt !== null &&
+                !Number.isSafeInteger(progression.nextEscapeAt)) ||
+            (progression.releasedAt !== null &&
+                !Number.isSafeInteger(progression.releasedAt)) ||
+            (progression.phase !== "released" &&
+                player.status !== "captured") ||
+            (progression.phase === "released" && player.status === "captured")
+        ) {
+            throw new Error("snapshot contains an invalid progression");
+        }
+        progressionMembers.add(progression.memberNumber);
     }
     if (snapshot.turn !== undefined && snapshot.turn !== null) {
         const turn = snapshot.turn as unknown as Record<string, unknown>;

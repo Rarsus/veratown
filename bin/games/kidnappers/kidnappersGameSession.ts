@@ -22,6 +22,7 @@ import {
 import type {
     KidnappersGameCommand,
     KidnappersGameEvent,
+    KidnappersContainment,
     KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
 import { KidnappersGameError } from "./kidnappersGameErrors";
@@ -65,9 +66,14 @@ export class KidnappersGameSession {
         now: number = Date.now(),
         snapshot?: KidnappersSessionSnapshot,
         version = 0,
+        containment: KidnappersContainment = "bondage",
     ) {
         this.sessionId = sessionId;
-        this.stateMachine = new KidnappersGameStateMachine(sessionId, now);
+        this.stateMachine = new KidnappersGameStateMachine(
+            sessionId,
+            now,
+            containment,
+        );
         this.persistenceVersion = version;
         if (snapshot) this.stateMachine.restore(snapshot);
         this.logger = createLogger(`KidnappersGameSession:${sessionId}`);

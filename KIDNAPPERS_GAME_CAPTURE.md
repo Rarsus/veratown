@@ -41,3 +41,25 @@ committed snapshot. A failed accepted write restores the previous in-memory
 snapshot. A failed effect mutation can be retried with the same application
 key after the domain transition has committed; the mutation service treats the
 application as idempotent.
+
+## Capture-to-release progression
+
+An accepted `CAPTURE_RESOLVED` event with outcome `captured` creates one
+persisted progression record with restraint level 1 and zero escape attempts.
+The progression is game state, while appearance and containment changes remain
+owned by `GameStateMutationService`.
+
+`ATTEMPT_ESCAPE` is guarded by captured status, an unreleased progression, and
+the persisted `nextEscapeAt` cooldown. The first two valid attempts emit
+`ESCAPE_FAILED`, increase restraint level (capped at 3), and set a 30-second
+cooldown. The third valid attempt emits `PLAYER_RELEASED`, restores the player
+to `active`, and clears the cooldown. `RELEASE_PLAYER` is the explicit
+administrative release path.
+
+Capture, failed-escape, release, and terminal cleanup events use stable
+application/reward keys. Bondage application is keyed by its restraint item,
+so replaying an event cannot append a duplicate restraint. Terminal game
+transitions include the affected member numbers and clear progression state;
+the coordinator then removes bondage or exits the configured cage/kennel through
+the shared mutation boundary. Optional character-system failures are left
+retryable without rolling back the committed game transition.
