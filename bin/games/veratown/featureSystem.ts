@@ -24,6 +24,21 @@ import { createLogger } from "../../logging";
 
 const logger = createLogger("featureSystem");
 
+let nextLifecycleObjectId = 1;
+const lifecycleObjectIds = new WeakMap<object, number>();
+
+export function getLifecycleObjectId(
+    value: object | undefined,
+): number | undefined {
+    if (!value) return undefined;
+    let id = lifecycleObjectIds.get(value);
+    if (id === undefined) {
+        id = nextLifecycleObjectId++;
+        lifecycleObjectIds.set(value, id);
+    }
+    return id;
+}
+
 export interface VeratownFeatureSystem {
     // Stable, lowercase identifier used in admin commands, eg. "cage".
     readonly key: string;
@@ -32,10 +47,15 @@ export interface VeratownFeatureSystem {
     // Registers this system's map/message triggers. Called once during
     // Veratown startup and awaited before the room is considered ready.
     registerTriggers(): void | Promise<void>;
+    // Rebind room/map handlers after a room or map instance is replaced.
+    attachToRoom?(): void | Promise<void>;
+    // Remove every handler installed by attachToRoom().
+    detachFromRoom?(): void;
     // Refreshes database-backed positions and replaces any dynamic triggers.
     // Features without location-backed triggers may omit this method.
     reloadLocations?(locations: readonly VeratownLocationDoc[]): Promise<void>;
     isReady?(): boolean;
+    getDiagnostics?(): Record<string, unknown>;
     // Whether this feature is currently active. Handlers should check this
     // and no-op (optionally telling the character it's disabled) when
     // false, rather than the orchestrator trying to physically add/remove

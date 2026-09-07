@@ -38,7 +38,10 @@ import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { KeypadDoorSystem } from "./veratown/keypadDoorSystem";
 import { CatDogSystem } from "./veratown/catDogSystem";
 import { FurnitureBondageSystem } from "./veratown/furnitureBondageSystem";
-import { VeratownFeatureSystem } from "./veratown/featureSystem";
+import {
+    VeratownFeatureSystem,
+    getLifecycleObjectId,
+} from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
 import {
     VeratownLocationStore,
@@ -578,7 +581,6 @@ export class Veratown {
 
     public async init(): Promise<void> {
         await Promise.all(this.pendingFeatureRegistrations);
-        await this.reloadLocations();
 
         // Watch for database changes and automatically reload affected locations
         if (this.locationStore) {
@@ -592,8 +594,12 @@ export class Veratown {
             });
         }
 
+        this.setContainmentReady(false);
         await this.setupRoom();
         await this.setupCharacter();
+        this.attachContainmentFeatures();
+        await this.reloadLocations();
+        this.updateContainmentReadiness();
     }
 
     public async reloadLocations(): Promise<void> {
@@ -657,6 +663,19 @@ export class Veratown {
         return this.containmentReady;
     }
 
+    public getContainmentDiagnostics(): Record<string, unknown> {
+        return {
+            roomIdentity: this.conn.chatRoom
+                ? getLifecycleObjectId(this.conn.chatRoom)
+                : undefined,
+            mapIdentity: this.conn.chatRoom?.map
+                ? getLifecycleObjectId(this.conn.chatRoom.map)
+                : undefined,
+            cage: this.cageSystem?.getDiagnostics(),
+            kennel: this.kennelSystem?.getDiagnostics(),
+        };
+    }
+
     private setContainmentReady(ready: boolean): void {
         this.containmentReady = ready;
         if (this.cageSystem) this.cageSystem.enabled = ready;
@@ -672,14 +691,18 @@ export class Veratown {
     }
 
     private onChatRoomCreated = async () => {
+        this.detachContainmentFeatures();
         await this.setupRoom();
         await this.setupCharacter();
+        this.attachContainmentFeatures();
         await this.reloadLocations();
         this.updateContainmentReadiness();
     };
 
     private onChatRoomJoined = async () => {
+        this.detachContainmentFeatures();
         await this.setupCharacter();
+        this.attachContainmentFeatures();
         await this.reloadLocations();
         this.updateContainmentReadiness();
     };
@@ -700,8 +723,10 @@ export class Veratown {
             ) {
                 return;
             }
+            this.detachContainmentFeatures();
             await this.setupRoom();
             await this.setupCharacter();
+            this.attachContainmentFeatures();
             await this.reloadLocations();
             this.updateContainmentReadiness();
         } catch (error) {
@@ -711,8 +736,20 @@ export class Veratown {
     };
 
     private onBotDisconnected = () => {
+        this.detachContainmentFeatures();
         this.setContainmentReady(false);
     };
+
+    private detachContainmentFeatures(): void {
+        this.setContainmentReady(false);
+        this.cageSystem?.detachFromRoom?.();
+        this.kennelSystem?.detachFromRoom?.();
+    }
+
+    private attachContainmentFeatures(): void {
+        this.cageSystem?.attachToRoom?.();
+        this.kennelSystem?.attachToRoom?.();
+    }
 
     private onAuxiliaryBotConnected = async (
         connection: API_Connector,

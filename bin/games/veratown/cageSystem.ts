@@ -12,11 +12,17 @@
  * limitations under the License.
  */
 
-import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import {
+    API_Connector,
+    API_Character,
+    API_Chatroom,
+    API_Map,
+    AssetGet,
+} from "bc-bot";
 import { wait } from "../../hub/utils";
 import { durationString, remainingTimeString } from "../../utils";
 import { NarratorBot } from "./veratownNarrationUtils";
-import { guardHandler } from "./featureSystem";
+import { getLifecycleObjectId, guardHandler } from "./featureSystem";
 import {
     CAGES,
     CAGE_INFORMATION_SCREEN,
@@ -223,6 +229,13 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private readonly cageTrigger: ReturnType<typeof guardHandler>;
     private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
     private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
+    private boundRoom?: API_Chatroom;
+    private boundMap?: API_Map;
+    private boundCageTrigger?: (...args: any[]) => void;
+    private boundCageEntryTrigger?: (...args: any[]) => void;
+    private boundCageInformationTrigger?: (...args: any[]) => void;
+    private lastSuccessfulBindAt?: number;
+    private lastSuccessfulReconciliationAt?: number;
 
     public constructor(
         conn: API_Connector,
@@ -244,11 +257,70 @@ export class CageSystem extends AbstractTileFeatureSystem {
     }
 
     public registerTriggers(): void {
-        // Register region trigger for cage information screen (doesn't depend on locations)
-        this.conn.chatRoom!.map.addEnterRegionTrigger(
-            CAGE_INFORMATION_SCREEN,
-            this.cageInformationTrigger,
-        );
+        this.attachToRoom();
+    }
+
+    public attachToRoom(): void {
+        const room = this.conn.chatRoom;
+        if (
+            room &&
+            this.boundRoom === room &&
+            this.boundMap === room.map &&
+            this.boundCageInformationTrigger
+        ) {
+            return;
+        }
+        this.detachFromRoom();
+        if (!room) return;
+
+        const map = room.map;
+        const informationTrigger = guardHandler(this.key, (...args: any[]) => {
+            if (this.boundRoom !== room || this.boundMap !== map) return;
+            this.cageInformationTrigger(...args);
+        });
+        this.boundRoom = room;
+        this.boundMap = map;
+        this.boundCageInformationTrigger = informationTrigger;
+        map.addEnterRegionTrigger(CAGE_INFORMATION_SCREEN, informationTrigger);
+        this.lastSuccessfulBindAt = Date.now();
+    }
+
+    public detachFromRoom(): void {
+        const map = this.boundMap;
+        if (!map) {
+            this.boundRoom = undefined;
+            this.triggersReady = false;
+            return;
+        }
+        this.unregisterMapTriggers(map);
+        if (this.boundCageInformationTrigger) {
+            map.removeEnterRegionTrigger(this.boundCageInformationTrigger);
+        }
+        this.boundRoom = undefined;
+        this.boundMap = undefined;
+        this.boundCageInformationTrigger = undefined;
+        this.triggersReady = false;
+    }
+
+    private unregisterMapTriggers(map: API_Map): void {
+        for (const posKey of this.cagesByPos.keys()) {
+            const [x, y] = posKey.split(",").map(Number);
+            map.removeTileTrigger(
+                x,
+                y,
+                this.boundCageTrigger ?? this.cageTrigger,
+            );
+        }
+        for (const posKey of this.cageEntriesByPos.keys()) {
+            const [x, y] = posKey.split(",").map(Number);
+            map.removeTileTrigger(
+                x,
+                y,
+                this.boundCageEntryTrigger ?? this.cageEntryTrigger,
+            );
+        }
+        this.boundCageTrigger = undefined;
+        this.boundCageEntryTrigger = undefined;
     }
 
     /**
@@ -260,22 +332,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
     ): Promise<void> {
         this.triggersReady = false;
         try {
-            for (const posKey of this.cagesByPos.keys()) {
-                const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom!.map.removeTileTrigger(
-                    x,
-                    y,
-                    this.cageTrigger,
-                );
-            }
-            for (const posKey of this.cageEntriesByPos.keys()) {
-                const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom!.map.removeTileTrigger(
-                    x,
-                    y,
-                    this.cageEntryTrigger,
-                );
-            }
+            this.attachToRoom();
+            const room = this.boundRoom;
+            const map = this.boundMap;
+            if (!room || !map) return;
+            this.unregisterMapTriggers(map);
             this.cagesByPos.clear();
             this.cageEntriesByPos.clear();
 
@@ -358,24 +419,34 @@ export class CageSystem extends AbstractTileFeatureSystem {
             }
 
             // Register tile triggers for cage positions
+            const cageTrigger = this.guardTileHandler(
+                (character: API_Character) => {
+                    if (this.boundRoom !== room || this.boundMap !== map)
+                        return;
+                    this.cageTrigger(character);
+                },
+            );
+            this.boundCageTrigger = cageTrigger;
             for (const posKey of this.cagesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom!.map.addTileTrigger(
-                    { X: x, Y: y },
-                    this.cageTrigger,
-                );
+                map.addTileTrigger({ X: x, Y: y }, cageTrigger);
             }
 
             // Register tile triggers for cage entry positions
+            const cageEntryTrigger = this.guardTileHandler(
+                (character: API_Character) => {
+                    if (this.boundRoom !== room || this.boundMap !== map)
+                        return;
+                    this.cageEntryTrigger(character);
+                },
+            );
+            this.boundCageEntryTrigger = cageEntryTrigger;
             for (const posKey of this.cageEntriesByPos.keys()) {
                 const [x, y] = posKey.split(",").map(Number);
-                this.conn.chatRoom!.map.addTileTrigger(
-                    { X: x, Y: y },
-                    this.cageEntryTrigger,
-                );
+                map.addTileTrigger({ X: x, Y: y }, cageEntryTrigger);
             }
             this.triggersReady = true;
-            for (const character of this.conn.chatRoom?.characters ?? []) {
+            for (const character of room.characters) {
                 void this.recoverCagedCharacter(character).catch((error) => {
                     this.logger.error("Cage recovery failed", {
                         memberNumber: character.MemberNumber,
@@ -398,6 +469,25 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     public isReady(): boolean {
         return this.triggersReady;
+    }
+
+    public getDiagnostics(): Record<string, unknown> {
+        return {
+            roomIdentity: getLifecycleObjectId(this.boundRoom),
+            mapIdentity: getLifecycleObjectId(this.boundMap),
+            mapReady: !!this.boundMap,
+            triggersReady: this.triggersReady,
+            tileTriggerCount:
+                (this.boundCageTrigger ? this.cagesByPos.size : 0) +
+                (this.boundCageEntryTrigger ? this.cageEntriesByPos.size : 0),
+            regionTriggerCount: this.boundCageInformationTrigger ? 1 : 0,
+            listenerBinding: {
+                roomBound: !!this.boundRoom,
+                mapBound: !!this.boundMap,
+            },
+            lastSuccessfulBindAt: this.lastSuccessfulBindAt,
+            lastSuccessfulReconciliationAt: this.lastSuccessfulReconciliationAt,
+        };
     }
 
     // Removes a caged character's crate immediately, regardless of the
@@ -722,6 +812,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 liveCratePresent: this.isWearingCage(character),
             });
             this.recordRecoveryStatus(character.MemberNumber, assessment);
+            this.lastSuccessfulReconciliationAt = Date.now();
 
             if (assessment.classification === "not-contained") {
                 return;

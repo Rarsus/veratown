@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import { durationString } from "../../../utils";
 import {
@@ -91,6 +92,60 @@ function createMutationService() {
         enterCage: async (memberNumber: number) => {
             entries.push(memberNumber);
             return true;
+        },
+    };
+}
+
+function createLifecycleConnector() {
+    const createRoom = () => {
+        const room = new EventEmitter() as any;
+        const tileTriggers: any[] = [];
+        const regionTriggers: any[] = [];
+        room.characters = [];
+        room.map = {
+            addTileTrigger: (position: any, callback: any) => {
+                tileTriggers.push({ position, callback });
+            },
+            removeTileTrigger: (_x: number, _y: number, callback: any) => {
+                for (let index = tileTriggers.length - 1; index >= 0; index--) {
+                    if (tileTriggers[index].callback === callback) {
+                        tileTriggers.splice(index, 1);
+                    }
+                }
+            },
+            addEnterRegionTrigger: (region: any, callback: any) => {
+                regionTriggers.push({ region, callback });
+            },
+            removeEnterRegionTrigger: (callback: any) => {
+                for (
+                    let index = regionTriggers.length - 1;
+                    index >= 0;
+                    index--
+                ) {
+                    if (regionTriggers[index].callback === callback) {
+                        regionTriggers.splice(index, 1);
+                    }
+                }
+            },
+            tileTriggers,
+            regionTriggers,
+        };
+        return room;
+    };
+
+    let room = createRoom();
+    const connector = new EventEmitter() as any;
+    Object.defineProperty(connector, "chatRoom", {
+        get: () => room,
+    });
+    return {
+        connector,
+        get room() {
+            return room;
+        },
+        replaceRoom() {
+            room = createRoom();
+            return room;
         },
     };
 }
@@ -361,4 +416,43 @@ test("CageSystem preserves a live crate while creating durable state", async () 
         character.character.Appearance.getItemData("ItemDevices")?.Name,
         "FuturisticCrate",
     );
+});
+
+test("CageSystem rebinds map triggers without retaining stale room callbacks", async () => {
+    const lifecycle = createLifecycleConnector();
+    const system = new CageSystem(
+        lifecycle.connector,
+        createMutationService() as any,
+    );
+    const location = {
+        key: "cage",
+        name: "Cage",
+        type: "cage" as const,
+        x: 10,
+        y: 10,
+        data: { entryX: 9, entryY: 10 },
+        enabled: true,
+        createdAt: 0,
+        updatedAt: 0,
+    };
+
+    await system.reloadLocations([location]);
+    const oldRoom = lifecycle.room;
+    const oldTileTrigger = oldRoom.map.tileTriggers[0].callback;
+    assert.equal(oldRoom.map.regionTriggers.length, 1);
+
+    const newRoom = lifecycle.replaceRoom();
+    system.attachToRoom();
+    await system.reloadLocations([location]);
+    system.attachToRoom();
+
+    assert.equal(oldRoom.map.tileTriggers.length, 0);
+    assert.equal(oldRoom.map.regionTriggers.length, 0);
+    assert.equal(newRoom.map.tileTriggers.length, 2);
+    assert.equal(newRoom.map.regionTriggers.length, 1);
+    assert.equal(system.isReady(), true);
+
+    oldTileTrigger(createCharacter(16).character);
+    assert.equal(system.isReady(), true);
+    assert.equal(system.getDiagnostics().tileTriggerCount, 2);
 });

@@ -12,7 +12,13 @@
  * limitations under the License.
  */
 
-import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import {
+    API_Connector,
+    API_Character,
+    API_Chatroom,
+    API_Map,
+    AssetGet,
+} from "bc-bot";
 import { wait } from "../../hub/utils";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
@@ -21,6 +27,7 @@ import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
+import { getLifecycleObjectId } from "./featureSystem";
 
 // Owns kennel containment from entry through release. A session remains open
 // while the character is on a kennel tile or wearing the Kennel device.
@@ -39,6 +46,12 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     private readonly kennelExitTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
+    private boundRoom?: API_Chatroom;
+    private boundMap?: API_Map;
+    private boundKennelTrigger?: (...args: any[]) => void;
+    private boundKennelExitTrigger?: (...args: any[]) => void;
+    private lastSuccessfulBindAt?: number;
+    private lastSuccessfulReconciliationAt?: number;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
     public constructor(
@@ -57,9 +70,61 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     }
 
     public registerTriggers(): void {
-        // Location-backed triggers are registered by reloadLocations().
+        this.attachToRoom();
+    }
+
+    public attachToRoom(): void {
+        const room = this.conn.chatRoom;
+        if (
+            room &&
+            this.boundRoom === room &&
+            this.boundMap === room.map &&
+            this.boundRoomListenerAttached
+        ) {
+            return;
+        }
+        this.detachFromRoom();
+        if (!room) return;
+
+        this.boundRoom = room;
+        this.boundMap = room.map;
         this.conn.on("CharacterSync", this.onCharacterSync);
-        this.conn.chatRoom?.on("ItemRemove", this.onCharacterItemRemove);
+        room.on("ItemRemove", this.onCharacterItemRemove);
+        this.boundRoomListenerAttached = true;
+        this.lastSuccessfulBindAt = Date.now();
+    }
+
+    public detachFromRoom(): void {
+        const map = this.boundMap;
+        if (map) this.unregisterMapTriggers(map);
+        if (this.boundRoom) {
+            (this.boundRoom as any).off?.(
+                "ItemRemove",
+                this.onCharacterItemRemove,
+            );
+        }
+        (this.conn as any).off?.("CharacterSync", this.onCharacterSync);
+        this.boundRoom = undefined;
+        this.boundMap = undefined;
+        this.boundRoomListenerAttached = false;
+        this.triggersReady = false;
+    }
+
+    private boundRoomListenerAttached = false;
+
+    private unregisterMapTriggers(map: API_Map): void {
+        for (const kennelPos of this.kennelPositions) {
+            map.removeTileTrigger(
+                kennelPos.X,
+                kennelPos.Y,
+                this.boundKennelTrigger ?? this.kennelTrigger,
+            );
+        }
+        map.removeLeaveRegionTrigger(
+            this.boundKennelExitTrigger ?? this.kennelExitTrigger,
+        );
+        this.boundKennelTrigger = undefined;
+        this.boundKennelExitTrigger = undefined;
     }
 
     public async reloadLocations(
@@ -67,16 +132,11 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     ): Promise<void> {
         this.triggersReady = false;
         try {
-            for (const kennelPos of this.kennelPositions) {
-                this.conn.chatRoom!.map.removeTileTrigger(
-                    kennelPos.X,
-                    kennelPos.Y,
-                    this.kennelTrigger,
-                );
-            }
-            this.conn.chatRoom!.map.removeLeaveRegionTrigger(
-                this.kennelExitTrigger,
-            );
+            this.attachToRoom();
+            const room = this.boundRoom;
+            const map = this.boundMap;
+            if (!room || !map) return;
+            this.unregisterMapTriggers(map);
             this.kennelPositions = locations
                 .filter((loc) => loc.type === "kennel" && loc.enabled)
                 .map((kennel) => ({ X: kennel.x!, Y: kennel.y! }));
@@ -85,37 +145,48 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 this.kennelPositions = [...KENNEL_POSITIONS];
             }
 
+            const kennelTrigger = this.guardTileHandler(
+                (character: API_Character) => {
+                    if (this.boundRoom !== room || this.boundMap !== map)
+                        return;
+                    this.kennelTrigger(character);
+                },
+            );
+            const kennelExitTrigger = this.guardTileHandler(
+                (character: API_Character) => {
+                    if (this.boundRoom !== room || this.boundMap !== map)
+                        return;
+                    this.kennelExitTrigger(character);
+                },
+            );
+            this.boundKennelTrigger = kennelTrigger;
+            this.boundKennelExitTrigger = kennelExitTrigger;
             for (const kennelPos of this.kennelPositions) {
-                this.conn.chatRoom!.map.addTileTrigger(
-                    kennelPos,
-                    this.kennelTrigger,
-                );
-                this.conn.chatRoom!.map.addLeaveRegionTrigger(
+                map.addTileTrigger(kennelPos, kennelTrigger);
+                map.addLeaveRegionTrigger(
                     {
                         TopLeft: kennelPos,
                         BottomRight: kennelPos,
                     },
-                    this.kennelExitTrigger,
+                    kennelExitTrigger,
                 );
             }
 
             const occupants = (
                 await Promise.all(
-                    (this.conn.chatRoom?.characters ?? []).map(
-                        async (character) => {
-                            if (
-                                this.isKennelPosition(character) ||
-                                character.Appearance.getItemData("ItemDevices")
-                                    ?.Name === "Kennel" ||
-                                (await this.mutationService?.getActiveKennelSession?.(
-                                    character.MemberNumber,
-                                ))
-                            ) {
-                                return character;
-                            }
-                            return undefined;
-                        },
-                    ),
+                    room.characters.map(async (character) => {
+                        if (
+                            this.isKennelPosition(character) ||
+                            character.Appearance.getItemData("ItemDevices")
+                                ?.Name === "Kennel" ||
+                            (await this.mutationService?.getActiveKennelSession?.(
+                                character.MemberNumber,
+                            ))
+                        ) {
+                            return character;
+                        }
+                        return undefined;
+                    }),
                 )
             ).filter((character): character is API_Character => !!character);
             await Promise.all(
@@ -128,6 +199,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     }),
                 ),
             );
+            this.lastSuccessfulReconciliationAt = Date.now();
 
             this.logger?.info(
                 `[KennelSystem] Registered ${this.kennelPositions.length} kennel location(s)`,
@@ -144,6 +216,27 @@ export class KennelSystem extends AbstractTileFeatureSystem {
 
     public isReady(): boolean {
         return this.triggersReady;
+    }
+
+    public getDiagnostics(): Record<string, unknown> {
+        return {
+            roomIdentity: getLifecycleObjectId(this.boundRoom),
+            mapIdentity: getLifecycleObjectId(this.boundMap),
+            mapReady: !!this.boundMap,
+            triggersReady: this.triggersReady,
+            tileTriggerCount: this.boundKennelTrigger
+                ? this.kennelPositions.length
+                : 0,
+            regionTriggerCount: this.boundKennelExitTrigger
+                ? this.kennelPositions.length
+                : 0,
+            listenerBinding: {
+                characterSync: this.boundRoomListenerAttached,
+                itemRemove: this.boundRoomListenerAttached && !!this.boundRoom,
+            },
+            lastSuccessfulBindAt: this.lastSuccessfulBindAt,
+            lastSuccessfulReconciliationAt: this.lastSuccessfulReconciliationAt,
+        };
     }
 
     private onCharacterEnterKennel = async (character: API_Character) => {
@@ -247,6 +340,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     };
 
     private onCharacterSync = (character: API_Character): void => {
+        if (!this.isActiveCharacter(character)) return;
         void this.reconcileCharacter(character).catch((error) => {
             this.logger.error("Kennel character reconciliation failed", error, {
                 memberNumber: character.MemberNumber,
@@ -258,6 +352,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         character: API_Character,
         items: Array<{ Group?: string; Name?: string }>,
     ): void => {
+        if (!this.isActiveCharacter(character)) return;
         if (
             !items.some(
                 (item) =>
@@ -268,6 +363,11 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         }
         this.onCharacterSync(character);
     };
+
+    private isActiveCharacter(character: API_Character): boolean {
+        const characters = this.boundRoom?.characters ?? [];
+        return characters.some((candidate) => candidate === character);
+    }
 
     private isKennelPosition(character: API_Character): boolean {
         return this.kennelPositions.some(
