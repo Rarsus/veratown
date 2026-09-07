@@ -35,6 +35,7 @@ function createStore() {
             cageName: string,
             duration: number,
             actor: number,
+            enteredAt = Date.now(),
         ) => {
             if (
                 profile.veratown.cageIncarcerations.some(
@@ -46,7 +47,8 @@ function createStore() {
             profile.veratown.cageIncarcerations.push({
                 cageName,
                 duration,
-                enteredAt: Date.now(),
+                enteredAt,
+                expiresAt: enteredAt + duration,
                 detailedBy: actor,
             });
             calls.push("cage-entry");
@@ -272,6 +274,24 @@ test("GameStateMutationService records idempotent cage and kennel sessions", asy
             "audit:exitKennel",
         ],
     );
+});
+
+test("GameStateMutationService preserves the authoritative cage entry time", async () => {
+    const store = createStore();
+    const service = new GameStateMutationServiceImpl(
+        store as any,
+        new EventBus(),
+    );
+
+    await service.enterCage(1, "cell", 300_000, 99, 1_000);
+
+    assert.deepEqual(store.profile.veratown.cageIncarcerations[0], {
+        cageName: "cell",
+        duration: 300_000,
+        enteredAt: 1_000,
+        expiresAt: 301_000,
+        detailedBy: 99,
+    });
 });
 
 test("GameStateMutationService does not audit failed containment persistence", async () => {

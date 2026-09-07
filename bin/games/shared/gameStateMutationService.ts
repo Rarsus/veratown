@@ -22,6 +22,7 @@ import {
     CharacterBioUpdate,
     ProgressionAwardResult,
     ProgressionRollbackResult,
+    CageSession,
 } from "./unifiedCharacterTypes";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
@@ -140,7 +141,11 @@ export interface GameStateMutationService {
         cageName: string,
         durationMs?: number,
         actor?: number,
+        enteredAt?: number,
     ): Promise<boolean>;
+    getActiveCageSession(
+        memberNumber: number,
+    ): Promise<CageSession | undefined>;
     exitCage(memberNumber: number, actor?: number): Promise<boolean>;
     enterKennel(memberNumber: number, actor?: number): Promise<boolean>;
     exitKennel(memberNumber: number, actor?: number): Promise<boolean>;
@@ -215,6 +220,7 @@ type MutationStore = Pick<
     | "applyEffect"
     | "cancelEffect"
     | "getActiveEffects"
+    | "getVeratownView"
     | "recordCageEntry"
     | "recordCageExit"
     | "recordKennelEntry"
@@ -859,6 +865,7 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         cageName: string,
         durationMs?: number,
         actor = memberNumber,
+        enteredAt?: number,
     ): Promise<boolean> {
         this.validateMember(memberNumber);
         if (!cageName)
@@ -872,6 +879,7 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                 cageName,
                 durationMs ?? 0,
                 actor,
+                enteredAt,
             );
             if (!applied) return false;
             await this.audit(
@@ -880,11 +888,26 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                 {
                     cageName,
                     durationMs,
+                    enteredAt,
+                    expiresAt:
+                        enteredAt === undefined || durationMs === undefined
+                            ? undefined
+                            : enteredAt + durationMs,
                 },
                 actor,
             );
             return true;
         }, "enterCage");
+    }
+
+    public async getActiveCageSession(
+        memberNumber: number,
+    ): Promise<CageSession | undefined> {
+        this.validateMember(memberNumber);
+        const view = await this.unifiedStore.getVeratownView(memberNumber);
+        return [...view.cageIncarcerations]
+            .reverse()
+            .find((session) => !session.releasedAt);
     }
 
     public async exitCage(
