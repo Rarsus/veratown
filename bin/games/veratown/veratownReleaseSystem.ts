@@ -32,6 +32,8 @@ import {
 } from "./veratownConfig";
 import {
     createIdempotentMonitor,
+    filterValidAppearanceItems,
+    LiveAppearanceRemovalCoordinator,
     PosturePreserver,
     syncAppearanceMutation,
 } from "./shared";
@@ -150,6 +152,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private paroleMonitor = createIdempotentMonitor<API_Character>(
         "ReleaseSystem.parole",
     );
+    private readonly liveRemovalCoordinator =
+        new LiveAppearanceRemovalCoordinator();
+    private releaseOperationSequence = 0;
 
     public constructor(
         private conn: API_Connector,
@@ -1073,21 +1078,20 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         // Stripping operations can reset pose/kneeling state; we'll restore it after
         const posturePreserver = new PosturePreserver(character);
 
-        const appearance = character.Appearance.MakeAppearanceBundle() as any[];
+        const appearance =
+            character.Appearance.MakeAppearanceBundle() as unknown[];
+        const validAppearance = filterValidAppearanceItems(appearance);
+        const releaseOperation = `release-${character.MemberNumber}-${++this.releaseOperationSequence}`;
         const removedItems: RemovedBondageItem[] = [];
         const ownerLockedItems: RemovedBondageItem[] = [];
         const preservedCosplayItems: RemovedBondageItem[] = [];
-        const failedRemovals: RemovedBondageItem[] = [];
 
         // Separate items into categories based on their actual asset definitions:
         // - Owner-locked: preserved due to lock type (OwnerPadlock/OwnerTimerPadlock)
         // - Cosplay/Cosmetics: preserved (BodyCosplay items like tattoos, wings, tails)
         // - Removable: clothing and bondage items without owner locks
-        for (const item of appearance) {
-            if (!item?.Group || !item?.Name) {
-                continue;
-            }
-
+        for (const appearanceItem of validAppearance) {
+            const item = appearanceItem as any;
             const bondageItem: RemovedBondageItem = {
                 group: item.Group,
                 name: item.Name,
@@ -1122,7 +1126,15 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         this.log("info", "release_appearance_classified", {
             memberId: character.MemberNumber,
-            classifiedItems: appearance.map((item) => ({
+            releaseOperation,
+            ignoredItems: appearance
+                .filter((item) => !filterValidAppearanceItems([item]).length)
+                .map((item: any) => ({
+                    group: item?.Group,
+                    name: item?.Name,
+                    reason: "invalid_or_empty",
+                })),
+            classifiedItems: validAppearance.map((item: any) => ({
                 group: item.Group,
                 name: item.Name,
                 lockType: item.Property?.Lock,
@@ -1136,6 +1148,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             attemptedRemovals: removedItems.map((item) => ({
                 group: item.group,
                 name: item.name,
+            })),
+            plannedItems: removedItems.map((item) => ({
+                group: item.group,
+                name: item.name,
+                lockType: item.lockType,
             })),
             preservedOwnerLockedItems: ownerLockedItems.map((item) => ({
                 group: item.group,
@@ -1165,8 +1182,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
 
-        // Remove unlocked bondage items individually and slowly
-        // This avoids both WCE detection and any interference with owner-locked items
+        // Remove live targets through one operation/item-keyed coordinator.
         if (removedItems.length > 0) {
             this.logger?.info(
                 `[ReleaseSystem] Removing ${removedItems.length} unlocked bondage items`,
@@ -1174,18 +1190,33 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             for (const item of removedItems) {
                 try {
-                    character.Appearance.RemoveItem(item.group as any);
+                    await this.liveRemovalCoordinator.remove(
+                        character,
+                        releaseOperation,
+                        item,
+                    );
                     this.logger?.info(
                         `[ReleaseSystem] Removed unlocked item: ${item.name}`,
                     );
-                } catch (e) {
-                    failedRemovals.push(item);
+                } catch (error) {
                     this.logger?.error(
                         `[ReleaseSystem] Error removing item ${item.name}:`,
-                        e,
+                        error,
+                    );
+                    this.log("error", "release_appearance_removal_failed", {
+                        memberId: character.MemberNumber,
+                        releaseOperation,
+                        target: {
+                            group: item.group,
+                            name: item.name,
+                            lockType: item.lockType,
+                        },
+                    });
+                    throw new Error(
+                        `Release appearance verification failed for ${character.MemberNumber}`,
+                        { cause: error },
                     );
                 }
-                // Small delay between removals to further avoid WCE detection
                 await wait(50);
             }
         }
@@ -1196,8 +1227,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         // Re-read the live bundle after every removal phase. A failed or ignored
         // RemoveItem must stop release before parole or door access is granted.
-        const finalAppearance =
-            character.Appearance.MakeAppearanceBundle() as any[];
+        const finalAppearance = filterValidAppearanceItems(
+            character.Appearance.MakeAppearanceBundle(),
+        );
         const removedKeys = new Set(
             removedItems.map((item) => `${item.group}/${item.name}`),
         );
@@ -1205,7 +1237,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             removedKeys.has(`${item.Group}/${item.Name}`),
         );
         const remainingNonOwnerBondage = finalAppearance.filter(
-            (item) =>
+            (item: any) =>
                 isBind(item) &&
                 item.Property?.Lock !== "OwnerPadlock" &&
                 item.Property?.Lock !== "OwnerTimerPadlock",
@@ -1213,7 +1245,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         const missingOwnerLockedItems = ownerLockedItems.filter(
             (item) =>
                 !finalAppearance.some(
-                    (current) =>
+                    (current: any) =>
                         current.Group === item.group &&
                         current.Name === item.name &&
                         (current.Property?.Lock === "OwnerPadlock" ||
@@ -1223,6 +1255,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
         this.log("info", "release_appearance_verified", {
             memberId: character.MemberNumber,
+            releaseOperation,
             successfulRemovals: removedItems
                 .filter(
                     (item) =>
@@ -1233,11 +1266,22 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         ),
                 )
                 .map((item) => ({ group: item.group, name: item.name })),
-            failedRemovals: failedRemovals.map((item) => ({
+            removedItems: removedItems
+                .filter(
+                    (item) =>
+                        !remainingExpectedItems.some(
+                            (remaining) =>
+                                remaining.Group === item.group &&
+                                remaining.Name === item.name,
+                        ),
+                )
+                .map((item) => ({ group: item.group, name: item.name })),
+            preservedOwnerLockedItems: ownerLockedItems.map((item) => ({
                 group: item.group,
                 name: item.name,
+                lockType: item.lockType,
             })),
-            preservedOwnerLockedItems: ownerLockedItems.map((item) => ({
+            preservedOwnerLocks: ownerLockedItems.map((item) => ({
                 group: item.group,
                 name: item.name,
                 lockType: item.lockType,
@@ -1248,12 +1292,16 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     name: item.Name,
                 })),
                 remainingNonOwnerBondage: remainingNonOwnerBondage.map(
-                    (item) => ({
+                    (item: any) => ({
                         group: item.Group,
                         name: item.Name,
                         lockType: item.Property?.Lock,
                     }),
                 ),
+                remainingTargetItems: remainingExpectedItems.map((item) => ({
+                    group: item.Group,
+                    name: item.Name,
+                })),
                 missingOwnerLockedItems: missingOwnerLockedItems.map(
                     (item) => ({
                         group: item.group,
@@ -1265,7 +1313,6 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         });
 
         if (
-            failedRemovals.length > 0 ||
             remainingExpectedItems.length > 0 ||
             remainingNonOwnerBondage.length > 0 ||
             missingOwnerLockedItems.length > 0
