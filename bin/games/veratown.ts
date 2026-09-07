@@ -794,6 +794,7 @@ export class Veratown {
         ): boolean =>
             !!connection &&
             isBotRecoveryReady(connection) &&
+            connection.chatRoom?.Name === this.conn.chatRoom?.Name &&
             !!connection.chatRoom?.map &&
             connection.Player.MapPos.X === position.X &&
             connection.Player.MapPos.Y === position.Y;

@@ -282,6 +282,7 @@ function createRecoveryConnection(
     let descriptions = 0;
     return {
         Player: player,
+        chatRoom: { map: {} },
         moves,
         get descriptions() {
             return descriptions;
