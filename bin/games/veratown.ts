@@ -463,6 +463,10 @@ export class Veratown {
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
+                    (character) =>
+                        this.liveCharacterStateSync
+                            ?.syncCharacter(character)
+                            .then(() => undefined) ?? Promise.resolve(),
                 ),
         );
 
