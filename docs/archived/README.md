@@ -2,7 +2,7 @@
 
 Historical documentation from previous development phases and epics. These documents are preserved for reference but may not reflect the current system state.
 
-> Archived status reports are explicitly deprecated. For the current baseline, use [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_05.md) and [Current Hybrid Strategy Plan](../../HYBRID_STRATEGY_CURRENT_PLAN.md).
+> Archived status reports are explicitly deprecated. For the current baseline, use [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_07.md) and [Current Hybrid Strategy Plan](../../HYBRID_STRATEGY_CURRENT_PLAN.md).
 
 ## Why These Are Archived
 
@@ -46,6 +46,7 @@ Historical documentation from previous development phases and epics. These docum
 - GITHUB_ISSUES_STATUS_ASSESSMENT_DEPRECATED.md
 - GITHUB_ISSUES_VALIDATION_REPORT_2026_09_03_DEPRECATED.md
 - HYBRID_STRATEGY_IMPLEMENTATION_PLAN_2026_09_04_DEPRECATED.md
+- IMPLEMENTATION_STATUS_2026_09_05_DEPRECATED.md
 
 ---
 

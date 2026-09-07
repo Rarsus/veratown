@@ -21,15 +21,16 @@
 
 ## 🏗️ Architecture Understanding
 
-## Current Implementation Status (2026-09-05)
+## Current Implementation Status (2026-09-07)
 
-The authoritative status is [IMPLEMENTATION_STATUS_2026_09_05.md](IMPLEMENTATION_STATUS_2026_09_05.md).
+The authoritative status is [IMPLEMENTATION_STATUS_2026_09_07.md](IMPLEMENTATION_STATUS_2026_09_07.md).
 
 - Phase 1 is complete: DI, abstract feature foundations, mutation boundaries, EventBus, DeviceFactory, and the Phase 1 test foundation are implemented.
-- Phase 2A child systems are implemented, but Phase 2A remains open until integration, performance, coverage, strict TypeScript, rollback, and handoff gates in GitHub issue #59 pass.
-- Phase 2B (KidnappersGame) has not substantively started. Its work must be broken into dependency-ordered child issues under #30 before implementation begins.
-- Phase 3 and Phase 4 are blocked until both Phase 2 tracks complete their exit gates.
-- Do not repeat historical claims that strict TypeScript has zero errors. The current checkout must pass `npm run types`; the current known failures are documented in the status report.
+- Phase 2A handoff #59 is complete.
+- Phase 2B KidnappersGame #30 is complete: all nine child issues are closed and production integration is merged in PR #162.
+- Phase 3 #31 is the active phase. Follow [PHASE_3_INTEGRATION_PLAN.md](PHASE_3_INTEGRATION_PLAN.md) and its GitHub child issues.
+- Phase 4 #32 remains blocked until Phase 3 integration, performance, rollback, and deployment-readiness gates pass.
+- Treat executable checks and current GitHub state as authoritative; never copy historical status claims from `docs/archived/`.
 
 ### Controlling Engineering Principles
 
@@ -39,6 +40,23 @@ The authoritative status is [IMPLEMENTATION_STATUS_2026_09_05.md](IMPLEMENTATION
 - Cross-system subscribers must isolate failures, preserve observability, and deduplicate deliveries.
 - A completed issue is not an exit gate by itself. Require executable tests, coverage, documentation, migration notes, and rollback/recovery evidence.
 - When documentation conflicts with a command result or current GitHub issue state, report the discrepancy and update the current status source rather than copying the historical claim.
+
+### Phase 3 Execution Rules
+
+- Work in the dependency order in `PHASE_3_INTEGRATION_PLAN.md`: baseline/merge, bootstrap/DI, command routing, events, state/persistence, recovery, performance, full gates, rollback/handoff.
+- Do not call Phase 3 complete because code is merged. Require reproducible test artifacts, CI/staging evidence, performance measurements, rollback rehearsal, and documented residual risks.
+- Preserve Phase 2A and Phase 2B operation keys, correlation IDs, delivery IDs, sequence numbers, optimistic versions, audit records, and idempotency contracts.
+- Register one lifecycle owner per DI container. Recover active persisted sessions before accepting commands; dispose subscribers and timers during shutdown.
+- Test cross-system failures: duplicate delivery, subscriber failure, retry after partial write, stale-version conflict, reconnect, room recreation, and process restart.
+- Keep Phase 4 deployment work blocked until Phase 3 has an approved go/no-go record.
+
+### KidnappersGame Rules
+
+- The production controller/lifecycle service is authoritative; do not route new behavior through legacy `KidnappersGameRoom`.
+- State-machine transitions are pure/guarded and return defensive snapshots. Command handlers validate and delegate; they do not mutate character or database state directly.
+- Persistence uses schema versioning, optimistic versions, stable operation keys, unique audit indexes, and explicit stale-session handling. Never guess missing state.
+- Events carry session, correlation, delivery, and sequence identifiers. Failed subscribers are isolated and retryable without replaying successful durable effects.
+- Capture, escape, restraint, cage, kennel, inventory, audit, and cleanup effects use `GameStateMutationService` with stable application keys.
 
 ### Casino Venue System
 
@@ -59,7 +77,7 @@ The release system is carefully designed, NOT just strip-and-free:
 Stage 1: Confirm Release (20s timeout)
 Stage 2: Teleport to Punishment Room
 Stage 3: Free from Confinement (cage/kennel)
-Stage 4: Strip Non-Owner-Locked Items
+Stage 4: Strip Completely Unlocked Bondage Items
 Stage 5: Forced Nudity Verification (60s window)
 Stage 6: Grant Keypad Access
 Stage 7: Parole Monitoring (10-min escalating)
@@ -71,6 +89,8 @@ Stage 7: Parole Monitoring (10-min escalating)
 - Stage N failures don't restart from Stage 1
 - Parole violations restart from Stage 3 (not Stage 1)
 - Preserve narrative flow between stages
+- Remove only real bondage items with no effective lock; preserve every locked or ambiguous item.
+- Verify the live appearance before Stage 5/6. Persist the verified projection only after removal succeeds.
 
 ### Feature System Interface
 
@@ -78,14 +98,12 @@ All 11 Veratown systems implement this interface:
 
 ```typescript
 export interface VeratownFeatureSystem {
-    key: string;
-    name: string;
-    description: string;
-    isEnabled: boolean;
-    initialize(conn, stores): Promise<void>;
-    shutdown(): Promise<void>;
-    enable(): Promise<void>;
-    disable(): Promise<void>;
+    readonly key: string;
+    readonly label: string;
+    enabled: boolean;
+    registerTriggers(): void | Promise<void>;
+    reloadLocations?(locations: readonly unknown[]): Promise<void>;
+    isReady?(): boolean;
 }
 ```
 

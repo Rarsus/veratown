@@ -1,6 +1,6 @@
 # DEPRECATED: HYBRID STRATEGY (OPTION C) - ORIGINAL IMPLEMENTATION PLAN
 
-> **Deprecated on 2026-09-05.** This document is the original September 4 planning snapshot. It is preserved in `docs/archived/` for historical traceability; it is not an accurate execution status. See [IMPLEMENTATION_STATUS_2026_09_05.md](../../IMPLEMENTATION_STATUS_2026_09_05.md) and [HYBRID_STRATEGY_CURRENT_PLAN.md](../../HYBRID_STRATEGY_CURRENT_PLAN.md).
+> **Deprecated on 2026-09-05.** This document is the original September 4 planning snapshot. It is preserved in `docs/archived/` for historical traceability; it is not an accurate execution status. See [IMPLEMENTATION_STATUS_2026_09_07.md](../../IMPLEMENTATION_STATUS_2026_09_07.md) and [HYBRID_STRATEGY_CURRENT_PLAN.md](../../HYBRID_STRATEGY_CURRENT_PLAN.md).
 
 **Status**: ✅ **READY TO EXECUTE**  
 **Duration**: 12-14 weeks  

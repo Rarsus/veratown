@@ -1,8 +1,13 @@
 # Refactor Documentation Index
 
+> **Status: LEGACY REFERENCE**
+> This directory documents earlier refactor planning and completed work. It is
+> retained for research and traceability, but it is not current implementation
+> authority. Use the active status and Phase 3 documents at the repository root.
+
 **Project:** Ropeybot Codebase Compliance with Veratown+ Golden Rules  
-**Status:** Ready for Implementation  
-**Timeline:** 3 weeks (27-32 hours development)
+**Snapshot status:** Historical refactor plan; not an active work queue  
+**Original timeline:** 3 weeks (27-32 hours development)
 
 ---
 

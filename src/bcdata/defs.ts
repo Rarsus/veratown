@@ -555,4 +555,11 @@ export const AssetsItemPelvisFuturisticTrainingBeltScriptDrawHook = (..._: any[]
 export const DynamicDrawTextEffect = {
 	BURN: "burn",
 };
+
+// TechnoChastityCage.js (R131)
+export const InventoryItemVulvaTechnoChastityCageClickHook = (..._: any[]) => {};
+export const InventoryItemVulvaTechnoChastityCageDrawHook = (..._: any[]) => {};
+export const InventoryItemVulvaTechnoChastityCageExitHook = (..._: any[]) => {};
+export const InventoryItemVulvaTechnoChastityCageVoiceTriggers: any[] = [];
+export const InventoryItemVulvaChastityCageScriptDrawHook = (..._: any[]) => {};
 //#endregion

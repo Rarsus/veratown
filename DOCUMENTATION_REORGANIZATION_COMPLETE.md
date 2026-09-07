@@ -1,4 +1,9 @@
-# Documentation Reorganization - Completion Summary
+# DEPRECATED: Documentation Reorganization - Completion Summary
+
+> **Status: ARCHIVED COMPLETION SNAPSHOT**
+> The original reorganization was completed on September 2. Current lifecycle
+> classification is maintained in [DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md)
+> and [DOCUMENTATION_REORGANIZATION_STRATEGY.md](DOCUMENTATION_REORGANIZATION_STRATEGY.md).
 
 **Date**: 2026-09-02  
 **Status**: ✅ COMPLETE  

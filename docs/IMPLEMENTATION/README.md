@@ -4,7 +4,7 @@ Development practices, testing, logging, and coding standards for Ropeybot.
 
 ## Current Status
 
-Read [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_05.md) before assessing readiness or planning the next phase. Historical status snapshots in [the archive](../archived/) are deprecated.
+Read [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_07.md) before assessing readiness or planning the next phase. Historical status snapshots in [the archive](../archived/) are deprecated.
 
 ## Core Implementation Guides
 
@@ -13,6 +13,8 @@ Read [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_05.md) before a
 - **[Code Standards](GOLDEN_RULES.md)** - Coding patterns and best practices (if available)
 - **[KidnappersGame developer and operations guide](../../KIDNAPPERS_GAME_DEVELOPER_GUIDE.md)** - State, persistence, events, DI, migrations, observability, and rollback
 - **[Phase 2B handoff](../../PHASE_2B_HANDOFF.md)** - Phase 3 integration checklist and evidence
+- **[Phase 3 integration plan](../../PHASE_3_INTEGRATION_PLAN.md)** - Combined-system integration, validation, rollback, and handoff gates
+- **[Phase 3 integration plan](../../PHASE_3_INTEGRATION_PLAN.md)** - Executable combined-system integration and release gates
 
 ## Development Practices
 

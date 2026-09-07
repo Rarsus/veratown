@@ -1,6 +1,42 @@
-# Documentation Reorganization Strategy
+# Documentation Reorganization Strategy and Status Governance
 
-**Date**: 2026-09-02  
+> **Status: ACTIVE GOVERNANCE DOCUMENT**
+> **Updated:** September 7, 2026
+> This document supersedes the original September 2 planning snapshot below. The historical proposal is retained as context; current document lifecycle decisions are governed by [DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md).
+
+## Current Repository Decision
+
+The original reorganization has been executed sufficiently to establish the
+active/archive split. The repository now treats documentation as four states:
+
+1. **Active:** Current execution plans, status, operational runbooks, and
+   implementation contracts required for current work.
+2. **Reference:** Stable architecture, API, feature, deployment, and guide
+   material that remains valid but is not a current phase gate.
+3. **Legacy reference:** Older refactor/design material retained for research;
+   it must not be used as current implementation authority.
+4. **Archived:** Historical snapshots, completed migration reports, superseded
+   plans, and deprecated status claims.
+
+The path-level registry and update rules are maintained in
+[DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md). Root-level agent
+configuration remains in place because Copilot tooling discovers it there.
+
+## Current Phase Alignment
+
+- Phase 2A is complete and its handoff is recorded in `PHASE_2A_HANDOFF.md`.
+- Phase 2B is complete, including production integration PR #162; its handoff
+  is recorded in `PHASE_2B_HANDOFF.md`.
+- Phase 3 is active under GitHub issue #31 and
+  `PHASE_3_INTEGRATION_PLAN.md`.
+- Phase 4 remains blocked until Phase 3 evidence is approved.
+
+Do not update archived documents to reflect these states. Update the canonical
+status, current plan, Phase handoff, and Phase 3 plan instead.
+
+## Historical Proposal (Superseded)
+
+**Date**: 2026-09-02
 **Scope**: Complete documentation audit and reorganization  
 **Goal**: Consolidate live docs, archive outdated content, create clear structure
 

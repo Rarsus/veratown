@@ -1,6 +1,6 @@
 # DEPRECATED: GitHub Issues Validation Report
 
-> **Deprecated on 2026-09-05.** This September 3 snapshot is historical and contains superseded issue states and validation results. Use [IMPLEMENTATION_STATUS_2026_09_05.md](../../IMPLEMENTATION_STATUS_2026_09_05.md) for the current baseline.
+> **Deprecated on 2026-09-05.** This September 3 snapshot is historical and contains superseded issue states and validation results. Use [IMPLEMENTATION_STATUS_2026_09_07.md](../../IMPLEMENTATION_STATUS_2026_09_07.md) for the current baseline.
 
 ## Post-#4 Completion Validation & Updates
 

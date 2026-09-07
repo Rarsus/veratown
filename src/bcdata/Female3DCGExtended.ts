@@ -192,6 +192,12 @@ import {
 	InventoryItemPelvisLoveChastityBeltValidateHook,
 	AssetsItemPelvisFuturisticTrainingBeltScriptDrawHook,
 	DynamicDrawTextEffect,
+	// R131 TechnoChastityCage extended item hooks
+	InventoryItemVulvaTechnoChastityCageClickHook,
+	InventoryItemVulvaTechnoChastityCageDrawHook,
+	InventoryItemVulvaTechnoChastityCageExitHook,
+	InventoryItemVulvaTechnoChastityCageVoiceTriggers,
+	InventoryItemVulvaChastityCageScriptDrawHook,
 	//#endregion
 } from "./defs.ts";
 
@@ -513,6 +519,17 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				{ Name: "Arrow" },
 			],
 		}, // NPCBalloon
+		WitchHat: {
+			Archetype: ExtendedArchetype.MODULAR,
+			Modules: [
+				{
+					Name: "HairMasking",
+					Key: "z",
+					DrawImages: false,
+					Options: [{}, {}],
+				},
+			],
+		}, // WitchHat
 	},
 	HandAccessoryLeft: {
 		Rings: {
@@ -1931,6 +1948,59 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				},
 			],
 		}, // Animal Noses
+		FaceCrests: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChatSetting: ModularItemChatSetting.PER_MODULE,
+			DrawImages: true,
+			Modules: [
+				{
+					Name: "Outer",
+					Key: "o",
+					Options: [{}, {}, {}, {}, {}, {}, {}], // none, carved, fins, boomerang, headpiece, circuits, dots
+				},
+				{
+					Name: "Middle",
+					Key: "m",
+					Options: [{}, {}, {}, {}, {}, {}, {}], // none, pincers, open heart, jaws, crown, fangs, aquatic
+				},
+				{
+					Name: "Center",
+					Key: "c",
+					Options: [{}, {}, {}, {}, {}, {}, {}, {}], // none, chevron, arrow, dots, diamond, oval, open heart, closed heart
+				},
+				{
+					Name: "Special",
+					Key: "s",
+					Options: [{}, {}, {}, {}], // none, waves, wings, shell
+				},
+				{
+					Name: "Glow",
+					Key: "g",
+					Options: [{}, {}], // off, on
+				},
+				{
+					Name: "Holo",
+					Key: "h",
+					Options: [{}, {}], // off, on
+				},
+				{
+					Name: "Layering",
+					Key: "l",
+					Options: [
+						{
+							Property: {
+								OverridePriority: 45, // Above mask layers
+							},
+						},
+						{
+							Property: {
+								OverridePriority: 8, // Below eye layers
+							},
+						},
+					], // Mask Layer (45), Face Layer (8)
+				},
+			],
+		}, // FaceCrests
 	},
 	HairFront: {
 		HairFront60: {
@@ -2031,6 +2101,11 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				},
 			],
 		},
+		HairFront56: {
+			Archetype: ExtendedArchetype.TYPED,
+			DrawImages: false,
+			Options: [{ Name: "Type_1" }, { Name: "Type_2" }, { Name: "Type_3" }],
+		}, // HairFront56
 	},
 	HairBack: {
 		HairBack58: {
@@ -13489,6 +13564,111 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 		}, // SingleBalletBoot
 	}, // ItemBoots
 	ItemVulva: {
+		TechnoChastityCage: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.DEST_CHAR_NAME,
+				CommonChatTags.ASSET_NAME,
+			],
+			ChangeWhenLocked: false,
+			Modules: [
+				{
+					Name: "CageType",
+					Key: "t",
+					Options: [
+						{}, // 0 - Standard
+						{}, // 1 - Small
+						{}, // 2 - Nub
+					],
+				},
+				{
+					Name: "Arousal",
+					DrawImages: false,
+					Key: "a",
+					Options: [
+						{}, //e0 - Off
+						{}, //e1 - On
+					],
+				},
+				{
+					Name: "Intensity",
+					Key: "i",
+					DrawImages: false,
+					Options: [
+						{ Property: { Intensity: -1, Effect: ["Egged"] } }, // i0 - Turn Off
+						{ Property: { Intensity: 0, Effect: ["Egged", "Vibrating"] } }, // i1 - Low
+						{ Property: { Intensity: 1, Effect: ["Egged", "Vibrating"] } }, // i2 - Medium
+						{ Property: { Intensity: 2, Effect: ["Egged", "Vibrating"] } }, // i3 - High
+						{ Property: { Intensity: 3, Effect: ["Egged", "Vibrating"] } }, // i4 - Maximum
+					],
+				},
+				{
+					Name: "ShockModule",
+					Key: "s",
+					DrawImages: false,
+					Options: [
+						{ Property: { ShockLevel: 0 } }, // s0 - Off
+						{ Property: { ShockLevel: 0 } }, // s1 - Level 1
+						{ Property: { ShockLevel: 1 } }, // s2 - Level 2
+						{ Property: { ShockLevel: 2 } }, // s3 - Level 3
+					],
+					DrawData: {
+						elementData: [
+							{ position: ExtendedXYWithoutImages[8][0] },
+							{ position: ExtendedXYWithoutImages[8][1] },
+							{ position: ExtendedXYWithoutImages[8][2] },
+							{ position: ExtendedXYWithoutImages[8][3] },
+						],
+					},
+				},
+				{
+					Name: "OrgasmLock",
+					Key: "o",
+					DrawImages: false,
+					Options: [
+						{}, // o0 - Normal
+						{ Property: { Effect: ["DenialMode"] } }, // o1 - Edge
+						{ Property: { Effect: ["DenialMode", "RuinOrgasms"] } }, // o2 - Deny
+					],
+				},
+				{
+					Name: "VoiceControl",
+					Key: "v",
+					DrawImages: false,
+					Options: [
+						{}, //v0 - Off
+						{}, //v1 - On
+					],
+				},
+			],
+			BaselineProperty: {
+				TriggerCount: 0,
+				OrgasmCount: 0,
+				RuinedOrgasmCount: 0,
+				TimeWorn: CommonTime(),
+				TimeSinceLastOrgasm: CommonTime(),
+				ShowText: true,
+				ShockLevel: 0,
+				PunishOrgasm: false,
+				PunishStandup: false,
+				PunishStruggle: false,
+				PunishStruggleOther: false,
+				AccessMode: "",
+				ShowShrinkText: true,
+				ArousalLvl: "Horny",
+				TriggerValues: CommonConvertArrayToString(
+					InventoryItemVulvaTechnoChastityCageVoiceTriggers,
+				),
+			},
+			ScriptHooks: {
+				Click: InventoryItemVulvaTechnoChastityCageClickHook,
+				Draw: InventoryItemVulvaTechnoChastityCageDrawHook,
+				Exit: InventoryItemVulvaTechnoChastityCageExitHook,
+				ScriptDraw: InventoryItemVulvaChastityCageScriptDrawHook,
+			},
+		}, // TechnoChastityCage
 		ClitSuctionCup: {
 			Archetype: ExtendedArchetype.TYPED,
 			ChatTags: [CommonChatTags.SOURCE_CHAR, CommonChatTags.DEST_CHAR],
@@ -20699,6 +20879,48 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				Chat: "HairAccessory1CustomizableFluffyEars1Set",
 			},
 		}, // Customizable Cow Ears
+		CTHeadset: {
+			Archetype: ExtendedArchetype.MODULAR,
+			Modules: [
+				{
+					Name: "Glow",
+					Key: "g",
+					Options: [{}, {}],
+				},
+				{
+					Name: "Ears",
+					Key: "e",
+					Options: [{}, {}],
+				},
+				{
+					Name: "Mic",
+					Key: "m",
+					Options: [{}, {}],
+				},
+				{
+					Name: "Noisecancel",
+					Key: "nc",
+					Options: [
+						{},
+						{
+							Property: {
+								Effect: ["DeafLight"],
+							},
+						},
+						{
+							Property: {
+								Effect: ["DeafHeavy"],
+							},
+						},
+						{
+							Property: {
+								Effect: ["DeafTotal"],
+							},
+						},
+					],
+				},
+			],
+		}, // CTHeadset
 	}, // ItemEars
 	Bra: {
 		Ribbons: {
@@ -21331,6 +21553,16 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 			DrawImages: false,
 			Options: [{ Name: "Leftleg" }, { Name: "Rightleg" }, { Name: "Both" }],
 		}, // LaceLegRing
+		XLegStraps: {
+			Archetype: ExtendedArchetype.TYPED,
+			DrawImages: false,
+			Options: [{ Name: "Both" }, { Name: "Leftleg" }, { Name: "Rightleg" }],
+		}, // XLegStraps
+		LaceLegStrap: {
+			Archetype: ExtendedArchetype.TYPED,
+			DrawImages: false,
+			Options: [{ Name: "Both" }, { Name: "Leftleg" }, { Name: "Rightleg" }],
+		}, // LaceLegStrap
 	}, // Garters
 	AnkletRight: {
 		LegFur: {
@@ -21721,6 +21953,28 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				},
 			],
 		}, // TransparentBunnyGirl
+		DiaperSuit: {
+			Archetype: ExtendedArchetype.MODULAR,
+			Modules: [
+				{
+					Name: "Text",
+					Key: "e",
+					Options: [
+						{
+							HasSubscreen: true,
+							ArchetypeConfig: {
+								Archetype: ExtendedArchetype.TEXT,
+								MaxLength: { Text: 11 },
+								Font: "Impact",
+								ScriptHooks: {
+									AfterDraw: null, // TEXT archetype handler
+								},
+							},
+						},
+					],
+				},
+			],
+		}, // DiaperSuit
 	}, // Suit
 	SuitLower: {
 		MaleSeamlessCatsuit: {

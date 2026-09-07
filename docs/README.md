@@ -9,9 +9,11 @@ Welcome to the Ropeybot documentation. Start here to find what you need.
 - **Want to deploy?** → Check [Deployment Options](DEPLOYMENT/)
 - **Need system details?** → Read [Architecture](ARCHITECTURE/)
 - **Developing a feature?** → Follow [Developer Guide](GUIDES/DEVELOPMENT.md)
-- **Checking implementation status?** → Read [Current Implementation Status](../IMPLEMENTATION_STATUS_2026_09_05.md)
+- **Checking implementation status?** → Read [Current Implementation Status](../IMPLEMENTATION_STATUS_2026_09_07.md)
 - **Planning Phase 2B?** → Read [Current Hybrid Strategy Plan](../HYBRID_STRATEGY_CURRENT_PLAN.md)
 - **Integrating KidnappersGame?** → Read the [Phase 2B handoff](../PHASE_2B_HANDOFF.md)
+- **Executing Phase 3?** → Read the [Phase 3 integration plan](../PHASE_3_INTEGRATION_PLAN.md)
+- **Checking document lifecycle?** → Read the [Documentation Status Registry](../DOCUMENTATION_STATUS.md)
 
 ---
 
@@ -96,6 +98,7 @@ Historical documentation from previous phases and epics.
 - Historical analysis
 
 Current status reports and execution plans are kept at the repository root. Archived status snapshots are historical only and must not be used to determine readiness.
+Document lifecycle is governed by [DOCUMENTATION_STATUS.md](../DOCUMENTATION_STATUS.md); `docs/refactor/` is legacy reference, not active phase guidance.
 
 ---
 
@@ -113,6 +116,7 @@ Current status reports and execution plans are kept at the repository root. Arch
 | What environment variables are needed? | [GUIDES/ENVIRONMENT_VARIABLES.md](GUIDES/)                           |
 | How do I play KidnappersGame?          | [Player guide](../KIDNAPPERS_GAME_PLAYER_GUIDE.md)                   |
 | How do I integrate KidnappersGame?     | [Phase 2B handoff](../PHASE_2B_HANDOFF.md)                           |
+| How do I execute Phase 3?              | [Phase 3 integration plan](../PHASE_3_INTEGRATION_PLAN.md)           |
 
 ---
 
@@ -139,6 +143,6 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for code contribution guidelines.
 
 ---
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-07
 **Total Documentation Files**: 60+ files organized by purpose  
 **See Also**: [Archived Documentation](archived/) for historical reference

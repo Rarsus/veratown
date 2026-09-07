@@ -5,10 +5,11 @@
 **Next phase:** [#31](https://github.com/Rarsus/veratown/issues/31)  
 **Coordination:** Phase 2A handoff [#59](https://github.com/Rarsus/veratown/issues/59)
 
-This is the current Phase 2B.9 handoff package. Child issues #30.1 through
-#30.8 are closed; #59 is closed through merged PR #109. Phase 3 remains
-blocked until its integration gates are executed against the combined
-Phase 2A/2B checkout.
+This is the completed Phase 2B handoff package. Issue #30 and all nine child
+issues are closed; #59 is closed through merged PR #109; and PR #162 merged
+the KidnappersGame production bootstrap integration. Phase 3 is now active and
+must execute the remaining integration gates against the combined Phase 2A/2B
+checkout.
 
 ## Published documentation
 
@@ -48,6 +49,8 @@ not a passing result; CI remains authoritative for persistence and coverage.
 
 ## Phase 3 integration checklist
 
+The executable Phase 3 work breakdown is [PHASE_3_INTEGRATION_PLAN.md](PHASE_3_INTEGRATION_PLAN.md) and GitHub issue #31. The checklist below is retained as the Phase 2B handoff input to that work.
+
 - [x] Register one `KidnappersGameLifecycleService` per DI container.
 - [x] Initialize persistence indexes before accepting commands and recover
       active sessions before registering the route.
@@ -74,13 +77,13 @@ not a passing result; CI remains authoritative for persistence and coverage.
 
 ## Risks and deferred work
 
-| Item                                                          | Owner                     | Target                | Treatment                                                                                                                                                                   |
-| ------------------------------------------------------------- | ------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Combined Phase 2A/2B event and state-consistency run          | Phase 3 integration owner | Phase 3 / #31         | Execute the checklist above against the merged checkout.                                                                                                                    |
-| MongoDB performance baseline                                  | Platform maintainers      | Phase 3 / #31         | Capture the performance artifact in CI or staging; do not infer database latency from the in-memory benchmark.                                                              |
-| Long-term event metrics and dashboards                        | Observability owner       | Phase 3.5             | Current evidence is structured lifecycle logs, audit records, delivery IDs, and subscriber failure reports.                                                                 |
-| Automatic schema migration tooling                            | Persistence owner         | Phase 3.5             | Schema version 1 intentionally fails closed; add an explicit migration before version 2.                                                                                    |
-| Remaining bounded polling in unrelated Phase 2A systems       | Phase 2A owners           | Existing #9 follow-up | Not a Kidnappers blocker; do not add polling to Kidnappers where a durable deadline or lifecycle event exists.                                                              |
+| Item                                                    | Owner                     | Target                | Treatment                                                                                                      |
+| ------------------------------------------------------- | ------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Combined Phase 2A/2B event and state-consistency run    | Phase 3 integration owner | Phase 3 / #31         | Execute the checklist above against the merged checkout.                                                       |
+| MongoDB performance baseline                            | Platform maintainers      | Phase 3 / #31         | Capture the performance artifact in CI or staging; do not infer database latency from the in-memory benchmark. |
+| Long-term event metrics and dashboards                  | Observability owner       | Phase 3.5             | Current evidence is structured lifecycle logs, audit records, delivery IDs, and subscriber failure reports.    |
+| Automatic schema migration tooling                      | Persistence owner         | Phase 3.5             | Schema version 1 intentionally fails closed; add an explicit migration before version 2.                       |
+| Remaining bounded polling in unrelated Phase 2A systems | Phase 2A owners           | Existing #9 follow-up | Not a Kidnappers blocker; do not add polling to Kidnappers where a durable deadline or lifecycle event exists. |
 
 No status in this handoff should be read as Phase 3 approval. Approval requires
 the checked integration items, recorded performance output, accepted risks,

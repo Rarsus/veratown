@@ -1,4 +1,9 @@
-# Repository Documentation Inventory
+# DEPRECATED: Repository Documentation Inventory
+
+> **Status: ARCHIVED INVENTORY**
+> This table is a historical snapshot and is not the current lifecycle source.
+> Use [DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md) for current status
+> classification and the active navigation indexes.
 
 **Generated:** 2026-09-07
 **Total Documentation Files:** 200+  

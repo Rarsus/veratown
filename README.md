@@ -28,9 +28,11 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 
 **Start here**: [docs/README.md](docs/README.md) - Complete navigation and quick links to all documentation.
 
-**Current implementation status**: [IMPLEMENTATION_STATUS_2026_09_05.md](IMPLEMENTATION_STATUS_2026_09_05.md) - Verified phase status, quality gates, and next priorities.
+**Current implementation status**: [IMPLEMENTATION_STATUS_2026_09_07.md](IMPLEMENTATION_STATUS_2026_09_07.md) - Verified phase status, quality gates, and next priorities.
 
-**Current execution plan**: [HYBRID_STRATEGY_CURRENT_PLAN.md](HYBRID_STRATEGY_CURRENT_PLAN.md) - Active Hybrid Strategy plan and Phase 2B breakdown.
+**Current execution plan**: [HYBRID_STRATEGY_CURRENT_PLAN.md](HYBRID_STRATEGY_CURRENT_PLAN.md) - Active Hybrid Strategy plan and Phase 3 route.
+
+**Phase 3 integration**: [PHASE_3_INTEGRATION_PLAN.md](PHASE_3_INTEGRATION_PLAN.md) - Combined Phase 2A/2B integration, validation, rollback, and handoff gates.
 
 **For quick start**: [docs/QUICK_START.md](docs/QUICK_START.md) - Get Ropeybot running in 5 minutes.
 

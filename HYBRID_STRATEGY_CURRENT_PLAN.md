@@ -1,17 +1,17 @@
 # Hybrid Strategy: Current Execution Plan
 
-**Updated:** September 5, 2026  
+**Updated:** September 7, 2026
 **Target go-live:** November 19, 2026, subject to gate results
 
-> This is the active execution plan. For the verified baseline and current failures, see [Implementation Status](IMPLEMENTATION_STATUS_2026_09_05.md). The original plan is preserved as a deprecated archive.
+> This is the active execution plan. For the verified baseline and current failures, see [Implementation Status](IMPLEMENTATION_STATUS_2026_09_07.md). The original plan is preserved as a deprecated archive.
 
 ## Current Position
 
 - **Phase 1:** Complete.
 - **Phase 2A:** Handoff #59 is closed through merged PR #109.
-- **Phase 2B:** Child issues #30.1 through #30.8 are complete; documentation and
-  the Phase 3 handoff remain in #106.
-- **Phase 3:** Blocked until Phase 2A handoff and Phase 2B completion.
+- **Phase 2B:** Complete. Issue #30 is closed, all nine children are complete,
+  and PR #162 is merged into production.
+- **Phase 3:** Active. Execute the integration sub-issues under #31.
 - **Phase 4:** Blocked until Phase 3 integration and deployment-readiness approval.
 
 ## Immediate Work
@@ -23,21 +23,18 @@ Re-run its strict TypeScript, formatting, unit, integration, coverage, and
 performance gates on the combined Phase 2A/2B checkout, and preserve its
 rollback contract.
 
-### 2. Complete Phase 2B documentation and handoff: #106
+### 2. Execute Phase 3 integration and merge: #31
 
-Work in this order, with each child issue requiring implementation, tests, documentation, and a rollback or recovery note:
+Work in the dependency order defined by the Phase 3 sub-issues:
 
-1. [#102](https://github.com/Rarsus/veratown/issues/102) Core state machine and explicit transition model.
-2. [#107](https://github.com/Rarsus/veratown/issues/107) Persistence and recovery contract.
-3. [#101](https://github.com/Rarsus/veratown/issues/101) Capture mechanics and turn resolution.
-4. [#104](https://github.com/Rarsus/veratown/issues/104) Escape and bondage progression.
-5. [#108](https://github.com/Rarsus/veratown/issues/108) Event-driven messaging and cross-system integration.
-6. [#105](https://github.com/Rarsus/veratown/issues/105) Player commands and interaction permissions.
-7. [#100](https://github.com/Rarsus/veratown/issues/100) Ending, scoring, and deterministic replay outcomes.
-8. [#103](https://github.com/Rarsus/veratown/issues/103) Unit, integration, failure-recovery, and coverage gates.
-9. [#106](https://github.com/Rarsus/veratown/issues/106) Player/developer documentation and Phase 3 handoff package.
+1. Confirm the combined baseline and merge inventory.
+2. Verify production DI/bootstrap registration and lifecycle ownership.
+3. Validate cross-system event routing and duplicate-delivery isolation.
+4. Validate state consistency, persistence, versions, and recovery.
+5. Run end-to-end regression, performance, memory, and database gates.
+6. Rehearse rollback and publish the Phase 3 handoff.
 
-Phase 2B must use the Phase 1 DI and mutation boundaries, avoid polling-driven control flow, and keep game state authoritative and recoverable. The current package and its remaining integration gates are listed in [PHASE_2B_HANDOFF.md](PHASE_2B_HANDOFF.md).
+The Phase 2B package and known risks are recorded in [PHASE_2B_HANDOFF.md](PHASE_2B_HANDOFF.md). The executable Phase 3 guide is [PHASE_3_INTEGRATION_PLAN.md](PHASE_3_INTEGRATION_PLAN.md).
 
 ## Phase Gates
 
@@ -47,12 +44,12 @@ Phase 2B must use the Phase 1 DI and mutation boundaries, avoid polling-driven c
 - Strict TypeScript, formatting, unit, integration, and coverage checks pass.
 - No unresolved Phase 3-blocking reliability risks.
 
-### Phase 2B exit
+### Phase 2B exit: complete
 
 - KidnappersGame is playable through the supported command path.
 - State transitions, persistence, recovery, scoring, and event delivery are tested.
 - Failure isolation and duplicate-delivery behavior are proven.
-- Documentation and rollback notes are complete.
+- Documentation, rollback notes, and production bootstrap integration are complete.
 
 ### Phase 3 entry
 
@@ -60,4 +57,4 @@ Both Phase 2 exit gates are approved, the branches or commits are integrated, an
 
 ## Governance
 
-GitHub issue state and executable checks are authoritative. A closed child issue is not sufficient evidence for an epic exit gate unless its tests, documentation, migration notes, and rollback/recovery evidence are available. Update [Implementation Status](IMPLEMENTATION_STATUS_2026_09_05.md) whenever a gate changes.
+GitHub issue state and executable checks are authoritative. A closed child issue is not sufficient evidence for an epic exit gate unless its tests, documentation, migration notes, and rollback/recovery evidence are available. Update [Implementation Status](IMPLEMENTATION_STATUS_2026_09_07.md) whenever a gate changes.
