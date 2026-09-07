@@ -48,18 +48,18 @@ not a passing result; CI remains authoritative for persistence and coverage.
 
 ## Phase 3 integration checklist
 
-- [ ] Register one `KidnappersGameLifecycleService` per DI container.
-- [ ] Initialize persistence indexes before accepting commands and recover
+- [x] Register one `KidnappersGameLifecycleService` per DI container.
+- [x] Initialize persistence indexes before accepting commands and recover
       active sessions before registering the route.
-- [ ] Register `KidnappersGameCommandController` with the shared
+- [x] Register `KidnappersGameCommandController` with the shared
       `GamePluginCommandRouter`; verify both `!kidnappers` and `/bot kidnappers`.
-- [ ] Supply the room-membership guard and verify admin checks use
+- [x] Supply the room-membership guard and verify admin checks use
       `IsRoomAdmin()`.
 - [ ] Attach character, inventory, audit, and lifecycle subscribers exactly
       once; verify failed deliveries are retryable.
-- [ ] Verify `kidnappers_game_event` and `kidnappers_player_message` retain
+- [x] Verify `kidnappers_game_event` and `kidnappers_player_message` retain
       correlation ID, delivery ID, session ID, and sequence.
-- [ ] Verify capture, escape, release, cage, kennel, and cleanup effects go
+- [x] Verify capture, escape, release, cage, kennel, and cleanup effects go
       through `GameStateMutationService` with stable application keys.
 - [ ] Restart during lobby, pending capture, cooldown, and terminal cleanup;
       compare recovered snapshots and prevent duplicate effects.
@@ -76,7 +76,6 @@ not a passing result; CI remains authoritative for persistence and coverage.
 
 | Item                                                          | Owner                     | Target                | Treatment                                                                                                                                                                   |
 | ------------------------------------------------------------- | ------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Production bootstrap registration and legacy-room replacement | Phase 3 integration owner | Phase 3 / #31         | The controller and router adapter are implemented, but `bin/main.ts` still selects the legacy room path. Integrate deliberately rather than claiming the new route is live. |
 | Combined Phase 2A/2B event and state-consistency run          | Phase 3 integration owner | Phase 3 / #31         | Execute the checklist above against the merged checkout.                                                                                                                    |
 | MongoDB performance baseline                                  | Platform maintainers      | Phase 3 / #31         | Capture the performance artifact in CI or staging; do not infer database latency from the in-memory benchmark.                                                              |
 | Long-term event metrics and dashboards                        | Observability owner       | Phase 3.5             | Current evidence is structured lifecycle logs, audit records, delivery IDs, and subscriber failure reports.                                                                 |
