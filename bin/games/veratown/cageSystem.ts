@@ -860,6 +860,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
             const authoritativeExpiry = assessment.selectedExpiry;
             const liveCrate = this.isWearingCage(character);
+            if (assessment.classification === "conflicting-state") {
+                this.logger.warn(
+                    "Cage recovery found conflicting containment state",
+                    this.recoveryContext(character.MemberNumber, assessment),
+                );
+            }
             if (!liveCrate) {
                 await syncAppearanceMutation(
                     character,
