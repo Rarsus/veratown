@@ -287,3 +287,23 @@ class ReleaseSystem implements VeratownFeatureSystem {
 4. **Parole**: Time-locked re-confinement if abused
 5. **Observer Mode**: Admins can watch release room
 6. **Automation**: Auto-release after 24h in confinement
+
+## Conservative Release Removal
+
+Stage 4 plans only real bondage items (`isBind`). Body, identity, pose,
+cosmetic, facial, hair, and clothing groups never enter the bondage removal
+loop. Clothing is handled separately by the clothing strip operation.
+
+An item is removable only when its group and asset name are valid and its
+effective lock state is explicitly unlocked. Owner, timer, password,
+exclusive, unknown, `LockedBy`, active timer, malformed, and collar items are
+preserved. The policy fails closed when lock metadata is ambiguous.
+
+Each release has a durable `releaseRemovalOperation` in
+`veratown.releaseParoleState`. Its operation ID, planned, preserved, completed,
+remaining, attempt, error, and verification state are checkpointed in
+`UnifiedCharacterStore`. Repeated commands, reconnects, and restarts reuse an
+active `planned`, `removing`, or `verification_failed` operation. Stage 5 and
+keypad access are allowed only after the live appearance is synchronized,
+re-read, and verified; failed removal remains resumable and produces an
+actionable failure rather than a successful release message.

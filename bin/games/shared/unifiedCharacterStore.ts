@@ -1643,12 +1643,8 @@ export class UnifiedCharacterStore {
             startedAt: now,
             updatedAt: now,
             attempt: 0,
-            plannedUnlockedItems: dedupeReleaseItems(
-                plan.plannedUnlockedItems,
-            ),
-            preservedLockedItems: dedupeReleaseItems(
-                plan.preservedLockedItems,
-            ),
+            plannedUnlockedItems: dedupeReleaseItems(plan.plannedUnlockedItems),
+            preservedLockedItems: dedupeReleaseItems(plan.preservedLockedItems),
             completedRemovals: [],
             remainingItems: dedupeReleaseItems(plan.plannedUnlockedItems),
         };
@@ -1677,6 +1673,10 @@ export class UnifiedCharacterStore {
                         {
                             "veratown.releaseParoleState.releaseRemovalOperation.status":
                                 { $in: ["completed", "aborted"] },
+                        },
+                        {
+                            "veratown.releaseParoleState.releaseRemovalOperation":
+                                null,
                         },
                     ],
                 },
@@ -1731,19 +1731,38 @@ export class UnifiedCharacterStore {
                     `Release removal operation ${operationId} is not active`,
                 );
             }
+            if (current.status === "completed") return current;
+            if (current.status === "aborted") {
+                throw new Error(
+                    `Release removal operation ${operationId} was aborted`,
+                );
+            }
 
             const key = releaseItemIdentity(item);
-            const completed = current.completedRemovals.some(
+            const alreadyCompleted = current.completedRemovals.some(
                 (candidate) => releaseItemIdentity(candidate) === key,
-            )
-                ? current.completedRemovals
-                : result.success
-                  ? [...current.completedRemovals, item]
-                  : current.completedRemovals;
+            );
+            if (
+                alreadyCompleted ||
+                (!result.success &&
+                    current.status === "verification_failed" &&
+                    current.lastError ===
+                        (result.error ?? "Live removal failed"))
+            ) {
+                return current;
+            }
+            const completed = result.success
+                ? [...current.completedRemovals, item]
+                : current.completedRemovals;
             const remaining = current.remainingItems.filter(
                 (candidate) => releaseItemIdentity(candidate) !== key,
             );
-            if (!result.success && !remaining.some((candidate) => releaseItemIdentity(candidate) === key)) {
+            if (
+                !result.success &&
+                !remaining.some(
+                    (candidate) => releaseItemIdentity(candidate) === key,
+                )
+            ) {
                 remaining.push(item);
             }
             const updated: ReleaseRemovalOperation = {
@@ -1801,7 +1820,8 @@ export class UnifiedCharacterStore {
                 `Release removal operation ${operationId} is not active`,
             );
         }
-        const remaining = finalSnapshot.remainingItems ?? current.remainingItems;
+        const remaining =
+            finalSnapshot.remainingItems ?? current.remainingItems;
         if (remaining.length > 0) {
             throw new Error(
                 `Cannot complete release removal with ${remaining.length} remaining items`,
@@ -1813,9 +1833,7 @@ export class UnifiedCharacterStore {
             updatedAt: Date.now(),
             completedAt: Date.now(),
             remainingItems: [],
-            completedRemovals: dedupeReleaseItems(
-                current.plannedUnlockedItems,
-            ),
+            completedRemovals: dedupeReleaseItems(current.plannedUnlockedItems),
             lastError: undefined,
         };
         const set: Record<string, unknown> = {
@@ -1828,8 +1846,7 @@ export class UnifiedCharacterStore {
             lastAccessedBy: "veratown",
         };
         if (finalSnapshot.currentAppearance !== undefined) {
-            set["veratown.currentAppearance"] =
-                finalSnapshot.currentAppearance;
+            set["veratown.currentAppearance"] = finalSnapshot.currentAppearance;
             set["veratown.lastAppearanceAt"] = completed.updatedAt;
         }
         if (finalSnapshot.currentRestraints !== undefined) {
@@ -1887,13 +1904,19 @@ export class UnifiedCharacterStore {
                 `Release removal operation ${operationId} is not active`,
             );
         }
+        if (current.status === "completed") return current;
+        if (current.status === "aborted") {
+            throw new Error(
+                `Release removal operation ${operationId} was aborted`,
+            );
+        }
         const updated: ReleaseRemovalOperation = {
             ...current,
             status: "verification_failed",
             updatedAt: Date.now(),
             lastError: reason,
         };
-        await this.profiles.updateOne(
+        const result = await this.profiles.updateOne(
             {
                 _id: memberNumber,
                 "veratown.releaseParoleState.releaseRemovalOperation.operationId":
@@ -1915,6 +1938,17 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+        if (result.modifiedCount === 0) {
+            const latest = await this.getVeratownView(memberNumber);
+            const latestOperation =
+                latest.releaseParoleState?.releaseRemovalOperation;
+            if (latestOperation?.operationId === operationId) {
+                return latestOperation;
+            }
+            throw new Error(
+                `Concurrent release removal failure update failed for ${memberNumber}`,
+            );
+        }
         return updated;
     }
 

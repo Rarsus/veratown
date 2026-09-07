@@ -10,10 +10,11 @@ export interface LiveRemovalTarget {
     name: string;
     lockType?: string;
     lockedBy?: string;
+    lockFingerprint?: string;
 }
 
 function targetKey(target: LiveRemovalTarget): string {
-    return `${target.group}/${target.name}/${target.lockType ?? ""}/${target.lockedBy ?? ""}`;
+    return `${target.group}/${target.name}/${target.lockFingerprint ?? `${target.lockType ?? ""}/${target.lockedBy ?? ""}`}`;
 }
 
 function matchesTarget(item: any, target: LiveRemovalTarget): boolean {

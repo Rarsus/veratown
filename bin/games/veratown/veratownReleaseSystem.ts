@@ -229,14 +229,19 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     public async checkAndEnforceParoleViolation(
         character: API_Character,
     ): Promise<void> {
-        if (!this.characterProfileStore) {
+        if (!this.characterProfileStore && !this.unifiedStore) {
             return;
         }
 
-        const paroleState =
-            await this.characterProfileStore.getReleaseParoleState(
-                character.MemberNumber,
-            );
+        const paroleState = this.characterProfileStore
+            ? await this.characterProfileStore.getReleaseParoleState(
+                  character.MemberNumber,
+              )
+            : (
+                  await this.unifiedStore!.getVeratownView(
+                      character.MemberNumber,
+                  )
+              ).releaseParoleState;
 
         if (!paroleState?.isOnParole) {
             return;
@@ -1193,13 +1198,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                         item,
                     );
                     await this.unifiedStore?.recordReleaseRemovalAttempt(
-                    character.MemberNumber,
-                    releaseOperation,
-                    item,
-                    { success: true },
+                        character.MemberNumber,
+                        releaseOperation,
+                        item,
+                        { success: true },
                     );
                     if (
-                    item.group === "ItemMisc" &&
+                        item.group === "ItemMisc" &&
                         item.name === "WoodenSign"
                     ) {
                         await this.recordBunnyCleanup?.(
@@ -1328,13 +1333,11 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     group: item.Group,
                     name: item.Name,
                 })),
-                missingPreservedItems: missingPreservedItems.map(
-                    (item) => ({
-                        group: item.group,
-                        name: item.name,
-                        lockType: item.lockType,
-                    }),
-                ),
+                missingPreservedItems: missingPreservedItems.map((item) => ({
+                    group: item.group,
+                    name: item.name,
+                    lockType: item.lockType,
+                })),
             },
         });
 
@@ -1497,6 +1500,23 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                     ),
                 2,
                 "start_release_parole",
+            );
+        } else if (this.unifiedStore) {
+            const view = await this.unifiedStore.getVeratownView(
+                character.MemberNumber,
+            );
+            await this.unifiedStore.updateVeratownStats(
+                character.MemberNumber,
+                {
+                    releaseParoleState: {
+                        ...(view.releaseParoleState ?? { isOnParole: false }),
+                        isOnParole: true,
+                        paroleStartedAt: Date.now(),
+                        paroleExpiresAt: Date.now() + paroleDurationMs,
+                        removedBondageItems: removedItems,
+                        releasedFromLocation: { ...character.MapPos },
+                    },
+                },
             );
         }
     }

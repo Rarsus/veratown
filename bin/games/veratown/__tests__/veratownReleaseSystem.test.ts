@@ -4,6 +4,11 @@ import { isClothing } from "../../../../src/assetHelpers";
 import { ReleaseSystem } from "../veratownReleaseSystem";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
 import { LiveAppearanceRemovalCoordinator } from "../shared";
+import {
+    isEffectivelyUnlockedBondageItem,
+    normalizeReleaseAppearanceItem,
+    releaseItemIdentity,
+} from "../shared/releaseRemovalPolicy";
 
 function createCharacter(initialAppearance: any[], failingGroup?: string) {
     let appearance = structuredClone(initialAppearance);
@@ -93,15 +98,11 @@ test("release strips unlocked and temporary bondage, preserves owner locks, and 
 
     assert.deepEqual(
         removed.map((item: any) => `${item.group}/${item.name}`).sort(),
-        [
-            "ItemArms/UnlockedCuffs",
-            "ItemLegs/TemporaryCuffs",
-            "Cloth/CottonShirt",
-        ].sort(),
+        ["ItemArms/UnlockedCuffs"],
     );
     assert.deepEqual(
         created.appearance().map((item) => `${item.Group}/${item.Name}`),
-        ["ItemDevices/OwnerDevice"],
+        ["ItemLegs/TemporaryCuffs", "ItemDevices/OwnerDevice"],
     );
     assert.equal(persisted.length, 1);
     assert.deepEqual(
@@ -109,7 +110,10 @@ test("release strips unlocked and temporary bondage, preserves owner locks, and 
             group: item.group,
             itemName: item.itemName,
         })),
-        [{ group: "ItemDevices", itemName: "OwnerDevice" }],
+        [
+            { group: "ItemLegs", itemName: "TemporaryCuffs" },
+            { group: "ItemDevices", itemName: "OwnerDevice" },
+        ],
     );
 });
 
@@ -277,4 +281,76 @@ test("live removal retries a partial mutation and is idempotent after success", 
 
     assert.equal(attempts, 2);
     assert.deepEqual(appearance, []);
+});
+
+test("release lock policy fails closed for every effective or ambiguous lock", () => {
+    const locks = [
+        "OwnerPadlock",
+        "OwnerTimerPadlock",
+        "TimerPadlock",
+        "PasswordPadlock",
+        "ExclusivePadlock",
+        "FuturePadlock",
+    ];
+    for (const lock of locks) {
+        assert.equal(
+            isEffectivelyUnlockedBondageItem({
+                Group: "ItemArms",
+                Name: "Cuffs",
+                Property: { Lock: lock },
+            }),
+            false,
+            lock,
+        );
+    }
+    assert.equal(
+        isEffectivelyUnlockedBondageItem({
+            Group: "ItemArms",
+            Name: "Cuffs",
+            Property: { LockedBy: 251024 },
+        }),
+        false,
+    );
+    assert.equal(
+        isEffectivelyUnlockedBondageItem({
+            Group: "ItemArms",
+            Name: "Cuffs",
+            Property: { TimerEnd: Date.now() + 10_000 },
+        }),
+        false,
+    );
+    assert.equal(
+        isEffectivelyUnlockedBondageItem({
+            Group: "ItemArms",
+            Name: "Cuffs",
+            Property: {},
+        }),
+        true,
+    );
+    assert.equal(
+        isEffectivelyUnlockedBondageItem({
+            Group: "ItemNeck",
+            Name: "Collar",
+            Property: {},
+        }),
+        false,
+    );
+});
+
+test("release normalization and identity exclude placeholders and include lock fingerprints", () => {
+    assert.equal(normalizeReleaseAppearanceItem(null), undefined);
+    assert.equal(
+        normalizeReleaseAppearanceItem({ Group: "ItemArms", Name: "" }),
+        undefined,
+    );
+    const unlocked = {
+        group: "ItemArms",
+        name: "Cuffs",
+        lockFingerprint: '{"lock":null}',
+    };
+    const locked = {
+        ...unlocked,
+        lockFingerprint: '{"lock":"TimerPadlock"}',
+    };
+    assert.notEqual(releaseItemIdentity(unlocked), releaseItemIdentity(locked));
 });

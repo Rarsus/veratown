@@ -142,11 +142,7 @@ export interface RemovedBondageItem {
 }
 
 export type ReleaseRemovalStatus =
-    | "planned"
-    | "removing"
-    | "verification_failed"
-    | "completed"
-    | "aborted";
+    "planned" | "removing" | "verification_failed" | "completed" | "aborted";
 
 export interface ReleaseRemovalOperation {
     operationId: string;

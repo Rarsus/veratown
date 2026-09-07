@@ -11,9 +11,15 @@ const TIMER_KEYS = new Set([
     "TimerExpiresAt",
     "LockExpiresAt",
 ]);
+const LOCK_METADATA_KEY = /lock|timer|password|exclusive/i;
 
 function hasLockEvidence(value: unknown, key?: string): boolean {
-    if (value === undefined || value === null || value === "" || value === false)
+    if (
+        value === undefined ||
+        value === null ||
+        value === "" ||
+        value === false
+    )
         return false;
     if (typeof value === "number" && value <= 0) return false;
     if (key && TIMER_KEYS.has(key) && typeof value === "number") {
@@ -26,11 +32,7 @@ function getProperty(item: unknown): Record<string, unknown> | undefined {
     if (!item || typeof item !== "object") return undefined;
     const property = (item as { Property?: unknown }).Property;
     if (property === undefined) return {};
-    if (
-        !property ||
-        typeof property !== "object" ||
-        Array.isArray(property)
-    ) {
+    if (!property || typeof property !== "object" || Array.isArray(property)) {
         return undefined;
     }
     return property as Record<string, unknown>;
@@ -59,6 +61,12 @@ export function normalizeReleaseAppearanceItem(
 export function isEffectivelyUnlockedBondageItem(item: unknown): boolean {
     const normalized = normalizeReleaseAppearanceItem(item);
     if (!normalized || !isBind(normalized)) return false;
+    if (
+        normalized.Group === "ItemNeck" ||
+        normalized.Group === "ItemNeckAccessories"
+    ) {
+        return false;
+    }
 
     const property = getProperty(normalized);
     if (!property) return false;
@@ -71,7 +79,9 @@ export function isEffectivelyUnlockedBondageItem(item: unknown): boolean {
 
     for (const [key, value] of Object.entries(property)) {
         if (
-            (key === "LockedBy" || TIMER_KEYS.has(key)) &&
+            (key === "LockedBy" ||
+                TIMER_KEYS.has(key) ||
+                (key !== "Lock" && LOCK_METADATA_KEY.test(key))) &&
             hasLockEvidence(value, key)
         ) {
             return false;
@@ -79,7 +89,11 @@ export function isEffectivelyUnlockedBondageItem(item: unknown): boolean {
     }
 
     const topLevel = normalized as unknown as Record<string, unknown>;
-    for (const key of ["LockedBy", ...TIMER_KEYS]) {
+    for (const key of [
+        "LockedBy",
+        ...TIMER_KEYS,
+        ...Object.keys(topLevel).filter((key) => LOCK_METADATA_KEY.test(key)),
+    ]) {
         if (hasLockEvidence(topLevel[key], key)) return false;
     }
 
@@ -90,21 +104,25 @@ export function releaseLockFingerprint(item: unknown): string {
     const normalized = normalizeReleaseAppearanceItem(item);
     if (!normalized) return "invalid";
     const property = getProperty(normalized);
+    const propertyLockMetadata = property
+        ? Object.fromEntries(
+              Object.entries(property)
+                  .filter(
+                      ([key]) =>
+                          key === "Lock" ||
+                          key === "LockedBy" ||
+                          TIMER_KEYS.has(key) ||
+                          LOCK_METADATA_KEY.test(key),
+                  )
+                  .sort(([left], [right]) => left.localeCompare(right)),
+          )
+        : null;
     const source = {
-        lock: property?.Lock ?? null,
-        lockedBy: property?.LockedBy ?? (normalized as any).LockedBy ?? null,
-        timers: Object.fromEntries(
-            [...TIMER_KEYS]
-                .filter(
-                    (key) =>
-                        property?.[key] !== undefined ||
-                        (normalized as any)[key] !== undefined,
-                )
-                .sort()
-                .map((key) => [
-                    key,
-                    property?.[key] ?? (normalized as any)[key],
-                ]),
+        property: propertyLockMetadata,
+        topLevel: Object.fromEntries(
+            Object.entries(normalized as any)
+                .filter(([key]) => LOCK_METADATA_KEY.test(key))
+                .sort(([left], [right]) => left.localeCompare(right)),
         ),
     };
     return JSON.stringify(source);
@@ -130,7 +148,7 @@ export function toRemovedBondageItem(
                 ? source.Property.Lock
                 : undefined,
         lockedBy:
-            source.Property?.LockedBy ?? source.LockedBy
+            (source.Property?.LockedBy ?? source.LockedBy)
                 ? String(source.Property?.LockedBy ?? source.LockedBy)
                 : undefined,
         color: source.Color ? String(source.Color) : undefined,
