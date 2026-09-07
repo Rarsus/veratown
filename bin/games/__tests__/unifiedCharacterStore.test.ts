@@ -410,6 +410,8 @@ test("UnifiedCharacterStore - Cage entry and exit events", async (t) => {
         true,
     );
     assert.strictEqual(view.kennelSessions[0].releasedAt !== undefined, true);
+    assert.ok(view.kennelSessions[0].totalTime >= 0);
+    assert.equal(view.kennelSessions[0].totalTime, view.totalTimeInKennels);
 });
 
 test("UnifiedCharacterStore - Cross-system queries", async (t) => {

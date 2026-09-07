@@ -72,10 +72,14 @@ for all three cages (pruning any that are no longer actually locked first).
 Two `KENNEL_POSITIONS` tiles. Stepping on one (`onCharacterEnterKennel`)
 equips a `Kennel` with the door open (`TypeRecord: { d: 0, p: 1 }`), waits
 `KENNEL_DOOR_CLOSE_DELAY_MS` (5s), then closes the door (`d: 1`) if the
-character is still wearing it. **Not locked** - purely a roleplay prop with
-no enforced release; leaving is just `RemoveItem("ItemDevices")` (not
-currently wired to any player-facing command specifically for this - see
-"Known gaps" below).
+character is still wearing it. The `KennelSystem` owns the complete lifecycle:
+it observes both tile exit and `ItemDevices/Kennel` removal, and finalizes a
+session only after the character is outside the kennel and no longer wearing
+the device. The same reconciliation runs after location reload/reconnect,
+while `GameStateMutationService.exitKennel()` and `UnifiedCharacterStore`
+remain the single persistence, event, aggregate-time, and audit boundary.
+**Not locked** - the device is a roleplay prop, and administrative release
+still uses the shared transition.
 
 ### Showers
 
@@ -153,10 +157,9 @@ Registered directly by Veratown (in addition to whatever Dare registers):
 - Exhibit tile triggers, dressing/redressing pads, and hallway/common-area
   doors are **disabled** - the comment in the constructor notes their
   coordinates need updating to match the current map layout (`MAP`).
-- Kennels have no dedicated release command/trigger of their own - freeing
-  someone from a kennel currently relies on the general
-  `/bot freeandleave` (which strips all bondage, including kennels) rather
-  than a kennel-specific mechanic.
+- Kennels have no dedicated release command of their own; `/bot freeandleave`
+  remains the general release path and routes kennel cleanup through the
+  shared exit transition.
 - `CHANGELOG` is manually maintained prose, not derived from git history -
   remember to add an entry when shipping a new player-facing feature.
 - The map (`MAP` constant) is an opaque compressed blob

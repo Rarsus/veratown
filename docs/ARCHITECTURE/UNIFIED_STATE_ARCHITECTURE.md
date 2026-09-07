@@ -31,6 +31,23 @@ All three major systems (Casino, Dare, Veratown) now share a unified character s
 
 ---
 
+## Kennel lifecycle ownership
+
+`KennelSystem` owns live containment detection. It listens for kennel-tile
+exits and device removals independently, then reconciles both signals so a
+session is not closed while the character is still inside or still wearing the
+Kennel device. Location reloads perform the same reconciliation for reconnect
+and restart recovery.
+
+`GameStateMutationService.exitKennel()` is the single mutation boundary.
+`UnifiedCharacterStore.recordKennelExit()` atomically claims the open session,
+sets `releasedAt` and `totalTime`, increments `totalTimeInKennels`, and emits
+the `kennel_exit` event; duplicate exit signals therefore produce no second
+session update or event. Administrative and forced-release paths must use this
+transition rather than updating kennel state directly.
+
+---
+
 ## Part 1: Current Architecture Analysis
 
 ### 1.1 System Overview
