@@ -389,6 +389,10 @@ export class KidnappersGameCommandController {
                         },
                     );
                     if (!left.ok) {
+                        await this.dispatchSessionCommand(target.sessionId, {
+                            type: "LEAVE_SESSION",
+                            memberNumber: sender.MemberNumber,
+                        });
                         return this.resultFromTransition(
                             left,
                             current.sessionId,
