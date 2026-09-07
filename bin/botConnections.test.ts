@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     getBotAccountRoles,
+    getBotRecoveryStatuses,
+    stopSupervisingBotConnections,
+    superviseBotConnections,
     validateBotAccountConfiguration,
 } from "./botConnections";
 import { ValidationError } from "./errors";
@@ -123,6 +126,76 @@ test("connection readiness supports timeout and cancellation", async () => {
     );
 });
 
+test("recovery restores each Veratown role once after duplicate lifecycle events", async () => {
+    const main = createRecoveryConnection();
+    const shower = createRecoveryConnection();
+    const casino = createRecoveryConnection();
+    const connections = { main, shower, casino };
+
+    superviseBotConnections(connections as never, config({}));
+    main.emit("Disconnected");
+    main.emit("Disconnected");
+    main.emit("Connected");
+    main.emit("Connected");
+    shower.emit("Disconnected");
+    shower.emit("Connected");
+    casino.emit("Disconnected");
+    casino.emit("Connected");
+
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(main.moves, [{ X: 10, Y: 8 }]);
+    assert.deepEqual(shower.moves, [{ X: 9, Y: 24 }]);
+    assert.deepEqual(casino.moves, [{ X: 38, Y: 38 }]);
+    assert.equal(main.descriptions, 1);
+    assert.deepEqual(
+        getBotRecoveryStatuses(connections as never).map(
+            ({ role, state, recoveryAttempts }) => ({
+                role,
+                state,
+                recoveryAttempts,
+            }),
+        ),
+        [
+            { role: "main", state: "connected", recoveryAttempts: 1 },
+            { role: "shower", state: "connected", recoveryAttempts: 1 },
+            { role: "casino", state: "connected", recoveryAttempts: 1 },
+        ],
+    );
+    stopSupervisingBotConnections(connections as never);
+});
+
+test("recovery failure leaves only the affected role unavailable", async () => {
+    const main = createRecoveryConnection(new Error("movement unavailable"));
+    const connections = { main };
+
+    superviseBotConnections(connections as never, config({}));
+    main.emit("Disconnected");
+    main.emit("Connected");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(
+        getBotRecoveryStatuses(connections as never).map(
+            ({ role, state, recoveryAttempts, lastFailure }) => ({
+                role,
+                state,
+                recoveryAttempts,
+                lastFailure,
+            }),
+        ),
+        [
+            {
+                role: "main",
+                state: "failed",
+                recoveryAttempts: 1,
+                lastFailure: "movement unavailable",
+            },
+        ],
+    );
+    stopSupervisingBotConnections(connections as never);
+});
+
 function createConnection() {
     const listeners = new Map<string, Set<() => void>>();
     const onceListeners = new Map<string, Set<() => void>>();
@@ -149,6 +222,40 @@ function createConnection() {
                 }
                 listener();
             }
+        },
+    };
+}
+
+function createRecoveryConnection(error?: Error) {
+    const listeners = new Map<string, Set<() => void>>();
+    const moves: Array<{ X: number; Y: number }> = [];
+    let descriptions = 0;
+    return {
+        Player: { Name: "test-bot", MemberNumber: 1 },
+        moves,
+        get descriptions() {
+            return descriptions;
+        },
+        isConnected: () => true,
+        on: (event: string, listener: () => void) => {
+            const eventListeners = listeners.get(event) ?? new Set();
+            eventListeners.add(listener);
+            listeners.set(event, eventListeners);
+        },
+        off: (event: string, listener: () => void) => {
+            listeners.get(event)?.delete(listener);
+        },
+        emit: (event: string) => {
+            for (const listener of [...(listeners.get(event) ?? [])]) {
+                listener();
+            }
+        },
+        moveOnMapAndWait: async (X: number, Y: number) => {
+            moves.push({ X, Y });
+            if (error) throw error;
+        },
+        setBotDescription: () => {
+            descriptions += 1;
         },
     };
 }

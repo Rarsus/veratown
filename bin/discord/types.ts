@@ -76,6 +76,7 @@ export interface SystemDiagnostics {
     databaseConnected: boolean;
     uptime: number; // milliseconds
     activeConnections: number;
+    connectionRecovery?: import("../botConnections").BotRecoveryStatus[];
     lastError?: string;
     lastErrorTime?: Date;
     memoryUsage: {
@@ -110,6 +111,7 @@ export interface BotStatusInfo {
     };
     playerCount: number;
     diagnostics: SystemDiagnostics;
+    recovery?: import("../botConnections").BotRecoveryStatus[];
 }
 
 /**
