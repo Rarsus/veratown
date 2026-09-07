@@ -343,6 +343,7 @@ function createMockCasino(
     const events: any[] = [];
     const deductCalls: any[] = [];
     const awardChipsCalls: any[] = [];
+    const applyForfeitCalls: any[] = [];
     const progressionXpCalls: any[] = [];
     const gameProgressUpdates: any[] = [];
 
@@ -427,6 +428,7 @@ function createMockCasino(
         events,
         deductCalls,
         awardChipsCalls,
+        applyForfeitCalls,
         progressionXpCalls,
         gameProgressUpdates,
         getUnifiedStore: () => unifiedStore,
@@ -435,7 +437,9 @@ function createMockCasino(
         getSign: () => sign,
         setTextColor: () => {},
         setBio: async () => {},
-        applyForfeit: () => {},
+        applyForfeit: (bet: any) => {
+            applyForfeitCalls.push(bet);
+        },
         cheatPunishment: () => {},
         multiplier: options.multiplier ?? 1,
         lockedItems: new Map(),
@@ -547,6 +551,15 @@ test("Blackjack Phase 2A.2: Idempotent settlement and venue modifier application
     );
     // Winnings: 100 * 2 = 200 base, with 2.0x venue multiplier = 400
     assert.strictEqual(casino.awardChipsCalls[0].amount, 400);
+    const settlement = casino.events.find(
+        (event) => event.type === "casino_blackjack_settlement",
+    );
+    assert.strictEqual(settlement.data.resultType, "win");
+    assert.ok(
+        conn.sentMessages.some((message) =>
+            message.msg.includes("WinnerPlayer wins 400 chips!"),
+        ),
+    );
 
     // Call resolveGame second time on same round
     await (game as any).resolveGame();
@@ -555,6 +568,220 @@ test("Blackjack Phase 2A.2: Idempotent settlement and venue modifier application
         casino.awardChipsCalls.length,
         1,
         "Settlement must be idempotent and not pay out twice",
+    );
+    assert.strictEqual(
+        conn.sentMessages.filter((message) =>
+            message.msg.includes("WinnerPlayer wins 400 chips!"),
+        ).length,
+        1,
+        "Settlement message must be emitted once",
+    );
+});
+
+test("Blackjack settlement reports normal losses and persists the loss amount", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ venueMultiplier: 2 });
+    const game = new BlackjackGame(conn as any, casino as any);
+    const bet = {
+        memberNumber: 510,
+        memberName: "LosingPlayer",
+        stake: 10,
+        stakeForfeit: "",
+        standing: true,
+    };
+
+    (game as any).currentRoundId = "loss-round";
+    game.placeBet(bet);
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "10" },
+        { suit: "Clubs", value: "7" },
+    ];
+    (game as any).playerHands.set(bet, [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "6" },
+    ]);
+
+    await (game as any).resolveGame();
+
+    const settlement = casino.events.find(
+        (event) => event.type === "casino_blackjack_settlement",
+    );
+    assert.ok(settlement);
+    assert.strictEqual(settlement.data.rawWinnings, 0);
+    assert.strictEqual(settlement.data.effectiveWinnings, 0);
+    assert.strictEqual(settlement.data.lossAmount, 10);
+    assert.strictEqual(settlement.data.resultType, "loss");
+    assert.ok(
+        conn.sentMessages.some((message) =>
+            message.msg.includes("LosingPlayer lost 10 chips."),
+        ),
+    );
+});
+
+test("Blackjack dealer blackjack reports the full losing stake", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino();
+    const game = new BlackjackGame(conn as any, casino as any);
+    const bet = {
+        memberNumber: 514,
+        memberName: "DealerBlackjackLoser",
+        stake: 25,
+        stakeForfeit: "",
+        standing: true,
+    };
+
+    (game as any).currentRoundId = "dealer-blackjack-round";
+    game.placeBet(bet);
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "A" },
+        { suit: "Clubs", value: "K" },
+    ];
+    (game as any).playerHands.set(bet, [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "9" },
+    ]);
+
+    await (game as any).resolveGame();
+
+    const settlement = casino.events.find(
+        (event) => event.type === "casino_blackjack_settlement",
+    );
+    assert.ok(settlement);
+    assert.strictEqual(settlement.data.lossAmount, 25);
+    assert.strictEqual(settlement.data.resultType, "loss");
+    assert.ok(
+        conn.sentMessages.some((message) =>
+            message.msg.includes("DealerBlackjackLoser lost 25 chips."),
+        ),
+    );
+});
+
+test("Blackjack settlement reports pushes without applying a venue multiplier", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ venueMultiplier: 2 });
+    const game = new BlackjackGame(conn as any, casino as any);
+    const bet = {
+        memberNumber: 511,
+        memberName: "PushPlayer",
+        stake: 10,
+        stakeForfeit: "",
+        standing: true,
+    };
+
+    (game as any).currentRoundId = "push-round";
+    game.placeBet(bet);
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "10" },
+        { suit: "Clubs", value: "7" },
+    ];
+    (game as any).playerHands.set(bet, [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "7" },
+    ]);
+
+    await (game as any).resolveGame();
+
+    const settlement = casino.events.find(
+        (event) => event.type === "casino_blackjack_settlement",
+    );
+    assert.ok(settlement);
+    assert.strictEqual(settlement.data.effectiveWinnings, 10);
+    assert.strictEqual(settlement.data.lossAmount, 0);
+    assert.strictEqual(settlement.data.resultType, "push");
+    assert.strictEqual(casino.awardChipsCalls[0].amount, 10);
+    assert.ok(
+        conn.sentMessages.some((message) =>
+            message.msg.includes("PushPlayer pushed and gets 10 chips back."),
+        ),
+    );
+});
+
+test("Blackjack settlement reports double-down and split losses once in aggregate", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino({ venueMultiplier: 2 });
+    const game = new BlackjackGame(conn as any, casino as any);
+    const firstBet = {
+        memberNumber: 512,
+        memberName: "SplitPlayer",
+        stake: 20,
+        stakeForfeit: "",
+        standing: true,
+    };
+    const secondBet = {
+        ...firstBet,
+        stake: 10,
+    };
+
+    (game as any).currentRoundId = "split-loss-round";
+    (game as any).players = [
+        {
+            memberNumber: firstBet.memberNumber,
+            memberName: firstBet.memberName,
+            playingHand: 0,
+            bets: [firstBet, secondBet],
+        },
+    ];
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "10" },
+        { suit: "Clubs", value: "7" },
+    ];
+    (game as any).playerHands.set(firstBet, [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "6" },
+    ]);
+    (game as any).playerHands.set(secondBet, [
+        { suit: "Spades", value: "9" },
+        { suit: "Hearts", value: "7" },
+    ]);
+
+    await (game as any).resolveGame();
+
+    const settlement = casino.events.find(
+        (event) => event.type === "casino_blackjack_settlement",
+    );
+    assert.ok(settlement);
+    assert.strictEqual(settlement.data.lossAmount, 30);
+    assert.strictEqual(settlement.data.resultType, "loss");
+    assert.strictEqual(
+        conn.sentMessages.filter((message) =>
+            message.msg.includes("SplitPlayer lost 30 chips."),
+        ).length,
+        1,
+    );
+});
+
+test("Blackjack forfeit settlement reports both chip value and the forfeit", async () => {
+    const conn = createMockConnector();
+    const casino = createMockCasino();
+    const game = new BlackjackGame(conn as any, casino as any);
+    const bet = {
+        memberNumber: 513,
+        memberName: "ForfeitPlayer",
+        stake: 7,
+        stakeForfeit: "legbinder",
+        standing: true,
+    };
+
+    (game as any).currentRoundId = "forfeit-loss-round";
+    game.placeBet(bet);
+    (game as any).dealerHand = [
+        { suit: "Hearts", value: "10" },
+        { suit: "Clubs", value: "7" },
+    ];
+    (game as any).playerHands.set(bet, [
+        { suit: "Spades", value: "10" },
+        { suit: "Hearts", value: "6" },
+    ]);
+
+    await (game as any).resolveGame();
+
+    assert.strictEqual(casino.applyForfeitCalls.length, 1);
+    assert.ok(
+        conn.sentMessages.some((message) =>
+            message.msg.includes(
+                "ForfeitPlayer lost 7 chips and gets Leg binder!",
+            ),
+        ),
     );
 });
 

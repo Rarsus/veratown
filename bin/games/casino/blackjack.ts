@@ -45,6 +45,11 @@ Each player is dealt two cards, and can choose to "hit" (take another card) or "
 The dealer also has a hand, and must hit until they reach 17 or higher.
 Blackjack (21 with two cards) pays 3:2 rounding down to the nearest whole number.
 
+Settlement results report the chips won, lost, or returned:
+- Wins: "<name> wins <amount> chips!"
+- Losses: "<name> lost <amount> chips."
+- Pushes return the stake and report that no chips were lost or won.
+
 Every card has a value:
 - Number cards (2-10) are worth their face value.
 - Jacks, Queens, and Kings are worth 10.
@@ -185,6 +190,14 @@ export interface BlackjackBet extends Bet {
 }
 
 type Hand = Card[];
+
+type BlackjackSettlementResult = {
+    totalStake: number;
+    rawWinnings: number;
+    effectiveWinnings: number;
+    lossAmount: number;
+    resultType: "win" | "loss" | "push" | "forfeit_loss" | "forfeit_push";
+};
 
 export class BlackjackGame implements Game {
     private readonly logger = createLogger("BlackjackGame");
@@ -1211,7 +1224,11 @@ export class BlackjackGame implements Game {
             this.casino.venueSystem?.getVenueMultiplier() ?? 1;
 
         for (const player of this.players) {
-            let totalWinnings = 0;
+            const totalStake = player.bets.reduce(
+                (stake, bet) => stake + bet.stake,
+                0,
+            );
+            let rawWinnings = 0;
             for (const bet of player.bets) {
                 const playerHand = this.playerHands.get(bet);
                 if (!playerHand) {
@@ -1221,41 +1238,79 @@ export class BlackjackGame implements Game {
                     continue;
                 }
                 const winnings = this.getWinnings(playerHand, bet);
-                totalWinnings += winnings;
+                rawWinnings += winnings;
             }
 
+            const forfeitBet = player.bets.find((bet) => bet.stakeForfeit);
+            const isForfeitPush = Boolean(forfeitBet) && rawWinnings === -100;
+            const isPush =
+                isForfeitPush ||
+                (!forfeitBet && rawWinnings >= 0 && rawWinnings === totalStake);
             const effectiveWinnings =
-                totalWinnings > 0
-                    ? (this.casino.venueSystem?.applyVenueBonus(
-                          totalWinnings,
-                      ) ?? totalWinnings)
-                    : totalWinnings;
+                rawWinnings > 0 && !isPush
+                    ? (this.casino.venueSystem?.applyVenueBonus(rawWinnings) ??
+                      rawWinnings)
+                    : rawWinnings;
+            const result: BlackjackSettlementResult = {
+                totalStake,
+                rawWinnings,
+                effectiveWinnings,
+                lossAmount: isPush
+                    ? 0
+                    : rawWinnings < 0
+                      ? Math.abs(rawWinnings)
+                      : rawWinnings === 0
+                        ? totalStake
+                        : 0,
+                resultType: isForfeitPush
+                    ? "forfeit_push"
+                    : isPush
+                      ? "push"
+                      : effectiveWinnings > 0
+                        ? "win"
+                        : forfeitBet
+                          ? "forfeit_loss"
+                          : "loss",
+            };
 
-            if (effectiveWinnings > 0) {
+            if (result.effectiveWinnings > 0) {
                 // Update chips using unified store via mutation service
                 await this.casino
                     .getMutationService()
                     .awardChips(
                         player.memberNumber,
-                        effectiveWinnings,
+                        result.effectiveWinnings,
                         "blackjack_win",
                         player.memberNumber,
                     );
-                // Phase 2A.7: Award progression XP, keyed by round so
-                // retried settlements never grant duplicate XP.
-                await this.casino
-                    .getMutationService()
-                    .awardProgressionXp(
-                        player.memberNumber,
-                        getXpRewardForSource("casino_blackjack_win"),
-                        "casino_blackjack_win",
-                        `blackjack:${this.currentRoundId}:${player.memberNumber}`,
-                        player.memberNumber,
-                    );
-                message += `${player.memberName} wins ${effectiveWinnings} chips! \n`;
-            } else if (player.bets[0].stakeForfeit && totalWinnings !== -100) {
-                await this.casino.applyForfeit(player.bets[0]);
-                message += `${player.memberName} lost and gets ${FORFEITS[player.bets[0].stakeForfeit].name}! \n`;
+                if (result.resultType === "win") {
+                    // Phase 2A.7: Award progression XP, keyed by round so
+                    // retried settlements never grant duplicate XP.
+                    await this.casino
+                        .getMutationService()
+                        .awardProgressionXp(
+                            player.memberNumber,
+                            getXpRewardForSource("casino_blackjack_win"),
+                            "casino_blackjack_win",
+                            `blackjack:${this.currentRoundId}:${player.memberNumber}`,
+                            player.memberNumber,
+                        );
+                    message += `${player.memberName} wins ${result.effectiveWinnings} chips! \n`;
+                } else {
+                    message += `${player.memberName} pushed and gets ${result.effectiveWinnings} chips back. \n`;
+                }
+            } else if (
+                result.resultType === "loss" ||
+                result.resultType === "forfeit_loss"
+            ) {
+                if (result.resultType === "forfeit_loss" && forfeitBet) {
+                    await this.casino.applyForfeit(forfeitBet);
+                    message += `${player.memberName} lost ${result.lossAmount} chips and gets ${FORFEITS[forfeitBet.stakeForfeit].name}! \n`;
+                } else {
+                    message += `${player.memberName} lost ${result.lossAmount} chips. \n`;
+                }
+            } else if (result.resultType === "forfeit_push") {
+                message += `${player.memberName} pushed; no chips were lost or won. \n`;
             }
 
             await this.casino.getMutationService().recordEvent({
@@ -1266,9 +1321,12 @@ export class BlackjackGame implements Game {
                 target: player.memberNumber,
                 data: {
                     roundId: this.currentRoundId,
-                    rawWinnings: totalWinnings,
-                    effectiveWinnings,
+                    rawWinnings: result.rawWinnings,
+                    effectiveWinnings: result.effectiveWinnings,
                     venueMultiplier,
+                    totalStake: result.totalStake,
+                    lossAmount: result.lossAmount,
+                    resultType: result.resultType,
                 },
                 processed: true,
             });
