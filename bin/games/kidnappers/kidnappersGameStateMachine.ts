@@ -1422,9 +1422,13 @@ export class KidnappersGameStateMachine {
 
     private accept(
         event: KidnappersGameEvent,
-        _command: KidnappersGameCommand,
+        command: KidnappersGameCommand,
     ): KidnappersGameTransitionResult {
-        return { ok: true, event, state: this.toSnapshot() };
+        return {
+            ok: true,
+            event: this.withDeliveryId(event, command.correlationId),
+            state: this.toSnapshot(),
+        };
     }
 
     private reject(
@@ -1434,15 +1438,30 @@ export class KidnappersGameStateMachine {
         return {
             ok: false,
             error,
-            event: {
-                type: "ACTION_REJECTED",
-                command: error.command,
-                reason: error.reason,
-                message: error.message,
-                correlationId: error.correlationId,
-                emittedAt: Date.now(),
-            },
+            event: this.withDeliveryId(
+                {
+                    type: "ACTION_REJECTED",
+                    command: error.command,
+                    reason: error.reason,
+                    message: error.message,
+                    correlationId: error.correlationId,
+                    emittedAt: Date.now(),
+                },
+                error.correlationId,
+            ),
             state: before,
+        };
+    }
+
+    private withDeliveryId(
+        event: KidnappersGameEvent,
+        correlationId: string,
+    ): KidnappersGameEvent {
+        return {
+            ...event,
+            deliveryId:
+                event.deliveryId ??
+                `kidnappers:${this.sessionId}:${correlationId}:${event.type}`,
         };
     }
 

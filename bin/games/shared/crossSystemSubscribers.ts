@@ -28,6 +28,10 @@ import {
 } from "./gameStateMutationService";
 
 import { createLogger } from "../../logging";
+import {
+    KidnappersGameSubscribers,
+    type KidnappersSubscriberHandlers,
+} from "../kidnappers/kidnappersGameMessaging";
 
 /**
  * External system interfaces for event subscribers.
@@ -64,6 +68,7 @@ export class CrossSystemSubscribers {
     private readonly logger = createLogger("CrossSystemSubscribers");
     private eventBus: EventBus;
     private readonly handledLocationEvents = new Set<string>();
+    private kidnappersSubscribers?: KidnappersGameSubscribers;
     private initialized = false;
 
     constructor(
@@ -348,5 +353,23 @@ export class CrossSystemSubscribers {
      */
     public getEventBus(): EventBus {
         return this.eventBus;
+    }
+
+    /**
+     * Attach KidnappersGame's character, inventory, audit, and lifecycle
+     * handlers to this shared event bus. Initialization is idempotent and
+     * failed handlers remain retryable through EventBus.publishReliable().
+     */
+    public initializeKidnappersGameSubscribers(
+        handlers: KidnappersSubscriberHandlers,
+    ): KidnappersGameSubscribers {
+        if (!this.kidnappersSubscribers) {
+            this.kidnappersSubscribers = new KidnappersGameSubscribers(
+                this.eventBus,
+                handlers,
+            );
+            this.kidnappersSubscribers.initialize();
+        }
+        return this.kidnappersSubscribers;
     }
 }

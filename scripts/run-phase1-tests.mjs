@@ -8,6 +8,7 @@ const tests = [
     "bin/games/shared/__tests__/deviceFactory.test.ts",
     "bin/games/shared/__tests__/eventBus.test.ts",
     "bin/games/shared/__tests__/crossSystemSubscribers.test.ts",
+    "bin/games/kidnappers/__tests__/kidnappersGameMessaging.test.ts",
     "bin/games/shared/__tests__/mongodbTypeValidation.test.ts",
     "bin/games/shared/__tests__/gameStateMutationService.test.ts",
     "bin/games/shared/__tests__/unifiedCharacterStore.unit.test.ts",

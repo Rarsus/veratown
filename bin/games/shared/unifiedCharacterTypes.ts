@@ -332,13 +332,20 @@ export interface GameEvent {
         | "inventory_removed"
         | "effect_applied"
         | "effect_cancelled"
-        | "effect_expired";
-    source: "casino" | "dare" | "veratown" | "progression" | "admin";
+        | "effect_expired"
+        | "kidnappers_game_event"
+        | "kidnappers_player_message";
+    source:
+        "casino" | "dare" | "veratown" | "kidnappers" | "progression" | "admin";
     actor: number; // memberNumber of who caused this
     target: number; // memberNumber affected
     data: Record<string, unknown>;
     processed: boolean;
-    processedBy?: ("casino" | "dare" | "veratown")[];
+    processedBy?: ("casino" | "dare" | "veratown" | "kidnappers")[];
+    /** Stable identity used to deduplicate delivery across retries. */
+    correlationId?: string;
+    deliveryId?: string;
+    sequence?: number;
 }
 
 // ===== CASINO VIEW (What Casino system sees)
