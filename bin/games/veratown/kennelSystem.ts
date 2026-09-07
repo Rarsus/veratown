@@ -42,6 +42,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         private readonly stateSync?: (
             character: API_Character,
         ) => Promise<void>,
+        private readonly delay: (milliseconds: number) => Promise<void> = wait,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
@@ -77,8 +78,23 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 );
             }
 
+            const occupants = (this.conn.chatRoom?.characters ?? []).filter(
+                (character) => this.isKennelPosition(character),
+            );
+            await Promise.all(
+                occupants.map((character) =>
+                    this.reconcileCharacter(character).catch((error) => {
+                        this.logger.error("Kennel recovery failed", error, {
+                            memberNumber: character.MemberNumber,
+                            position: character.MapPos,
+                        });
+                    }),
+                ),
+            );
+
             this.logger?.info(
                 `[KennelSystem] Registered ${this.kennelPositions.length} kennel location(s)`,
+                { occupantCount: occupants.length },
             );
         } catch (e) {
             this.logger?.error(
@@ -93,43 +109,104 @@ export class KennelSystem extends AbstractTileFeatureSystem {
 
         // Use idempotent monitor to prevent duplicate execution
         await this.monitor.run(character, async () => {
-            const persisted = await this.mutationService?.enterKennel(
-                character.MemberNumber,
-            );
-            if (persisted === false) return;
-            await syncAppearanceMutation(
-                character,
-                async () => {
-                    const kennel = character.Appearance.AddItem(
-                        AssetGet("ItemDevices", "Kennel"),
+            const wearingKennel =
+                character.Appearance.getItemData("ItemDevices")?.Name ===
+                "Kennel";
+            const activeSession =
+                await this.mutationService?.getActiveKennelSession?.(
+                    character.MemberNumber,
+                );
+            const persisted =
+                activeSession || wearingKennel
+                    ? activeSession
+                        ? false
+                        : await this.mutationService?.enterKennel(
+                              character.MemberNumber,
+                          )
+                    : await this.mutationService?.enterKennel(
+                          character.MemberNumber,
+                      );
+
+            if (persisted === false && !activeSession && !wearingKennel) {
+                this.logger.warn("Kennel entry not persisted", {
+                    memberNumber: character.MemberNumber,
+                    position: character.MapPos,
+                });
+                return;
+            }
+
+            const createdSession = persisted === true;
+            try {
+                if (!wearingKennel) {
+                    await syncAppearanceMutation(
+                        character,
+                        () => {
+                            const kennel = character.Appearance.AddItem(
+                                AssetGet("ItemDevices", "Kennel"),
+                            );
+                            kennel.SetCraft({
+                                Name: "Kennel",
+                                Description: `${character} is relaxing in their Kennel`,
+                            });
+                            // d: 0 = door open, p: 1 = padding enabled
+                            kennel.setProperty("TypeRecord", { d: 0, p: 1 });
+                        },
+                        50,
+                        this.stateSync,
                     );
-                    kennel.SetCraft({
-                        Name: "Kennel",
-                        Description: `${character} is relaxing in their Kennel`,
-                    });
-                    // d: 0 = door open, p: 1 = padding enabled
-                    kennel.setProperty("TypeRecord", { d: 0, p: 1 });
+                }
+            } catch (error) {
+                if (createdSession) {
+                    await this.mutationService?.exitKennel(
+                        character.MemberNumber,
+                    );
+                }
+                throw error;
+            }
 
-                    await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
-                    if (
-                        character.Appearance.getItemData("ItemDevices")
-                            ?.Name !== "Kennel"
-                    )
-                        return;
-
-                    // d: 1 = door closed
-                    kennel.setProperty("TypeRecord", { d: 1, p: 1 });
-                },
-                50,
-                this.stateSync,
-            );
-
-            this.logger.info("Kennel door closed", {
+            this.logger.info("Kennel entry completed", {
                 memberNumber: character.MemberNumber,
-                location: "kennel",
+                persisted: persisted !== false,
+                appearance: "Kennel",
+                position: character.MapPos,
+            });
+            void this.closeDoorAfterDelay(character).catch((error) => {
+                this.logger.error("Kennel door close failed", error, {
+                    memberNumber: character.MemberNumber,
+                });
             });
         });
     };
+
+    private async reconcileCharacter(character: API_Character): Promise<void> {
+        this.logger.info("Reconciling kennel occupant", {
+            memberNumber: character.MemberNumber,
+            position: character.MapPos,
+        });
+        await this.onCharacterEnterKennel(character);
+    }
+
+    private isKennelPosition(character: API_Character): boolean {
+        return this.kennelPositions.some(
+            (position) =>
+                position.X === character.MapPos.X &&
+                position.Y === character.MapPos.Y,
+        );
+    }
+
+    private async closeDoorAfterDelay(character: API_Character): Promise<void> {
+        await this.delay(KENNEL_DOOR_CLOSE_DELAY_MS);
+        const kennel = character.Appearance.getItemData("ItemDevices");
+        if (kennel?.Name !== "Kennel") return;
+        // d: 1 = door closed, p: 1 = padding enabled
+        (kennel as any).setProperty("TypeRecord", { d: 1, p: 1 });
+        character.Appearance.MakeAppearanceBundle();
+        await this.stateSync?.(character);
+        this.logger.info("Kennel door closed", {
+            memberNumber: character.MemberNumber,
+            location: "kennel",
+        });
+    }
 
     /**
      * Remove the Kennel device if the character is wearing one
@@ -139,7 +216,6 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     ): Promise<void> {
         const kennel = character.Appearance.getItemData("ItemDevices");
         if (kennel?.Name === "Kennel") {
-            await this.mutationService?.exitKennel(character.MemberNumber);
             await syncAppearanceMutation(
                 character,
                 () => {
@@ -148,6 +224,13 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 50,
                 this.stateSync,
             );
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name ===
+                "Kennel"
+            ) {
+                return;
+            }
+            await this.mutationService?.exitKennel(character.MemberNumber);
         }
     }
 }

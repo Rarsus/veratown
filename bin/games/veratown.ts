@@ -59,6 +59,7 @@ import {
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
 import { createLogger } from "../logging";
+import { isBotRecoveryReady } from "../botConnections";
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
@@ -193,6 +194,7 @@ export class Veratown {
     private pendingFeatureRegistrations: Promise<void>[] = [];
     private locationSnapshot: VeratownLocationDoc[] = [];
     private locationReload?: Promise<void>;
+    private containmentReady = false;
 
     // Only set when mongo_uri/mongo_db are configured; without it, the map
     // layout falls back to the built-in default (MAP, from veratownConfig.ts)
@@ -308,6 +310,8 @@ export class Veratown {
 
         this.conn.on("RoomCreate", this.onChatRoomCreated);
         this.conn.on("RoomJoin", this.onChatRoomJoined);
+        this.conn.on("Connected", this.onBotConnected);
+        this.conn.on("Disconnected", this.onBotDisconnected);
 
         // Each system is constructed and registered independently: if one
         // fails (eg. a bug in a single feature), the others are unaffected
@@ -608,6 +612,16 @@ export class Veratown {
         ].join("\n");
     }
 
+    public isContainmentReady(): boolean {
+        return this.containmentReady;
+    }
+
+    private setContainmentReady(ready: boolean): void {
+        this.containmentReady = ready;
+        if (this.cageSystem) this.cageSystem.enabled = ready;
+        if (this.kennelSystem) this.kennelSystem.enabled = ready;
+    }
+
     public getRegionManager(): RegionManager {
         return this.regionManager;
     }
@@ -619,10 +633,27 @@ export class Veratown {
     private onChatRoomCreated = async () => {
         await this.setupRoom();
         await this.setupCharacter();
+        await this.reloadLocations();
     };
 
     private onChatRoomJoined = async () => {
         await this.setupCharacter();
+        await this.reloadLocations();
+    };
+
+    private onBotConnected = async () => {
+        try {
+            await this.setupRoom();
+            await this.setupCharacter();
+            await this.reloadLocations();
+        } catch (error) {
+            logger.error("Bot reconnect setup failed", error);
+            this.setContainmentReady(false);
+        }
+    };
+
+    private onBotDisconnected = () => {
+        this.setContainmentReady(false);
     };
 
     private setupRoom = async () => {
@@ -643,17 +674,81 @@ export class Veratown {
     };
 
     private setupCharacter = async () => {
-        this.conn.moveOnMap(RECEPTIONIST_POSITION.X, RECEPTIONIST_POSITION.Y);
+        await this.moveBotToPosition(this.conn, RECEPTIONIST_POSITION, "main");
         this.conn.Player.SetActivePose(["Kneel"]);
         await this.liveCharacterStateSync?.reconcile();
 
         if (this.conn2) {
-            this.conn2.moveOnMap(
-                SHOWER_BOT2_HOME_POSITION.X,
-                SHOWER_BOT2_HOME_POSITION.Y,
+            await this.moveBotToPosition(
+                this.conn2,
+                SHOWER_BOT2_HOME_POSITION,
+                "shower",
             );
         }
+        if (this.conn3) {
+            await this.moveBotToPosition(
+                this.conn3,
+                GAME_MISTRESS_POSITION,
+                "casino",
+            );
+        }
+        this.updateContainmentReadiness();
     };
+
+    private async moveBotToPosition(
+        connection: API_Connector,
+        position: { X: number; Y: number },
+        role: string,
+    ): Promise<boolean> {
+        try {
+            await connection.moveOnMapAndWait(position.X, position.Y);
+            logger.info("Bot map position ready", {
+                role,
+                position,
+            });
+            return true;
+        } catch (error) {
+            logger.error("Bot map position unavailable", error, {
+                role,
+                position,
+            });
+            return false;
+        }
+    }
+
+    private updateContainmentReadiness(): void {
+        const atPosition = (
+            connection: API_Connector | undefined,
+            position: { X: number; Y: number },
+        ): boolean =>
+            !!connection &&
+            isBotRecoveryReady(connection) &&
+            !!connection.chatRoom?.map &&
+            connection.Player.MapPos.X === position.X &&
+            connection.Player.MapPos.Y === position.Y;
+
+        const mainReady = atPosition(this.conn, RECEPTIONIST_POSITION);
+        const showerReady =
+            !this.conn2 || atPosition(this.conn2, SHOWER_BOT2_HOME_POSITION);
+        const casinoReady =
+            !this.conn3 || atPosition(this.conn3, GAME_MISTRESS_POSITION);
+        const ready = mainReady && showerReady && casinoReady;
+        this.setContainmentReady(ready);
+
+        const roles = {
+            main: mainReady,
+            shower: showerReady,
+            casino: casinoReady,
+        };
+        if (ready && casinoReady) {
+            logger.info("Veratown containment readiness confirmed", { roles });
+        } else {
+            logger.warn("Veratown running with degraded readiness", {
+                roles,
+                containmentReady: ready,
+            });
+        }
+    }
 
     private onCommandFreeAndLeave = async (
         sender: API_Character,

@@ -23,6 +23,7 @@ import {
     ProgressionAwardResult,
     ProgressionRollbackResult,
     CageSession,
+    KennelSession,
 } from "./unifiedCharacterTypes";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
@@ -146,6 +147,9 @@ export interface GameStateMutationService {
     getActiveCageSession(
         memberNumber: number,
     ): Promise<CageSession | undefined>;
+    getActiveKennelSession(
+        memberNumber: number,
+    ): Promise<KennelSession | undefined>;
     exitCage(memberNumber: number, actor?: number): Promise<boolean>;
     enterKennel(memberNumber: number, actor?: number): Promise<boolean>;
     exitKennel(memberNumber: number, actor?: number): Promise<boolean>;
@@ -906,6 +910,16 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         this.validateMember(memberNumber);
         const view = await this.unifiedStore.getVeratownView(memberNumber);
         return [...view.cageIncarcerations]
+            .reverse()
+            .find((session) => !session.releasedAt);
+    }
+
+    public async getActiveKennelSession(
+        memberNumber: number,
+    ): Promise<KennelSession | undefined> {
+        this.validateMember(memberNumber);
+        const view = await this.unifiedStore.getVeratownView(memberNumber);
+        return [...view.kennelSessions]
             .reverse()
             .find((session) => !session.releasedAt);
     }
