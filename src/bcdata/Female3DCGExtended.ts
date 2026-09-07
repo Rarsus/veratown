@@ -21967,7 +21967,7 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 								MaxLength: { Text: 11 },
 								Font: "Impact",
 								ScriptHooks: {
-									AfterDraw: null, // TEXT archetype handler
+									AfterDraw: undefined, // TEXT archetype handler
 								},
 							},
 						},
