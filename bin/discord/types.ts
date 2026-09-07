@@ -77,6 +77,7 @@ export interface SystemDiagnostics {
     uptime: number; // milliseconds
     activeConnections: number;
     connectionRecovery?: import("../botConnections").BotRecoveryStatus[];
+    containmentRecovery?: import("../games/veratown/cageSystem").ContainmentRecoveryStatus[];
     lastError?: string;
     lastErrorTime?: Date;
     memoryUsage: {

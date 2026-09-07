@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { durationString } from "../../../utils";
-import { CageSystem, type CageTimer } from "../cageSystem";
+import {
+    CageSystem,
+    classifyContainmentRecovery,
+    type CageTimer,
+} from "../cageSystem";
 
 class FakeTimer implements CageTimer {
     public nowMs = 0;
@@ -76,10 +80,16 @@ function createCharacter(memberNumber = 251024) {
 
 function createMutationService() {
     const exits: number[] = [];
+    const entries: number[] = [];
     return {
         exits,
+        entries,
         exitCage: async (memberNumber: number) => {
             exits.push(memberNumber);
+            return true;
+        },
+        enterCage: async (memberNumber: number) => {
+            entries.push(memberNumber);
             return true;
         },
     };
@@ -268,5 +278,87 @@ test("CageSystem restores a missing crate from persisted containment state", asy
         character.character.Appearance.getItemData("ItemDevices")?.Property
             ?.RemoveTimer,
         300_000,
+    );
+});
+
+test("classifies recovery from persistence and live appearance state", () => {
+    assert.equal(
+        classifyContainmentRecovery({}).classification,
+        "not-contained",
+    );
+    assert.equal(
+        classifyContainmentRecovery({
+            activeSession: { expiresAt: 300_000 },
+        }).classification,
+        "contained-persisted-expiry",
+    );
+    assert.equal(
+        classifyContainmentRecovery({ liveCrateExpiry: 300_000 })
+            .classification,
+        "contained-live-expiry",
+    );
+    assert.equal(
+        classifyContainmentRecovery({ liveCratePresent: true }).classification,
+        "contained-missing-expiry",
+    );
+    assert.equal(
+        classifyContainmentRecovery({
+            activeSession: {},
+            liveCrateExpiry: "missing",
+        }).classification,
+        "contained-missing-expiry",
+    );
+    const conflict = classifyContainmentRecovery({
+        activeSession: { expiresAt: 300_000 },
+        liveCrateExpiry: 400_000,
+    });
+    assert.equal(conflict.classification, "conflicting-state");
+    assert.equal(conflict.selectedExpiry, 400_000);
+});
+
+test("CageSystem ignores an ordinary character during recovery", async () => {
+    const timer = new FakeTimer();
+    const mutations = Object.assign(createMutationService(), {
+        getActiveCageSession: async () => undefined,
+    });
+    const character = createCharacter();
+    const system = new CageSystem(
+        {} as any,
+        mutations as any,
+        undefined,
+        timer,
+    );
+
+    await (system as any).recoverCagedCharacter(character.character);
+
+    assert.deepEqual(mutations.entries, []);
+    assert.deepEqual(mutations.exits, []);
+    assert.equal((system as any).cagedCharacters.size, 0);
+});
+
+test("CageSystem preserves a live crate while creating durable state", async () => {
+    const timer = new FakeTimer();
+    const mutations = Object.assign(createMutationService(), {
+        getActiveCageSession: async () => undefined,
+    });
+    const character = createCharacter();
+    character.setCrate({
+        Name: "FuturisticCrate",
+        Property: { RemoveTimer: 300_000 },
+    });
+    const system = new CageSystem(
+        {} as any,
+        mutations as any,
+        undefined,
+        timer,
+    );
+
+    void (system as any).recoverCagedCharacter(character.character);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(mutations.entries, [251024]);
+    assert.equal(
+        character.character.Appearance.getItemData("ItemDevices")?.Name,
+        "FuturisticCrate",
     );
 });

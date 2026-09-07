@@ -1761,8 +1761,17 @@ export class UnifiedCharacterStore {
         // Keep only last 10 cage sessions
         const sessions = [...currentSessions, cageSession].slice(-10);
 
-        await this.profiles.updateOne(
-            { _id: memberNumber },
+        const entryResult = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.cageIncarcerations": {
+                    $not: {
+                        $elemMatch: {
+                            releasedAt: { $exists: false },
+                        },
+                    },
+                },
+            },
             {
                 $set: {
                     "veratown.cageIncarcerations": sessions,
@@ -1775,6 +1784,7 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+        if (entryResult.matchedCount === 0) return false;
 
         // Emit event
         const event: GameEvent = {
@@ -1818,8 +1828,17 @@ export class UnifiedCharacterStore {
         current.releasedAt = now;
         current.duration = now - current.enteredAt;
 
-        await this.profiles.updateOne(
-            { _id: memberNumber },
+        const exitResult = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.cageIncarcerations": {
+                    $elemMatch: {
+                        enteredAt: current.enteredAt,
+                        cageName: current.cageName,
+                        releasedAt: { $exists: false },
+                    },
+                },
+            },
             {
                 $set: {
                     "veratown.cageIncarcerations": sessions,
@@ -1835,6 +1854,7 @@ export class UnifiedCharacterStore {
                 },
             },
         );
+        if (exitResult.matchedCount === 0) return false;
 
         // Emit event
         const event: GameEvent = {
