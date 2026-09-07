@@ -75,6 +75,20 @@ VeratownLocationStore (feature locations/regions)
 └── Type: "cage", "keypad_door", "region", etc.
 ```
 
+### Live character state synchronization
+
+`LiveCharacterStateSync` owns the recoverable projection of live room state.
+It reconciles every visible character on room join, immediately after map
+movement and interactions, and at a bounded 60-second interval. Appearance mutations must use
+`syncAppearanceMutation`; the helper persists the normalized appearance and
+restraint snapshot after the external appearance API update has propagated.
+
+Reconciliation retries on the next interaction or interval after a store/API
+failure. `UnifiedCharacterStore.syncVeratownState()` is idempotent, so an
+unchanged observation does not update timestamps or versions. Use
+`getSynchronizationDiagnostics(memberNumber, staleAfterMs)` to identify stale
+or incomplete position, appearance, restraint, and casino projections.
+
 ---
 
 ## BASE CLASS PATTERNS

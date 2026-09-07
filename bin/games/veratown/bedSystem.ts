@@ -23,6 +23,7 @@ import {
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 // While a character remains on a bed tile, keeps checking whether they have
 // the "Sleep" Emoticon expression active: equips a Bed device while both are
@@ -43,7 +44,12 @@ export class BedSystem extends AbstractTileFeatureSystem {
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
 
-    public constructor(conn: API_Connector) {
+    public constructor(
+        conn: API_Connector,
+        private readonly stateSync?: (
+            character: API_Character,
+        ) => Promise<void>,
+    ) {
         super(conn, "bed", "Beds");
         this.bedTrigger = this.guardTileHandler(this.onCharacterEnterBed);
     }
@@ -235,6 +241,12 @@ export class BedSystem extends AbstractTileFeatureSystem {
         }
 
         character.Appearance.MakeAppearanceBundle();
+        await syncAppearanceMutation(
+            character,
+            () => undefined,
+            0,
+            this.stateSync,
+        );
     }
 
     private async ensureNoBed(character: API_Character): Promise<void> {
@@ -253,5 +265,11 @@ export class BedSystem extends AbstractTileFeatureSystem {
         character.Appearance.RemoveItem("ItemDevices");
 
         character.Appearance.MakeAppearanceBundle();
+        await syncAppearanceMutation(
+            character,
+            () => undefined,
+            0,
+            this.stateSync,
+        );
     }
 }

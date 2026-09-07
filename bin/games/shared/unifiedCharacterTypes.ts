@@ -350,11 +350,17 @@ export interface CasinoView {
     winStreak: number;
     lossStreak: number;
     cheatStrikes: number;
+    totalWins: number;
+    totalLosses: number;
     lastDailyClaimAt?: number;
+    lastGamePlayedAt?: number;
     // Phase 3: Chip locking
-    lockedChips?: number;
-    chipLockReason?: string;
+    lockedChips: number;
+    chipLockReason?: "bondage" | "parole" | "cage";
     chipLockUntil?: number;
+    recentWinnings: number;
+    version: number;
+    updatedAt: number;
 }
 
 // ===== DARE VIEW (What Dare system sees)
@@ -385,7 +391,9 @@ export interface VeratownView {
     memberNumber: number;
     name: string;
     lastPosition?: ChatRoomMapPos;
+    lastPositionAt: number;
     currentAppearance?: BC_AppearanceItem[];
+    lastAppearanceAt: number;
     currentRestraints: CurrentRestraint[];
     cageIncarcerations: CageSession[];
     kennelSessions: KennelSession[];

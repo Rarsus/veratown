@@ -17,6 +17,21 @@ import { wait } from "../../../hub/utils"; // Adjust path as needed
 const logger = createLogger("appearanceSync");
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
+const appearanceStateSynchronizers = new WeakMap<
+    API_Character,
+    (character: API_Character) => Promise<void>
+>();
+
+/**
+ * Registers the store-backed snapshot writer for a live room character.
+ * The weak association is discarded when the API character is discarded.
+ */
+export function registerAppearanceStateSynchronizer(
+    character: API_Character,
+    synchronizer: (character: API_Character) => Promise<void>,
+): void {
+    appearanceStateSynchronizers.set(character, synchronizer);
+}
 
 /**
  * Execute an appearance mutation with automatic sync and delay
@@ -26,6 +41,7 @@ export async function syncAppearanceMutation(
     character: API_Character,
     mutation: () => void | Promise<void>,
     delayMs: number = DEFAULT_SYNC_DELAY_MS,
+    onSynchronized?: (character: API_Character) => Promise<void>,
 ): Promise<void> {
     try {
         // Execute the mutation
@@ -38,6 +54,10 @@ export async function syncAppearanceMutation(
         if (delayMs > 0) {
             await wait(delayMs);
         }
+
+        await (onSynchronized ?? appearanceStateSynchronizers.get(character))?.(
+            character,
+        );
     } catch (error) {
         logger.error(
             `[AppearanceSync] Failed to sync appearance for ${character.MemberNumber}:`,

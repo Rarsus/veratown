@@ -16,6 +16,7 @@ import { after, before, test, type TestContext } from "node:test";
 import * as assert from "node:assert/strict";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { Db, MongoClient } from "mongodb";
+import { BC_AppearanceItem } from "bc-bot";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { EventBus } from "../shared/eventBus";
 import { GameEvent } from "../shared/unifiedCharacterTypes";
@@ -273,6 +274,82 @@ test("UnifiedCharacterStore - Veratown view and position tracking", async (t) =>
     assert.strictEqual(view.auditLog.length, 1);
     assert.strictEqual(view.auditLog[0].action, "entered_cage");
     assert.strictEqual(view.auditLog[0].performedBy, 555);
+});
+
+test("UnifiedCharacterStore - live snapshots are idempotent and casino updates preserve state", async (t) => {
+    const db = getTestDb(t, "test_live_state_sync");
+    if (!db) return;
+    const store = new UnifiedCharacterStore(db);
+    const memberNumber = 445;
+    const position = { X: 10, Y: 20 };
+    const appearance: BC_AppearanceItem[] = [
+        {
+            Group: "ItemArms" as AssetGroupName,
+            Name: "LeatherCuffs",
+            Property: { RemoveTimer: 123456 },
+        },
+    ];
+    const restraints = [
+        {
+            itemName: "LeatherCuffs",
+            group: "ItemArms",
+            equippedAt: 123,
+            lockedUntil: 123456,
+        },
+    ];
+
+    assert.equal(
+        await store.syncVeratownState(
+            memberNumber,
+            position,
+            appearance,
+            restraints,
+        ),
+        true,
+    );
+    const afterFirstSnapshot = await store.getProfile(memberNumber);
+    assert.equal(
+        await store.syncVeratownState(
+            memberNumber,
+            position,
+            appearance,
+            restraints,
+        ),
+        false,
+    );
+    const afterRetry = await store.getProfile(memberNumber);
+    assert.equal(afterRetry.version, afterFirstSnapshot.version);
+
+    await Promise.all([
+        store.updateCasinoStats(memberNumber, {
+            totalWins: 7,
+            recentWinnings: 12,
+        }),
+        store.updateCasinoStats(memberNumber, {
+            score: 42,
+            totalLosses: 3,
+            lastGamePlayedAt: 999,
+        }),
+    ]);
+
+    const veratown = await store.getVeratownView(memberNumber);
+    assert.deepEqual(veratown.lastPosition, position);
+    assert.deepEqual(veratown.currentAppearance, appearance);
+    assert.deepEqual(veratown.currentRestraints, restraints);
+
+    const casino = await store.getCasinoView(memberNumber);
+    assert.equal(casino.score, 42);
+    assert.equal(casino.totalWins, 7);
+    assert.equal(casino.totalLosses, 3);
+    assert.equal(casino.recentWinnings, 12);
+    assert.equal(casino.lastGamePlayedAt, 999);
+    assert.ok(casino.version >= 2);
+
+    assert.deepEqual(
+        (await store.getSynchronizationDiagnostics(memberNumber, 60_000))
+            .missingCasinoFields,
+        [],
+    );
 });
 
 test("UnifiedCharacterStore - Cage entry and exit events", async (t) => {

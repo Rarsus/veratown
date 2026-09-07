@@ -20,6 +20,7 @@ import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
+import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 // Owns the kennel tiles: equips a Kennel device (door open, padded) on
 // entry, then automatically closes the door after a short delay as long as
@@ -38,6 +39,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
+        private readonly stateSync?: (
+            character: API_Character,
+        ) => Promise<void>,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
@@ -93,25 +97,32 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 character.MemberNumber,
             );
             if (persisted === false) return;
-            const kennel = character.Appearance.AddItem(
-                AssetGet("ItemDevices", "Kennel"),
+            await syncAppearanceMutation(
+                character,
+                async () => {
+                    const kennel = character.Appearance.AddItem(
+                        AssetGet("ItemDevices", "Kennel"),
+                    );
+                    kennel.SetCraft({
+                        Name: "Kennel",
+                        Description: `${character} is relaxing in their Kennel`,
+                    });
+                    // d: 0 = door open, p: 1 = padding enabled
+                    kennel.setProperty("TypeRecord", { d: 0, p: 1 });
+
+                    await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
+                    if (
+                        character.Appearance.getItemData("ItemDevices")
+                            ?.Name !== "Kennel"
+                    )
+                        return;
+
+                    // d: 1 = door closed
+                    kennel.setProperty("TypeRecord", { d: 1, p: 1 });
+                },
+                50,
+                this.stateSync,
             );
-            kennel.SetCraft({
-                Name: "Kennel",
-                Description: `${character} is relaxing in their Kennel`,
-            });
-            // d: 0 = door open, p: 1 = padding enabled
-            kennel.setProperty("TypeRecord", { d: 0, p: 1 });
-
-            await wait(KENNEL_DOOR_CLOSE_DELAY_MS);
-            if (
-                character.Appearance.getItemData("ItemDevices")?.Name !==
-                "Kennel"
-            )
-                return;
-
-            // d: 1 = door closed
-            kennel.setProperty("TypeRecord", { d: 1, p: 1 });
 
             this.logger.info("Kennel door closed", {
                 memberNumber: character.MemberNumber,
@@ -129,7 +140,14 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         const kennel = character.Appearance.getItemData("ItemDevices");
         if (kennel?.Name === "Kennel") {
             await this.mutationService?.exitKennel(character.MemberNumber);
-            character.Appearance.RemoveItem("ItemDevices" as any);
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    character.Appearance.RemoveItem("ItemDevices" as any);
+                },
+                50,
+                this.stateSync,
+            );
         }
     }
 }
