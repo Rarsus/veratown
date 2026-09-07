@@ -42,6 +42,11 @@ import {
     CurrentRestraint,
     AuditLogEntry,
     BunnyPunishmentArtifact,
+    ReleaseRemovalOperation,
+    ReleaseRemovalPlan,
+    ReleaseRemovalAttemptResult,
+    ReleaseRemovalFinalSnapshot,
+    RemovedBondageItem,
 } from "./unifiedCharacterTypes";
 import { EventBus } from "./eventBus";
 import {
@@ -65,6 +70,7 @@ import {
     computeProgressionSummary,
     deriveEventSourceFromRewardSource,
 } from "./progressionRules";
+import { releaseItemIdentity } from "../veratown/shared/releaseRemovalPolicy";
 
 export function normalizeVeratownAuditLog(value: unknown): AuditLogEntry[] {
     if (!Array.isArray(value)) return [];
@@ -75,6 +81,16 @@ export function normalizeVeratownAuditLog(value: unknown): AuditLogEntry[] {
             typeof (entry as AuditLogEntry).action === "string" &&
             typeof (entry as AuditLogEntry).performedAt === "number",
     );
+}
+
+function dedupeReleaseItems(items: RemovedBondageItem[]): RemovedBondageItem[] {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+        const key = releaseItemIdentity(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 /**
@@ -1599,6 +1615,307 @@ export class UnifiedCharacterStore {
             roles: profile.veratown.roles,
             auditLog: profile.veratown.auditLog,
         };
+    }
+
+    public async getActiveReleaseRemoval(
+        memberNumber: number,
+    ): Promise<ReleaseRemovalOperation | undefined> {
+        const operation = (await this.getVeratownView(memberNumber))
+            .releaseParoleState?.releaseRemovalOperation;
+        return operation &&
+            ["planned", "removing", "verification_failed"].includes(
+                operation.status,
+            )
+            ? operation
+            : undefined;
+    }
+
+    public async beginReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        plan: ReleaseRemovalPlan,
+    ): Promise<ReleaseRemovalOperation> {
+        await this.init();
+        const now = Date.now();
+        const operation: ReleaseRemovalOperation = {
+            operationId,
+            status: "planned",
+            startedAt: now,
+            updatedAt: now,
+            attempt: 0,
+            plannedUnlockedItems: dedupeReleaseItems(
+                plan.plannedUnlockedItems,
+            ),
+            preservedLockedItems: dedupeReleaseItems(
+                plan.preservedLockedItems,
+            ),
+            completedRemovals: [],
+            remainingItems: dedupeReleaseItems(plan.plannedUnlockedItems),
+        };
+
+        for (let retry = 0; retry < 3; retry++) {
+            const profile = await this.getProfile(memberNumber);
+            const existing =
+                profile.veratown.releaseParoleState?.releaseRemovalOperation;
+            if (
+                existing &&
+                ["planned", "removing", "verification_failed"].includes(
+                    existing.status,
+                )
+            ) {
+                return existing;
+            }
+
+            const result = await this.profiles.updateOne(
+                {
+                    _id: memberNumber,
+                    $or: [
+                        {
+                            "veratown.releaseParoleState.releaseRemovalOperation":
+                                { $exists: false },
+                        },
+                        {
+                            "veratown.releaseParoleState.releaseRemovalOperation.status":
+                                { $in: ["completed", "aborted"] },
+                        },
+                    ],
+                },
+                {
+                    $set: {
+                        "veratown.releaseParoleState.releaseRemovalOperation":
+                            operation,
+                        "veratown.updatedAt": now,
+                        updatedAt: now,
+                        lastAccessedAt: now,
+                        lastAccessedBy: "veratown",
+                    },
+                    $inc: {
+                        "veratown.version": asVersion(1),
+                        version: asVersion(1),
+                    },
+                },
+            );
+            if (result.modifiedCount > 0) {
+                await this.recordVeratownAuditEntry(
+                    memberNumber,
+                    "release_removal_started",
+                    memberNumber,
+                    {
+                        operationId,
+                        plannedItems: operation.plannedUnlockedItems,
+                        preservedItems: operation.preservedLockedItems,
+                    },
+                );
+                return operation;
+            }
+        }
+
+        const active = await this.getActiveReleaseRemoval(memberNumber);
+        if (active) return active;
+        throw new Error(`Unable to begin release removal for ${memberNumber}`);
+    }
+
+    public async recordReleaseRemovalAttempt(
+        memberNumber: number,
+        operationId: string,
+        item: RemovedBondageItem,
+        result: ReleaseRemovalAttemptResult,
+    ): Promise<ReleaseRemovalOperation> {
+        await this.init();
+        for (let retry = 0; retry < 3; retry++) {
+            const profile = await this.getProfile(memberNumber);
+            const current =
+                profile.veratown.releaseParoleState?.releaseRemovalOperation;
+            if (!current || current.operationId !== operationId) {
+                throw new Error(
+                    `Release removal operation ${operationId} is not active`,
+                );
+            }
+
+            const key = releaseItemIdentity(item);
+            const completed = current.completedRemovals.some(
+                (candidate) => releaseItemIdentity(candidate) === key,
+            )
+                ? current.completedRemovals
+                : result.success
+                  ? [...current.completedRemovals, item]
+                  : current.completedRemovals;
+            const remaining = current.remainingItems.filter(
+                (candidate) => releaseItemIdentity(candidate) !== key,
+            );
+            if (!result.success && !remaining.some((candidate) => releaseItemIdentity(candidate) === key)) {
+                remaining.push(item);
+            }
+            const updated: ReleaseRemovalOperation = {
+                ...current,
+                status: result.success ? "removing" : "verification_failed",
+                updatedAt: Date.now(),
+                attempt: current.attempt + 1,
+                completedRemovals: dedupeReleaseItems(completed),
+                remainingItems: dedupeReleaseItems(remaining),
+                ...(result.success
+                    ? { lastError: undefined }
+                    : { lastError: result.error ?? "Live removal failed" }),
+            };
+            const update: Record<string, unknown> = {
+                $set: {
+                    "veratown.releaseParoleState.releaseRemovalOperation":
+                        updated,
+                    "veratown.updatedAt": updated.updatedAt,
+                    updatedAt: updated.updatedAt,
+                    lastAccessedAt: updated.updatedAt,
+                    lastAccessedBy: "veratown",
+                },
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+            };
+            const write = await this.profiles.updateOne(
+                {
+                    _id: memberNumber,
+                    "veratown.releaseParoleState.releaseRemovalOperation.operationId":
+                        operationId,
+                    "veratown.version": profile.veratown.version,
+                },
+                update,
+            );
+            if (write.modifiedCount > 0) return updated;
+        }
+        throw new Error(
+            `Concurrent release removal update failed for ${memberNumber}`,
+        );
+    }
+
+    public async completeReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        finalSnapshot: ReleaseRemovalFinalSnapshot,
+    ): Promise<ReleaseRemovalOperation> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        const current =
+            profile.veratown.releaseParoleState?.releaseRemovalOperation;
+        if (!current || current.operationId !== operationId) {
+            throw new Error(
+                `Release removal operation ${operationId} is not active`,
+            );
+        }
+        const remaining = finalSnapshot.remainingItems ?? current.remainingItems;
+        if (remaining.length > 0) {
+            throw new Error(
+                `Cannot complete release removal with ${remaining.length} remaining items`,
+            );
+        }
+        const completed: ReleaseRemovalOperation = {
+            ...current,
+            status: "completed",
+            updatedAt: Date.now(),
+            completedAt: Date.now(),
+            remainingItems: [],
+            completedRemovals: dedupeReleaseItems(
+                current.plannedUnlockedItems,
+            ),
+            lastError: undefined,
+        };
+        const set: Record<string, unknown> = {
+            "veratown.releaseParoleState.releaseRemovalOperation": completed,
+            "veratown.releaseParoleState.removedBondageItems":
+                completed.completedRemovals,
+            "veratown.updatedAt": completed.updatedAt,
+            updatedAt: completed.updatedAt,
+            lastAccessedAt: completed.updatedAt,
+            lastAccessedBy: "veratown",
+        };
+        if (finalSnapshot.currentAppearance !== undefined) {
+            set["veratown.currentAppearance"] =
+                finalSnapshot.currentAppearance;
+            set["veratown.lastAppearanceAt"] = completed.updatedAt;
+        }
+        if (finalSnapshot.currentRestraints !== undefined) {
+            set["veratown.currentRestraints"] = finalSnapshot.currentRestraints;
+        }
+        const result = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.releaseParoleState.releaseRemovalOperation.operationId":
+                    operationId,
+                "veratown.version": profile.veratown.version,
+            },
+            {
+                $set: set,
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+            },
+        );
+        if (result.modifiedCount === 0) {
+            const latest = await this.getActiveReleaseRemoval(memberNumber);
+            if (!latest || latest.operationId !== operationId) {
+                const view = await this.getVeratownView(memberNumber);
+                const completedLatest =
+                    view.releaseParoleState?.releaseRemovalOperation;
+                if (completedLatest?.operationId === operationId) {
+                    return completedLatest;
+                }
+            }
+            throw new Error(
+                `Concurrent release removal completion failed for ${memberNumber}`,
+            );
+        }
+        await this.recordVeratownAuditEntry(
+            memberNumber,
+            "release_removal_completed",
+            memberNumber,
+            { operationId, completedItems: completed.completedRemovals },
+        );
+        return completed;
+    }
+
+    public async failReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        reason: string,
+    ): Promise<ReleaseRemovalOperation> {
+        await this.init();
+        const profile = await this.getProfile(memberNumber);
+        const current =
+            profile.veratown.releaseParoleState?.releaseRemovalOperation;
+        if (!current || current.operationId !== operationId) {
+            throw new Error(
+                `Release removal operation ${operationId} is not active`,
+            );
+        }
+        const updated: ReleaseRemovalOperation = {
+            ...current,
+            status: "verification_failed",
+            updatedAt: Date.now(),
+            lastError: reason,
+        };
+        await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.releaseParoleState.releaseRemovalOperation.operationId":
+                    operationId,
+                "veratown.version": profile.veratown.version,
+            },
+            {
+                $set: {
+                    "veratown.releaseParoleState.releaseRemovalOperation":
+                        updated,
+                    "veratown.updatedAt": updated.updatedAt,
+                    updatedAt: updated.updatedAt,
+                    lastAccessedAt: updated.updatedAt,
+                    lastAccessedBy: "veratown",
+                },
+                $inc: {
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+            },
+        );
+        return updated;
     }
 
     /**

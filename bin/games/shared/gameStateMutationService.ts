@@ -24,6 +24,11 @@ import {
     ProgressionRollbackResult,
     CageSession,
     KennelSession,
+    ReleaseRemovalOperation,
+    ReleaseRemovalPlan,
+    ReleaseRemovalAttemptResult,
+    ReleaseRemovalFinalSnapshot,
+    RemovedBondageItem,
 } from "./unifiedCharacterTypes";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
@@ -193,6 +198,34 @@ export interface GameStateMutationService {
         rewardKey: string,
         actor?: number,
     ): Promise<ProgressionRollbackResult>;
+    beginReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        plan: ReleaseRemovalPlan,
+        actor?: number,
+    ): Promise<ReleaseRemovalOperation>;
+    recordReleaseRemovalAttempt(
+        memberNumber: number,
+        operationId: string,
+        item: RemovedBondageItem,
+        result: ReleaseRemovalAttemptResult,
+        actor?: number,
+    ): Promise<ReleaseRemovalOperation>;
+    getActiveReleaseRemoval(
+        memberNumber: number,
+    ): Promise<ReleaseRemovalOperation | undefined>;
+    completeReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        finalSnapshot: ReleaseRemovalFinalSnapshot,
+        actor?: number,
+    ): Promise<ReleaseRemovalOperation>;
+    failReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        reason: string,
+        actor?: number,
+    ): Promise<ReleaseRemovalOperation>;
 }
 
 type MutationStore = Pick<
@@ -229,6 +262,11 @@ type MutationStore = Pick<
     | "recordCageExit"
     | "recordKennelEntry"
     | "recordKennelExit"
+    | "beginReleaseRemoval"
+    | "recordReleaseRemovalAttempt"
+    | "getActiveReleaseRemoval"
+    | "completeReleaseRemoval"
+    | "failReleaseRemoval"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -1086,6 +1124,117 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         actor?: number,
     ): Promise<void> {
         return this.audit(memberNumber, operation, context, actor);
+    }
+
+    public async beginReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        plan: ReleaseRemovalPlan,
+        actor = memberNumber,
+    ): Promise<ReleaseRemovalOperation> {
+        this.validateMember(memberNumber);
+        if (!operationId || !plan) {
+            throw new ValidationError("operationId and plan are required");
+        }
+        return this.withRetry(async () => {
+            const operation = await this.unifiedStore.beginReleaseRemoval(
+                memberNumber,
+                operationId,
+                plan,
+            );
+            await this.audit(
+                memberNumber,
+                "beginReleaseRemoval",
+                { operationId, status: operation.status },
+                actor,
+            );
+            return operation;
+        }, "beginReleaseRemoval");
+    }
+
+    public async recordReleaseRemovalAttempt(
+        memberNumber: number,
+        operationId: string,
+        item: RemovedBondageItem,
+        result: ReleaseRemovalAttemptResult,
+        actor = memberNumber,
+    ): Promise<ReleaseRemovalOperation> {
+        this.validateMember(memberNumber);
+        if (!operationId || !item?.group || !item?.name || !result) {
+            throw new ValidationError(
+                "operationId, item, and result are required",
+            );
+        }
+        return this.withRetry(async () => {
+            const operation =
+                await this.unifiedStore.recordReleaseRemovalAttempt(
+                    memberNumber,
+                    operationId,
+                    item,
+                    result,
+                );
+            await this.audit(
+                memberNumber,
+                "recordReleaseRemovalAttempt",
+                { operationId, item, success: result.success },
+                actor,
+            );
+            return operation;
+        }, "recordReleaseRemovalAttempt");
+    }
+
+    public async getActiveReleaseRemoval(
+        memberNumber: number,
+    ): Promise<ReleaseRemovalOperation | undefined> {
+        this.validateMember(memberNumber);
+        return this.unifiedStore.getActiveReleaseRemoval(memberNumber);
+    }
+
+    public async completeReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        finalSnapshot: ReleaseRemovalFinalSnapshot,
+        actor = memberNumber,
+    ): Promise<ReleaseRemovalOperation> {
+        this.validateMember(memberNumber);
+        return this.withRetry(async () => {
+            const operation = await this.unifiedStore.completeReleaseRemoval(
+                memberNumber,
+                operationId,
+                finalSnapshot,
+            );
+            await this.audit(
+                memberNumber,
+                "completeReleaseRemoval",
+                { operationId },
+                actor,
+            );
+            return operation;
+        }, "completeReleaseRemoval");
+    }
+
+    public async failReleaseRemoval(
+        memberNumber: number,
+        operationId: string,
+        reason: string,
+        actor = memberNumber,
+    ): Promise<ReleaseRemovalOperation> {
+        this.validateMember(memberNumber);
+        if (!reason) throw new ValidationError("reason is required");
+        return this.withRetry(async () => {
+            const operation = await this.unifiedStore.failReleaseRemoval(
+                memberNumber,
+                operationId,
+                reason,
+            );
+            await this.audit(
+                memberNumber,
+                "failReleaseRemoval",
+                { operationId, reason },
+                actor,
+            );
+            return operation;
+        }, "failReleaseRemoval");
     }
 
     private async publish(
