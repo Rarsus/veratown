@@ -40,6 +40,11 @@ export type KidnappersSessionCommandResult =
           readonly event: KidnappersGameEvent;
       };
 
+export type KidnappersGameEventPublisher = (
+    sessionId: string,
+    event: KidnappersGameEvent,
+) => Promise<unknown>;
+
 /**
  * Thin, DI-friendly owner of a single `KidnappersGameStateMachine`.
  *
@@ -129,6 +134,32 @@ export class KidnappersGameSession {
     }
 
     /**
+     * Dispatch a command and publish its result only after the authoritative
+     * in-memory transition has completed. Publisher failures are deliberately
+     * isolated from the state transition; reliable publishers expose them in
+     * their delivery report and can retry with the same delivery id.
+     */
+    public async dispatchAndPublish(
+        command: KidnappersGameCommand,
+        publisher: KidnappersGameEventPublisher,
+    ): Promise<KidnappersSessionCommandResult> {
+        const result = this.dispatch(command);
+        try {
+            await publisher(this.sessionId, result.event);
+        } catch (error) {
+            this.logger.error(
+                "KidnappersGame event publication failed",
+                error,
+                {
+                    sessionId: this.sessionId,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        return result;
+    }
+
+    /**
      * Dispatch and durably record a transition. The state machine is restored
      * when the database write fails, so callers never observe an uncommitted
      * in-memory transition.
@@ -149,6 +180,27 @@ export class KidnappersGameSession {
         } finally {
             this.inFlightOperations.delete(command.correlationId);
         }
+    }
+
+    public async dispatchPersistedAndPublish(
+        command: KidnappersGameCommand,
+        persistence: KidnappersGamePersistence,
+        publisher: KidnappersGameEventPublisher,
+    ): Promise<KidnappersSessionCommandResult> {
+        const result = await this.dispatchPersisted(command, persistence);
+        try {
+            await publisher(this.sessionId, result.event);
+        } catch (error) {
+            this.logger.error(
+                "KidnappersGame event publication failed",
+                error,
+                {
+                    sessionId: this.sessionId,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        return result;
     }
 
     private async dispatchPersistedOnce(

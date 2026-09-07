@@ -308,6 +308,11 @@ export type KidnappersGameCommandType = KidnappersGameCommand["type"];
 export interface KidnappersGameEventBase {
     readonly correlationId: string;
     readonly emittedAt: number;
+    /**
+     * Stable logical-delivery identity. Older persisted events may omit this
+     * field and are normalized at the messaging boundary.
+     */
+    readonly deliveryId?: string;
 }
 
 export type KidnappersGameEvent =
