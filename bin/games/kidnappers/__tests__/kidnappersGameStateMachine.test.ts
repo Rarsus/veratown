@@ -628,16 +628,43 @@ describe("KidnappersGameStateMachine", () => {
                 .players.find((player) => player.memberNumber === 101)?.status,
             "captured",
         );
+        assert.equal(
+            machine
+                .getSnapshot()
+                .progressions?.find(
+                    (progression) => progression.memberNumber === 101,
+                )?.phase,
+            "captured",
+        );
 
         const second = new KidnappersGameStateMachine("session-2");
         joinPlayers(second, KIDNAPPERS_MIN_PLAYERS);
         second.dispatch(cmd({ type: "START_GAME" }, 100));
         const secondTurn = second.getSnapshot().turn;
         assert.ok(secondTurn);
+        second.dispatch(
+            cmd(
+                {
+                    type: "ATTEMPT_CAPTURE",
+                    actorMemberNumber: 100,
+                    targetMemberNumber: 101,
+                    turnId: secondTurn.turnId,
+                },
+                101,
+            ),
+        );
         const disconnected = second.dispatch(
-            cmd({ type: "PLAYER_DISCONNECTED", memberNumber: 100 }, 101),
+            cmd({ type: "PLAYER_DISCONNECTED", memberNumber: 101 }, 102),
         );
         assert.equal(disconnected.ok, true);
         assert.equal(second.getSnapshot().turn, null);
+        assert.equal(
+            second
+                .getSnapshot()
+                .progressions?.find(
+                    (progression) => progression.memberNumber === 101,
+                )?.phase,
+            "captured",
+        );
     });
 });

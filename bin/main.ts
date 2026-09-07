@@ -12,7 +12,6 @@
  * limitations under the License.
  */
 
-import { KidnappersGameRoom } from "./hub/logic/kidnappersGameRoom";
 import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom";
 import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
@@ -51,6 +50,9 @@ import {
 } from "./discord";
 import { DIContainer, DIServiceKeys } from "./di/container";
 import { asAppError } from "./errors";
+import { KidnappersGamePersistence } from "./games/kidnappers/kidnappersGamePersistence";
+import { KidnappersGameLifecycleService } from "./games/kidnappers/kidnappersGameLifecycleService";
+import { createKidnappersAuditSubscriber } from "./games/kidnappers/kidnappersGameMessaging";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -435,6 +437,21 @@ async function initializeVeratownGame(
             unifiedStore.getEventBus(),
         ),
     );
+    const kidnappersPersistence = new KidnappersGamePersistence(db);
+    await kidnappersPersistence.initialize();
+    container.register(
+        DIServiceKeys.KIDNAPPERS_GAME_PERSISTENCE,
+        kidnappersPersistence,
+    );
+    const kidnappersLifecycle = new KidnappersGameLifecycleService(
+        createLogger("KidnappersGameLifecycle"),
+        kidnappersPersistence,
+    );
+    await kidnappersLifecycle.recoverActiveSessions();
+    container.register(
+        DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+        kidnappersLifecycle,
+    );
 
     // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
     const venueSystem = new CasinoVenueSystem(
@@ -468,6 +485,13 @@ async function initializeVeratownGame(
         ),
     );
     container.register(DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS, subscribers);
+    subscribers.initializeKidnappersGameSubscribers({
+        audit: createKidnappersAuditSubscriber(
+            container.get<GameStateMutationService>(
+                DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+            ),
+        ),
+    });
     logger.info("CrossSystemSubscribers initialized");
 
     // Phase 2A.4: Initialize Keypad Access Control System
@@ -624,11 +648,15 @@ async function startConfiguredGame({
             return;
         }
         case "kidnappers": {
-            logger.info("Starting game: Kidnappers (legacy)");
-            const game = new KidnappersGameRoom(main, config);
+            logger.info("Starting game: Kidnappers (Veratown integration)");
+            if (!database) {
+                logger.fatal(
+                    "mongo_uri/mongo_db must be configured to run Kidnappers",
+                );
+                process.exit(1);
+            }
             main.accountUpdate({ Nickname: "Kidnappers Bot" });
-            main.setBotDescription(KidnappersGameRoom.description);
-            main.startBot(game);
+            await initializeVeratownGame(connections, database, config);
             return;
         }
         case "roleplay": {

@@ -555,6 +555,16 @@ export class KidnappersGameStateMachine {
                             status: "captured",
                         });
                     }
+                    this.state.progressions.set(pending.targetMemberNumber, {
+                        memberNumber: pending.targetMemberNumber,
+                        phase: "captured",
+                        containment: this.containment,
+                        restraintLevel: 1,
+                        escapeAttempts: 0,
+                        capturedAt: command.issuedAt,
+                        nextEscapeAt: null,
+                        releasedAt: null,
+                    });
                 }
                 const nextTurn = this.advanceCaptureTurn(command.issuedAt);
                 return this.accept(
@@ -602,6 +612,16 @@ export class KidnappersGameStateMachine {
                     this.state.players.set(command.memberNumber, {
                         ...player,
                         status: "captured",
+                    });
+                    this.state.progressions.set(command.memberNumber, {
+                        memberNumber: command.memberNumber,
+                        phase: "captured",
+                        containment: this.containment,
+                        restraintLevel: 1,
+                        escapeAttempts: 0,
+                        capturedAt: command.issuedAt,
+                        nextEscapeAt: null,
+                        releasedAt: null,
                     });
                     nextTurn = this.advanceCaptureTurn(command.issuedAt);
                 } else if (turn?.ownerMemberNumber === command.memberNumber) {

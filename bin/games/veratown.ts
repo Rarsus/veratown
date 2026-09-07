@@ -28,6 +28,11 @@ import { Casino } from "./casino";
 import { CasinoConfig } from "./casino";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import { GameStateMutationService } from "./shared/gameStateMutationService";
+import { GamePluginCommandRouterImpl } from "./shared/gamePluginCommandRouter";
+import { KidnappersGameCommandController } from "./kidnappers/kidnappersGameCommands";
+import { KidnappersGameEventRouter } from "./kidnappers/kidnappersGameMessaging";
+import { KidnappersGameLifecycleService } from "./kidnappers/kidnappersGameLifecycleService";
+import { KidnappersGamePersistence } from "./kidnappers/kidnappersGamePersistence";
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
 import { ShowerSystem } from "./veratown/showerSystem";
@@ -179,6 +184,7 @@ export class Veratown {
 
     private dare?: Dare;
     private casino?: Casino;
+    private kidnappers?: KidnappersGameCommandController;
 
     private cageSystem?: CageSystem;
     private kennelSystem?: KennelSystem;
@@ -324,6 +330,38 @@ export class Veratown {
                 mutationService,
             });
             this.playerRoleSystem = new PlayerRoleSystem(db);
+            if (
+                this.container.has(
+                    DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                ) &&
+                this.container.has(DIServiceKeys.KIDNAPPERS_GAME_PERSISTENCE)
+            ) {
+                const kidnappersLifecycle =
+                    this.container.get<KidnappersGameLifecycleService>(
+                        DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                    );
+                const kidnappersPersistence =
+                    this.container.get<KidnappersGamePersistence>(
+                        DIServiceKeys.KIDNAPPERS_GAME_PERSISTENCE,
+                    );
+                this.kidnappers = new KidnappersGameCommandController(
+                    this.conn,
+                    kidnappersLifecycle,
+                    kidnappersPersistence,
+                    {
+                        eventRouter: new KidnappersGameEventRouter(
+                            unifiedStore.getEventBus(),
+                        ),
+                        mutationService,
+                        isInGameRoom: (sender) =>
+                            Boolean(
+                                this.conn.chatRoom?.getCharacter(
+                                    sender.MemberNumber,
+                                ),
+                            ),
+                    },
+                );
+            }
         } else {
             logger.info(
                 "mongo_uri/mongo_db must be configured to enable the dare/pick commands and persistent map storage in Veratown; skipping.",
@@ -561,6 +599,9 @@ export class Veratown {
             () => this.reloadLocations(),
             () => this.getStatus(),
         ).registerCommands();
+        this.kidnappers?.registerCommands(
+            new GamePluginCommandRouterImpl(this.commandParser, "kidnappers"),
+        );
     }
 
     // Constructs and registers a single room feature system, isolating any
