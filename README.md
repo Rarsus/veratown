@@ -171,7 +171,12 @@ If MongoDB is configured (`mongo_uri`/`mongo_db`), Veratown also makes the Dare 
 
 ### Kidnappers ('kidnappers')
 
-From the original bot hub. Code is mostly unmodified from its original state.
+The Phase 2B KidnappersGame package provides a recoverable state machine,
+persistent sessions, event-driven effects, and a plugin command controller.
+Read the [player and room-admin guide](KIDNAPPERS_GAME_PLAYER_GUIDE.md), the
+[developer and operations guide](KIDNAPPERS_GAME_DEVELOPER_GUIDE.md), and the
+[Phase 2B handoff](PHASE_2B_HANDOFF.md). The legacy hub room remains a
+separate adapter until the Phase 3 bootstrap checklist is complete.
 
 ### Roleplay challenge ('roleplay')
 

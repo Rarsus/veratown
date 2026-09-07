@@ -11,6 +11,7 @@ Welcome to the Ropeybot documentation. Start here to find what you need.
 - **Developing a feature?** → Follow [Developer Guide](GUIDES/DEVELOPMENT.md)
 - **Checking implementation status?** → Read [Current Implementation Status](../IMPLEMENTATION_STATUS_2026_09_05.md)
 - **Planning Phase 2B?** → Read [Current Hybrid Strategy Plan](../HYBRID_STRATEGY_CURRENT_PLAN.md)
+- **Integrating KidnappersGame?** → Read the [Phase 2B handoff](../PHASE_2B_HANDOFF.md)
 
 ---
 
@@ -44,6 +45,7 @@ Development practices, testing strategy, and logging.
 - Testing approach (Node.js test module)
 - Code standards and patterns
 - Performance considerations
+- KidnappersGame [developer and operations guide](../KIDNAPPERS_GAME_DEVELOPER_GUIDE.md)
 
 ### [Features](FEATURES/)
 
@@ -54,6 +56,7 @@ Documentation for game systems and bot features.
 - Veratown areas and systems
 - Bot invisibility features
 - Item and content systems
+- KidnappersGame [player guide](../KIDNAPPERS_GAME_PLAYER_GUIDE.md)
 
 ### [Guides](GUIDES/)
 
@@ -108,6 +111,8 @@ Current status reports and execution plans are kept at the repository root. Arch
 | What's the database design?            | [ARCHITECTURE/COMPLEX_COLLECTION_ARCHITECTURE.md](ARCHITECTURE/)     |
 | How do I run tests?                    | [CONTRIBUTING.md](../CONTRIBUTING.md)                                |
 | What environment variables are needed? | [GUIDES/ENVIRONMENT_VARIABLES.md](GUIDES/)                           |
+| How do I play KidnappersGame?          | [Player guide](../KIDNAPPERS_GAME_PLAYER_GUIDE.md)                   |
+| How do I integrate KidnappersGame?     | [Phase 2B handoff](../PHASE_2B_HANDOFF.md)                           |
 
 ---
 

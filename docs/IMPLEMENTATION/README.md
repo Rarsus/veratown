@@ -11,6 +11,8 @@ Read [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_05.md) before a
 - **[Logging Guide](LOGGING_GUIDE.md)** - How to use the centralized logging system
 - **[Testing Strategy](TESTING.md)** - Unit tests, test patterns, and coverage (if available)
 - **[Code Standards](GOLDEN_RULES.md)** - Coding patterns and best practices (if available)
+- **[KidnappersGame developer and operations guide](../../KIDNAPPERS_GAME_DEVELOPER_GUIDE.md)** - State, persistence, events, DI, migrations, observability, and rollback
+- **[Phase 2B handoff](../../PHASE_2B_HANDOFF.md)** - Phase 3 integration checklist and evidence
 
 ## Development Practices
 
