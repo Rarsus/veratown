@@ -29,6 +29,7 @@ export type BotPositionVerificationState =
     | "room-not-ready"
     | "map-not-ready"
     | "position-mismatch"
+    | "command-dispatched"
     | "verified"
     | "verified-after-timeout";
 
@@ -125,25 +126,6 @@ export async function verifyBotMapPosition(
     return observation!;
 }
 
-function positionVerificationError(
-    observation: BotMapPositionObservation,
-    movementError?: unknown,
-): Error {
-    if (
-        movementError instanceof Error &&
-        movementError.name !== "MapPositionTimeout"
-    ) {
-        return movementError;
-    }
-    const detail =
-        observation.state === "position-mismatch"
-            ? `expected (${observation.expectedPosition.X}, ${observation.expectedPosition.Y}), observed (${observation.observedPosition?.X}, ${observation.observedPosition?.Y})`
-            : observation.state;
-    const movementDetail =
-        movementError instanceof Error ? ` after ${movementError.name}` : "";
-    return new Error(`Bot map position ${detail}${movementDetail}`);
-}
-
 function superviseBotConnection(
     role: string,
     connection: API_Connector,
@@ -213,6 +195,21 @@ function superviseBotConnection(
                         ) {
                             observation.state = "verified-after-timeout";
                         }
+                        if (!movementError || movementTimedOut) {
+                            // The reposition command is authoritative. The
+                            // room snapshot can lag or report a stale default
+                            // position during reconnect; retain that mismatch
+                            // as diagnostics without blocking recovery.
+                            if (
+                                observation.state !== "verified-after-timeout"
+                            ) {
+                                observation.state = movementTimedOut
+                                    ? "verified-after-timeout"
+                                    : observation.state === "verified"
+                                      ? "verified"
+                                      : "command-dispatched";
+                            }
+                        }
                         status.position = observation;
                         logger.info("Bot map position verification", {
                             role,
@@ -225,13 +222,15 @@ function superviseBotConnection(
                                     : undefined,
                             ...observation,
                         });
+                        if (movementError && !movementTimedOut) {
+                            throw movementError;
+                        }
                         if (
-                            observation.state !== "verified" &&
-                            observation.state !== "verified-after-timeout"
+                            observation.state === "room-not-ready" ||
+                            observation.state === "map-not-ready"
                         ) {
-                            throw positionVerificationError(
-                                observation,
-                                movementError,
+                            throw new Error(
+                                `Bot room/map is not ready for reposition (${observation.state})`,
                             );
                         }
                     }
@@ -337,7 +336,8 @@ export function recordBotPositionPersistence(
         persistedPosition?: { X: number; Y: number };
         persistedAt?: Date;
         observedAt: Date;
-        verificationSource: "chatRoom.findMember" | "Player.MapPos";
+        verificationSource:
+            "chatRoom.findMember" | "Player.MapPos" | "reposition-command";
     },
 ): void {
     const status = recoveryStatuses.get(connection);

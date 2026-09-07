@@ -219,7 +219,7 @@ test("recovery retries a transient map-position failure", async () => {
     stopSupervisingBotConnections(connections as never);
 });
 
-test("recovery fails when the requested map position cannot be verified", async () => {
+test("recovery uses the successful reposition command when room observation is stale", async () => {
     const main = createRecoveryConnection(undefined, false);
     const connections = { main };
 
@@ -228,14 +228,9 @@ test("recovery fails when the requested map position cannot be verified", async 
     main.emit("Connected");
     await new Promise((resolve) => setTimeout(resolve, 400));
 
-    assert.equal(
-        getBotRecoveryStatuses(connections as never)[0].state,
-        "failed",
-    );
-    assert.match(
-        getBotRecoveryStatuses(connections as never)[0].lastFailure ?? "",
-        /map position/,
-    );
+    const status = getBotRecoveryStatuses(connections as never)[0];
+    assert.equal(status.state, "connected");
+    assert.equal(status.position?.state, "command-dispatched");
     stopSupervisingBotConnections(connections as never);
 });
 

@@ -1028,16 +1028,11 @@ export class Veratown {
             connection: API_Connector | undefined,
             position: { X: number; Y: number },
         ): boolean => {
-            const observedPosition = connection?.chatRoom?.findMember(
-                connection.Player.MemberNumber,
-            )?.MapPos;
             return (
                 !!connection &&
                 isBotRecoveryReady(connection) &&
                 connection.chatRoom?.Name === this.conn.chatRoom?.Name &&
-                !!connection.chatRoom?.map &&
-                observedPosition?.X === position.X &&
-                observedPosition.Y === position.Y
+                !!connection.chatRoom?.map
             );
         };
 

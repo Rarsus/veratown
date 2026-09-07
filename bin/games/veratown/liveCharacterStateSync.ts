@@ -36,7 +36,8 @@ export interface SelfPositionSyncDiagnostic {
     persistedPosition?: { X: number; Y: number };
     observedAt: Date;
     persistedAt?: Date;
-    verificationSource: "chatRoom.findMember" | "Player.MapPos";
+    verificationSource:
+        "chatRoom.findMember" | "Player.MapPos" | "reposition-command";
     persisted: boolean;
 }
 
@@ -151,7 +152,8 @@ export class LiveCharacterStateSync {
         const character = this.observedSelf(connection);
         if (!character) return undefined;
 
-        const position = observedPosition ?? character.MapPos;
+        const observed = observedPosition ?? character.MapPos;
+        const position = requestedPosition ?? observed;
         const observedAt = new Date();
         const verificationSource = connection.chatRoom?.findMember?.(
             connection.Player.MemberNumber,
@@ -169,7 +171,7 @@ export class LiveCharacterStateSync {
         const diagnostic: SelfPositionSyncDiagnostic = {
             memberNumber: connection.Player.MemberNumber,
             requestedPosition,
-            observedPosition: { ...position },
+            observedPosition: { ...observed },
             persistedPosition: view.lastPosition
                 ? { ...view.lastPosition }
                 : undefined,
@@ -178,7 +180,9 @@ export class LiveCharacterStateSync {
                 typeof view.lastPositionAt === "number"
                     ? new Date(view.lastPositionAt)
                     : undefined,
-            verificationSource,
+            verificationSource: requestedPosition
+                ? "reposition-command"
+                : verificationSource,
             persisted,
         };
         this.selfPositionDiagnostics.set(
