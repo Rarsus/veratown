@@ -206,3 +206,151 @@ test("Casino dispatches the documented root-level game command", async () => {
         mock.timers.reset();
     }
 });
+
+test("Casino only sends daily-chip status from casino-region entry", async () => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+        const connection = new MockConnection() as any;
+        const enterTriggers: Array<
+            (character: unknown, prevPos: unknown) => void
+        > = [];
+        const leaveTriggers: Array<
+            (character: unknown, prevPos: unknown) => void
+        > = [];
+        const map = {
+            addEnterRegionTrigger: (
+                _region: unknown,
+                callback: (character: unknown, prevPos: unknown) => void,
+            ) => enterTriggers.push(callback),
+            removeEnterRegionTrigger: (
+                callback: (character: unknown, prevPos: unknown) => void,
+            ) => {
+                const index = enterTriggers.indexOf(callback);
+                if (index >= 0) enterTriggers.splice(index, 1);
+            },
+            addLeaveRegionTrigger: (
+                _region: unknown,
+                callback: (character: unknown, prevPos: unknown) => void,
+            ) => leaveTriggers.push(callback),
+            removeLeaveRegionTrigger: (
+                callback: (character: unknown, prevPos: unknown) => void,
+            ) => {
+                const index = leaveTriggers.indexOf(callback);
+                if (index >= 0) leaveTriggers.splice(index, 1);
+            },
+        };
+        Object.assign(connection, {
+            setItemPermission: () => {},
+            chatRoom: { map },
+            Player: {
+                Name: "Casino",
+                MemberNumber: 1,
+                Appearance: {
+                    AddItem: () => ({
+                        setProperty: () => {},
+                        SetColor: () => {},
+                        SetCraft: () => {},
+                    }),
+                    InventoryGet: () => ({
+                        setProperty: () => {},
+                        SetColor: () => {},
+                        SetCraft: () => {},
+                    }),
+                    applyBundle: () => {},
+                },
+                setScriptPermissions: () => {},
+            },
+            SendMessage: () => {},
+        });
+        const casino = new Casino(
+            connection,
+            { collection: () => ({}) } as any,
+            {
+                game: "roulette",
+                region: {
+                    TopLeft: { X: 1, Y: 1 },
+                    BottomRight: { X: 5, Y: 5 },
+                },
+            },
+        ) as any;
+        const now = Date.now();
+        let claimResult = false;
+        let claimCalls = 0;
+        const character = {
+            MemberNumber: 123,
+            toString: () => "Player",
+            Tell: (_type: string, message: string) =>
+                connection.replies.push(message),
+        };
+        casino.getStore = () => ({
+            setPlayerName: async () => {},
+            claimDailyFreeChips: async () => {
+                claimCalls++;
+                return claimResult;
+            },
+        });
+        casino.unifiedStore.getDailyFreeChipsStatus = async () => ({
+            eligible: !claimResult,
+            ...(claimResult ? { lastClaimAt: now + 1 } : { lastClaimAt: now }),
+            nextClaimAt: now + 60_000,
+            remainingMs: claimResult ? 0 : 60_000,
+        });
+
+        casino.registerTriggers();
+        for (const listener of connection.listeners.get("CharacterEntered") ??
+            []) {
+            listener(character);
+        }
+        await flushCommands();
+        assert.deepEqual(connection.replies, []);
+
+        enterTriggers[0](character, { X: 0, Y: 0 });
+        await flushCommands();
+        assert.equal(
+            connection.replies.filter((message: string) =>
+                message.includes("until your next free chips"),
+            ).length,
+            1,
+        );
+        assert.equal(
+            connection.replies.some((message: string) =>
+                message.includes("0 seconds"),
+            ),
+            false,
+        );
+
+        enterTriggers[0](character, { X: 0, Y: 0 });
+        await flushCommands();
+        assert.equal(
+            connection.replies.filter((message: string) =>
+                message.includes("until your next free chips"),
+            ).length,
+            1,
+        );
+
+        leaveTriggers[0](character, { X: 1, Y: 1 });
+        enterTriggers[0](character, { X: 0, Y: 0 });
+        await flushCommands();
+        assert.equal(
+            connection.replies.filter((message: string) =>
+                message.includes("until your next free chips"),
+            ).length,
+            2,
+        );
+
+        claimResult = true;
+        await Promise.all([
+            casino.onCharacterEnterCasinoRegion(character),
+            casino.onCharacterEnterCasinoRegion(character),
+        ]);
+        assert.equal(claimCalls, 4);
+        assert.equal(
+            connection.replies.filter((message: string) =>
+                message.includes("free chips for today"),
+            ).length,
+            1,
+        );
+    } finally {
+        mock.timers.reset();
+    }
+});

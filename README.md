@@ -187,5 +187,6 @@ Also from the original bot hub, a single player adventure. Needs a second bot ac
 A gambling room with Roulette and Blackjack (`casino.game` in the config picks which one
 to start with; admins can switch with `/bot game <roulette|blackjack>`). Chip balances are
 stored in MongoDB, so `mongo_uri`/`mongo_db` must be configured (see "Running with Docker
-Compose" above). Players get a daily allowance of free chips, can bet chips or forfeits,
-and can `/bot give`/admins can `/bot grant` chips to other players.
+Compose" above). Players receive the daily free-chip grant or cooldown status only when
+they enter the configured casino region. They can bet chips or forfeits, and can `/bot
+give`/admins can `/bot grant` chips to other players.

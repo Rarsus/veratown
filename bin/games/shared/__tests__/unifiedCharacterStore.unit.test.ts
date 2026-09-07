@@ -162,6 +162,27 @@ test("UnifiedCharacterStore covers non-Mongo state and event workflows", async (
     assert.equal(profile._id, 1);
 });
 
+test("daily free-chip status uses the authoritative casino cooldown", async () => {
+    const { store, profile } = createStore();
+    const now = 1_800_000_000_000;
+
+    profile.casino.lastDailyClaimAt = now - 60 * 60 * 1000;
+    const future = await store.getDailyFreeChipsStatus(1, now);
+    assert.equal(future.eligible, false);
+    assert.equal(future.nextClaimAt, now + 23 * 60 * 60 * 1000);
+    assert.equal(future.remainingMs, 23 * 60 * 60 * 1000);
+
+    profile.casino.lastDailyClaimAt = now - 24 * 60 * 60 * 1000;
+    const eligible = await store.getDailyFreeChipsStatus(1, now);
+    assert.equal(eligible.eligible, true);
+    assert.equal(eligible.remainingMs, 0);
+
+    delete profile.casino.lastDailyClaimAt;
+    const firstClaim = await store.getDailyFreeChipsStatus(1, now);
+    assert.equal(firstClaim.eligible, true);
+    assert.equal(firstClaim.remainingMs, 0);
+});
+
 test("UnifiedCharacterStore creates profiles with default state", async () => {
     const { store, clearProfile } = createStore();
     clearProfile();
