@@ -355,6 +355,39 @@ export class UnifiedCharacterStore {
         };
     }
 
+    /**
+     * Return the authoritative daily free-chip cooldown.
+     *
+     * `eligible` uses the same 24-hour boundary as claimDailyFreeChips().
+     * A positive remaining duration is always rounded up by callers before
+     * displaying it, so a future cooldown is never shown as zero seconds.
+     */
+    public async getDailyFreeChipsStatus(
+        memberNumber: number,
+        now = Date.now(),
+    ): Promise<{
+        eligible: boolean;
+        lastClaimAt?: number;
+        nextClaimAt: number;
+        remainingMs: number;
+    }> {
+        const { lastDailyClaimAt } = await this.getCasinoView(memberNumber);
+        const hasValidClaim =
+            typeof lastDailyClaimAt === "number" &&
+            Number.isFinite(lastDailyClaimAt);
+        const nextClaimAt = hasValidClaim
+            ? lastDailyClaimAt + 24 * 60 * 60 * 1000
+            : now;
+        const eligible = !hasValidClaim || nextClaimAt <= now;
+
+        return {
+            eligible,
+            ...(hasValidClaim ? { lastClaimAt: lastDailyClaimAt } : {}),
+            nextClaimAt,
+            remainingMs: eligible ? 0 : nextClaimAt - now,
+        };
+    }
+
     public async getBio(memberNumber: number): Promise<CharacterBio> {
         const profile = await this.getProfile(memberNumber);
         if (profile.bio && typeof profile.bio === "object") {
@@ -723,7 +756,7 @@ export class UnifiedCharacterStore {
                 {
                     _id: memberNumber,
                     $or: [
-                        { "casino.lastDailyClaimAt": { $lt: cutoff } },
+                        { "casino.lastDailyClaimAt": { $lte: cutoff } },
                         { "casino.lastDailyClaimAt": { $exists: false } },
                     ],
                 },

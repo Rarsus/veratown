@@ -26,7 +26,7 @@ import {
     importBundle,
 } from "bc-bot";
 import { RouletteGame } from "./casino/roulette";
-import { generatePassword, remainingTimeString } from "../utils";
+import { durationString, generatePassword } from "../utils";
 import {
     FORFEITS,
     forfeitsString,
@@ -118,6 +118,15 @@ export class Casino implements GamePlugin {
     private forfeitService: ForfeitService;
     public readonly venueSystem: CasinoVenueSystem;
     private readonly messageFeatureSystem: GamePluginMessageFeatureSystem;
+    private readonly dailyChipNotificationInFlight = new Map<
+        number,
+        { generation: number; promise: Promise<void> }
+    >();
+    private readonly dailyChipNotificationGeneration = new Map<
+        number,
+        number
+    >();
+    private readonly lastDailyChipNotificationAt = new Map<number, number>();
 
     /**
      * Phase 5: Direct UnifiedCharacterStore access (no adapters)
@@ -478,12 +487,19 @@ export class Casino implements GamePlugin {
      */
     public registerTriggers(): void {
         if (this.gameConfig?.region && this.conn) {
+            this.conn.chatRoom!.map.removeEnterRegionTrigger(
+                this.casinoRegionEnterTrigger,
+            );
+            this.conn.chatRoom!.map.removeLeaveRegionTrigger(
+                this.casinoRegionLeaveTrigger,
+            );
             this.conn!.chatRoom!.map.addEnterRegionTrigger(
                 this.gameConfig.region,
-                guardHandler(
-                    "casino:enterRegion",
-                    this.onCharacterEnterCasinoRegion,
-                ),
+                this.casinoRegionEnterTrigger,
+            );
+            this.conn!.chatRoom!.map.addLeaveRegionTrigger(
+                this.gameConfig.region,
+                this.casinoRegionLeaveTrigger,
             );
         }
 
@@ -515,27 +531,95 @@ export class Casino implements GamePlugin {
             character.MemberNumber,
             character.toString(),
         );
+    };
 
-        const granted = await this.getStore().claimDailyFreeChips(
+    private readonly casinoRegionEnterTrigger = guardHandler(
+        "casino:enterRegion",
+        (character: API_Character) =>
+            this.onCharacterEnterCasinoRegion(character),
+    );
+
+    private readonly casinoRegionLeaveTrigger = guardHandler(
+        "casino:leaveRegion",
+        (character: API_Character) => {
+            this.dailyChipNotificationGeneration.set(
+                character.MemberNumber,
+                (this.dailyChipNotificationGeneration.get(
+                    character.MemberNumber,
+                ) ?? 0) + 1,
+            );
+            this.lastDailyChipNotificationAt.delete(character.MemberNumber);
+        },
+    );
+
+    private notifyDailyFreeChips = async (
+        character: API_Character,
+    ): Promise<void> => {
+        const generation =
+            this.dailyChipNotificationGeneration.get(character.MemberNumber) ??
+            0;
+        const existing = this.dailyChipNotificationInFlight.get(
             character.MemberNumber,
         );
+        if (existing?.generation === generation) {
+            await existing.promise;
+            return;
+        }
+        if (existing) await existing.promise;
 
-        if (granted) {
-            character.Tell(
-                "Whisper",
-                `Welcome to the Casino, ${character}! Here are your ${FREE_CHIPS} free chips for today. See my bio for how to play. Good luck!`,
-            );
-        } else {
-            const player = await this.getStore().getPlayer(
+        const notification = (async () => {
+            const granted = await this.getStore().claimDailyFreeChips(
                 character.MemberNumber,
             );
-            const dayInMs = 24 * 60 * 60 * 1000;
-            const lastClaimTime = player.lastFreeCredits || 0;
-            const nextFreeCreditsAt = lastClaimTime + dayInMs;
-            character.Tell(
-                "Whisper",
-                `Welcome back, ${character}. ${remainingTimeString(nextFreeCreditsAt)} until your next free chips. See my bio for how to play.`,
+            const status = await this.unifiedStore.getDailyFreeChipsStatus(
+                character.MemberNumber,
             );
+            if (
+                (this.dailyChipNotificationGeneration.get(
+                    character.MemberNumber,
+                ) ?? 0) !== generation
+            ) {
+                return;
+            }
+            const notificationKey = status.lastClaimAt ?? status.nextClaimAt;
+            if (
+                this.lastDailyChipNotificationAt.get(character.MemberNumber) ===
+                notificationKey
+            ) {
+                return;
+            }
+            this.lastDailyChipNotificationAt.set(
+                character.MemberNumber,
+                notificationKey,
+            );
+
+            if (granted) {
+                character.Tell(
+                    "Whisper",
+                    `Welcome to the Casino, ${character}! Here are your ${FREE_CHIPS} free chips for today. See my bio for how to play. Good luck!`,
+                );
+            } else {
+                character.Tell(
+                    "Whisper",
+                    `Welcome back, ${character}. ${durationString(status.remainingMs)} until your next free chips. See my bio for how to play.`,
+                );
+            }
+        })();
+        this.dailyChipNotificationInFlight.set(character.MemberNumber, {
+            generation,
+            promise: notification,
+        });
+        try {
+            await notification;
+        } finally {
+            if (
+                this.dailyChipNotificationInFlight.get(character.MemberNumber)
+                    ?.promise === notification
+            ) {
+                this.dailyChipNotificationInFlight.delete(
+                    character.MemberNumber,
+                );
+            }
         }
     };
 
@@ -551,9 +635,19 @@ export class Casino implements GamePlugin {
 
         if (this.gameRegion && this.conn) {
             // Register enter trigger with loaded region
+            this.conn!.chatRoom!.map.removeEnterRegionTrigger(
+                this.casinoRegionEnterTrigger,
+            );
+            this.conn!.chatRoom!.map.removeLeaveRegionTrigger(
+                this.casinoRegionLeaveTrigger,
+            );
             this.conn!.chatRoom!.map.addEnterRegionTrigger(
                 this.gameRegion,
-                this.onCharacterEnterCasinoRegion,
+                this.casinoRegionEnterTrigger,
+            );
+            this.conn!.chatRoom!.map.addLeaveRegionTrigger(
+                this.gameRegion,
+                this.casinoRegionLeaveTrigger,
             );
         }
 
@@ -564,6 +658,8 @@ export class Casino implements GamePlugin {
 
     private onCharacterEnterCasinoRegion = async (character: API_Character) => {
         if (!this.enabled) return;
+
+        await this.notifyDailyFreeChips(character);
 
         // this.game.HELPMESSAGE already includes the commands list (see
         // ROULETTEHELP/FULLBLACKJACKHELP), so don't also append
