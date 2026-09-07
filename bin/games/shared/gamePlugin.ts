@@ -187,6 +187,11 @@ export interface GamePluginCommandRouter {
     registerRoot(handler: GamePluginCommandHandler): void;
 
     /**
+     * Remove the plugin-root command registered by registerRoot().
+     */
+    unregisterRoot?(): void;
+
+    /**
      * Register a command at the parser root without the plugin key.
      *
      * @example
@@ -214,6 +219,11 @@ export interface GamePluginCommandRouter {
      * router.registerCommand("play", async (sender, msg, args) => {...});
      */
     registerCommand(name: string, handler: GamePluginCommandHandler): void;
+
+    /**
+     * Remove a command registered with registerCommand().
+     */
+    unregisterCommand?(name: string): void;
 
     /**
      * Register a nested group of related sub-commands.
