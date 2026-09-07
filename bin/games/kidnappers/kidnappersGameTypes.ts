@@ -27,12 +27,10 @@
  *   Callers must never mutate a snapshot; the state machine always returns
  *   a fresh snapshot after every successful transition.
  *
- * Persistence and recovery (durable storage, cross-restart resume) are
- * explicitly out of scope for this phase and are handed off to
- * Rarsus/veratown#30.2. Everything here is designed to be trivially
- * serializable (plain data, no class instances, no functions) so that a
- * future persistence layer can snapshot/restore state without redesigning
- * the model.
+ * Persistence and recovery are implemented at the session/lifecycle boundary
+ * (`kidnappersGamePersistence.ts`). Everything here remains trivially
+ * serializable (plain data, no class instances, no functions) so snapshots
+ * can be safely stored and restored.
  */
 
 /**

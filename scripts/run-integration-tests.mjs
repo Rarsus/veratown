@@ -9,6 +9,7 @@ const tests = [
     "bin/games/shared/__tests__/gameStateMutationService.integration.test.ts",
     "bin/games/shared/__tests__/progressionSystem.integration.test.ts",
     "bin/games/veratown/__tests__/locationEventSystem.test.ts",
+    "bin/games/kidnappers/__tests__/kidnappersGamePersistence.integration.test.ts",
 ];
 
 for (const test of tests) {

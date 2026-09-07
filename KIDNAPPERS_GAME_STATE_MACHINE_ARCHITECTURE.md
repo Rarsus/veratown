@@ -9,10 +9,9 @@ handoff [#59](https://github.com/Rarsus/veratown/issues/59))
 state machine on the Phase 1 architecture (DI container, `AppError`
 hierarchy, no global mutable state).
 
-This phase defines **only** the domain model, the state machine, and its DI
-lifecycle wiring. It intentionally does **not** wire up chat commands,
-Discord interactions, matchmaking, or persistence — those are later Phase 2B
-sub-issues. The legacy hub prototype at
+The domain model, state machine, DI lifecycle wiring, and durable recovery
+boundary are kept separate. Chat commands, Discord interactions, and
+matchmaking remain outside this module. The legacy hub prototype at
 `bin/hub/logic/kidnappersGameRoom.ts` is the source of the role/phase
 vocabulary reused here, adapted onto the Phase 1 conventions used by
 `bin/games/dare` and `bin/games/shared/gameStateMutationService.ts`.
@@ -26,6 +25,7 @@ bin/games/kidnappers/
 ├── kidnappersGameStateMachine.ts     # Deterministic transition logic (the only mutator)
 ├── kidnappersGameSession.ts          # Owns one state machine instance; correlation id helper
 ├── kidnappersGameLifecycleService.ts # DI-registered owner of all active sessions
+├── kidnappersGamePersistence.ts      # MongoDB contract, optimistic updates, and recovery
 └── __tests__/                        # Unit tests for all of the above
 ```
 
@@ -180,26 +180,19 @@ already-removed or unknown session id is a no-op, and `shutdownAll` may be
 called more than once without error, which is required for safe use as an
 application-shutdown hook.
 
-## Rollback / recovery note (handoff to #30.2)
+## Rollback / recovery
 
-This phase deliberately keeps all state **in-memory and non-persistent**:
+`KidnappersGamePersistence` stores snapshots and audit records transactionally.
+`KidnappersGameSession.dispatchPersisted()` restores the previous snapshot when
+a durable update fails, while version and operation-key checks make retries
+safe after an uncertain response. `KidnappersGameLifecycleService` exposes
+`createPersistedSession()` and `recoverSession()` for restart recovery.
 
-- No MongoDB collection, schema, or store is introduced by this change.
-- `KidnappersSessionSnapshot` and all command/event types are plain,
-  JSON-serializable data (no class instances, no functions), so a future
-  persistence layer can snapshot/restore a session without redesigning the
-  domain model.
-- If the process restarts, all in-flight sessions are lost; there is
-  currently no recovery path. This is an accepted, explicit limitation of
-  Phase 2B.1, not an oversight.
-- Rollback of this change is a pure code revert: no migrations, indexes, or
-  DI registrations touch shared/global state, and no other module currently
-  depends on `bin/games/kidnappers/*` or
-  `DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE`.
-- **Handed off to [#30.2](https://github.com/Rarsus/veratown/issues/30):**
-  durable persistence of `KidnappersSessionSnapshot`, crash-recovery/resume
-  of an in-progress session, and reconciliation of the in-memory state
-  machine against a persisted record after a restart.
+The collection contract, indexes, stale-session policy, migration rule, and
+operator runbook are documented in
+[`KIDNAPPERS_GAME_PERSISTENCE.md`](KIDNAPPERS_GAME_PERSISTENCE.md). Invalid
+documents are rejected rather than silently repaired; stale active sessions
+must be inspected before being marked stale.
 
 ## Exit evidence
 

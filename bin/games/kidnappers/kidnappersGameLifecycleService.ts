@@ -16,6 +16,8 @@ import { randomUUID } from "node:crypto";
 import { createLogger, Logger } from "../../logging";
 import { BusinessLogicError } from "../../errors";
 import { KidnappersGameSession } from "./kidnappersGameSession";
+import { KidnappersGamePersistence } from "./kidnappersGamePersistence";
+import { isTerminalPhase } from "./kidnappersGameTypes";
 
 /**
  * DI-registered owner of every active `KidnappersGameSession`.
@@ -31,17 +33,22 @@ import { KidnappersGameSession } from "./kidnappersGameSession";
  * - `shutdownAll()` gives the DI container a single, explicit hook to call
  *   during application shutdown so no session is ever leaked.
  *
- * This service defines only the *lifecycle* (create/get/shutdown) of a
- * minimal playable session; it intentionally does not wire up chat commands,
- * persistence, or matchmaking. Those are later Phase 2B sub-issues.
+ * This service defines the lifecycle of a minimal playable session and the
+ * explicit persistence/recovery hooks used by the application boundary. It
+ * does not wire up chat commands, Discord interactions, or matchmaking.
  */
 export class KidnappersGameLifecycleService {
     private readonly sessions = new Map<string, KidnappersGameSession>();
     private readonly logger: Logger;
     private shutDown = false;
+    private readonly persistence?: KidnappersGamePersistence;
 
-    constructor(logger: Logger = createLogger("KidnappersGameLifecycle")) {
+    constructor(
+        logger: Logger = createLogger("KidnappersGameLifecycle"),
+        persistence?: KidnappersGamePersistence,
+    ) {
         this.logger = logger;
+        this.persistence = persistence;
     }
 
     /**
@@ -71,6 +78,112 @@ export class KidnappersGameLifecycleService {
 
     public getSession(sessionId: string): KidnappersGameSession | undefined {
         return this.sessions.get(sessionId);
+    }
+
+    public async createPersistedSession(
+        sessionId: string = randomUUID(),
+    ): Promise<KidnappersGameSession> {
+        if (this.shutDown) {
+            throw new BusinessLogicError(
+                "Cannot create a session after the lifecycle service has been shut down",
+                { sessionId },
+            );
+        }
+        if (!this.persistence) {
+            throw new BusinessLogicError(
+                "KidnappersGame persistence is not configured",
+            );
+        }
+        if (this.sessions.has(sessionId)) {
+            throw new BusinessLogicError(
+                `Session '${sessionId}' already exists`,
+                { sessionId },
+            );
+        }
+        const session = new KidnappersGameSession(sessionId);
+        const document = await this.persistence.createSession(
+            session.getSnapshot(),
+        );
+        const recovered = new KidnappersGameSession(
+            sessionId,
+            document.snapshot.createdAt,
+            document.snapshot,
+            document.version,
+        );
+        this.sessions.set(sessionId, recovered);
+        this.logger.info("KidnappersGame persisted session created", {
+            sessionId,
+        });
+        return recovered;
+    }
+
+    public async recoverSession(
+        sessionId: string,
+    ): Promise<KidnappersGameSession | undefined> {
+        if (!this.persistence) {
+            throw new BusinessLogicError(
+                "KidnappersGame persistence is not configured",
+            );
+        }
+        const document = await this.persistence.recoverSession(sessionId);
+        if (!document || document.status === "closed") return undefined;
+        const session = new KidnappersGameSession(
+            sessionId,
+            document.snapshot.createdAt,
+            document.snapshot,
+            document.version,
+        );
+        this.sessions.set(sessionId, session);
+        return session;
+    }
+
+    public async recoverActiveSessions(): Promise<KidnappersGameSession[]> {
+        if (!this.persistence) {
+            throw new BusinessLogicError(
+                "KidnappersGame persistence is not configured",
+            );
+        }
+        const documents = await this.persistence.recoverActiveSessions();
+        const sessions = documents.map(
+            (document) =>
+                new KidnappersGameSession(
+                    document.sessionId,
+                    document.snapshot.createdAt,
+                    document.snapshot,
+                    document.version,
+                ),
+        );
+        for (const session of sessions) {
+            this.sessions.set(session.sessionId, session);
+        }
+        return sessions;
+    }
+
+    public async closePersistedSession(sessionId: string): Promise<void> {
+        if (!this.persistence) {
+            throw new BusinessLogicError(
+                "KidnappersGame persistence is not configured",
+            );
+        }
+        const session = this.sessions.get(sessionId);
+        if (!session) return;
+        if (!isTerminalPhase(session.getSnapshot().phase)) {
+            const result = await session.dispatchPersisted(
+                {
+                    type: "SHUTDOWN_SESSION",
+                    correlationId: `shutdown:${sessionId}`,
+                    issuedAt: Date.now(),
+                },
+                this.persistence,
+            );
+            if (!result.ok) return;
+        }
+        await this.persistence.closeSession(
+            sessionId,
+            session.getVersion(),
+            `close:${sessionId}`,
+        );
+        this.sessions.delete(sessionId);
     }
 
     public listSessionIds(): string[] {
