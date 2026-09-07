@@ -237,11 +237,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             ? await this.characterProfileStore.getReleaseParoleState(
                   character.MemberNumber,
               )
-            : (
-                  await this.unifiedStore!.getVeratownView(
-                      character.MemberNumber,
-                  )
-              ).releaseParoleState;
+            : (await this.unifiedStore!.getVeratownView(character.MemberNumber))
+                  .releaseParoleState;
 
         if (!paroleState?.isOnParole) {
             return;
