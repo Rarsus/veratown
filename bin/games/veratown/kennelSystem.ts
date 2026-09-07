@@ -18,7 +18,9 @@ import {
     API_Chatroom,
     API_Map,
     AssetGet,
+    type BC_AppearanceItem,
 } from "bc-bot";
+import { ConnectionError } from "../../errors";
 import { wait } from "../../hub/utils";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
@@ -28,6 +30,9 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { getLifecycleObjectId } from "./featureSystem";
+
+const KENNEL_DOOR_CLOSE_MAX_ATTEMPTS = 3;
+const KENNEL_DOOR_CLOSE_RETRY_DELAY_MS = 100;
 
 // Owns kennel containment from entry through release. A session remains open
 // while the character is on a kennel tile or wearing the Kennel device.
@@ -54,6 +59,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     private boundKennelExitTrigger?: (...args: any[]) => void;
     private lastSuccessfulBindAt?: number;
     private lastSuccessfulReconciliationAt?: number;
+    private readonly pendingDoorClosures = new Map<
+        number,
+        { kennel: BC_AppearanceItem; task: Promise<void> }
+    >();
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
     public constructor(
@@ -360,11 +369,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             appearance: "Kennel",
             position: character.MapPos,
         });
-        void this.closeDoorAfterDelay(character).catch((error) => {
-            this.logger.error("Kennel door close failed", error, {
-                memberNumber: character.MemberNumber,
-            });
-        });
+        const currentKennel = character.Appearance.getItemData("ItemDevices");
+        if (currentKennel?.Name === "Kennel") {
+            this.scheduleDoorClose(character, currentKennel);
+        }
     }
 
     private onCharacterLeaveKennel = async (character: API_Character) => {
@@ -415,18 +423,148 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         );
     }
 
-    private async closeDoorAfterDelay(character: API_Character): Promise<void> {
-        await this.delay(KENNEL_DOOR_CLOSE_DELAY_MS);
-        const kennel = character.Appearance.getItemData("ItemDevices");
-        if (kennel?.Name !== "Kennel") return;
-        // d: 1 = door closed, p: 1 = padding enabled
-        (kennel as any).setProperty("TypeRecord", { d: 1, p: 1 });
-        character.Appearance.MakeAppearanceBundle();
-        await this.stateSync?.(character);
-        this.logger.info("Kennel door closed", {
-            memberNumber: character.MemberNumber,
-            location: "kennel",
+    private scheduleDoorClose(
+        character: API_Character,
+        kennel: BC_AppearanceItem,
+    ): void {
+        const memberNumber = character.MemberNumber;
+        const pending = this.pendingDoorClosures.get(memberNumber);
+        if (pending?.kennel === kennel) return;
+
+        const task = this.closeDoorAfterDelay(character, kennel).finally(() => {
+            if (this.pendingDoorClosures.get(memberNumber)?.task === task) {
+                this.pendingDoorClosures.delete(memberNumber);
+            }
         });
+        this.pendingDoorClosures.set(memberNumber, { kennel, task });
+        void task.catch((error) => {
+            this.logger.error("Kennel door close failed", error, {
+                memberNumber,
+                attempts:
+                    error instanceof ConnectionError
+                        ? error.context.attempts
+                        : undefined,
+            });
+        });
+    }
+
+    private async closeDoorAfterDelay(
+        character: API_Character,
+        expectedKennel: BC_AppearanceItem,
+    ): Promise<void> {
+        await this.delay(KENNEL_DOOR_CLOSE_DELAY_MS);
+        let lastError: unknown;
+
+        for (
+            let attempt = 1;
+            attempt <= KENNEL_DOOR_CLOSE_MAX_ATTEMPTS;
+            attempt++
+        ) {
+            const kennel = character.Appearance.getItemData("ItemDevices");
+            if (kennel !== expectedKennel || kennel?.Name !== "Kennel") return;
+
+            try {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        const currentKennelData =
+                            character.Appearance.getItemData("ItemDevices");
+                        if (
+                            currentKennelData !== expectedKennel ||
+                            currentKennelData?.Name !== "Kennel"
+                        ) {
+                            return;
+                        }
+                        // getItemData returns raw data; InventoryGet returns
+                        // the API_AppearanceItem mutation wrapper.
+                        const currentKennel =
+                            character.Appearance.InventoryGet("ItemDevices");
+                        if (!currentKennel || currentKennel.Name !== "Kennel") {
+                            throw new ConnectionError(
+                                "Kennel appearance wrapper unavailable",
+                                {
+                                    memberNumber: character.MemberNumber,
+                                },
+                            );
+                        }
+                        currentKennel.setProperty("TypeRecord", {
+                            d: 1,
+                            p: 1,
+                        });
+                    },
+                    50,
+                    this.stateSync,
+                    { throwOnSyncFailure: true },
+                );
+
+                const verifiedKennel =
+                    character.Appearance.getItemData("ItemDevices");
+                if (
+                    verifiedKennel !== expectedKennel ||
+                    verifiedKennel?.Name !== "Kennel"
+                ) {
+                    return;
+                }
+                if (
+                    verifiedKennel.Property?.TypeRecord?.d !== 1 ||
+                    verifiedKennel.Property?.TypeRecord?.p !== 1
+                ) {
+                    throw new ConnectionError(
+                        "Kennel door state did not persist",
+                        {
+                            memberNumber: character.MemberNumber,
+                            attempt,
+                            expectedTypeRecord: { d: 1, p: 1 },
+                        },
+                    );
+                }
+
+                this.logger.info("Kennel door closed", {
+                    memberNumber: character.MemberNumber,
+                    location: "kennel",
+                    attempts: attempt,
+                    verified: true,
+                    typeRecord: { d: 1, p: 1 },
+                });
+                return;
+            } catch (error) {
+                lastError = error;
+                if (attempt === KENNEL_DOOR_CLOSE_MAX_ATTEMPTS) break;
+                this.logger.warn("Kennel door close retrying", {
+                    memberNumber: character.MemberNumber,
+                    attempt,
+                    maxAttempts: KENNEL_DOOR_CLOSE_MAX_ATTEMPTS,
+                    errorName:
+                        error instanceof Error ? error.name : "UnknownError",
+                    errorMessage:
+                        error instanceof Error ? error.message : String(error),
+                });
+                await this.delay(
+                    KENNEL_DOOR_CLOSE_RETRY_DELAY_MS * 2 ** (attempt - 1),
+                );
+            }
+        }
+
+        throw new ConnectionError(
+            "Kennel door close failed after bounded retries",
+            {
+                memberNumber: character.MemberNumber,
+                attempts: KENNEL_DOOR_CLOSE_MAX_ATTEMPTS,
+                expectedTypeRecord: { d: 1, p: 1 },
+                finalTypeRecord:
+                    character.Appearance.getItemData("ItemDevices")?.Property
+                        ?.TypeRecord,
+                lastErrorName:
+                    lastError instanceof Error
+                        ? lastError.name
+                        : "UnknownError",
+                lastErrorMessage:
+                    lastError instanceof Error
+                        ? lastError.message
+                        : String(lastError),
+            },
+            { cause: lastError },
+        );
     }
 
     /**

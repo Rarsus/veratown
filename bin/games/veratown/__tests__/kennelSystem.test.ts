@@ -6,6 +6,16 @@ import { KennelSystem } from "../kennelSystem";
 function createCharacter(memberNumber = 7) {
     let device: any;
     const messages: string[] = [];
+    const createDeviceWrapper = () => ({
+        Name: "Kennel",
+        SetCraft: () => {},
+        setProperty: (_key: string, value: unknown) => {
+            device.Property = {
+                ...(device.Property ?? {}),
+                TypeRecord: value,
+            };
+        },
+    });
     const character: any = {
         MemberNumber: memberNumber,
         MapPos: { X: 4, Y: 38 },
@@ -13,19 +23,19 @@ function createCharacter(memberNumber = 7) {
         Appearance: {
             AddItem: () => {
                 device = {
+                    Group: "ItemDevices",
                     Name: "Kennel",
-                    SetCraft: () => {},
-                    setProperty: (_key: string, value: unknown) => {
-                        device.property = value;
-                    },
+                    Property: { TypeRecord: { d: 0, p: 1 } },
                 };
-                return device;
+                return createDeviceWrapper();
             },
             getItemData: () => device,
+            InventoryGet: () => (device ? createDeviceWrapper() : null),
             RemoveItem: () => {
                 device = undefined;
             },
-            MakeAppearanceBundle: () => [],
+            MakeAppearanceBundle: () =>
+                device ? [JSON.parse(JSON.stringify(device))] : [],
         },
     };
     return {
@@ -169,6 +179,161 @@ test("KennelSystem applies the device and records one session on tile entry", as
 
     assert.equal(created.device?.Name, "Kennel");
     assert.deepEqual(mutations.entries, [7]);
+});
+
+test("KennelSystem closes and persists the door on a reacquired raw item", async () => {
+    const created = createCharacter(16);
+    const persisted: any[] = [];
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        async (character: any) => {
+            persisted.push(character.Appearance.MakeAppearanceBundle());
+        },
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    callbacks[0](created.character, { X: 3, Y: 38 });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    assert.deepEqual(created.device?.Property?.TypeRecord, { d: 1, p: 1 });
+    assert.deepEqual(
+        persisted.at(-1)?.find((item: any) => item.Name === "Kennel")?.Property
+            ?.TypeRecord,
+        { d: 1, p: 1 },
+    );
+});
+
+test("KennelSystem retries a transient door synchronization failure", async () => {
+    const created = createCharacter(17);
+    let syncCalls = 0;
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        async () => {
+            syncCalls++;
+            if (syncCalls > 1 && syncCalls < 4) {
+                throw new Error("temporary sync failure");
+            }
+        },
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    callbacks[0](created.character, { X: 3, Y: 38 });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    assert.equal(syncCalls, 4);
+    assert.deepEqual(created.device?.Property?.TypeRecord, { d: 1, p: 1 });
+});
+
+test("KennelSystem abandons delayed closure when the Kennel is replaced", async () => {
+    const created = createCharacter(18);
+    let releaseDelay!: () => void;
+    const delay = async () =>
+        new Promise<void>((resolve) => {
+            releaseDelay = resolve;
+        });
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        delay,
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    callbacks[0](created.character, { X: 3, Y: 38 });
+    for (let attempt = 0; attempt < 10 && !releaseDelay; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.ok(releaseDelay);
+    const original = created.device;
+    created.character.Appearance.AddItem({});
+    releaseDelay();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.notEqual(created.device, original);
+    assert.deepEqual(created.device?.Property?.TypeRecord, { d: 0, p: 1 });
+});
+
+test("KennelSystem exits cleanly when the Kennel is removed before closure", async () => {
+    const created = createCharacter(19);
+    let releaseDelay!: () => void;
+    const delay = async () =>
+        new Promise<void>((resolve) => {
+            releaseDelay = resolve;
+        });
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        delay,
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    callbacks[0](created.character, { X: 3, Y: 38 });
+    for (let attempt = 0; attempt < 10 && !releaseDelay; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.ok(releaseDelay);
+    created.character.Appearance.RemoveItem("ItemDevices");
+    releaseDelay();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(created.device, undefined);
 });
 
 test("KennelSystem reconciles an occupant after location reload", async () => {
