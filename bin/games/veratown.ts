@@ -312,20 +312,24 @@ export class Veratown {
         this.conn.on("RoomJoin", this.onChatRoomJoined);
         this.conn.on("Connected", this.onBotConnected);
         this.conn.on("Disconnected", this.onBotDisconnected);
-        this.conn2?.on("Connected", () =>
-            void this.onAuxiliaryBotConnected(
-                this.conn2!,
-                "shower",
-                SHOWER_BOT2_HOME_POSITION,
-            ),
+        this.conn2?.on(
+            "Connected",
+            () =>
+                void this.onAuxiliaryBotConnected(
+                    this.conn2!,
+                    "shower",
+                    SHOWER_BOT2_HOME_POSITION,
+                ),
         );
         this.conn2?.on("Disconnected", this.onBotDisconnected);
-        this.conn3?.on("Connected", () =>
-            void this.onAuxiliaryBotConnected(
-                this.conn3!,
-                "casino",
-                GAME_MISTRESS_POSITION,
-            ),
+        this.conn3?.on(
+            "Connected",
+            () =>
+                void this.onAuxiliaryBotConnected(
+                    this.conn3!,
+                    "casino",
+                    GAME_MISTRESS_POSITION,
+                ),
         );
         this.conn3?.on("Disconnected", this.onBotDisconnected);
 
@@ -661,6 +665,13 @@ export class Veratown {
 
     private onBotConnected = async () => {
         try {
+            if (!(await this.waitForBotRecovery(this.conn))) {
+                this.setContainmentReady(false);
+                logger.warn("Main bot recovery remains degraded", {
+                    position: RECEPTIONIST_POSITION,
+                });
+                return;
+            }
             await this.setupRoom();
             await this.setupCharacter();
             await this.reloadLocations();
@@ -693,10 +704,14 @@ export class Veratown {
         try {
             await this.reloadLocations();
         } catch (error) {
-            logger.error("Auxiliary bot location reconciliation failed", error, {
-                role,
-                position,
-            });
+            logger.error(
+                "Auxiliary bot location reconciliation failed",
+                error,
+                {
+                    role,
+                    position,
+                },
+            );
         }
         this.updateContainmentReadiness();
     };

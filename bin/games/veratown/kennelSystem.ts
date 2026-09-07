@@ -80,9 +80,25 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 );
             }
 
-            const occupants = (this.conn.chatRoom?.characters ?? []).filter(
-                (character) => this.isKennelPosition(character),
-            );
+            const occupants = (
+                await Promise.all(
+                    (this.conn.chatRoom?.characters ?? []).map(
+                        async (character) => {
+                            if (
+                                this.isKennelPosition(character) ||
+                                character.Appearance.getItemData("ItemDevices")
+                                    ?.Name === "Kennel" ||
+                                (await this.mutationService?.getActiveKennelSession?.(
+                                    character.MemberNumber,
+                                ))
+                            ) {
+                                return character;
+                            }
+                            return undefined;
+                        },
+                    ),
+                )
+            ).filter((character): character is API_Character => !!character);
             await Promise.all(
                 occupants.map((character) =>
                     this.reconcileCharacter(character).catch((error) => {

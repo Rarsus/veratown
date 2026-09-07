@@ -247,6 +247,21 @@ All operations logged with context:
 [BotRestart] Veratown game reinitialized with room configuration and map
 ```
 
+### Degraded readiness and containment recovery
+
+Initialization can complete in degraded mode when a required bot cannot be
+verified at its configured map position. The `main`, `shower`, and `casino`
+roles are retried with bounded backoff; until their current room/map positions
+and the cage/kennel tile triggers are ready, containment remains disabled.
+
+On recovery or room recreation, location triggers are replaced on the current
+map and existing characters are reconciled. Kennel recovery also repairs an
+open persisted session or a live `Kennel` device. Cage recovery fails closed
+when neither a persisted expiry nor a valid live timer is available. Operators
+should inspect the structured `BotRecovery`, `Veratown`, and
+`Containment cages:TileFeatureSystem` diagnostics, repair the persisted expiry
+or remove the stale crate, and reconnect/restart the affected bot role.
+
 ---
 
 ## Performance Considerations
