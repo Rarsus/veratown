@@ -1353,4 +1353,8 @@ export class Veratown {
     public getPlayerRoleSystem(): PlayerRoleSystem | undefined {
         return this.playerRoleSystem;
     }
+
+    public getDIContainer(): DIContainer {
+        return this.container;
+    }
 }

@@ -15,6 +15,7 @@
 import { describe, test, before, after } from "node:test";
 import { strict as assert } from "node:assert";
 import { DIContainer, DIServiceKeys, ServiceLifetime } from "../container";
+import { KidnappersGameLifecycleService } from "../../games/kidnappers/kidnappersGameLifecycleService";
 
 /**
  * Mock service implementations for testing
@@ -324,6 +325,28 @@ describe("DI Container Integration Tests", () => {
             container2.register("service", service2);
             const retrieved = container2.get("service");
             assert.strictEqual((retrieved as any).id, 2);
+        });
+
+        test("Lifecycle service is container-owned and shuts down idempotently", () => {
+            const container2 = new DIContainer();
+            const lifecycle = new KidnappersGameLifecycleService();
+            container2.register(
+                DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                lifecycle,
+            );
+
+            const resolved = container2.get<KidnappersGameLifecycleService>(
+                DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+            );
+            const session = resolved.createSession("phase3-session");
+
+            resolved.shutdownAll();
+            resolved.shutdownAll();
+
+            assert.strictEqual(resolved, lifecycle);
+            assert.strictEqual(resolved.isShutDown(), true);
+            assert.deepStrictEqual(resolved.listSessionIds(), []);
+            assert.strictEqual(session.getSnapshot().phase, "aborted");
         });
     });
 
