@@ -13,6 +13,7 @@
  */
 
 import { Collection, Db } from "mongodb";
+import { EventEmitter } from "node:events";
 import {
     KeypadDoorDefinitionDoc,
     KeypadGroupDefinitionDoc,
@@ -33,11 +34,12 @@ import {
  *
  * @CROSS-SYSTEM Used by KeypadAccessService, KeypadDoorSystem, Commands
  */
-export class KeypadDefinitionService {
+export class KeypadDefinitionService extends EventEmitter {
     private doorDefinitions: Collection<KeypadDoorDefinitionDoc>;
     private groupDefinitions: Collection<KeypadGroupDefinitionDoc>;
 
     constructor(private db: Db) {
+        super();
         this.doorDefinitions = this.db.collection("keypadDoorDefinitions");
         this.groupDefinitions = this.db.collection("keypadGroupDefinitions");
     }
@@ -90,6 +92,7 @@ export class KeypadDefinitionService {
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
+        this.emit("doorChanged");
     }
 
     /**
@@ -108,6 +111,7 @@ export class KeypadDefinitionService {
                 },
             },
         );
+        this.emit("doorChanged");
     }
 
     /**
@@ -115,6 +119,7 @@ export class KeypadDefinitionService {
      */
     async deleteDoor(doorKey: string): Promise<void> {
         await this.doorDefinitions.deleteOne({ doorKey });
+        this.emit("doorChanged");
     }
 
     /**

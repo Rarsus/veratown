@@ -21,7 +21,6 @@ import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
 import { KeypadDoorSystem } from "./keypadDoorSystemRefactored";
-import { KeypadLocationIntegration } from "./migrations/keypadLocationIntegration";
 import { KeypadCollectionSetup } from "./migrations/keypadCollectionSetup";
 import { KeypadBackwardCompatibility } from "./migrations/keypadBackwardCompatibility";
 import { KeypadDataMigrator } from "./migrations/keypadDataMigrator";
@@ -208,12 +207,6 @@ export class KeypadSystemInitializer {
             await accessService.init();
             this.logger.info("✓ KeypadAccessService initialized");
 
-            // Create Location Integration
-            const locationIntegration = new KeypadLocationIntegration(
-                definitionService,
-            );
-            this.logger.info("✓ KeypadLocationIntegration initialized");
-
             // Create Command Dispatcher
             const commandDispatcher = new KeypadCommandDispatcher(
                 definitionService,
@@ -225,7 +218,6 @@ export class KeypadSystemInitializer {
             step.services = {
                 definitionService,
                 accessService,
-                locationIntegration,
                 commandDispatcher,
             };
             step.success = true;
@@ -258,11 +250,9 @@ export class KeypadSystemInitializer {
         try {
             const system = new KeypadDoorSystem(
                 this.conn,
-                this.locationStore,
                 services.definitionService,
                 services.accessService,
                 services.commandDispatcher,
-                services.locationIntegration,
                 this.commandParser,
             );
 
@@ -483,7 +473,6 @@ export interface InitStepWithSystem extends InitStep {
 export interface KeypadServices {
     definitionService: KeypadDefinitionService;
     accessService: KeypadAccessService;
-    locationIntegration: KeypadLocationIntegration;
     commandDispatcher: KeypadCommandDispatcher;
 }
 

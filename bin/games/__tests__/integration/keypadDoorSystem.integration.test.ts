@@ -13,7 +13,6 @@ import { KeypadDoorSystem } from "../../veratown/keypadDoorSystemRefactored";
 import { KeypadDefinitionService } from "../../veratown/services/keypadDefinitionService";
 import { KeypadAccessService } from "../../veratown/services/keypadAccessService";
 import { KeypadCommandDispatcher } from "../../veratown/handlers/keypadCommandDispatcher";
-import { KeypadLocationIntegration } from "../../veratown/migrations/keypadLocationIntegration";
 import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
 import { GameStateMutationServiceImpl } from "../../shared/gameStateMutationService";
 import { EventBus } from "../../shared/eventBus";
@@ -127,11 +126,9 @@ describe("Refactored keypad door integration", () => {
         await access.init();
         system = new KeypadDoorSystem(
             new MockConnection() as any,
-            locations,
             definitions,
             access,
             dispatcher,
-            new KeypadLocationIntegration(definitions),
         );
     });
 
@@ -273,23 +270,9 @@ describe("Refactored keypad door integration", () => {
 
         await system.init();
 
-        const migratedLegacy = await definitions.getDoorDefinition(
-            `auto_location_${legacyKey}`,
-        );
-        assert.ok(migratedLegacy);
         assert.ok(await definitions.getDoorDefinition(newDoorKey));
-        assert.deepEqual(
-            await new KeypadLocationIntegration(
-                definitions,
-            ).validateKeypadLocations(await locations.getAllLocations()),
-            [],
-        );
         assert.equal(
-            (system as any).getDoorKey(await locations.getLocation(legacyKey)),
-            `auto_location_${legacyKey}`,
-        );
-        assert.equal(
-            (system as any).getDoorKey(await locations.getLocation(newKey)),
+            (await definitions.getDoorDefinition(newDoorKey))?.doorKey,
             newDoorKey,
         );
     });
