@@ -269,4 +269,47 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         expect(sent[0]).toContain("!door help");
         await system.shutdown();
     });
+
+    it("registers door commands with the ChatRoomBot command parser", async () => {
+        let doorParser:
+            | ((sender: any, message: unknown, args: string[]) => void)
+            | undefined;
+        const sent: string[] = [];
+        const system = new KeypadDoorSystem(
+            {
+                on: () => {},
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            {
+                getHelpText: () => "!door help",
+                executeCommand: async () => ({
+                    success: false,
+                    message: "Unknown command: mystery\n!door help",
+                }),
+            } as any,
+            {
+                register: (command: string, handler: typeof doorParser) => {
+                    if (command === "door") doorParser = handler;
+                },
+            } as any,
+        );
+
+        expect(doorParser).toBeDefined();
+        doorParser!(
+            { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+            {},
+            ["help"],
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(sent[0]).toContain("!door help");
+        await system.shutdown();
+    });
 });

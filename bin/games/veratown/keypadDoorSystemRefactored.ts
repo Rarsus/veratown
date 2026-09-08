@@ -89,6 +89,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             "code",
             guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser),
         );
+        this.commandParser?.register(
+            "door",
+            guardHandler(`${this.key}:door-parser`, this.onDoorCommandParser),
+        );
     }
 
     /**
@@ -417,6 +421,14 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     private onCodeCommandParser = async (): Promise<void> => {
         // CommandParser handles this, we just need to be registered
+    };
+
+    private onDoorCommandParser = async (
+        character: API_Character,
+        _message: unknown,
+        args: string[],
+    ): Promise<void> => {
+        await this.onAdminMessage(character, args.join(" "));
     };
 
     /**
