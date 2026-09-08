@@ -1,4 +1,9 @@
-# 🚀 Phase 4: Code Integration - Getting Started Guide
+# DEPRECATED: Phase 4: Code Integration - Getting Started Guide
+
+> This historical integration plan is preserved for traceability. It predates
+> the current Phase 3 gate and must not be used as deployment or readiness
+> guidance. See [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_07.md)
+> and [Current Hybrid Strategy Plan](../../HYBRID_STRATEGY_CURRENT_PLAN.md).
 
 ## Status
 

@@ -75,6 +75,9 @@ runtime behavior, deployment commands, schemas, or generated interfaces.
   even if they remain linked for traceability.
 - The original September 4 Hybrid Strategy plan and September 3 GitHub status
   reports are archived under `docs/archived/`.
+- The superseded Phase 4 type-integration reports are archived under
+  `docs/archived/PHASE_4_*_DEPRECATED.md`; the current Phase 4 gate remains
+  blocked until Phase 3 approval.
 - The superseded `IMPLEMENTATION_STATUS_2026_09_05.md` path is represented by
   `docs/archived/IMPLEMENTATION_STATUS_2026_09_05_DEPRECATED.md`; the active
   status is `IMPLEMENTATION_STATUS_2026_09_07.md`.

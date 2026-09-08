@@ -12,6 +12,10 @@ How to deploy Ropeybot to production and staging environments.
 
 - **[Deployment Execution Plan](DEPLOYMENT_EXECUTION_PLAN.md)** - Step-by-step deployment process
 - **[Verification Checklist](VERIFICATION_CHECKLIST.md)** - Pre-deployment verification steps
+- **[Phase 4 Go-Live Checklist](PHASE_4_GO_LIVE_CHECKLIST.md)** - Combined release gate
+- **[Platform Rollback Procedure](PLATFORM_ROLLBACK_PROCEDURE.md)** - Release and data-safe rollback
+- **[Administrator Operations Guide](ADMIN_OPERATIONS_GUIDE.md)** - Routine production operations
+- **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Incident diagnosis and evidence collection
 - **[Keypad Deployment Guide](KEYPAD_DEPLOYMENT_GUIDE.md)** - Keypad-specific deployment
 - **[Keypad Deployment Checklist](KEYPAD_DEPLOYMENT_CHECKLIST.md)** - Keypad verification
 
@@ -65,6 +69,7 @@ Before deploying to production:
 4. ✅ Database migrations complete
 5. ✅ Logs reviewed for errors
 6. ✅ Run [Verification Checklist](VERIFICATION_CHECKLIST.md)
+7. ✅ Run `pnpm run phase4:readiness`
 
 ---
 

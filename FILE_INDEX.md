@@ -449,7 +449,7 @@ npx tsx scripts/database-type-safety.ts help
 
 ### 9. **Phase 4 Integration Guide** (New)
 
-**File:** `PHASE_4_INTEGRATION_GUIDE.md`  
+**File:** `docs/archived/PHASE_4_INTEGRATION_GUIDE_DEPRECATED.md`
 **Status:** ✅ Created  
 **Size:** 8.4 KB  
 **Purpose:** Detailed guide for code integration
@@ -623,7 +623,7 @@ npx tsx scripts/database-type-safety.ts help
 **Documentation:**
 
 - `EXECUTION_COMPLETE.md` - This execution summary
-- `PHASE_4_INTEGRATION_GUIDE.md` - Code integration guide
+- `docs/archived/PHASE_4_INTEGRATION_GUIDE_DEPRECATED.md` - Archived code integration guide
 - `DATABASE_TYPE_SAFETY_*.md` - Comprehensive guides
 
 **Generated Reports:**
@@ -781,7 +781,7 @@ import {
     ```
 
 2. **Start Code Integration** (Phase 4)
-    - Read: `PHASE_4_INTEGRATION_GUIDE.md`
+    - Read: `docs/archived/PHASE_4_INTEGRATION_GUIDE_DEPRECATED.md` for historical context
     - Follow step-by-step instructions
     - Estimated time: 2-4 hours
 
