@@ -24,13 +24,16 @@ import {
     asGameCounter,
     asTimestamp,
     asVersion,
+    createCharacterBio,
     createCasinoState,
     createCrossSystemState,
     createDareState,
+    createProgressionState,
     createTypeConversionStage,
     createVeratownState,
     validateCharacterProfileTypes,
 } from "../shared/mongodbTypeValidation";
+import { ValidationError } from "../../errors";
 
 let mongoServer: MongoMemoryServer | undefined;
 let mongoClient: MongoClient | undefined;
@@ -72,6 +75,104 @@ test("UnifiedCharacterStore - Profile creation and retrieval", async (t) => {
     assert.strictEqual(profile.casino.chips, 0);
     assert.strictEqual(profile.dare.gameIds.length, 0);
     assert.strictEqual(profile.veratown.auditLog.length, 0);
+});
+
+test("UnifiedCharacterStore rejects object member IDs before a write", async (t) => {
+    const db = getTestDb(t, "test_invalid_member_number");
+    if (!db) return;
+    const store = new UnifiedCharacterStore(db);
+    const profiles = db.collection("unifiedCharacterProfiles");
+
+    await assert.rejects(
+        () => store.getProfile({ target: 251024 } as any),
+        (error: unknown) =>
+            error instanceof ValidationError &&
+            error.code === "VALIDATION_ERROR" &&
+            error.context.receivedType === "object",
+    );
+    assert.equal(await profiles.countDocuments(), 0);
+
+    const canonical = await store.getProfile(251024);
+    assert.equal(canonical._id, 251024);
+    assert.equal(await profiles.countDocuments(), 1);
+});
+
+test("UnifiedCharacterStore repairs only verified default malformed profiles", async (t) => {
+    const db = getTestDb(t, "test_profile_id_repair");
+    if (!db) return;
+    const memberNumber = 250927;
+    const now = Date.now();
+    const profiles = db.collection<any>("unifiedCharacterProfiles");
+    await profiles.insertOne({
+        _id: { target: memberNumber },
+        name: "",
+        createdAt: now,
+        bio: createCharacterBio(),
+        casino: createCasinoState(),
+        dare: createDareState(),
+        veratown: createVeratownState(),
+        progression: createProgressionState(),
+        crossSystem: createCrossSystemState(),
+        lastAccessedAt: now,
+        updatedAt: now,
+        version: 0,
+    });
+    const store = new UnifiedCharacterStore(db);
+    await store.updateChips(memberNumber, 100, "seed");
+
+    const before = await store.getProfileIdIntegrityReport();
+    assert.deepEqual(before.duplicateLogicalMemberNumbers, [memberNumber]);
+    await assert.rejects(() => store.repairMalformedProfileIds(false));
+    assert.deepEqual(await store.repairMalformedProfileIds(true), [
+        {
+            targetMemberNumber: memberNumber,
+            decision: "deleted_default_duplicate",
+        },
+    ]);
+
+    const canonical = await store.getProfile(memberNumber);
+    assert.equal(canonical.casino.chips, 100);
+    assert.equal(await profiles.countDocuments(), 1);
+    assert.equal(
+        await db
+            .collection("unifiedCharacterProfileIdRepairBackups")
+            .countDocuments(),
+        1,
+    );
+    assert.deepEqual(
+        (await store.getProfileIdIntegrityReport()).malformedProfileIds,
+        [],
+    );
+});
+
+test("UnifiedCharacterStore retains non-default malformed profiles for review", async (t) => {
+    const db = getTestDb(t, "test_non_default_profile_id_repair");
+    if (!db) return;
+    const memberNumber = 252648;
+    const profiles = db.collection<any>("unifiedCharacterProfiles");
+    await profiles.insertOne({
+        _id: { target: memberNumber },
+        name: "",
+        casino: { chips: 500 },
+        version: 0,
+    });
+    const store = new UnifiedCharacterStore(db);
+    await store.updateChips(memberNumber, 100, "seed");
+
+    assert.deepEqual(await store.repairMalformedProfileIds(true), [
+        {
+            targetMemberNumber: memberNumber,
+            decision: "retained_for_manual_review",
+        },
+    ]);
+    assert.equal((await store.getProfile(memberNumber)).casino.chips, 100);
+    assert.equal(await profiles.countDocuments(), 2);
+    assert.equal(
+        await db
+            .collection("unifiedCharacterProfileIdRepairBackups")
+            .countDocuments(),
+        1,
+    );
 });
 
 test("UnifiedCharacterStore repairs legacy audit logs atomically", async (t) => {

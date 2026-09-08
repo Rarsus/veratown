@@ -19,6 +19,8 @@
         "prettier:fix": "prettier -w .",
         "migrate:keypad": "tsx scripts/migrate-keypad-system.ts",
         "validate:keypad-migration": "tsx scripts/migrate-keypad-system.ts --validate",
+        "check:unified-profile-ids": "tsx scripts/reconcile-unified-character-profile-ids.ts",
+        "reconcile:unified-profile-ids": "tsx scripts/reconcile-unified-character-profile-ids.ts --apply --approve-cleanup",
         "benchmark:keypad": "tsx scripts/benchmark-keypad-system.ts",
         "reconcile:keypad": "tsx scripts/reconcile-keypad-doors.ts",
         "compile:bc-bot": "cd src && npm run compile",
