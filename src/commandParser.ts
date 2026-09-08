@@ -97,13 +97,14 @@ export class CommandParser {
     };
 
     private processCmdString(ev: API_Message, cmdString: string): void {
-        const parts = cmdString.toLowerCase().split(" ");
+        const parts = cmdString.split(" ");
         let cmd = [];
 
         // try more words of the command until we run out of parts, so
         // we can support multi-word commands
         while (parts.length > 0) {
-            cmd.push(parts.shift());
+            const part = parts.shift();
+            cmd.push(part?.toLowerCase());
 
             const cb = this.commands.get(cmd.join(" "));
             if (cb) {
