@@ -40,7 +40,6 @@ import { CasinoVenueSystem } from "./games/shared/casinoVenueSystem";
 import { CasinoEngine } from "./games/casino/casinoEngine";
 import { KeypadDefinitionService } from "./games/veratown/services/keypadDefinitionService";
 import { KeypadAccessService } from "./games/veratown/services/keypadAccessService";
-import { KeypadAccessGroupManager } from "./games/veratown/keypadAccessGroupManager";
 import { initializeLoggingFromEnv, LoggerRegistry } from "./logging";
 import { createLogger } from "./logging";
 import {
@@ -536,11 +535,6 @@ async function initializeVeratownGame(
         keypadAccessService,
     );
 
-    const keypadAccessGroupManager = new KeypadAccessGroupManager(db);
-    container.register(
-        DIServiceKeys.KEYPAD_ACCESS_GROUP_MANAGER,
-        keypadAccessGroupManager,
-    );
     logger.info("Keypad Access Control System services registered in DI");
 
     // Create new Veratown instance with DI container

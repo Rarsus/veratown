@@ -2,17 +2,17 @@
 
 ## Executive Summary
 
-**CRITICAL GAP IDENTIFIED**: The keypad system refactoring was documented as **"COMPLETE & PRODUCTION READY"** but the refactored implementation is **NOT INTEGRATED** into the active system.
+**Phase 4 update**: The keypad system is now integrated, migrated, verified, benchmarked, and cleaned up. The historical gap below is retained as an audit trail.
 
-| Aspect                            | Plan       | Actual             | Status |
-| --------------------------------- | ---------- | ------------------ | ------ |
-| **Old System (1,243 lines)**      | Replaced   | STILL ACTIVE       | ❌     |
-| **Refactored System (385 lines)** | Active     | Exists but unused  | ⚠️     |
-| **Services**                      | Integrated | Exist only         | ⚠️     |
-| **Handlers**                      | Integrated | Exist only         | ⚠️     |
-| **Migrations**                    | Complete   | Exist only         | ⚠️     |
-| **Tests**                         | Passing    | Exist but untested | ⚠️     |
-| **Integration**                   | Done       | NOT STARTED        | ❌     |
+| Aspect                | Plan       | Actual              | Status |
+| --------------------- | ---------- | ------------------- | ------ |
+| **Old System**        | Replaced   | Removed             | ✅     |
+| **Refactored System** | Active     | Active at runtime   | ✅     |
+| **Services**          | Integrated | Wired through DI    | ✅     |
+| **Handlers**          | Integrated | Dispatcher active   | ✅     |
+| **Migrations**        | Complete   | Live migration done | ✅     |
+| **Tests**             | Passing    | Phase 3 passing     | ✅     |
+| **Integration**       | Done       | Complete            | ✅     |
 
 ---
 
@@ -30,13 +30,14 @@
 - ✅ Tests: 7+ test files with 69+ test cases
 - ✅ Documentation: KEYPAD_SYSTEM_FINAL_STATUS.md, KEYPAD_REFACTORING_COMPLETE.md, KEYPAD_ADVANCED_GROUPS.md
 
-**Current Usage** (What's actually active):
+**Current Usage**:
 
-- ❌ Old system: `keypadDoorSystem.ts` (1,243 lines) - **STILL IN USE**
-- ❌ Refactored system: Not imported, not used
-- ❌ Services: Not called by active system
-- ❌ Handlers: Not wired to command dispatcher
-- ❌ Migrations: Never executed
+- ✅ Refactored system: active runtime implementation
+- ✅ Services: wired through the Veratown DI setup
+- ✅ Handlers: routed through `KeypadCommandDispatcher`
+- ✅ Migrations: executed and validated against the live database
+- ✅ Tests: Phase 3 unit and integration suites pass
+- ✅ Legacy system and manager: removed
 
 ### Proof of Current State
 
@@ -199,11 +200,11 @@ this.keypadDoorSystem = this.initFeature(() =>
 
 ### Phase 4: Performance & Cleanup (Day 5)
 
-- [ ] 4.1: Benchmark door unlock (target: 100-200ms)
-- [ ] 4.2: Benchmark list doors (target: 100-300ms)
-- [ ] 4.3: Remove old KeypadDoorSystem
-- [ ] 4.4: Remove KeypadAccessGroupManager (if not needed)
-- [ ] 4.5: Update documentation
+- [x] 4.1: Benchmark door unlock (target: 100-200ms)
+- [x] 4.2: Benchmark list doors (target: 100-300ms)
+- [x] 4.3: Remove old KeypadDoorSystem
+- [x] 4.4: Remove KeypadAccessGroupManager (if not needed)
+- [x] 4.5: Update documentation
 
 ---
 

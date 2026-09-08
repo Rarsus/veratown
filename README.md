@@ -57,6 +57,8 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 - [docs/VERATOWN_COMPLETE_GUIDE.md](docs/VERATOWN_COMPLETE_GUIDE.md) - Comprehensive guide (everything in one place)
 - [docs/VERATOWN_ARCHITECTURE.md](docs/VERATOWN_ARCHITECTURE.md) - Technical deep dive (systems, design decisions, patterns)
 - [docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md](docs/VERATOWN_MAP_REGIONS_IMPROVEMENTS.md) - Map layout, regions, and future improvements
+- [docs/KEYPAD_SYSTEM_FINAL_STATUS.md](docs/KEYPAD_SYSTEM_FINAL_STATUS.md) - Keypad integration status
+- [docs/KEYPAD_MIGRATION_RUNBOOK.md](docs/KEYPAD_MIGRATION_RUNBOOK.md) - Keypad migration and rollback procedures
 - [docs/GOOGLE_CLOUD_QUICK_START.md](docs/GOOGLE_CLOUD_QUICK_START.md) - Deploy to Google Cloud in 30 minutes (Compute Engine + GitHub Actions)
 - [docs/GOOGLE_CLOUD_DEPLOYMENT.md](docs/GOOGLE_CLOUD_DEPLOYMENT.md) - Complete Google Cloud options (Compute Engine, GKE, Cloud Run)
 

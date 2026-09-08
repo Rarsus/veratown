@@ -59,7 +59,6 @@ import {
 import { VeratownAdminCommands } from "./veratown/adminCommands";
 import { RegionManager, VeratownRegion } from "./veratown/regionManager";
 import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
-import { KeypadAccessGroupManager } from "./veratown/keypadAccessGroupManager";
 import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSystem";
 import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
 import { DIContainer, DIServiceKeys } from "../di/container";
@@ -203,7 +202,6 @@ export class Veratown {
     private releaseSystem?: ReleaseSystem;
 
     // EPIC 1.3: Veratown Architecture Systems
-    private keypadAccessGroupManager?: KeypadAccessGroupManager;
     private furnitureInteractionSystem?: FurnitureInteractionSystem;
     private appearanceAuditTrail?: AppearanceAuditTrail;
     private locationEventSystem?: LocationEventSystem;
@@ -294,13 +292,6 @@ export class Veratown {
             // EPIC 1.3: Initialize Veratown Architecture Systems (Phase 2 Integration)
             // These systems provide core functionality: access control, furniture interactions,
             // audit trails, location events, and role management
-            this.keypadAccessGroupManager = this.container.has(
-                DIServiceKeys.KEYPAD_ACCESS_GROUP_MANAGER,
-            )
-                ? this.container.get<KeypadAccessGroupManager>(
-                      DIServiceKeys.KEYPAD_ACCESS_GROUP_MANAGER,
-                  )
-                : new KeypadAccessGroupManager(db);
             this.furnitureInteractionSystem = new FurnitureInteractionSystem(
                 db,
                 this.conn,
@@ -1408,10 +1399,6 @@ export class Veratown {
     }
 
     // EPIC 1.3 System Accessors
-    public getKeypadAccessGroupManager(): KeypadAccessGroupManager | undefined {
-        return this.keypadAccessGroupManager;
-    }
-
     public getFurnitureInteractionSystem():
         FurnitureInteractionSystem | undefined {
         return this.furnitureInteractionSystem;

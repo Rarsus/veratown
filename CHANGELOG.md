@@ -9,12 +9,14 @@ All notable changes to Ropeybot are documented here.
 - Comprehensive unit test suite for centralized logging system (38 tests)
 - Pre-commit hook enhancement: Auto-fixes Prettier formatting issues
 - Documentation reorganization and archival system
+- Keypad Phase 4 benchmark, integration plan, and migration runbook
 
 ### Changed
 
 - Migrated all 52 files to centralized `/bin/logging/` logger
 - Removed deprecated `systemLogger.ts`
 - Restructured documentation for improved clarity and navigation
+- Removed the legacy keypad door system and access-group manager after refactored-system verification
 
 ### Fixed
 
