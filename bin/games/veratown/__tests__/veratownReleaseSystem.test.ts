@@ -16,6 +16,7 @@ function createCharacter(initialAppearance: any[], failingGroup?: string) {
     const character: any = {
         MemberNumber: 145,
         MapPos: { X: 1, Y: 1 },
+        sendAppearanceUpdate: () => {},
         Appearance: {
             MakeAppearanceBundle: () => structuredClone(appearance),
             slowlyStripBulk: async (config: any) => {
@@ -258,6 +259,7 @@ test("live removal retries a partial mutation and is idempotent after success", 
     let attempts = 0;
     const character: any = {
         MemberNumber: 145,
+        sendAppearanceUpdate: () => {},
         Appearance: {
             MakeAppearanceBundle: () => structuredClone(appearance),
             RemoveItem: (group: string) => {
