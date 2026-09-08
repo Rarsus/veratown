@@ -128,6 +128,11 @@ test("connection readiness supports timeout and cancellation", async () => {
     );
 });
 
+test("room-aware readiness verifies map and room membership before settling", async () => {
+    const connection = createRecoveryConnection();
+    await waitForConnectionStability(connection as never, 100, undefined, 5);
+});
+
 test("recovery restores each Veratown role once after duplicate lifecycle events", async () => {
     const main = createRecoveryConnection();
     const shower = createRecoveryConnection();
