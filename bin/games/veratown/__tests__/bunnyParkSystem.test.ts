@@ -12,9 +12,11 @@ function createCharacter(
         failOn?: string;
         initialAppearance?: any[];
         accessible?: boolean;
+        dropSignOnBundleCall?: number;
     } = {},
 ) {
     let appearance = structuredClone(options.initialAppearance ?? []);
+    let bundleCalls = 0;
     const added: string[] = [];
     const messages: string[] = [];
     const character: any = {
@@ -66,7 +68,19 @@ function createCharacter(
             RemoveItem: (group: string) => {
                 appearance = appearance.filter((item) => item.Group !== group);
             },
-            MakeAppearanceBundle: () => structuredClone(appearance),
+            MakeAppearanceBundle: () => {
+                bundleCalls += 1;
+                if (bundleCalls === options.dropSignOnBundleCall) {
+                    appearance = appearance.filter(
+                        (item) =>
+                            !(
+                                item.Group === "ItemMisc" &&
+                                item.Name === "WoodenSign"
+                            ),
+                    );
+                }
+                return structuredClone(appearance);
+            },
         },
         Tell: (_type: string, message: string) => messages.push(message),
     };
@@ -210,6 +224,35 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
                     item.Group === "ItemMisc" && item.Name === "WoodenSign",
             ),
         true,
+    );
+});
+
+test("bunny punishment restores a sign lost before persistence verification", async () => {
+    const created = createCharacter(17, { dropSignOnBundleCall: 4 });
+    const persisted: any[] = [];
+    const system = new BunnyParkSystem(
+        {} as any,
+        async (character) => {
+            persisted.push(character.Appearance.MakeAppearanceBundle());
+        },
+        deterministicRandom(0),
+        0,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.finalVerification, true);
+    assert.equal(result.signPresent, true);
+    assert.equal(result.signVisible, true);
+    assert.ok(
+        persisted[0].some(
+            (item: any) =>
+                item.Group === "ItemMisc" && item.Name === "WoodenSign",
+        ),
     );
 });
 

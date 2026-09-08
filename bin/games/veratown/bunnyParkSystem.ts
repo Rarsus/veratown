@@ -483,18 +483,28 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     const beforePersistence = verifyBunnySign(
                         current.Appearance.MakeAppearanceBundle(),
                     );
+                    if (!beforePersistence.visible) {
+                        const sign = current.Appearance.AddItem(
+                            AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
+                        );
+                        sign.setProperty("Text", BUNNY_SIGN_TEXT);
+                        sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
+                    }
+                    const synchronizedSign = verifyBunnySign(
+                        current.Appearance.MakeAppearanceBundle(),
+                    );
                     this.logger.info(
                         "Bunny punishment sign post-sync verification",
                         {
                             ...context,
-                            signPresent: beforePersistence.present,
-                            signVisible: beforePersistence.visible,
-                            signFailureReason: beforePersistence.reason,
+                            signPresent: synchronizedSign.present,
+                            signVisible: synchronizedSign.visible,
+                            signFailureReason: synchronizedSign.reason,
                         },
                     );
-                    if (!beforePersistence.visible) {
+                    if (!synchronizedSign.visible) {
                         throw new Error(
-                            beforePersistence.reason ??
+                            synchronizedSign.reason ??
                                 "WoodenSign failed pre-persistence verification",
                         );
                     }
