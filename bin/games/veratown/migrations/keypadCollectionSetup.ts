@@ -398,25 +398,27 @@ export class KeypadCollectionSetup {
         }
 
         // Check for orphaned memberships
-        const groupIds = new Set(
+        const groupKeys = new Set(
             (
                 await db
                     .collection("keypadGroupDefinitions")
-                    .find({}, { projection: { _id: 1 } })
+                    .find({}, { projection: { doorKey: 1, groupName: 1 } })
                     .toArray()
-            ).map((g) => g._id),
+            ).map((group) => `${group.doorKey}:${group.groupName}`),
         );
 
         const orphanedMemberships = await db
             .collection("keypadGroupMemberships")
-            .find({
-                _id: { $nin: Array.from(groupIds) },
-            })
+            .find({})
             .toArray();
+        const orphanedMembershipCount = orphanedMemberships.filter(
+            (membership) =>
+                !groupKeys.has(`${membership.doorKey}:${membership.groupName}`),
+        ).length;
 
-        if (orphanedMemberships.length > 0) {
+        if (orphanedMembershipCount > 0) {
             errors.push(
-                `ERROR: Found ${orphanedMemberships.length} orphaned memberships`,
+                `ERROR: Found ${orphanedMembershipCount} orphaned memberships`,
             );
         }
 
