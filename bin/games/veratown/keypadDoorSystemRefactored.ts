@@ -232,51 +232,94 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         if (!map) return;
 
         this.unregisterMapTriggers();
-        for (const location of this.locations) {
-            if (
-                location.type !== "keypad_door" ||
-                !location.enabled ||
-                location.x === undefined ||
-                location.y === undefined
-            ) {
-                continue;
+        for (const door of this.doors.values()) {
+            const linkedLocations = this.locations.filter(
+                (location) =>
+                    location.type === "keypad_door" &&
+                    location.enabled &&
+                    this.getDoorKey(location) === door.doorKey,
+            );
+            const keypadTiles = this.uniquePositions([
+                ...(door.keypadTiles ?? []),
+                ...linkedLocations.flatMap((location) =>
+                    location.x !== undefined && location.y !== undefined
+                        ? [{ X: location.x, Y: location.y }]
+                        : [],
+                ),
+            ]);
+            const autoOpenTiles = this.uniquePositions([
+                ...(door.autoOpenTiles ?? []),
+                ...(door.autoOpenTile ? [door.autoOpenTile] : []),
+            ]);
+
+            for (const position of keypadTiles) {
+                const location =
+                    linkedLocations.find(
+                        (candidate) =>
+                            candidate.x === position.X &&
+                            candidate.y === position.Y,
+                    ) ?? this.createSyntheticKeypadLocation(door, position);
+                const keypadCallback = guardHandler(
+                    `${this.key}:keypad:${door.doorKey}:${position.X}:${position.Y}`,
+                    (character: API_Character) =>
+                        this.onCharacterAtKeypad(character, location),
+                );
+                map.addTileTrigger(position, keypadCallback);
+                this.tileTriggerBindings.push({
+                    map,
+                    x: position.X,
+                    y: position.Y,
+                    callback: keypadCallback,
+                });
             }
 
-            const doorKey = this.getDoorKey(location);
-            const door = doorKey ? this.doors.get(doorKey) : undefined;
-            if (!door) continue;
-
-            const keypadCallback = guardHandler(
-                `${this.key}:keypad:${doorKey}`,
-                (character: API_Character) =>
-                    this.onCharacterAtKeypad(character, location),
-            );
-            map.addTileTrigger(
-                { X: location.x, Y: location.y },
-                keypadCallback,
-            );
-            this.tileTriggerBindings.push({
-                map,
-                x: location.x,
-                y: location.y,
-                callback: keypadCallback,
-            });
-
-            if (door.autoOpenTile) {
+            for (const position of autoOpenTiles) {
+                const location =
+                    linkedLocations[0] ??
+                    this.createSyntheticKeypadLocation(door, position);
                 const autoOpenCallback = guardHandler(
-                    `${this.key}:auto-open:${doorKey}`,
+                    `${this.key}:auto-open:${door.doorKey}:${position.X}:${position.Y}`,
                     (character: API_Character) =>
                         this.onCharacterAtAutoOpenTile(character, location),
                 );
-                map.addTileTrigger(door.autoOpenTile, autoOpenCallback);
+                map.addTileTrigger(position, autoOpenCallback);
                 this.tileTriggerBindings.push({
                     map,
-                    x: door.autoOpenTile.X,
-                    y: door.autoOpenTile.Y,
+                    x: position.X,
+                    y: position.Y,
                     callback: autoOpenCallback,
                 });
             }
         }
+    }
+
+    private uniquePositions(
+        positions: Array<{ X: number; Y: number }>,
+    ): Array<{ X: number; Y: number }> {
+        const seen = new Set<string>();
+        return positions.filter((position) => {
+            const key = `${position.X},${position.Y}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    private createSyntheticKeypadLocation(
+        door: KeypadDoorDefinitionDoc,
+        position: { X: number; Y: number },
+    ): VeratownLocationDoc {
+        return {
+            key: `${door.doorKey}:tile:${position.X}:${position.Y}`,
+            name: door.description ?? door.doorKey,
+            type: "keypad_door",
+            x: position.X,
+            y: position.Y,
+            data: { doorKey: door.doorKey },
+            enabled: door.enabled,
+            createdAt: door.createdAt,
+            updatedAt: door.updatedAt,
+        };
     }
 
     /**
@@ -344,7 +387,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         if (!doorKey) return;
 
         const door = this.doors.get(doorKey);
-        if (!door || !door.autoOpenTile) return;
+        if (!door) return;
 
         // Prevent spam
         const timerId = `auto_open_${doorKey}`;
@@ -377,10 +420,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<boolean> => {
         // Find doors at character's current location
         const charLoc = character.MapPos;
-        const doorDef = await this.definitionService.getDoorAt(
-            charLoc.X,
-            charLoc.Y,
-        );
+        const doorDef = this.findDoorAtPosition(charLoc.X, charLoc.Y);
 
         if (!doorDef) {
             return false; // No door here
@@ -409,6 +449,35 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         return true; // Command was handled
     };
+
+    private findDoorAtPosition(
+        x: number,
+        y: number,
+    ): KeypadDoorDefinitionDoc | undefined {
+        for (const door of this.doors.values()) {
+            const keypadTiles = [
+                ...(door.keypadTiles ?? []),
+                ...this.locations.flatMap((location) =>
+                    location.type === "keypad_door" &&
+                    location.enabled &&
+                    this.getDoorKey(location) === door.doorKey &&
+                    location.x !== undefined &&
+                    location.y !== undefined
+                        ? [{ X: location.x, Y: location.y }]
+                        : [],
+                ),
+            ];
+            if (
+                keypadTiles.some(
+                    (position) => position.X === x && position.Y === y,
+                ) ||
+                (door.doorX === x && door.doorY === y)
+            ) {
+                return door;
+            }
+        }
+        return undefined;
+    }
 
     /**
      * Handle admin door commands

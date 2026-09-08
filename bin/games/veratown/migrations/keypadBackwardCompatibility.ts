@@ -69,16 +69,27 @@ export class KeypadBackwardCompatibility {
         // Generate auto doorKey based on location ID
         const doorKey = `auto_location_${location.key}`;
 
+        const autoOpenTiles = Array.isArray(data.autoOpenTiles)
+            ? data.autoOpenTiles
+            : data.autoOpenTile
+              ? [data.autoOpenTile]
+              : [];
+
         return {
             _id: doorKey,
             doorKey,
-            doorX: location.x!,
-            doorY: location.y!,
+            doorX: typeof data.doorX === "number" ? data.doorX : location.x!,
+            doorY: typeof data.doorY === "number" ? data.doorY : location.y!,
             lockedTile: (data.lockedTile as string) || "MetalDown",
             unlockedTile: (data.unlockedTile as string) || "SteelDoorOpen",
             unlockDurationMs: (data.unlockDurationMs as number) || 10000,
+            keypadTiles:
+                location.x !== undefined && location.y !== undefined
+                    ? [{ X: location.x, Y: location.y }]
+                    : [],
             insideRegion: (data.insideRegion as any) || undefined,
-            autoOpenTile: (data.autoOpenTile as any) || undefined,
+            autoOpenTile: autoOpenTiles[0] as any,
+            autoOpenTiles: autoOpenTiles as any,
             enabled: location.enabled,
             description: `Auto-migrated from location: ${location.key}`,
             createdAt: Date.now(),

@@ -197,7 +197,7 @@ export class KeypadDefinitionService {
     async verifyCode(doorKey: string, code: string): Promise<string | null> {
         const group = await this.groupDefinitions.findOne({
             doorKey,
-            code,
+            $or: [{ code }, { codes: code }],
         });
         return group ? group.groupName : null;
     }

@@ -89,6 +89,17 @@ export class KeypadCollectionSetup {
                                 description:
                                     "Duration in milliseconds door stays unlocked",
                             },
+                            keypadTiles: {
+                                bsonType: ["array", "null"],
+                                items: {
+                                    bsonType: "object",
+                                    required: ["X", "Y"],
+                                    properties: {
+                                        X: { bsonType: "int" },
+                                        Y: { bsonType: "int" },
+                                    },
+                                },
+                            },
                             insideRegion: {
                                 bsonType: ["object", "null"],
                                 description: "Optional region inside door",
@@ -116,6 +127,17 @@ export class KeypadCollectionSetup {
                                 properties: {
                                     X: { bsonType: "int" },
                                     Y: { bsonType: "int" },
+                                },
+                            },
+                            autoOpenTiles: {
+                                bsonType: ["array", "null"],
+                                items: {
+                                    bsonType: "object",
+                                    required: ["X", "Y"],
+                                    properties: {
+                                        X: { bsonType: "int" },
+                                        Y: { bsonType: "int" },
+                                    },
                                 },
                             },
                             enabled: {
@@ -200,6 +222,12 @@ export class KeypadCollectionSetup {
                                 bsonType: "string",
                                 description: "Access code for this group",
                             },
+                            codes: {
+                                bsonType: ["array", "null"],
+                                items: { bsonType: "string" },
+                                description:
+                                    "Additional access codes for multi-keypad doors",
+                            },
                             groupType: {
                                 enum: ["builtin", "custom"],
                                 description: "Whether builtin or admin-created",
@@ -246,10 +274,41 @@ export class KeypadCollectionSetup {
                 error instanceof Error &&
                 error.message.includes("already exists")
             ) {
+                await this.allowMultipleGroupCodes(db, collectionName);
                 return;
             }
             throw error;
         }
+    }
+
+    private static async allowMultipleGroupCodes(
+        db: Db,
+        collectionName: string,
+    ): Promise<void> {
+        const collectionInfo = await db
+            .listCollections({ name: collectionName }, { nameOnly: false })
+            .next();
+        const validator = collectionInfo?.options?.validator;
+        const schema = validator?.$jsonSchema;
+        if (!schema?.properties) return;
+
+        await db.command({
+            collMod: collectionName,
+            validator: {
+                $jsonSchema: {
+                    ...schema,
+                    properties: {
+                        ...schema.properties,
+                        codes: {
+                            bsonType: ["array", "null"],
+                            items: { bsonType: "string" },
+                            description:
+                                "Additional access codes for multi-keypad doors",
+                        },
+                    },
+                },
+            },
+        });
     }
 
     /**

@@ -38,6 +38,25 @@ The command exits non-zero on any phase or validation error.
 pnpm validate:keypad-migration
 ```
 
+## Reconcile Multiple Keypads and Auto-Open Tiles
+
+Generate a consolidation plan without writing data:
+
+```bash
+pnpm reconcile:keypad
+```
+
+The plan separates physical door coordinates from keypad tiles, normalizes
+legacy group names, merges duplicate access records, and reports stale access.
+Review the proposed mapping before applying it:
+
+```bash
+pnpm reconcile:keypad -- --apply
+```
+
+Apply mode creates a rollback snapshot first. The command prints the snapshot
+ID after a successful write.
+
 ## Restore
 
 Use the snapshot ID printed by the migration:

@@ -20,6 +20,7 @@
         "migrate:keypad": "tsx scripts/migrate-keypad-system.ts",
         "validate:keypad-migration": "tsx scripts/migrate-keypad-system.ts --validate",
         "benchmark:keypad": "tsx scripts/benchmark-keypad-system.ts",
+        "reconcile:keypad": "tsx scripts/reconcile-keypad-doors.ts",
         "compile:bc-bot": "cd src && npm run compile",
         "bundle": "npm run compile:bc-bot && esbuild bin/main.ts --bundle --platform=node --outfile=dist/bundle.js --sourcemap",
         "start": "npm run compile:bc-bot && tsx bin/main.ts",

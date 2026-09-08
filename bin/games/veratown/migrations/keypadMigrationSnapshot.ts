@@ -57,7 +57,12 @@ export class KeypadMigrationSnapshotStore {
                 .collection<Document & { _id: number }>(
                     "unifiedCharacterProfiles",
                 )
-                .find({ _id: { $in: [...affectedMemberNumbers] } })
+                .find({
+                    $or: [
+                        { _id: { $in: [...affectedMemberNumbers] } },
+                        { "veratown.keypadAccess": { $exists: true } },
+                    ],
+                })
                 .toArray(),
             keypadDoorDefinitions: await db
                 .collection("keypadDoorDefinitions")
@@ -104,18 +109,17 @@ export class KeypadMigrationSnapshotStore {
             }
         }
 
-        if (snapshot.affectedMemberNumbers.length > 0) {
-            const profiles = db.collection<Document & { _id: number }>(
-                "unifiedCharacterProfiles",
-            );
+        if (snapshot.profiles.length > 0) {
+            const profiles = db.collection("unifiedCharacterProfiles");
             await profiles.deleteMany({
-                _id: { $in: snapshot.affectedMemberNumbers },
+                _id: { $in: snapshot.profiles.map((profile) => profile._id) },
             });
-            if (snapshot.profiles.length > 0) {
-                await profiles.insertMany(
-                    snapshot.profiles as Array<Document & { _id: number }>,
-                );
-            }
+            await profiles.insertMany(snapshot.profiles);
+        }
+        const locations = db.collection("veratownLocations");
+        await locations.deleteMany({ type: "keypad_door" });
+        if (snapshot.locations.length > 0) {
+            await locations.insertMany(snapshot.locations);
         }
         await this.setStatus(db, snapshotId, "restored");
     }

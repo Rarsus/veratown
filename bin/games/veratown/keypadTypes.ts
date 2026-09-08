@@ -33,6 +33,10 @@ export interface KeypadDoorDefinitionDoc {
     unlockedTile: string; // "SteelDoorOpen"
     unlockDurationMs: number; // 10000 ms default
 
+    // Optional keypad trigger tiles. Legacy location records are normalized
+    // into this list during reconciliation.
+    keypadTiles?: Array<{ X: number; Y: number }>;
+
     // Optional: Protection when someone is inside (directional exit lock)
     insideRegion?: MapRegion;
 
@@ -41,6 +45,9 @@ export interface KeypadDoorDefinitionDoc {
         X: number;
         Y: number;
     };
+
+    // Canonical representation for one or more automatic opening tiles.
+    autoOpenTiles?: Array<{ X: number; Y: number }>;
 
     // Metadata
     enabled: boolean;
@@ -66,6 +73,7 @@ export interface KeypadGroupDefinitionDoc {
 
     // Access code for this group
     code: string; // Empty string for admin group, specific code for others
+    codes?: string[]; // Additional valid codes for multi-keypad doors
 
     // Metadata
     description?: string; // "Daily maintenance access"
