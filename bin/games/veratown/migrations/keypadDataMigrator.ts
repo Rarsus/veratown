@@ -20,6 +20,11 @@ import { KeypadDefinitionService } from "../services/keypadDefinitionService";
 import { KeypadAccessService } from "../services/keypadAccessService";
 import { VeratownLocationStore } from "../veratownLocationStore";
 import { UnifiedCharacterStore } from "../../shared/unifiedCharacterStore";
+import {
+    KeypadGroupDefinitionDoc,
+    KeypadGroupMembershipDoc,
+} from "../keypadTypes";
+import { KeypadAccessRecord } from "../../shared/unifiedCharacterTypes";
 
 /**
  * Keypad System Data Migration Coordinator
@@ -163,11 +168,13 @@ export class KeypadDataMigrator {
                 );
             }
 
-            result.success = true;
             result.totalErrors = result.phases.reduce(
                 (sum, p) => sum + p.errors.length,
                 0,
             );
+            result.success =
+                result.totalErrors === 0 &&
+                result.phases.every((phase) => phase.status === "success");
 
             this.logger.info(
                 `Migration complete. Phases: ${result.phases.length}, Errors: ${result.totalErrors}`,
@@ -216,7 +223,8 @@ export class KeypadDataMigrator {
                 await KeypadCollectionSetup.initializeCollections(this.db);
             }
 
-            phaseResult.status = "success";
+            phaseResult.status =
+                phaseResult.errors.length === 0 ? "success" : "error";
             phaseResult.message = dryRun
                 ? "Would create 3 collections with schema validators"
                 : "Created 3 collections (doorDefinitions, groupDefinitions, memberships)";
@@ -274,7 +282,8 @@ export class KeypadDataMigrator {
                     legacyLocations,
                 );
 
-            phaseResult.status = "success";
+            phaseResult.status =
+                phaseResult.errors.length === 0 ? "success" : "error";
             phaseResult.message = dryRun
                 ? `Would migrate ${stats.totalLocations} locations with ${stats.doorsToCreate} doors and ~${stats.totalMembers} members`
                 : `Validated ${stats.totalLocations} legacy locations`;
@@ -336,7 +345,8 @@ export class KeypadDataMigrator {
                 }
             }
 
-            phaseResult.status = "success";
+            phaseResult.status =
+                phaseResult.errors.length === 0 ? "success" : "error";
             phaseResult.message = `Migrated ${phaseResult.itemsCreated} door definitions`;
         } catch (error) {
             phaseResult.status = "error";
@@ -365,10 +375,91 @@ export class KeypadDataMigrator {
         };
 
         try {
-            // Placeholder for group creation logic
-            // This would iterate through migrated doors and create auto_* groups
-            phaseResult.status = "success";
-            phaseResult.message = "Group definitions created";
+            const locations = await this.locationStore.getAllLocations();
+            const legacyLocations =
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                    locations,
+                );
+            const definitionService = new KeypadDefinitionService(this.db);
+            await definitionService.init();
+
+            for (const location of legacyLocations) {
+                const door =
+                    KeypadBackwardCompatibility.extractLegacyDoorConfig(
+                        location,
+                    );
+                if (!door) continue;
+
+                const data = (location.data ?? {}) as Record<string, unknown>;
+                const codes =
+                    data.codes &&
+                    typeof data.codes === "object" &&
+                    !Array.isArray(data.codes)
+                        ? (data.codes as Record<string, unknown>)
+                        : {};
+                const legacyCode =
+                    typeof data.code === "string" ? data.code : undefined;
+                const groups = new Map<string, string>();
+
+                for (const [groupName, code] of Object.entries(codes)) {
+                    if (typeof code === "string" && code.length > 0) {
+                        groups.set(groupName, code);
+                    }
+                }
+                if (legacyCode && !groups.has("guest")) {
+                    groups.set("guest", legacyCode);
+                }
+                if (
+                    Array.isArray(data.whitelistMemberNumbers) &&
+                    !groups.has("whitelist")
+                ) {
+                    groups.set("whitelist", "");
+                }
+                if (
+                    Array.isArray(data.memberNumbers) &&
+                    !groups.has("members")
+                ) {
+                    groups.set("members", "");
+                }
+
+                phaseResult.itemsProcessed += groups.size;
+                if (dryRun) {
+                    phaseResult.itemsCreated += groups.size;
+                    continue;
+                }
+
+                for (const [groupName, code] of groups) {
+                    const existing = await definitionService.getGroupDefinition(
+                        door.doorKey,
+                        groupName,
+                    );
+                    if (existing) continue;
+
+                    const group: KeypadGroupDefinitionDoc = {
+                        _id: `${door.doorKey}:${groupName}`,
+                        doorKey: door.doorKey,
+                        groupName,
+                        code,
+                        groupType:
+                            groupName === "admin" ||
+                            groupName === "whitelist" ||
+                            groupName === "guest"
+                                ? "builtin"
+                                : "custom",
+                        description: `Auto-migrated from location: ${location.key}`,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                    };
+                    await definitionService.createGroup(group);
+                    phaseResult.itemsCreated++;
+                }
+            }
+
+            phaseResult.status =
+                phaseResult.errors.length === 0 ? "success" : "error";
+            phaseResult.message = dryRun
+                ? `Would create ${phaseResult.itemsCreated} group definitions`
+                : `Created ${phaseResult.itemsCreated} group definitions`;
         } catch (error) {
             phaseResult.status = "error";
             phaseResult.errors.push(
@@ -396,10 +487,75 @@ export class KeypadDataMigrator {
         };
 
         try {
-            // Placeholder for character access migration
-            // This would scan locations and migrate membership to character profiles
-            phaseResult.status = "success";
-            phaseResult.message = "Character access migrated";
+            const locations = await this.locationStore.getAllLocations();
+            const legacyLocations =
+                await KeypadBackwardCompatibility.findLegacyKeypadLocations(
+                    locations,
+                );
+
+            for (const location of legacyLocations) {
+                const door =
+                    KeypadBackwardCompatibility.extractLegacyDoorConfig(
+                        location,
+                    );
+                if (!door) continue;
+
+                const data = (location.data ?? {}) as Record<string, unknown>;
+                const memberships = new Map<string, number[]>();
+                const whitelist = Array.isArray(data.whitelistMemberNumbers)
+                    ? data.whitelistMemberNumbers.filter(
+                          (member): member is number =>
+                              Number.isInteger(member),
+                      )
+                    : [];
+                const members = Array.isArray(data.memberNumbers)
+                    ? data.memberNumbers.filter((member): member is number =>
+                          Number.isInteger(member),
+                      )
+                    : [];
+                if (whitelist.length > 0)
+                    memberships.set("whitelist", whitelist);
+                if (members.length > 0) memberships.set("members", members);
+
+                for (const [groupName, memberNumbers] of memberships) {
+                    for (const memberNumber of new Set(memberNumbers)) {
+                        phaseResult.itemsProcessed++;
+                        const access: KeypadAccessRecord = {
+                            doorKey: door.doorKey,
+                            groupName,
+                            grantedAt: Date.now(),
+                            grantedBy: 0,
+                            grantedReason: `Migrated from location: ${location.key}`,
+                        };
+                        if (!dryRun) {
+                            const existing = (
+                                await this.characterStore.getKeypadAccess(
+                                    memberNumber,
+                                )
+                            ).some(
+                                (record) =>
+                                    record.doorKey === access.doorKey &&
+                                    record.groupName === access.groupName,
+                            );
+                            if (!existing) {
+                                await this.characterStore.addKeypadAccess(
+                                    memberNumber,
+                                    access,
+                                );
+                                phaseResult.itemsCreated++;
+                            }
+                        } else {
+                            phaseResult.itemsCreated++;
+                        }
+                    }
+                }
+            }
+
+            phaseResult.status =
+                phaseResult.errors.length === 0 ? "success" : "error";
+            phaseResult.message = dryRun
+                ? `Would migrate ${phaseResult.itemsCreated} character access records`
+                : `Migrated ${phaseResult.itemsCreated} character access records`;
         } catch (error) {
             phaseResult.status = "error";
             phaseResult.errors.push(
@@ -427,9 +583,50 @@ export class KeypadDataMigrator {
         };
 
         try {
-            // Placeholder for index building
-            phaseResult.status = "success";
-            phaseResult.message = "Membership index built";
+            if (!dryRun) {
+                const memberships =
+                    this.db.collection<KeypadGroupMembershipDoc>(
+                        "keypadGroupMemberships",
+                    );
+                await memberships.deleteMany({});
+                const profiles = await this.db
+                    .collection("unifiedCharacterProfiles")
+                    .find(
+                        { "veratown.keypadAccess": { $exists: true } },
+                        { projection: { _id: 1, "veratown.keypadAccess": 1 } },
+                    )
+                    .toArray();
+                const records: KeypadGroupMembershipDoc[] = [];
+                for (const profile of profiles) {
+                    const access = (profile.veratown?.keypadAccess ??
+                        []) as KeypadAccessRecord[];
+                    for (const record of access) {
+                        records.push({
+                            _id: `${record.doorKey}:${record.groupName}:${profile._id}`,
+                            doorKey: record.doorKey,
+                            groupName: record.groupName,
+                            memberNumber: profile._id as unknown as number,
+                            grantedAt: record.grantedAt,
+                            grantedBy: record.grantedBy,
+                            grantedReason: record.grantedReason,
+                            expiresAt: record.expiresAt,
+                            syncedFromProfile: true,
+                        });
+                    }
+                }
+                if (records.length > 0) await memberships.insertMany(records);
+                phaseResult.itemsProcessed = records.length;
+                phaseResult.itemsCreated = records.length;
+            } else {
+                phaseResult.message =
+                    "Would rebuild membership index from profiles";
+            }
+
+            phaseResult.status =
+                phaseResult.errors.length === 0 ? "success" : "error";
+            phaseResult.message = dryRun
+                ? "Would rebuild membership index from profiles"
+                : `Built membership index with ${phaseResult.itemsCreated} records`;
         } catch (error) {
             phaseResult.status = "error";
             phaseResult.errors.push(
