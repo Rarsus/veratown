@@ -27,6 +27,7 @@ import {
 
 class MockConnection {
     public on(): void {}
+    public SendMessage(): void {}
 }
 
 const now = () => Date.now();
@@ -170,6 +171,7 @@ describe("Refactored keypad door integration", () => {
                 Name: `Character ${memberNumber}`,
                 MapPos: { X: 10, Y: 20 },
                 IsRoomAdmin: () => admin,
+                Tell: () => {},
             };
             return (system as any).onCodeMessage(character, code);
         };

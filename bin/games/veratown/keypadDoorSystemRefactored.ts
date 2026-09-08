@@ -438,7 +438,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
 
-        // Log notification instead of sending (sendNotification doesn't exist on API_Connector)
+        this.conn.SendMessage("Whisper", message, character.MemberNumber);
         this.logger.info(`Notification to ${character.Name}: ${message}`);
     }
 

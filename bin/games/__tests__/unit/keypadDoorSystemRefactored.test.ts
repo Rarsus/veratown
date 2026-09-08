@@ -38,7 +38,7 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
                 doorKey === door.doorKey ? door : null,
         };
         const system = new KeypadDoorSystem(
-            { chatRoom: { map }, on: () => {} } as any,
+            { chatRoom: { map }, on: () => {}, SendMessage: () => {} } as any,
             definitionService as any,
             { init: async () => {}, canAccessDoor: async () => true } as any,
             {} as any,
@@ -132,6 +132,35 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         await new Promise((resolve) => setImmediate(resolve));
         expect(dispatched?.commandLine).toBe("door list");
         expect(dispatched?.isAdmin).toBe(true);
+        await system.shutdown();
+    });
+
+    it("sends notifications to the character as whispers", async () => {
+        const sent: Array<{
+            type: string;
+            message: string;
+            memberNumber: number;
+        }> = [];
+        const { system } = createSystem({
+            addTileTrigger: () => {},
+            removeTileTrigger: () => {},
+            setObject: () => {},
+        });
+        (system as any).conn.SendMessage = (
+            type: string,
+            message: string,
+            memberNumber: number,
+        ) => sent.push({ type, message, memberNumber });
+        const character = {
+            MemberNumber: 1,
+            Name: "Shopper",
+        };
+
+        (system as any).sendNotification(character, "Incorrect code.");
+
+        expect(sent).toEqual([
+            { type: "Whisper", message: "Incorrect code.", memberNumber: 1 },
+        ]);
         await system.shutdown();
     });
 });
