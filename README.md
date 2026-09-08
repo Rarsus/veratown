@@ -34,6 +34,8 @@ See [docs/CREDITS.md](docs/CREDITS.md) for who's contributed to the project, and
 
 **Phase 3 integration**: [PHASE_3_INTEGRATION_PLAN.md](PHASE_3_INTEGRATION_PLAN.md) - Combined Phase 2A/2B integration, validation, rollback, and handoff gates.
 
+**Phase 3 baseline**: [PHASE_3_BASELINE_INVENTORY.md](PHASE_3_BASELINE_INVENTORY.md) - Recorded combined commit, merge inventory, risks, rollback boundary, and reproducible evidence commands.
+
 **For quick start**: [docs/QUICK_START.md](docs/QUICK_START.md) - Get Ropeybot running in 5 minutes.
 
 **Veratown+** is a persistent-world roleplay bot with integrated games, multi-bot architecture, and region management.

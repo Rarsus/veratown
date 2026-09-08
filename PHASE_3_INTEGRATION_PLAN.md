@@ -3,7 +3,7 @@
 **Status:** Active execution plan  
 **GitHub epic:** [#31](https://github.com/Rarsus/veratown/issues/31)  
 **Prerequisites:** Phase 2A #59 closed; Phase 2B #30 closed with PR #162 merged  
-**Primary evidence:** `PHASE_2A_HANDOFF.md`, `PHASE_2B_HANDOFF.md`
+**Primary evidence:** `PHASE_3_BASELINE_INVENTORY.md`, `PHASE_2A_HANDOFF.md`, `PHASE_2B_HANDOFF.md`
 
 ## Objective
 
