@@ -137,8 +137,11 @@ export async function syncAppearanceMutation(
         // Execute the mutation
         await mutation();
 
-        // Sync appearance to server
+        // Send the complete bundle so mutations on remote characters are
+        // persisted by ChatRoomCharacterUpdate. Item updates are broadcast
+        // only and do not update the target account on the server.
         character.Appearance.MakeAppearanceBundle();
+        character.sendAppearanceUpdate();
 
         // Wait to ensure sync is visible
         if (delayMs > 0) {
