@@ -151,6 +151,13 @@ describe("Keypad access integration", () => {
             }),
             1,
         );
+        assert.equal(
+            await db!.collection("auditLogs").countDocuments({
+                action: "addKeypadAccess",
+                targetMemberNumber: memberNumber,
+            }),
+            1,
+        );
         assert.equal(delivered.length, 1);
         assert.equal(delivered[0].data.operation, "addKeypadAccess");
     });

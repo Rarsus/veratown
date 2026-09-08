@@ -207,6 +207,27 @@ export interface AuditLogEntry {
     details?: Record<string, unknown>;
 }
 
+export interface AuditSummary {
+    lastAction?: string;
+    lastActionAt?: number;
+    lastActionBy?: number;
+    totalAuditEvents: number;
+}
+
+export interface AuditLogDocument {
+    _id?: unknown;
+    auditId: string;
+    timestamp: number;
+    action: string;
+    source: string;
+    targetMemberNumber: number;
+    actorMemberNumber?: number;
+    operationId?: string;
+    details?: Record<string, unknown>;
+    retentionClass: "standard" | "security" | "compliance";
+    expiresAt?: Date;
+}
+
 export interface VeratownState {
     lastPosition?: ChatRoomMapPos;
     lastPositionAt: number;
@@ -221,6 +242,7 @@ export interface VeratownState {
     bunnyPunishmentArtifact?: BunnyPunishmentArtifact;
     roleplayFlags: RoleplayFlags;
     auditLog: AuditLogEntry[];
+    auditSummary?: AuditSummary;
     roles: string[];
     // Keypad access records (Layer 1: Character-specific)
     keypadAccess: KeypadAccessRecord[];

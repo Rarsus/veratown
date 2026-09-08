@@ -41,6 +41,8 @@ import {
     ChatRoomMapPos,
     CurrentRestraint,
     AuditLogEntry,
+    AuditLogDocument,
+    AuditSummary,
     BunnyPunishmentArtifact,
     ReleaseRemovalOperation,
     ReleaseRemovalPlan,
@@ -71,6 +73,8 @@ import {
     deriveEventSourceFromRewardSource,
 } from "./progressionRules";
 import { releaseItemIdentity } from "../veratown/shared/releaseRemovalPolicy";
+import { AuditLogService } from "./auditLogService";
+import { randomUUID } from "node:crypto";
 
 export function normalizeVeratownAuditLog(value: unknown): AuditLogEntry[] {
     if (!Array.isArray(value)) return [];
@@ -110,6 +114,7 @@ function dedupeReleaseItems(items: RemovedBondageItem[]): RemovedBondageItem[] {
 export class UnifiedCharacterStore {
     private profiles: Collection<UnifiedCharacterProfile>;
     private events: Collection<GameEvent>;
+    private auditLogService: AuditLogService;
     private inited = false;
     private eventBus: EventBus;
 
@@ -121,6 +126,7 @@ export class UnifiedCharacterStore {
             "unifiedCharacterProfiles",
         );
         this.events = db.collection<GameEvent>("gameEvents");
+        this.auditLogService = new AuditLogService(db);
         this.eventBus = eventBus ?? new EventBus();
     }
 
@@ -170,6 +176,7 @@ export class UnifiedCharacterStore {
             source: 1,
             type: 1,
         });
+        await this.auditLogService.init();
 
         this.inited = true;
     }
@@ -1455,13 +1462,23 @@ export class UnifiedCharacterStore {
 
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
+        const auditId = `audit:${memberNumber}:${now}:${randomUUID()}`;
 
-        await this.recordVeratownAuditEntry(
-            memberNumber,
-            operation,
-            actor,
-            context,
-        );
+        await this.auditLogService.record({
+            auditId,
+            timestamp: now,
+            action: operation,
+            source: "veratown",
+            targetMemberNumber: memberNumber,
+            actorMemberNumber: actor,
+            details: context,
+            retentionClass: "standard",
+        });
+
+        await this.recordVeratownAuditEntry(memberNumber, operation, actor, {
+            ...context,
+            auditId,
+        });
 
         // Create audit event with full context
         const event: GameEvent = {
@@ -1472,6 +1489,7 @@ export class UnifiedCharacterStore {
             target: memberNumber,
             data: {
                 operation,
+                auditId,
                 ...context,
                 playerName: profile.name,
                 memberNumber,
@@ -1491,41 +1509,31 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         startTime?: number,
         endTime?: number,
-    ): Promise<GameEvent[]> {
+    ): Promise<Array<AuditLogDocument | GameEvent>> {
+        const centralized = await this.auditLogService.getForCharacter(
+            memberNumber,
+            startTime,
+            endTime,
+        );
         await this.init();
-
         const query: Record<string, unknown> = {
             target: memberNumber,
-            type: {
-                $in: [
-                    "audit_trail",
-                    "escape_payment",
-                    "chips_locked",
-                    "chips_unlocked",
-                ],
-            },
+            type: "audit_trail",
         };
-
-        if (startTime) {
-            query.timestamp = { $gte: startTime };
+        if (startTime !== undefined || endTime !== undefined) {
+            query.timestamp = {
+                ...(startTime !== undefined ? { $gte: startTime } : {}),
+                ...(endTime !== undefined ? { $lte: endTime } : {}),
+            };
         }
-        if (endTime) {
-            if (!query.timestamp) {
-                query.timestamp = {};
-            }
-            (query.timestamp as Record<string, number>).$lte = endTime;
-        }
-
-        const events = await this.events
+        const legacy = await this.events
             .find(query)
             .sort({ timestamp: -1 })
             .limit(1000)
             .toArray();
-
-        return events.map((doc) => {
-            const { _id, ...rest } = doc;
-            return rest as GameEvent;
-        });
+        return [...centralized, ...legacy].sort(
+            (left, right) => right.timestamp - left.timestamp,
+        );
     }
 
     // ===== PHASE 3.5: EVENT DEDUPLICATION & ERROR RECOVERY
@@ -2772,8 +2780,24 @@ export class UnifiedCharacterStore {
                                     [entry],
                                 ],
                             },
-                            -100,
+                            -10,
                         ],
+                    },
+                    "veratown.auditSummary": {
+                        lastAction: action,
+                        lastActionAt: now,
+                        lastActionBy: performedBy,
+                        totalAuditEvents: {
+                            $add: [
+                                {
+                                    $ifNull: [
+                                        "$veratown.auditSummary.totalAuditEvents",
+                                        0,
+                                    ],
+                                },
+                                1,
+                            ],
+                        },
                     },
                     "veratown.updatedAt": now,
                     "veratown.version": {

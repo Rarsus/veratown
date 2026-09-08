@@ -188,6 +188,28 @@ The reconciliation command is dry-run by default. Apply only after reviewing the
 pnpm reconcile:keypad -- --apply
 ```
 
+## Audit Log Migration
+
+The full audit history is stored centrally in `auditLogs`. Character profiles
+retain only a compact recent cache and summary. Preview the existing embedded
+audit data before backfilling:
+
+```bash
+pnpm migrate:audit-log
+```
+
+Apply the backfill and trim embedded caches to the last 10 entries:
+
+```bash
+pnpm migrate:audit-log -- --apply
+```
+
+Restore the embedded profile data from the printed snapshot if necessary:
+
+```bash
+pnpm migrate:audit-log -- --restore=<snapshotId>
+```
+
 ## Rollback
 
 Every apply-mode reconciliation creates a snapshot ID. Restore with:
