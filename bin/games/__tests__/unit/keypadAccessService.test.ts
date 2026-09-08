@@ -185,14 +185,9 @@ describe("KeypadAccessService", () => {
                 "test_door",
                 "whitelist",
                 99999,
+                undefined,
+                now - 1000,
             );
-
-            // Manually set expiration to past
-            await characterStore.getProfile(12345).then((profile: any) => {
-                if (profile?.veratown?.keypadAccess) {
-                    profile.veratown.keypadAccess[0].expiresAt = now - 1000;
-                }
-            });
 
             const canAccess = await accessService.canAccessDoor(
                 12345,

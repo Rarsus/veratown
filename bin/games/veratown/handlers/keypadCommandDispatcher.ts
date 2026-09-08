@@ -210,7 +210,16 @@ export class KeypadCommandDispatcher {
         commandLine: string,
         isAdmin: boolean,
     ): Promise<KeypadCommandResult> {
-        const parts = commandLine.trim().split(/\s+/);
+        const parts = commandLine
+            .trim()
+            .split(/\s+/)
+            .map((part) =>
+                part.length >= 2 &&
+                ((part.startsWith('"') && part.endsWith('"')) ||
+                    (part.startsWith("'") && part.endsWith("'")))
+                    ? part.slice(1, -1)
+                    : part,
+            );
 
         if (parts.length < 2) {
             return {

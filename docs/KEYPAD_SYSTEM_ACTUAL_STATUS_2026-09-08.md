@@ -190,9 +190,9 @@ this.keypadDoorSystem = this.initFeature(() =>
 
 ### Phase 3: Feature Verification (Day 4)
 
-- [ ] 3.1: Test door unlock with each access group
-- [ ] 3.2: Test code entry and validation
-- [ ] 3.3: Test admin commands (grant, revoke, list)
+- [x] 3.1: Test door unlock with each access group
+- [x] 3.2: Test code entry and validation
+- [x] 3.3: Test admin commands (grant, revoke, list)
 - [ ] 3.4: Test whitelist functionality
 - [ ] 3.5: Test auto-open tiles
 - [ ] 3.6: Test backward compatibility with old configs
