@@ -321,6 +321,37 @@ export class Veratown {
                       DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                   )
                 : undefined;
+            const definitionService = this.container.has(
+                DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
+            )
+                ? this.container.get<KeypadDefinitionService>(
+                      DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
+                  )
+                : new KeypadDefinitionService(db);
+            if (!this.container.has(DIServiceKeys.KEYPAD_DEFINITION_SERVICE)) {
+                this.container.register(
+                    DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
+                    definitionService,
+                );
+            }
+            const accessService = this.container.has(
+                DIServiceKeys.KEYPAD_ACCESS_SERVICE,
+            )
+                ? this.container.get<KeypadAccessService>(
+                      DIServiceKeys.KEYPAD_ACCESS_SERVICE,
+                  )
+                : new KeypadAccessService(
+                      db,
+                      definitionService,
+                      unifiedStore,
+                      mutationService,
+                  );
+            if (!this.container.has(DIServiceKeys.KEYPAD_ACCESS_SERVICE)) {
+                this.container.register(
+                    DIServiceKeys.KEYPAD_ACCESS_SERVICE,
+                    accessService,
+                );
+            }
             this.liveCharacterStateSync = new LiveCharacterStateSync(
                 this.conn,
                 unifiedStore,
