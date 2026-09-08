@@ -13,6 +13,7 @@ Welcome to the Ropeybot documentation. Start here to find what you need.
 - **Planning Phase 2B?** → Read [Current Hybrid Strategy Plan](../HYBRID_STRATEGY_CURRENT_PLAN.md)
 - **Integrating KidnappersGame?** → Read the [Phase 2B handoff](../PHASE_2B_HANDOFF.md)
 - **Executing Phase 3?** → Read the [Phase 3 integration plan](../PHASE_3_INTEGRATION_PLAN.md)
+- **Checking the Phase 3 baseline?** → Read the [combined baseline and merge inventory](../PHASE_3_BASELINE_INVENTORY.md)
 - **Checking document lifecycle?** → Read the [Documentation Status Registry](../DOCUMENTATION_STATUS.md)
 
 ---

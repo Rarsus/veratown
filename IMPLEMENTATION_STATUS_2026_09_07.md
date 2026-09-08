@@ -35,6 +35,10 @@ This document is the current status source. Earlier status reports are preserved
 - The Phase 2B controller is integrated into the production bootstrap; the
   legacy `KidnappersGameRoom` path is not the authoritative controller.
 - Phase 3 #31 is open and ready for its integration sub-issues.
+- Phase 3 baseline and merge inventory for #166 is recorded in
+  [PHASE_3_BASELINE_INVENTORY.md](PHASE_3_BASELINE_INVENTORY.md), including
+  the combined `main` commit, child-issue traceability, rollback boundary,
+  and reproducible validation commands.
 - Phase 4 #32 remains blocked until Phase 3 passes its combined gates.
 
 ## Current Quality Gates
