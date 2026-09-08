@@ -266,30 +266,33 @@ export class KeypadCommandDispatcher {
     /**
      * Get help text for all commands
      */
-    private getHelpText(): string {
+    public getHelpText(): string {
         return `
 Keypad Door System Commands:
 
+Help:
+    !door help
+
 Access Management:
-  /bot door access grant <doorKey> <groupName> <memberNumber> [reason]
-  /bot door access revoke <doorKey> <memberNumber> [groupName]
-  /bot door access get <memberNumber>
-  /bot door access check <memberNumber> <doorKey>
+    !door access grant <doorKey> <groupName> <memberNumber> [reason]
+    !door access revoke <doorKey> <memberNumber> [groupName]
+    !door access get <memberNumber>
+    !door access check <memberNumber> <doorKey>
 
 Door Management:
-  /bot door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [duration]
-  /bot door update <doorKey> <fieldName> <value>...
-  /bot door delete <doorKey>
-  /bot door list
-  /bot door info <doorKey>
+    !door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [duration] [autoOpenX autoOpenY]
+    !door update <doorKey> <fieldName> <value>...
+    !door delete <doorKey>
+    !door list
+    !door info <doorKey>
 
 Group Management:
-  /bot door group create <doorKey> <groupName> <code> [type] [description]
-  /bot door group update <doorKey> <groupName> <fieldName> <value>...
-  /bot door group delete <doorKey> <groupName>
-  /bot door group list <doorKey>
-  /bot door group info <doorKey> <groupName>
-  /bot door group members <doorKey> <groupName>
+    !door group create <doorKey> <groupName> <code> [type] [description]
+    !door group update <doorKey> <groupName> <fieldName> <value>...
+    !door group delete <doorKey> <groupName>
+    !door group list <doorKey>
+    !door group info <doorKey> <groupName>
+    !door group members <doorKey> <groupName>
 
 Admin access required for all commands.
         `.trim();

@@ -135,6 +135,77 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         await system.shutdown();
     });
 
+    it("responds with help for !door help", async () => {
+        const sent: string[] = [];
+        let messageHandler: ((message: any) => void) | undefined;
+        const system = new KeypadDoorSystem(
+            {
+                on: (event: string, handler: (message: any) => void) => {
+                    if (event === "Message") messageHandler = handler;
+                },
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            { getHelpText: () => "!door help\n!door create" } as any,
+        );
+        system.registerTriggers();
+        messageHandler!({
+            message: { Type: "Whisper", Content: "!door help" },
+            sender: { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(sent[0]).toContain("!door help");
+        expect(sent[0]).toContain("!door create");
+        await system.shutdown();
+    });
+
+    it("preserves case-sensitive command arguments", async () => {
+        const dispatched: string[] = [];
+        let messageHandler: ((message: any) => void) | undefined;
+        const system = new KeypadDoorSystem(
+            {
+                on: (event: string, handler: (message: any) => void) => {
+                    if (event === "Message") messageHandler = handler;
+                },
+                SendMessage: () => {},
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            {
+                executeCommand: async (
+                    _actor: unknown,
+                    commandLine: string,
+                ) => {
+                    dispatched.push(commandLine);
+                    return { success: true, message: "ok" };
+                },
+            } as any,
+        );
+        system.registerTriggers();
+        messageHandler!({
+            message: {
+                Type: "Whisper",
+                Content: "!door group create shop GuestCode",
+            },
+            sender: { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(dispatched).toEqual(["group create shop GuestCode"]);
+        await system.shutdown();
+    });
+
     it("sends notifications to the character as whispers", async () => {
         const sent: Array<{
             type: string;
@@ -161,6 +232,41 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         expect(sent).toEqual([
             { type: "Whisper", message: "Incorrect code.", memberNumber: 1 },
         ]);
+        await system.shutdown();
+    });
+
+    it("reports unknown door commands instead of silently dropping them", async () => {
+        const sent: string[] = [];
+        const system = new KeypadDoorSystem(
+            {
+                on: () => {},
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            {
+                getHelpText: () => "!door help",
+                executeCommand: async () => ({
+                    success: false,
+                    message: "Unknown command: mystery command\n!door help",
+                }),
+            } as any,
+        );
+
+        (system as any).onMessage({
+            message: { Type: "Whisper", Content: "!door mystery command" },
+            sender: { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(sent[0]).toContain("Unknown command");
+        expect(sent[0]).toContain("!door help");
         await system.shutdown();
     });
 });

@@ -362,14 +362,26 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         character: API_Character,
         args: string,
     ): Promise<boolean> => {
+        if (!args.trim() || args.trim().toLowerCase() === "help") {
+            this.sendNotification(
+                character,
+                this.commandDispatcher.getHelpText(),
+            );
+            return true;
+        }
+
         if (!character.IsRoomAdmin()) {
+            this.sendNotification(
+                character,
+                "Permission denied. Door management commands require room administrator access. Use !door help for usage.",
+            );
             return false;
         }
 
         try {
             const result = await this.commandDispatcher.executeCommand(
                 character,
-                args,
+                this.normalizeDoorCommand(args),
                 true,
             );
 
@@ -387,6 +399,18 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             return true;
         }
     };
+
+    private normalizeDoorCommand(args: string): string {
+        const parts = args.trim().split(/\s+/);
+        if (parts.length > 0 && parts[0] === "help") return "help";
+        if (
+            parts.length > 0 &&
+            ["create", "update", "delete", "list", "info"].includes(parts[0])
+        ) {
+            return `door ${args.trim()}`;
+        }
+        return args.trim();
+    }
 
     /**
      * Handle /code command via CommandParser
@@ -446,13 +470,14 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Main message handler
      */
     private onMessage = async (message: API_Message): Promise<void> => {
-        const content = message.message.Content.toLowerCase();
+        const rawContent = message.message.Content.trim();
+        const content = rawContent.toLowerCase();
         const character = message.sender;
 
         // Handle whispered admin commands
         if (message.message.Type === "Whisper") {
-            if (content.startsWith("!door ")) {
-                const args = content.slice("!door ".length);
+            if (content === "!door" || content.startsWith("!door ")) {
+                const args = rawContent.slice("!door".length).trim();
                 await this.onAdminMessage(character, args);
             }
         }
