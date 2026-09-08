@@ -624,6 +624,16 @@ export class Veratown {
         this.kidnappers?.registerCommands(
             new GamePluginCommandRouterImpl(this.commandParser, "kidnappers"),
         );
+
+        // Register kennel commands (lock and escape)
+        if (this.kennelSystem) {
+            const kennelCommandController =
+                this.kennelSystem.createCommandController(
+                    this.commandParser,
+                    this.unifiedCharacterStore,
+                );
+            kennelCommandController.registerCommands();
+        }
     }
 
     // Constructs and registers a single room feature system, isolating any

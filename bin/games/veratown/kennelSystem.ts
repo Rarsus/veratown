@@ -30,6 +30,7 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { getLifecycleObjectId } from "./featureSystem";
+import { KennelCommandController } from "./kennelCommands";
 
 const KENNEL_DOOR_CLOSE_MAX_ATTEMPTS = 3;
 const KENNEL_DOOR_CLOSE_RETRY_DELAY_MS = 100;
@@ -65,6 +66,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     >();
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
+    private readonly kennelStateCache = new Map<
+        number,
+        { hasDevice: boolean; timestamp: number }
+    >();
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
@@ -299,6 +304,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         character: API_Character,
         entryRequested = false,
     ): Promise<void> {
+        const memberNumber = character.MemberNumber;
         const inKennel = entryRequested || this.isKennelPosition(character);
         const wearingKennel = this.isWearingKennel(character);
         const activeSession =
@@ -315,6 +321,18 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 );
                 if (exited) await this.stateSync?.(character);
             }
+            this.kennelStateCache.delete(memberNumber);
+            return;
+        }
+
+        // Skip redundant reconciliation if state hasn't changed
+        const cachedState = this.kennelStateCache.get(memberNumber);
+        const currentState = wearingKennel;
+        if (cachedState?.hasDevice === currentState) {
+            this.logger.debug(
+                "Kennel state unchanged, skipping redundant reconciliation",
+                { memberNumber, hasDevice: currentState },
+            );
             return;
         }
 
@@ -362,6 +380,12 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             }
             throw error;
         }
+
+        // Cache the successful state to prevent redundant reconciliations
+        this.kennelStateCache.set(memberNumber, {
+            hasDevice: wearingKennel,
+            timestamp: Date.now(),
+        });
 
         this.logger.info("Kennel entry completed", {
             memberNumber: character.MemberNumber,
@@ -429,21 +453,41 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     ): void {
         const memberNumber = character.MemberNumber;
         const pending = this.pendingDoorClosures.get(memberNumber);
-        if (pending?.kennel === kennel) return;
+        if (pending?.kennel === kennel) {
+            this.logger.debug("Door close already scheduled for kennel", {
+                memberNumber,
+            });
+            return;
+        }
+
+        this.logger.debug("Scheduling door close in 5 seconds", {
+            memberNumber,
+            delayMs: KENNEL_DOOR_CLOSE_DELAY_MS,
+        });
 
         const task = this.closeDoorAfterDelay(character, kennel).finally(() => {
             if (this.pendingDoorClosures.get(memberNumber)?.task === task) {
                 this.pendingDoorClosures.delete(memberNumber);
+                this.logger.debug(
+                    "Pending door close task removed from queue",
+                    {
+                        memberNumber,
+                    },
+                );
             }
         });
         this.pendingDoorClosures.set(memberNumber, { kennel, task });
         void task.catch((error) => {
+            const errorContext =
+                error instanceof ConnectionError ? error.context : undefined;
             this.logger.error("Kennel door close failed", error, {
                 memberNumber,
-                attempts:
-                    error instanceof ConnectionError
-                        ? error.context.attempts
-                        : undefined,
+                attempts: errorContext?.attempts,
+                kennelState: kennel.Property?.TypeRecord,
+                isStillWearingKennel:
+                    character.Appearance.getItemData("ItemDevices")?.Name ===
+                    "Kennel",
+                isStillInKennelTile: this.isKennelPosition(character),
             });
         });
     }
@@ -452,7 +496,17 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         character: API_Character,
         expectedKennel: BC_AppearanceItem,
     ): Promise<void> {
+        const memberNumber = character.MemberNumber;
+        this.logger.debug("Starting 5-second kennel door close delay", {
+            memberNumber,
+        });
         await this.delay(KENNEL_DOOR_CLOSE_DELAY_MS);
+        this.logger.debug(
+            "Kennel door close delay completed, attempting close",
+            {
+                memberNumber,
+            },
+        );
         let lastError: unknown;
 
         for (
@@ -461,7 +515,18 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             attempt++
         ) {
             const kennel = character.Appearance.getItemData("ItemDevices");
-            if (kennel !== expectedKennel || kennel?.Name !== "Kennel") return;
+            if (kennel !== expectedKennel || kennel?.Name !== "Kennel") {
+                this.logger.info(
+                    "Kennel door close abandoned - kennel removed or replaced",
+                    {
+                        memberNumber,
+                        hasKennel: !!kennel,
+                        kennelName: kennel?.Name,
+                        isSameReference: kennel === expectedKennel,
+                    },
+                );
+                return;
+            }
 
             try {
                 await syncAppearanceMutation(
@@ -519,12 +584,14 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     );
                 }
 
-                this.logger.info("Kennel door closed", {
+                this.logger.info("Kennel door closed successfully", {
                     memberNumber: character.MemberNumber,
                     location: "kennel",
                     attempts: attempt,
                     verified: true,
                     typeRecord: { d: 1, p: 1 },
+                    delayCompleted: true,
+                    syncSuccessful: true,
                 });
                 return;
             } catch (error) {
@@ -600,5 +667,22 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             );
             if (exited) await this.stateSync?.(character);
         }
+    }
+
+    /**
+     * Create a command controller for kennel commands.
+     * Call this during command registration (e.g., in Veratown.registerCommands()).
+     */
+    public createCommandController(
+        commandParser: any,
+        characterStore?: any,
+    ): KennelCommandController {
+        return new KennelCommandController(
+            this.conn,
+            commandParser,
+            this,
+            this.mutationService,
+            characterStore,
+        );
     }
 }

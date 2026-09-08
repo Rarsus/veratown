@@ -237,6 +237,7 @@ export const KENNEL_POSITIONS: ChatRoomMapPos[] = [
 ];
 
 export const KENNEL_DOOR_CLOSE_DELAY_MS = 5 * 1000;
+export const KENNEL_LOCK_MAX_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
 
 // --- Showers ---
 
