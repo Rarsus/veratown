@@ -15,6 +15,7 @@ function createCharacter(
         Appearance: {
             MakeAppearanceBundle: () => structuredClone(appearance),
         },
+        sendAppearanceUpdate: () => {},
     };
 }
 

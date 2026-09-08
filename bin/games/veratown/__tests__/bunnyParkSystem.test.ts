@@ -19,6 +19,7 @@ function createCharacter(
     let bundleCalls = 0;
     const added: string[] = [];
     const messages: string[] = [];
+    const appearanceUpdates: any[][] = [];
     const character: any = {
         MemberNumber: memberNumber,
         MapPos: { X: 29, Y: 6 },
@@ -82,12 +83,15 @@ function createCharacter(
                 return structuredClone(appearance);
             },
         },
+        sendAppearanceUpdate: () =>
+            appearanceUpdates.push(structuredClone(appearance)),
         Tell: (_type: string, message: string) => messages.push(message),
     };
     return {
         character,
         added,
         messages,
+        appearanceUpdates,
         appearance: () => structuredClone(appearance),
     };
 }
@@ -154,6 +158,37 @@ test("bunny punishment applies and persists each configured restraint set", asyn
         );
         assert.equal(sign?.Property?.Text, "I step on", config.name);
         assert.equal(sign?.Property?.Text2, "Bunnies", config.name);
+    }
+});
+
+test("bunny punishment sends the complete bundle for remote-character persistence", async () => {
+    const created = createCharacter(19);
+    const system = new BunnyParkSystem(
+        {} as any,
+        async () => {},
+        deterministicRandom(0),
+        0,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, true);
+    const update = created.appearanceUpdates.at(-1);
+    assert.ok(update);
+    for (const piece of [
+        ...BUNNY_RESTRAINT_CONFIGS[0].pieces,
+        { group: "ItemMisc", asset: "WoodenSign" },
+    ]) {
+        assert.ok(
+            update.some(
+                (item: any) =>
+                    item.Group === piece.group && item.Name === piece.asset,
+            ),
+            `${piece.group}/${piece.asset}`,
+        );
     }
 });
 
