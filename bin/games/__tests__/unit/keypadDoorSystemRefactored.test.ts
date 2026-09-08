@@ -66,4 +66,59 @@ describe("KeypadDoorSystem (refactored)", () => {
         expect(doors[0].doorX).toBe(10);
         expect(doors[0].doorY).toBe(20);
     });
+
+    it("routes whispered admin commands through the dispatcher", async () => {
+        let messageHandler:
+            | ((message: {
+                  message: { Type: string; Content: string };
+                  sender: any;
+              }) => void)
+            | undefined;
+        let dispatched: { commandLine: string; isAdmin: boolean } | undefined;
+        const connection = {
+            on: (
+                event: string,
+                handler: (message: {
+                    message: { Type: string; Content: string };
+                    sender: any;
+                }) => void,
+            ) => {
+                if (event === "Message") messageHandler = handler;
+            },
+        };
+        const dispatcher = {
+            executeCommand: async (
+                _actor: any,
+                commandLine: string,
+                isAdmin: boolean,
+            ) => {
+                dispatched = { commandLine, isAdmin };
+                return { success: true, message: "Door listed" };
+            },
+        };
+        const system = new KeypadDoorSystem(
+            connection as any,
+            {} as any,
+            { init: async () => {} } as any,
+            { init: async () => {} } as any,
+            dispatcher as any,
+            {} as any,
+        );
+
+        system.registerTriggers();
+        expect(messageHandler).toBeDefined();
+        messageHandler!({
+            message: { Type: "Whisper", Content: "!door door list" },
+            sender: {
+                MemberNumber: 1,
+                Name: "Admin",
+                IsRoomAdmin: () => true,
+            },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(dispatched?.commandLine).toBe("door list");
+        expect(dispatched?.isAdmin).toBe(true);
+        await system.shutdown();
+    });
 });

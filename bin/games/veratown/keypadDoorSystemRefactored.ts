@@ -109,8 +109,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Register triggers for this system (required by VeratownFeatureSystem)
      */
     registerTriggers(): void | Promise<void> {
-        // Triggers registered in constructor via guardHandler
-        // No additional registration needed
+        this.conn.on("Message", guardHandler(this.key, this.onMessage));
     }
 
     /**
