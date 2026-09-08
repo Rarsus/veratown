@@ -1,6 +1,6 @@
 # Deployment Troubleshooting Guide
 
-**Status:** Active reference  
+**Status:** Active reference
 **Updated:** September 8, 2026
 
 ## Bot cannot connect

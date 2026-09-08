@@ -1,6 +1,6 @@
 # Platform Rollback Procedure
 
-**Status:** Active operational contract  
+**Status:** Active operational contract
 **Updated:** September 8, 2026
 
 Rollback restores the last known-good application release while preserving

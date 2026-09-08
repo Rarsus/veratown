@@ -1,7 +1,7 @@
 # Phase 4 Go-Live Checklist
 
-**Status:** Active gate checklist  
-**Updated:** September 8, 2026  
+**Status:** Active gate checklist
+**Updated:** September 8, 2026
 **Prerequisite:** Phase 3 issue #31 must be approved before this checklist can
 be marked complete.
 
