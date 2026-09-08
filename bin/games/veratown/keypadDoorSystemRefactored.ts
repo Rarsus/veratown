@@ -30,6 +30,7 @@ import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
 import { KeypadLocationIntegration } from "./migrations/keypadLocationIntegration";
+import { KeypadBackwardCompatibility } from "./migrations/keypadBackwardCompatibility";
 import { KeypadDoorDefinitionDoc } from "./keypadTypes";
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
@@ -118,7 +119,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     async init(): Promise<void> {
         await this.definitionService.init();
         await this.accessService.init();
-        await this.reloadDoors();
+        await this.reloadLocations(await this.locationStore.getAllLocations());
     }
 
     /**
@@ -143,26 +144,38 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     /**
+     * Migrate legacy location-backed keypads before loading definitions.
+     */
+    async reloadLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        const migration = await this.locationIntegration.healOrphanedKeypads([
+            ...locations,
+        ]);
+        if (migration.failed > 0) {
+            this.logger.warn(
+                `Failed to migrate ${migration.failed} legacy keypad location(s)`,
+            );
+        }
+
+        await this.reloadDoors();
+
+        const errors = await this.locationIntegration.validateKeypadLocations([
+            ...locations,
+        ]);
+        if (errors.length > 0) {
+            this.logger.warn(`Keypad validation issues: ${errors.join(", ")}`);
+        }
+    }
+
+    /**
      * Handle location changes (create/update/delete)
      */
     private onLocationsChanged = async (
         locations: VeratownLocationDoc[],
     ): Promise<void> => {
         try {
-            // Update location integration (handles backward compat and auto-migration)
-            // Then reload doors
-            await this.reloadDoors();
-
-            // Validate orphaned keypads
-            const errors =
-                await this.locationIntegration.validateKeypadLocations(
-                    locations,
-                );
-            if (errors.length > 0) {
-                this.logger.warn(
-                    `Keypad validation issues: ${errors.join(", ")}`,
-                );
-            }
+            await this.reloadLocations(locations);
         } catch (error) {
             this.logger.error(
                 `Error handling location changes: ${error instanceof Error ? error.message : String(error)}`,
@@ -180,7 +193,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         if (location.type !== "keypad_door") return;
 
         // Get door definition
-        const doorKey = (location.data as any)?.doorKey;
+        const doorKey = this.getDoorKey(location);
         if (!doorKey) return; // No door reference in location
 
         const door = this.doors.get(doorKey);
@@ -231,7 +244,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     ): Promise<void> => {
         if (location.type !== "keypad_door") return;
 
-        const doorKey = (location.data as any)?.doorKey;
+        const doorKey = this.getDoorKey(location);
         if (!doorKey) return;
 
         const door = this.doors.get(doorKey);
@@ -249,6 +262,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             AUTO_OPEN_TRIGGER_DELAY_MS,
         );
     };
+
+    private getDoorKey(location: VeratownLocationDoc): string | undefined {
+        const referencedDoorKey = (location.data as any)?.doorKey;
+        if (referencedDoorKey) return referencedDoorKey;
+
+        return KeypadBackwardCompatibility.isLegacyKeypadLocation(location)
+            ? `auto_location_${location.key}`
+            : undefined;
+    }
 
     /**
      * Handle "code <code>" command for keypad access
