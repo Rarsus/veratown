@@ -84,6 +84,30 @@ Keypad tiles are stored in `keypadTiles` on the door definition. For multiple ke
 
 Do not create separate door definitions for keypad tiles that operate the same physical door. Use one `doorKey` and multiple `keypadTiles`.
 
+Update keypad locations from BC using compact JSON:
+
+```text
+!door update shop_entrance keypadTiles [{"X":20,"Y":36},{"X":20,"Y":38}]
+```
+
+The command removes duplicates and validates that every entry contains integer
+`X` and `Y` coordinates.
+
+Update auto-open locations the same way:
+
+```text
+!door update shop_entrance autoOpenTiles [{"X":21,"Y":36},{"X":21,"Y":38}]
+```
+
+The first auto-open tile is also kept in the legacy `autoOpenTile` field for
+backward compatibility.
+
+Update an inside/exit region with:
+
+```text
+!door update shop_entrance insideRegion {"TopLeft":{"X":19,"Y":35},"BottomRight":{"X":22,"Y":38}}
+```
+
 ## Configure Groups
 
 Create a group:
@@ -130,6 +154,8 @@ Confirm:
 - Auto-open coordinates are correct.
 - Locked and unlocked tiles are valid.
 - The door is enabled.
+- The full response includes keypad tiles, auto-open tiles, inside region,
+  description, creation time, and update time.
 
 ### 2. Test keypad access
 

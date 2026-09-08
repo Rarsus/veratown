@@ -170,6 +170,80 @@ describe("KeypadCommandHandlers", () => {
             expect(updated?.unlockDurationMs).toBe(15000);
         });
 
+        it("should update keypad and auto-open locations from JSON", async () => {
+            const door: KeypadDoorDefinitionDoc = {
+                _id: "door_locations",
+                doorKey: "door_locations",
+                doorX: 21,
+                doorY: 37,
+                lockedTile: "MetalDown",
+                unlockedTile: "SteelDoorOpen",
+                unlockDurationMs: 10000,
+                enabled: true,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            };
+            await definitionService.createDoor(door);
+
+            const keypadResult = await dispatcher.executeCommand(
+                mockAdmin as API_Character,
+                'door update door_locations keypadTiles [{"X":20,"Y":36},{"X":20,"Y":38}]',
+                true,
+            );
+            const autoOpenResult = await dispatcher.executeCommand(
+                mockAdmin as API_Character,
+                'door update door_locations autoOpenTiles [{"X":21,"Y":36}]',
+                true,
+            );
+
+            expect(keypadResult.success).toBe(true);
+            expect(autoOpenResult.success).toBe(true);
+            const updated =
+                await definitionService.getDoorDefinition("door_locations");
+            expect(updated?.keypadTiles).toEqual([
+                { X: 20, Y: 36 },
+                { X: 20, Y: 38 },
+            ]);
+            expect(updated?.autoOpenTiles).toEqual([{ X: 21, Y: 36 }]);
+            expect(updated?.autoOpenTile).toEqual({ X: 21, Y: 36 });
+        });
+
+        it("should include all door location fields in door info", async () => {
+            await definitionService.createDoor({
+                _id: "door_info",
+                doorKey: "door_info",
+                doorX: 21,
+                doorY: 37,
+                keypadTiles: [{ X: 20, Y: 36 }],
+                autoOpenTiles: [{ X: 21, Y: 36 }],
+                insideRegion: {
+                    TopLeft: { X: 19, Y: 35 },
+                    BottomRight: { X: 22, Y: 38 },
+                },
+                lockedTile: "MetalDown",
+                unlockedTile: "SteelDoorOpen",
+                unlockDurationMs: 5000,
+                enabled: true,
+                description: "Information test door",
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+
+            const result = await dispatcher.executeCommand(
+                mockAdmin as API_Character,
+                "door info door_info",
+                true,
+            );
+
+            expect(result.success).toBe(true);
+            expect(result.message).toContain("Keypad Tiles");
+            expect(result.message).toContain('"X":20');
+            expect(result.message).toContain("Auto-Open Tiles");
+            expect(result.message).toContain("Inside Region");
+            expect(result.message).toContain("Information test door");
+            expect(result.message).toContain("Updated:");
+        });
+
         it("should delete a door", async () => {
             const door: KeypadDoorDefinitionDoc = {
                 _id: "door3",
