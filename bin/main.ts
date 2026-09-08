@@ -297,6 +297,18 @@ export async function restartBotConnections(): Promise<void> {
             // Close existing game instance (if running Veratown)
             if (activeVeratownGame) {
                 logger.info("Closing active Veratown game instance");
+                const container = activeVeratownGame.getDIContainer();
+                if (
+                    container.has(
+                        DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                    )
+                ) {
+                    container
+                        .get<KidnappersGameLifecycleService>(
+                            DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                        )
+                        .shutdownAll();
+                }
                 activeVeratownGame = undefined;
             }
 
@@ -601,6 +613,30 @@ async function shutdown(): Promise<void> {
                 logger.info("Discord bot shut down successfully");
             } catch (error) {
                 logger.error("Error shutting down Discord bot", error, {});
+            }
+        }
+
+        if (activeVeratownGame) {
+            try {
+                const container = activeVeratownGame.getDIContainer();
+                if (
+                    container.has(
+                        DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                    )
+                ) {
+                    container
+                        .get<KidnappersGameLifecycleService>(
+                            DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
+                        )
+                        .shutdownAll();
+                    logger.info("KidnappersGameLifecycleService shut down");
+                }
+            } catch (error) {
+                logger.error(
+                    "Error shutting down KidnappersGameLifecycleService",
+                    error,
+                    {},
+                );
             }
         }
 
