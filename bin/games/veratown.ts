@@ -40,9 +40,13 @@ import { BedSystem } from "./veratown/bedSystem";
 import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
-import { KeypadDoorSystem } from "./veratown/keypadDoorSystem";
+import { KeypadDoorSystem } from "./veratown/keypadDoorSystemRefactored";
 import { CatDogSystem } from "./veratown/catDogSystem";
 import { FurnitureBondageSystem } from "./veratown/furnitureBondageSystem";
+import { KeypadDefinitionService } from "./veratown/services/keypadDefinitionService";
+import { KeypadAccessService } from "./veratown/services/keypadAccessService";
+import { KeypadCommandDispatcher } from "./veratown/handlers/keypadCommandDispatcher";
+import { KeypadLocationIntegration } from "./veratown/migrations/keypadLocationIntegration";
 import {
     VeratownFeatureSystem,
     getLifecycleObjectId,
@@ -473,19 +477,49 @@ export class Veratown {
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn),
         );
-        this.keypadDoorSystem = this.initFeature(() =>
-            this.container.has(DIServiceKeys.KEYPAD_DOOR_SYSTEM)
-                ? this.container.get<KeypadDoorSystem>(
-                      DIServiceKeys.KEYPAD_DOOR_SYSTEM,
-                  )
-                : new KeypadDoorSystem(
-                      this.conn,
-                      this.commandParser,
-                      this.locationStore,
-                      () => this.reloadLocations(),
-                      this.keypadAccessGroupManager,
-                  ),
-        );
+        this.keypadDoorSystem = this.initFeature(() => {
+            if (this.container.has(DIServiceKeys.KEYPAD_DOOR_SYSTEM)) {
+                return this.container.get<KeypadDoorSystem>(
+                    DIServiceKeys.KEYPAD_DOOR_SYSTEM,
+                );
+            }
+
+            if (!this.locationStore || !this.unifiedCharacterStore) {
+                throw new Error(
+                    "KeypadDoorSystem requires a database-backed location store",
+                );
+            }
+
+            const definitionService =
+                this.container.get<KeypadDefinitionService>(
+                    DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
+                );
+            const accessService = this.container.get<KeypadAccessService>(
+                DIServiceKeys.KEYPAD_ACCESS_SERVICE,
+            );
+            const system = new KeypadDoorSystem(
+                this.conn,
+                this.locationStore,
+                definitionService,
+                accessService,
+                new KeypadCommandDispatcher(
+                    definitionService,
+                    accessService,
+                    this.unifiedCharacterStore,
+                ),
+                new KeypadLocationIntegration(definitionService),
+                this.commandParser,
+            );
+            this.pendingFeatureRegistrations.push(
+                system.init().catch((error) => {
+                    logger.error(
+                        "Failed to initialize KeypadDoorSystem",
+                        error,
+                    );
+                }),
+            );
+            return system;
+        });
         this.catDogSystem = this.initFeature(
             () =>
                 new CatDogSystem(
