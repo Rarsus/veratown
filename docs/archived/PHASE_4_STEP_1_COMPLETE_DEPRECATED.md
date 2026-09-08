@@ -1,4 +1,8 @@
-# ✅ Phase 4 Step 1 Complete - unifiedCharacterStore.ts Updated
+# DEPRECATED: Phase 4 Step 1 Complete - unifiedCharacterStore.ts Updated
+
+> This historical completion report is preserved for traceability. It does
+> not establish current Phase 4 readiness; use [Implementation Status](../../IMPLEMENTATION_STATUS_2026_09_07.md)
+> and the [Phase 3 Integration Plan](../../PHASE_3_INTEGRATION_PLAN.md).
 
 **Date:** September 3, 2026  
 **File:** bin/games/shared/unifiedCharacterStore.ts  

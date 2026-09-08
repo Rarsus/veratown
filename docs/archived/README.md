@@ -16,6 +16,8 @@ Historical documentation from previous development phases and epics. These docum
 
 ### Phase Completion Reports
 
+- PHASE_4_INTEGRATION_GUIDE_DEPRECATED.md
+- PHASE_4_STEP_1_COMPLETE_DEPRECATED.md
 - PHASE1_COMPLETION_REPORT.md
 - PHASE2_ADAPTER_DEPLOYMENT.md
 - PHASE2_COMPLETION_STATUS.md
