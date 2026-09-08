@@ -20,6 +20,110 @@ import { VeratownLocationDoc } from "../../veratown/veratownLocationStore";
 import { KeypadDoorDefinitionDoc } from "../../veratown/keypadTypes";
 
 describe("KeypadDoorSystem (refactored)", () => {
+    it("registers keypad and auto-open triggers and relocks the door", async () => {
+        const tileTriggers: Array<{
+            x: number;
+            y: number;
+            callback: (character: any) => void;
+        }> = [];
+        const tileUpdates: string[] = [];
+        const map = {
+            addTileTrigger: (
+                position: { X: number; Y: number },
+                callback: (character: any) => void,
+            ) => {
+                tileTriggers.push({
+                    x: position.X,
+                    y: position.Y,
+                    callback,
+                });
+            },
+            removeTileTrigger: () => {},
+            setObject: (_position: { X: number; Y: number }, tile: string) => {
+                tileUpdates.push(tile);
+            },
+        };
+        const location: VeratownLocationDoc = {
+            key: "shop_entrance",
+            name: "Shop entrance",
+            type: "keypad_door",
+            x: 13,
+            y: 9,
+            data: { doorKey: "shop_entrance" },
+            enabled: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+        const door: KeypadDoorDefinitionDoc = {
+            _id: "shop_entrance",
+            doorKey: "shop_entrance",
+            doorX: 13,
+            doorY: 9,
+            lockedTile: "MetalDown",
+            unlockedTile: "SteelDoorOpen",
+            unlockDurationMs: 10,
+            autoOpenTile: { X: 13, Y: 8 },
+            enabled: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+        const definitionService = {
+            init: async () => {},
+            getAllDoorDefinitions: async () => [door],
+            getDoorDefinition: async (doorKey: string) =>
+                doorKey === door.doorKey ? door : null,
+        };
+        const connection = {
+            chatRoom: { map },
+            on: () => {},
+        };
+        const system = new KeypadDoorSystem(
+            connection as any,
+            {
+                getAllLocations: async () => [location],
+                on: () => {},
+                off: () => {},
+            } as any,
+            definitionService as any,
+            {
+                init: async () => {},
+                canAccessDoor: async () => true,
+            } as any,
+            {} as any,
+            new KeypadLocationIntegration(definitionService as any),
+        );
+
+        await system.init();
+
+        expect(tileTriggers.length).toBe(2);
+        expect(
+            tileTriggers.map((trigger) => `${trigger.x},${trigger.y}`).sort(),
+        ).toEqual(["13,8", "13,9"]);
+
+        const character = {
+            MemberNumber: 1,
+            Name: "Shopper",
+            MapPos: { X: 13, Y: 9 },
+            IsRoomAdmin: () => false,
+        };
+        tileTriggers
+            .find((trigger) => trigger.x === 13 && trigger.y === 9)!
+            .callback(character);
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(tileUpdates).toContain("SteelDoorOpen");
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        expect(tileUpdates.at(-1)).toBe("MetalDown");
+
+        tileTriggers
+            .find((trigger) => trigger.x === 13 && trigger.y === 8)!
+            .callback(character);
+        await new Promise((resolve) => setTimeout(resolve, 1025));
+        expect(tileUpdates).toContain("SteelDoorOpen");
+
+        await system.shutdown();
+    });
+
     it("migrates legacy locations before loading door definitions", async () => {
         const doors: KeypadDoorDefinitionDoc[] = [];
         const definitionService = {

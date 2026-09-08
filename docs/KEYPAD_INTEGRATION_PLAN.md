@@ -23,6 +23,12 @@ The refactored keypad system is active in `bin/games/veratown.ts`. Phase 2 migra
 
 ## Commands
 
+Create a door with one approach tile, for example `(13, 8)`:
+
+```text
+!door door create shop_entrance 13 9 MetalDown SteelDoorOpen 10000 13 8
+```
+
 ```bash
 pnpm migrate:keypad -- --dry-run
 pnpm migrate:keypad

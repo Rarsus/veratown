@@ -17,6 +17,7 @@ import {
     API_Character,
     API_Connector,
     API_Message,
+    API_Map,
     CommandParser,
 } from "bc-bot";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
@@ -71,10 +72,17 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         "KeypadDoorSystem.autoOpen",
     );
     private readonly logger = createLogger("KeypadDoorSystem");
-
-    // Handlers
-    private readonly keypadTrigger: ReturnType<typeof guardHandler>;
-    private readonly autoOpenTrigger: ReturnType<typeof guardHandler>;
+    private readonly tileTriggerBindings: Array<{
+        map: API_Map;
+        x: number;
+        y: number;
+        callback: (...args: any[]) => void;
+    }> = [];
+    private boundMap?: API_Map;
+    private boundRoom?: API_Connector["chatRoom"];
+    private locations: VeratownLocationDoc[] = [];
+    private messageTriggerRegistered = false;
+    private messageTrigger?: (...args: any[]) => void;
 
     constructor(
         private conn: API_Connector,
@@ -85,19 +93,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private locationIntegration: KeypadLocationIntegration,
         private commandParser?: CommandParser,
     ) {
-        this.keypadTrigger = guardHandler(this.key, ((
-            character: API_Character,
-            location: VeratownLocationDoc,
-        ) => {
-            this.onCharacterAtKeypad(character, location);
-        }) as any);
-        this.autoOpenTrigger = guardHandler(this.key, ((
-            character: API_Character,
-            location: VeratownLocationDoc,
-        ) => {
-            this.onCharacterAtAutoOpenTile(character, location);
-        }) as any);
-
         // Register code command with CommandParser
         this.commandParser?.register(
             "code",
@@ -109,7 +104,43 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Register triggers for this system (required by VeratownFeatureSystem)
      */
     registerTriggers(): void | Promise<void> {
-        this.conn.on("Message", guardHandler(this.key, this.onMessage));
+        this.attachToRoom();
+        if (!this.messageTriggerRegistered) {
+            this.messageTrigger = guardHandler(this.key, this.onMessage);
+            this.conn.on("Message", this.messageTrigger);
+            this.messageTriggerRegistered = true;
+        }
+    }
+
+    attachToRoom(): void {
+        const room = this.conn.chatRoom;
+        if (room && this.boundRoom === room && this.boundMap === room.map) {
+            this.registerMapTriggers();
+            return;
+        }
+
+        this.detachFromRoom();
+        if (!room) return;
+
+        this.boundRoom = room;
+        this.boundMap = room.map;
+        this.locationStore.on("locationChanged", this.onLocationsChanged);
+        this.registerMapTriggers();
+    }
+
+    detachFromRoom(): void {
+        this.unregisterMapTriggers();
+        (this.locationStore as any).off?.(
+            "locationChanged",
+            this.onLocationsChanged,
+        );
+        if (this.messageTrigger) {
+            (this.conn as any).off?.("Message", this.messageTrigger);
+        }
+        this.boundMap = undefined;
+        this.boundRoom = undefined;
+        this.messageTriggerRegistered = false;
+        this.messageTrigger = undefined;
     }
 
     /**
@@ -148,6 +179,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     async reloadLocations(
         locations: readonly VeratownLocationDoc[],
     ): Promise<void> {
+        this.locations = [...locations];
+        this.attachToRoom();
         const migration = await this.locationIntegration.healOrphanedKeypads([
             ...locations,
         ]);
@@ -158,6 +191,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         await this.reloadDoors();
+        this.registerMapTriggers();
 
         const errors = await this.locationIntegration.validateKeypadLocations([
             ...locations,
@@ -170,17 +204,80 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     /**
      * Handle location changes (create/update/delete)
      */
-    private onLocationsChanged = async (
-        locations: VeratownLocationDoc[],
-    ): Promise<void> => {
+    private onLocationsChanged = async (_changeType: string): Promise<void> => {
         try {
-            await this.reloadLocations(locations);
+            await this.reloadLocations(
+                await this.locationStore.getAllLocations(),
+            );
         } catch (error) {
             this.logger.error(
                 `Error handling location changes: ${error instanceof Error ? error.message : String(error)}`,
             );
         }
     };
+
+    private unregisterMapTriggers(): void {
+        for (const binding of this.tileTriggerBindings) {
+            binding.map.removeTileTrigger(
+                binding.x,
+                binding.y,
+                binding.callback,
+            );
+        }
+        this.tileTriggerBindings.length = 0;
+    }
+
+    private registerMapTriggers(): void {
+        const map = this.boundMap;
+        if (!map) return;
+
+        this.unregisterMapTriggers();
+        for (const location of this.locations) {
+            if (
+                location.type !== "keypad_door" ||
+                !location.enabled ||
+                location.x === undefined ||
+                location.y === undefined
+            ) {
+                continue;
+            }
+
+            const doorKey = this.getDoorKey(location);
+            const door = doorKey ? this.doors.get(doorKey) : undefined;
+            if (!door) continue;
+
+            const keypadCallback = guardHandler(
+                `${this.key}:keypad:${doorKey}`,
+                (character: API_Character) =>
+                    this.onCharacterAtKeypad(character, location),
+            );
+            map.addTileTrigger(
+                { X: location.x, Y: location.y },
+                keypadCallback,
+            );
+            this.tileTriggerBindings.push({
+                map,
+                x: location.x,
+                y: location.y,
+                callback: keypadCallback,
+            });
+
+            if (door.autoOpenTile) {
+                const autoOpenCallback = guardHandler(
+                    `${this.key}:auto-open:${doorKey}`,
+                    (character: API_Character) =>
+                        this.onCharacterAtAutoOpenTile(character, location),
+                );
+                map.addTileTrigger(door.autoOpenTile, autoOpenCallback);
+                this.tileTriggerBindings.push({
+                    map,
+                    x: door.autoOpenTile.X,
+                    y: door.autoOpenTile.Y,
+                    callback: autoOpenCallback,
+                });
+            }
+        }
+    }
 
     /**
      * Handle keypad tile interaction (character steps on keypad)
@@ -360,22 +457,24 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private unlockDoor(door: KeypadDoorDefinitionDoc): void {
         const timerId = door.doorKey;
 
-        // Note: setTile is not available on API_Connector
-        // Door state would typically be updated via location store
-        // this.conn.setTile(door.doorX, door.doorY, door.unlockedTile);
+        if (this.doorUnlockTimers.has(timerId)) return;
+        this.setDoorTile(door, door.unlockedTile);
 
         // Start unlock timer - re-lock when timer expires
         this.doorUnlockTimers.set(
             timerId,
             () => {
-                // Timer expired - lock the door
-                // this.conn.setTile(door.doorX, door.doorY, door.lockedTile);
+                this.setDoorTile(door, door.lockedTile);
                 this.logger.debug(
                     `Door ${door.doorKey} auto-locked after ${door.unlockDurationMs}ms`,
                 );
             },
             door.unlockDurationMs,
         );
+    }
+
+    private setDoorTile(door: KeypadDoorDefinitionDoc, tile: string): void {
+        this.boundMap?.setObject({ X: door.doorX, Y: door.doorY }, tile);
     }
 
     /**
@@ -425,6 +524,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Cleanup on system shutdown
      */
     async shutdown(): Promise<void> {
+        this.detachFromRoom();
         this.doorUnlockTimers.clearAll();
         this.notificationTimers.clearAll();
         this.autoOpenTimers.clearAll();

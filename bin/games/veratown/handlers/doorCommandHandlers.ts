@@ -20,7 +20,7 @@ import {
 import { KeypadDoorDefinitionDoc } from "../keypadTypes";
 
 /**
- * /bot door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [unlockDurationMs]
+ * /bot door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [unlockDurationMs] [autoOpenX autoOpenY]
  * Create a new door definition
  */
 export class CreateDoorHandler extends KeypadCommandHandler {
@@ -37,7 +37,7 @@ export class CreateDoorHandler extends KeypadCommandHandler {
             return {
                 valid: false,
                 message:
-                    "Usage: /bot door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [unlockDurationMs]",
+                    "Usage: /bot door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [unlockDurationMs] [autoOpenX autoOpenY]",
             };
         }
 
@@ -46,8 +46,22 @@ export class CreateDoorHandler extends KeypadCommandHandler {
         const duration = context.args[5]
             ? parseInt(context.args[5], 10)
             : 10000;
+        const autoOpenX = context.args[6]
+            ? parseInt(context.args[6], 10)
+            : undefined;
+        const autoOpenY = context.args[7]
+            ? parseInt(context.args[7], 10)
+            : undefined;
 
-        if (isNaN(x) || isNaN(y) || (context.args[5] && isNaN(duration))) {
+        if (
+            isNaN(x) ||
+            isNaN(y) ||
+            (context.args[5] && isNaN(duration)) ||
+            (context.args[6] && isNaN(autoOpenX!)) ||
+            (context.args[7] && isNaN(autoOpenY!)) ||
+            (context.args[6] && !context.args[7]) ||
+            (!context.args[6] && context.args[7])
+        ) {
             return { valid: false, message: "Invalid coordinates or duration" };
         }
 
@@ -65,6 +79,12 @@ export class CreateDoorHandler extends KeypadCommandHandler {
         const duration = context.args[5]
             ? parseInt(context.args[5], 10)
             : 10000;
+        const autoOpenX = context.args[6]
+            ? parseInt(context.args[6], 10)
+            : undefined;
+        const autoOpenY = context.args[7]
+            ? parseInt(context.args[7], 10)
+            : undefined;
 
         // Check if door already exists
         const existing =
@@ -85,6 +105,10 @@ export class CreateDoorHandler extends KeypadCommandHandler {
             lockedTile,
             unlockedTile,
             unlockDurationMs: duration,
+            autoOpenTile:
+                autoOpenX !== undefined && autoOpenY !== undefined
+                    ? { X: autoOpenX, Y: autoOpenY }
+                    : undefined,
             enabled: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),

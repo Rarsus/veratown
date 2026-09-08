@@ -105,6 +105,19 @@ describe("KeypadCommandHandlers", () => {
             expect(result.errorCode).toBe("PERMISSION_DENIED");
         });
 
+        it("should create a door with an auto-open tile", async () => {
+            const result = await dispatcher.executeCommand(
+                mockAdmin as API_Character,
+                "door create shop_entrance 13 9 MetalDown SteelDoorOpen 10000 13 8",
+                true,
+            );
+
+            expect(result.success).toBe(true);
+            const created =
+                await definitionService.getDoorDefinition("shop_entrance");
+            expect(created?.autoOpenTile).toEqual({ X: 13, Y: 8 });
+        });
+
         it("should list all doors", async () => {
             const door: KeypadDoorDefinitionDoc = {
                 _id: "door1",
