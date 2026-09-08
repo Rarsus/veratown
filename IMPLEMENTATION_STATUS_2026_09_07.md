@@ -85,3 +85,5 @@ the full repository gate.
 - [Original Hybrid Strategy Plan (deprecated archive)](docs/archived/HYBRID_STRATEGY_IMPLEMENTATION_PLAN_2026_09_04_DEPRECATED.md)
 - [Implementation Documentation](docs/IMPLEMENTATION/README.md)
 - [Archived Documentation](docs/archived/README.md)
+- [Phase 4 Go-Live Checklist](docs/DEPLOYMENT/PHASE_4_GO_LIVE_CHECKLIST.md)
+- [Platform Rollback Procedure](docs/DEPLOYMENT/PLATFORM_ROLLBACK_PROCEDURE.md)

@@ -7,6 +7,7 @@ Welcome to the Ropeybot documentation. Start here to find what you need.
 - **New to the project?** → Start with [Quick Start](QUICK_START.md)
 - **Setting up locally?** → See [Setup & Build](GUIDES/BUILD_SETUP.md)
 - **Want to deploy?** → Check [Deployment Options](DEPLOYMENT/)
+- **Preparing a release?** → Use the [Phase 4 Go-Live Checklist](DEPLOYMENT/PHASE_4_GO_LIVE_CHECKLIST.md)
 - **Need system details?** → Read [Architecture](ARCHITECTURE/)
 - **Developing a feature?** → Follow [Developer Guide](GUIDES/DEVELOPMENT.md)
 - **Checking implementation status?** → Read [Current Implementation Status](../IMPLEMENTATION_STATUS_2026_09_07.md)

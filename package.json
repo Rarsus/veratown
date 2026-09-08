@@ -12,6 +12,7 @@
         "performance:phase2a": "node --import tsx scripts/phase2a-performance.mjs",
         "test:phase2b": "node scripts/run-phase2b-tests.mjs",
         "test:phase2b:coverage": "node scripts/check-phase2b-coverage.mjs",
+        "phase4:readiness": "node scripts/validate-phase4-readiness.mjs",
         "performance:phase2b": "node --import tsx scripts/phase2b-performance.mjs",
         "prettier": "prettier --check .",
         "prettier:fix": "prettier -w .",
