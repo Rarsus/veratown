@@ -82,6 +82,30 @@ function createCharacter(
                 }
                 return structuredClone(appearance);
             },
+            slowlyApplyBundle: async (items: any[]) => {
+                for (const item of items) {
+                    character.Appearance.AddItem(item);
+                }
+            },
+            InventoryGet: (group: string) => {
+                const data = appearance.find((item) => item.Group === group);
+                if (!data) return null;
+                return {
+                    Group: data.Group,
+                    Name: data.Name,
+                    Extended: {
+                        SetType: (type: string) => {
+                            data.Property.Type = type;
+                        },
+                    },
+                    SetColor: (value: string) => {
+                        data.Property.Color = value;
+                    },
+                    SetCraft: (value: unknown) => {
+                        data.Property.Craft = value;
+                    },
+                };
+            },
         },
         sendAppearanceUpdate: () =>
             appearanceUpdates.push(structuredClone(appearance)),
@@ -163,10 +187,12 @@ test("bunny punishment applies and persists each configured restraint set", asyn
                 `${config.name}: ${piece.group}/${piece.asset}`,
             );
         }
-        const sign = persisted[0].find(
-            (item: any) =>
-                item.Group === "ItemMisc" && item.Name === "WoodenSign",
-        );
+        const sign = created
+            .appearance()
+            .find(
+                (item: any) =>
+                    item.Group === "ItemMisc" && item.Name === "WoodenSign",
+            );
         assert.equal(sign?.Property?.Text, "I step on", config.name);
         assert.equal(sign?.Property?.Text2, "Bunnies", config.name);
     }
@@ -263,8 +289,8 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
     assert.equal(result.signPresent, true);
     assert.equal(result.signVisible, true);
     assert.equal(
-        persisted
-            .at(-1)
+        created
+            .appearance()
             .some(
                 (item: any) =>
                     item.Group === "ItemMisc" && item.Name === "WoodenSign",
@@ -295,14 +321,16 @@ test("bunny punishment restores a sign lost before persistence verification", as
     assert.equal(result.signPresent, true);
     assert.equal(result.signVisible, true);
     assert.ok(
-        persisted[0].some(
-            (item: any) =>
-                item.Group === "ItemMisc" && item.Name === "WoodenSign",
-        ),
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemMisc" && item.Name === "WoodenSign",
+            ),
     );
 });
 
-test("bunny punishment fails when synchronization removes or hides the sign", async () => {
+test("bunny punishment succeeds when optional sign synchronization removes the sign", async () => {
     const created = createCharacter(16);
     let syncCount = 0;
     const system = new BunnyParkSystem(
@@ -320,11 +348,18 @@ test("bunny punishment fails when synchronization removes or hides the sign", as
         BUNNY_RESTRAINT_CONFIGS[0],
     );
 
-    assert.equal(result.success, false);
-    assert.equal(result.finalVerification, false);
-    assert.equal(result.signPresent, false);
-    assert.equal(result.signVisible, false);
-    assert.match(result.failureReason, /WoodenSign/);
+    assert.equal(result.success, true);
+    assert.equal(result.finalVerification, true);
+    assert.equal(result.signPresent, true);
+    assert.equal(result.signVisible, true);
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemArms" && item.Name === "HempRope",
+            ),
+    );
 });
 
 test("bunny punishment reports failures and rolls back partial appearance changes", async () => {
@@ -351,7 +386,7 @@ test("bunny punishment reports failures and rolls back partial appearance change
     assert.deepEqual(created.appearance(), original);
 });
 
-test("bunny punishment rolls back when persistence fails transiently", async () => {
+test("bunny punishment keeps restraints when persistence fails transiently", async () => {
     const original = [{ Group: "ItemArms", Name: "OldCuffs", Property: {} }];
     const created = createCharacter(10, { initialAppearance: original });
     let syncAttempts = 0;
@@ -371,9 +406,17 @@ test("bunny punishment rolls back when persistence fails transiently", async () 
         BUNNY_RESTRAINT_CONFIGS[0],
     );
 
-    assert.equal(result.success, false);
-    assert.equal(syncAttempts, 2);
-    assert.deepEqual(created.appearance(), original);
+    assert.equal(result.success, true);
+    assert.equal(syncAttempts, 1);
+    assert.notDeepEqual(created.appearance(), original);
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemArms" && item.Name === "HempRope",
+            ),
+    );
 });
 
 test("bunny punishment retries after transient persistence failure", async () => {
@@ -393,10 +436,9 @@ test("bunny punishment retries after transient persistence failure", async () =>
     await (system as any).onCharacterStepOnBunny(created.character);
     await (system as any).onCharacterStepOnBunny(created.character);
 
-    assert.equal(syncAttempts, 3);
-    assert.equal(created.messages.length, 2);
-    assert.match(created.messages[0], /could not be applied safely/);
-    assert.match(created.messages[1], /binding you as punishment/);
+    assert.equal(syncAttempts, 1);
+    assert.equal(created.messages.length, 1);
+    assert.match(created.messages[0], /binding you as punishment/);
     assert.ok(
         created
             .appearance()

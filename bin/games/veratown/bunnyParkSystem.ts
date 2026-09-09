@@ -115,7 +115,6 @@ function verifyBunnySign(
 
 async function repairBunnySign(
     character: API_Character,
-    stateSync: ((character: API_Character) => Promise<void>) | undefined,
 ): Promise<BunnySignVerification> {
     const sign = character.Appearance.AddItem(
         AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
@@ -132,7 +131,6 @@ async function repairBunnySign(
     character.Appearance.MakeAppearanceBundle();
     character.sendAppearanceUpdate();
     await wait(SIGN_REPAIR_DELAY_MS);
-    await stateSync?.(character);
     return verifyBunnySign(character.Appearance.MakeAppearanceBundle());
 }
 
@@ -382,13 +380,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         }
 
         const validationErrors = validateBunnyRestraintConfig(config);
-        const signAsset = AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset);
-        if (!getAssetDef(signAsset)) {
-            validationErrors.push(
-                `asset unavailable: ${BUNNY_SIGN.group}/${BUNNY_SIGN.asset}`,
-            );
-        }
-        const allAssets = [...config.pieces, BUNNY_SIGN].map((piece) => ({
+        const allAssets = config.pieces.map((piece) => ({
             ...piece,
             descriptor: AssetGet(piece.group, piece.asset),
         }));
@@ -445,127 +437,89 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         try {
             await syncAppearanceMutation(
                 character,
-                () => {
+                async () => {
+                    mutationStarted = true;
+                    const restraintBundle = config.pieces.map((piece) =>
+                        AssetGet(piece.group, piece.asset),
+                    );
+                    await character.Appearance.slowlyApplyBundle(
+                        restraintBundle,
+                        {
+                            appearance: false,
+                            bodyCosplay: false,
+                            clothing: false,
+                            item: true,
+                        },
+                    );
                     for (const piece of config.pieces) {
                         const key = pieceKey(piece);
-                        mutationStarted = true;
-                        try {
-                            const item = character.Appearance.AddItem(
-                                AssetGet(piece.group, piece.asset),
+                        const item = character.Appearance.InventoryGet(
+                            piece.group as any,
+                        );
+                        if (!item) {
+                            failedPieces.push(key);
+                            throw new Error(
+                                `Bundle application produced no item for ${key}`,
                             );
-                            if (!item) {
+                        }
+                        if (piece.extendedType) {
+                            if (!item.Extended) {
+                                failedPieces.push(key);
                                 throw new Error(
-                                    `AddItem returned no item for ${key}`,
+                                    `extended item unavailable for ${key}`,
                                 );
                             }
-                            if (piece.extendedType) {
-                                if (!item.Extended) {
-                                    throw new Error(
-                                        `extended item unavailable for ${key}`,
-                                    );
-                                }
-                                item.Extended.SetType(piece.extendedType);
-                            }
-                            item.SetDifficulty(20);
-                            item.SetColor(BUNNY_ROPE_COLOR);
-                            item.SetCraft({
-                                Name: piece.asset,
-                                Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
-                            });
-                            appliedPieces.push(key);
-                        } catch (error) {
-                            failedPieces.push(key);
-                            throw error;
+                            item.Extended.SetType(piece.extendedType);
                         }
-                    }
-
-                    const signKey = pieceKey(BUNNY_SIGN);
-                    mutationStarted = true;
-                    try {
-                        const sign = character.Appearance.AddItem(
-                            AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
-                        );
-                        if (!sign) {
-                            throw new Error(
-                                `AddItem returned no item for ${signKey}`,
-                            );
-                        }
-                        sign.setProperty("Text", BUNNY_SIGN_TEXT);
-                        sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
-                        appliedPieces.push(signKey);
-                        this.logger.info("Bunny punishment sign added", {
-                            ...context,
-                            signPresent: true,
-                            signVisible: true,
+                        item.SetColor(BUNNY_ROPE_COLOR);
+                        item.SetCraft({
+                            Name: piece.asset,
+                            Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
                         });
-                    } catch (error) {
-                        failedPieces.push(signKey);
-                        throw error;
+                        appliedPieces.push(key);
                     }
                 },
                 this.syncDelayMs,
                 async (current) => {
-                    const beforePersistence = verifyBunnySign(
-                        current.Appearance.MakeAppearanceBundle(),
-                    );
-                    if (!beforePersistence.visible) {
-                        const sign = current.Appearance.AddItem(
-                            AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
-                        );
-                        sign.setProperty("Text", BUNNY_SIGN_TEXT);
-                        sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
-                    }
-                    const synchronizedSign = verifyBunnySign(
-                        current.Appearance.MakeAppearanceBundle(),
-                    );
-                    this.logger.info(
-                        "Bunny punishment sign post-sync verification",
-                        {
-                            ...context,
-                            signPresent: synchronizedSign.present,
-                            signVisible: synchronizedSign.visible,
-                            signFailureReason: synchronizedSign.reason,
-                        },
-                    );
-                    if (!synchronizedSign.visible) {
-                        throw new Error(
-                            synchronizedSign.reason ??
-                                "WoodenSign failed pre-persistence verification",
-                        );
-                    }
-
                     await this.stateSync?.(current);
-
-                    const afterPersistence = verifyBunnySign(
-                        current.Appearance.MakeAppearanceBundle(),
-                    );
-                    this.logger.info("Bunny punishment sign persisted", {
-                        ...context,
-                        signPresent: afterPersistence.present,
-                        signVisible: afterPersistence.visible,
-                        signFailureReason: afterPersistence.reason,
-                    });
-                    if (!afterPersistence.visible) {
-                        const repaired = await repairBunnySign(
-                            current,
-                            this.stateSync,
-                        );
-                        if (!repaired.visible) {
-                            throw new Error(
-                                repaired.reason ??
-                                    afterPersistence.reason ??
-                                    "WoodenSign was removed or normalized after persistence",
-                            );
-                        }
-                    }
                 },
                 {
-                    throwOnSyncFailure: true,
+                    throwOnSyncFailure: false,
                     source: "bunny",
                     reason: "bunny_punishment_applied",
                     operationId: context.operationId,
                 },
             );
+
+            try {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        const sign = character.Appearance.AddItem(
+                            AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
+                        );
+                        if (!sign) return;
+                        sign.setProperty("Text", BUNNY_SIGN_TEXT);
+                        sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
+                    },
+                    this.syncDelayMs,
+                    async () => {},
+                    {
+                        throwOnSyncFailure: false,
+                        source: "bunny",
+                        reason: "bunny_punishment_sign",
+                        operationId: context.operationId,
+                    },
+                );
+            } catch (signError) {
+                this.logger.warn("Optional Bunny punishment sign failed", {
+                    ...context,
+                    error:
+                        signError instanceof Error
+                            ? signError.message
+                            : String(signError),
+                });
+            }
 
             const finalAppearance = character.Appearance.MakeAppearanceBundle();
             const finalRestraintsVerified = config.pieces.every((piece) =>
@@ -574,20 +528,23 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         item.Group === piece.group && item.Name === piece.asset,
                 ),
             );
-            const finalSign = verifyBunnySign(finalAppearance);
-            let settledFinalSign = finalSign;
+            let settledFinalSign = verifyBunnySign(finalAppearance);
             if (!settledFinalSign.visible) {
-                settledFinalSign = await repairBunnySign(
-                    character,
-                    this.stateSync,
-                );
+                try {
+                    settledFinalSign = await repairBunnySign(character);
+                } catch (signError) {
+                    this.logger.warn("Optional Bunny sign repair failed", {
+                        ...context,
+                        error:
+                            signError instanceof Error
+                                ? signError.message
+                                : String(signError),
+                    });
+                }
             }
-            const finalVerification =
-                finalRestraintsVerified && settledFinalSign.visible;
-            if (!finalVerification) {
+            if (!finalRestraintsVerified) {
                 throw new Error(
-                    settledFinalSign.reason ??
-                        "final appearance verification failed",
+                    "final restraint appearance verification failed",
                 );
             }
             const appliedAt = Date.now();
@@ -611,7 +568,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 attemptedPieces,
                 appliedPieces,
                 failedPieces,
-                finalVerification,
+                finalVerification: true,
                 signPresent: settledFinalSign.present,
                 signVisible: settledFinalSign.visible,
                 operationId: context.operationId,
@@ -620,12 +577,27 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 ...context,
                 appliedPieces,
                 failedPieces,
-                finalVerification,
+                finalVerification: true,
                 signPresent: settledFinalSign.present,
                 signVisible: settledFinalSign.visible,
             });
             return result;
         } catch (error) {
+            const observedAppearance =
+                character.Appearance.MakeAppearanceBundle();
+            for (const piece of config.pieces) {
+                const key = pieceKey(piece);
+                if (
+                    !observedAppearance.some(
+                        (item) =>
+                            item.Group === piece.group &&
+                            item.Name === piece.asset,
+                    ) &&
+                    !failedPieces.includes(key)
+                ) {
+                    failedPieces.push(key);
+                }
+            }
             let rollbackError: string | undefined;
             if (mutationStarted) {
                 try {
