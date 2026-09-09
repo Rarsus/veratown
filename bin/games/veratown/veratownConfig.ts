@@ -197,6 +197,8 @@ export interface BunnyRestraintPiece {
     // Optional Extended item "type" to select a specific tie (e.g.
     // "BoxTie", "Frogtie"). Leave undefined for items that don't have one.
     extendedType?: string;
+    // Optional lock applied after the item is equipped.
+    lockType?: "ExclusivePadlock";
 }
 
 // A full restraint "outfit": a named set of pieces applied together.
@@ -205,43 +207,23 @@ export interface BunnyRestraintConfig {
     pieces: BunnyRestraintPiece[];
 }
 
-// The possible punishments for stepping on a bunny. One of these is picked
-// at random each time someone steps on a bunny. Add, remove, or edit entries
-// here to change what restraints are used and how they're combined - see
-// bunny.md for the full list of asset/group/type options available.
+// The single universal punishment for stepping on a bunny. The HeavyYoke and
+// HeavySpreaderMetal are suitable for all character bodies; the WoodenSign
+// renders at the neck. Both restraints receive an exclusive padlock.
 export const BUNNY_RESTRAINT_CONFIGS: BunnyRestraintConfig[] = [
     {
-        name: "Classic Boxtie",
+        name: "Heavy Yoke and Neck Sign",
         pieces: [
-            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
-            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
-        ],
-    },
-    {
-        name: "Full Bunny Bind",
-        pieces: [
-            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
-            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
-            { group: "ItemFeet", asset: "HempRope" },
-            { group: "ItemPelvis", asset: "HempRope" },
-            { group: "ItemTorso", asset: "HempRopeHarness" },
-            { group: "ItemNeck", asset: "NeckRope" },
-        ],
-    },
-    {
-        name: "Collared and Hopping",
-        pieces: [
-            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
-            { group: "ItemFeet", asset: "HempRope" },
-            { group: "ItemNeck", asset: "NeckRope" },
-        ],
-    },
-    {
-        name: "Harnessed Thighs",
-        pieces: [
-            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
-            { group: "ItemPelvis", asset: "HempRope" },
-            { group: "ItemTorso", asset: "HempRopeHarness" },
+            {
+                group: "ItemArms",
+                asset: "HeavyYoke",
+                lockType: "ExclusivePadlock",
+            },
+            {
+                group: "ItemFeet",
+                asset: "HeavySpreaderMetal",
+                lockType: "ExclusivePadlock",
+            },
         ],
     },
 ];

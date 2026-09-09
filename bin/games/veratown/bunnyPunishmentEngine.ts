@@ -58,7 +58,13 @@ export function planBunnyPunishment(
         const current = currentByGroup.get(piece.group);
         if (!current) {
             missingPieces.push(piece);
-        } else if (current.Name === piece.asset) {
+        } else if (
+            current.Name === piece.asset &&
+            (!("lockType" in piece) ||
+                piece.lockType === undefined ||
+                (current.Property as { LockedBy?: string } | undefined)
+                    ?.LockedBy === piece.lockType)
+        ) {
             exactPieces.push(piece);
         } else {
             blockedPieces.push(piece);
@@ -80,9 +86,17 @@ export function hasBunnyPiece(
     appearance: readonly BunnyAppearanceItem[],
     piece: BunnyPunishmentPiece,
 ): boolean {
-    return appearance.some(
-        (item) => item.Group === piece.group && item.Name === piece.asset,
-    );
+    return appearance.some((item) => {
+        if (item.Group !== piece.group || item.Name !== piece.asset) {
+            return false;
+        }
+        return (
+            !("lockType" in piece) ||
+            piece.lockType === undefined ||
+            (item.Property as { LockedBy?: string } | undefined)?.LockedBy ===
+                piece.lockType
+        );
+    });
 }
 
 export function verifyBunnySign(

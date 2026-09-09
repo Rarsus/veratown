@@ -64,6 +64,11 @@ function createCharacter(
                     setProperty: (key: string, value: unknown) => {
                         data.Property[key] = value;
                     },
+                    lock: (lockType: string, lockedBy: number) => {
+                        data.Property.LockedBy = lockType;
+                        data.Property.LockMemberNumber = lockedBy;
+                        data.Property.Effect = ["Lock"];
+                    },
                 };
                 return item;
             },
@@ -114,6 +119,11 @@ function createCharacter(
                     },
                     setProperty: (key: string, value: unknown) => {
                         data.Property[key] = value;
+                    },
+                    lock: (lockType: string, lockedBy: number) => {
+                        data.Property.LockedBy = lockType;
+                        data.Property.LockMemberNumber = lockedBy;
+                        data.Property.Effect = ["Lock"];
                     },
                 };
             },
@@ -168,7 +178,7 @@ test("every bunny restraint configuration validates every asset and group", () =
     }
 });
 
-test("bunny punishment applies and persists each configured restraint set", async () => {
+test("bunny punishment applies the universal yoke, spreader, and neck sign", async () => {
     for (const [index, config] of BUNNY_RESTRAINT_CONFIGS.entries()) {
         const created = createCharacter(index + 1);
         const persisted: any[] = [];
@@ -204,6 +214,21 @@ test("bunny punishment applies and persists each configured restraint set", asyn
                 `${config.name}: ${piece.group}/${piece.asset}`,
             );
         }
+        const yoke = created
+            .appearance()
+            .find(
+                (item: any) =>
+                    item.Group === "ItemArms" && item.Name === "HeavyYoke",
+            );
+        assert.equal(yoke?.Property?.LockedBy, "ExclusivePadlock");
+        const spreader = created
+            .appearance()
+            .find(
+                (item: any) =>
+                    item.Group === "ItemFeet" &&
+                    item.Name === "HeavySpreaderMetal",
+            );
+        assert.equal(spreader?.Property?.LockedBy, "ExclusivePadlock");
         const sign = created
             .appearance()
             .find(
@@ -279,13 +304,16 @@ test("bunny punishment records a durable sign artifact", async () => {
     assert.equal(artifact.status, "active");
 });
 
-test("bunny punishment restores a sign omitted after ropes were retained", async () => {
-    const config = BUNNY_RESTRAINT_CONFIGS[1];
+test("bunny punishment restores a sign omitted after the yoke was retained", async () => {
+    const config = BUNNY_RESTRAINT_CONFIGS[0];
     const created = createCharacter(15, {
         initialAppearance: config.pieces.map((piece) => ({
             Group: piece.group,
             Name: piece.asset,
-            Property: {},
+            Property:
+                "lockType" in piece && piece.lockType
+                    ? { LockedBy: piece.lockType }
+                    : {},
         })),
     });
     const persisted: any[] = [];
@@ -294,7 +322,7 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
         async (character) => {
             persisted.push(character.Appearance.MakeAppearanceBundle());
         },
-        deterministicRandom(1),
+        deterministicRandom(0),
         0,
     );
 
@@ -320,7 +348,7 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
 });
 
 test("bunny punishment fails when the required sign is lost", async () => {
-    const created = createCharacter(17, { dropSignOnBundleCall: 8 });
+    const created = createCharacter(17, { dropSignOnBundleCall: 4 });
     const persisted: any[] = [];
     const system = new BunnyParkSystem(
         createMessageConnection(created.character) as any,
@@ -368,9 +396,9 @@ test("bunny punishment fails when required sign synchronization removes the sign
 });
 
 test("bunny punishment keeps successful pieces when one restraint fails", async () => {
-    const original = [{ Group: "ItemArms", Name: "OldCuffs", Property: {} }];
+    const original = [{ Group: "ItemHands", Name: "OldCuffs", Property: {} }];
     const created = createCharacter(9, {
-        failOn: "ItemLegs/HempRope",
+        failOn: "ItemArms/HeavyYoke",
         initialAppearance: original,
     });
     const system = new BunnyParkSystem(
@@ -387,17 +415,14 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
 
     assert.equal(result.success, false);
     assert.equal(result.status, "partial");
-    assert.deepEqual(result.failedPieces, [
-        "ItemArms/HempRope",
-        "ItemLegs/HempRope",
-    ]);
+    assert.deepEqual(result.failedPieces, ["ItemArms/HeavyYoke"]);
     assert.match(result.failureReason, /failed to add/);
     assert.ok(
         created
             .appearance()
             .some(
                 (item: any) =>
-                    item.Group === "ItemArms" && item.Name === "OldCuffs",
+                    item.Group === "ItemHands" && item.Name === "OldCuffs",
             ),
     );
     assert.ok(
@@ -413,7 +438,7 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
             .appearance()
             .some(
                 (item: any) =>
-                    item.Group === "ItemLegs" && item.Name === "HempRope",
+                    item.Group === "ItemArms" && item.Name === "HeavyYoke",
             ),
         false,
     );
@@ -421,7 +446,7 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
 
 test("bunny punishment continues when a restraint is silently omitted", async () => {
     const created = createCharacter(20, {
-        omitOn: "ItemLegs/HempRope",
+        omitOn: "ItemArms/HeavyYoke",
     });
     const system = new BunnyParkSystem(
         createMessageConnection(created.character) as any,
@@ -438,18 +463,10 @@ test("bunny punishment continues when a restraint is silently omitted", async ()
     assert.equal(result.success, false);
     assert.equal(result.status, "partial");
     assert.deepEqual(result.appliedPieces, [
-        "ItemArms/HempRope",
+        "ItemFeet/HeavySpreaderMetal",
         "ItemMisc/WoodenSign",
     ]);
-    assert.deepEqual(result.failedPieces, ["ItemLegs/HempRope"]);
-    assert.ok(
-        created
-            .appearance()
-            .some(
-                (item: any) =>
-                    item.Group === "ItemArms" && item.Name === "HempRope",
-            ),
-    );
+    assert.deepEqual(result.failedPieces, ["ItemArms/HeavyYoke"]);
     assert.ok(
         created
             .appearance()
@@ -487,7 +504,7 @@ test("bunny punishment keeps restraints when persistence fails transiently", asy
             .appearance()
             .some(
                 (item: any) =>
-                    item.Group === "ItemArms" && item.Name === "HempRope",
+                    item.Group === "ItemArms" && item.Name === "HeavyYoke",
             ),
     );
 });
@@ -518,7 +535,7 @@ test("bunny punishment retries after transient persistence failure", async () =>
             .appearance()
             .some(
                 (item: any) =>
-                    item.Group === "ItemArms" && item.Name === "HempRope",
+                    item.Group === "ItemArms" && item.Name === "HeavyYoke",
             ),
     );
 });
@@ -586,7 +603,7 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
 
     assert.equal(syncCount, 3);
     assert.equal(
-        created.added.filter((key) => key === "ItemArms/HempRope").length,
+        created.added.filter((key) => key === "ItemArms/HeavyYoke").length,
         1,
     );
     assert.equal(created.messages.length, 2);

@@ -357,9 +357,10 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                                 },
                             );
                             if (
-                                !hasBunnyPiece(
-                                    character.Appearance.MakeAppearanceBundle(),
-                                    piece,
+                                !character.Appearance.MakeAppearanceBundle().some(
+                                    (item) =>
+                                        item.Group === piece.group &&
+                                        item.Name === piece.asset,
                                 )
                             ) {
                                 throw new Error(
@@ -385,6 +386,19 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                                 Name: piece.asset,
                                 Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
                             });
+                            if ("lockType" in piece && piece.lockType) {
+                                if (typeof (item as any).lock !== "function") {
+                                    throw new Error(
+                                        `${key}: item lock API unavailable`,
+                                    );
+                                }
+                                (item as any).lock(
+                                    piece.lockType,
+                                    this.conn.Player?.MemberNumber ??
+                                        character.MemberNumber,
+                                    {},
+                                );
+                            }
                         } catch (error) {
                             pieceError =
                                 error instanceof Error
