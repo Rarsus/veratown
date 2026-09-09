@@ -35,12 +35,11 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
-import { wait } from "../../hub/utils";
+import type { GameStateMutationService } from "../shared/gameStateMutationService";
 
 const BUNNY_SIGN = { group: "ItemMisc", asset: "WoodenSign" } as const;
 const BUNNY_SIGN_TEXT = "I step on";
 const BUNNY_SIGN_TEXT2 = "Bunnies";
-const SIGN_REPAIR_DELAY_MS = 50;
 
 interface BunnySignVerification {
     present: boolean;
@@ -113,27 +112,6 @@ function verifyBunnySign(
     };
 }
 
-async function repairBunnySign(
-    character: API_Character,
-): Promise<BunnySignVerification> {
-    const sign = character.Appearance.AddItem(
-        AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
-    );
-    if (!sign) {
-        return {
-            present: false,
-            visible: false,
-            reason: "WoodenSign could not be re-added after synchronization",
-        };
-    }
-    sign.setProperty("Text", BUNNY_SIGN_TEXT);
-    sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
-    character.Appearance.MakeAppearanceBundle();
-    character.sendAppearanceUpdate();
-    await wait(SIGN_REPAIR_DELAY_MS);
-    return verifyBunnySign(character.Appearance.MakeAppearanceBundle());
-}
-
 export function validateBunnyRestraintConfig(
     config: BunnyRestraintConfig,
 ): string[] {
@@ -195,6 +173,10 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         private readonly recordPunishmentArtifact?: (
             artifact: BunnyPunishmentArtifact,
         ) => Promise<void>,
+        private readonly mutationService?: Pick<
+            GameStateMutationService,
+            "recordAuditEntry"
+        >,
     ) {
         super(conn, "bunnyPark", "Bunny park");
         this.bunnyTrigger = this.guardTileHandler(this.onCharacterStepOnBunny);
@@ -296,15 +278,13 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             }
 
             try {
+                this.messageSender.whisperToCharacter(
+                    character,
+                    "(Please do not step on the park's bunnies. You will be restrained as punishment.)",
+                );
                 const result = await this.applyPunishment(character, config);
                 if (result.skipped) return;
-                if (result.success) {
-                    this.messageSender.whisperToCharacter(
-                        character,
-                        "(You stepped on one of the park's bunnies! Rope seems to shoot out from nowhere, quickly " +
-                            "binding you as punishment for your carelessness...)",
-                    );
-                } else {
+                if (!result.success) {
                     this.messageSender.whisperToCharacter(
                         character,
                         "(The bunny punishment could not be applied safely. Please notify an operator.)",
@@ -439,9 +419,12 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 character,
                 async () => {
                     mutationStarted = true;
-                    const restraintBundle = config.pieces.map((piece) =>
-                        AssetGet(piece.group, piece.asset),
-                    );
+                    const restraintBundle = [
+                        ...config.pieces.map((piece) =>
+                            AssetGet(piece.group, piece.asset),
+                        ),
+                        AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
+                    ];
                     await character.Appearance.slowlyApplyBundle(
                         restraintBundle,
                         {
@@ -478,6 +461,18 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         });
                         appliedPieces.push(key);
                     }
+                    const sign = character.Appearance.InventoryGet(
+                        BUNNY_SIGN.group as any,
+                    );
+                    if (!sign) {
+                        failedPieces.push(pieceKey(BUNNY_SIGN));
+                        throw new Error(
+                            "Bundle application produced no WoodenSign",
+                        );
+                    }
+                    sign.setProperty("Text", BUNNY_SIGN_TEXT);
+                    sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
+                    appliedPieces.push(pieceKey(BUNNY_SIGN));
                 },
                 this.syncDelayMs,
                 async (current) => {
@@ -491,36 +486,6 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 },
             );
 
-            try {
-                await syncAppearanceMutation(
-                    character,
-                    () => {
-                        const sign = character.Appearance.AddItem(
-                            AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
-                        );
-                        if (!sign) return;
-                        sign.setProperty("Text", BUNNY_SIGN_TEXT);
-                        sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
-                    },
-                    this.syncDelayMs,
-                    async () => {},
-                    {
-                        throwOnSyncFailure: false,
-                        source: "bunny",
-                        reason: "bunny_punishment_sign",
-                        operationId: context.operationId,
-                    },
-                );
-            } catch (signError) {
-                this.logger.warn("Optional Bunny punishment sign failed", {
-                    ...context,
-                    error:
-                        signError instanceof Error
-                            ? signError.message
-                            : String(signError),
-                });
-            }
-
             const finalAppearance = character.Appearance.MakeAppearanceBundle();
             const finalRestraintsVerified = config.pieces.every((piece) =>
                 finalAppearance.some(
@@ -528,23 +493,13 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         item.Group === piece.group && item.Name === piece.asset,
                 ),
             );
-            let settledFinalSign = verifyBunnySign(finalAppearance);
-            if (!settledFinalSign.visible) {
-                try {
-                    settledFinalSign = await repairBunnySign(character);
-                } catch (signError) {
-                    this.logger.warn("Optional Bunny sign repair failed", {
-                        ...context,
-                        error:
-                            signError instanceof Error
-                                ? signError.message
-                                : String(signError),
-                    });
-                }
-            }
-            if (!finalRestraintsVerified) {
+            const finalSign = verifyBunnySign(finalAppearance);
+            if (!finalRestraintsVerified || !finalSign.visible) {
                 throw new Error(
-                    "final restraint appearance verification failed",
+                    !finalRestraintsVerified
+                        ? "final restraint appearance verification failed"
+                        : (finalSign.reason ??
+                              "final WoodenSign verification failed"),
                 );
             }
             const appliedAt = Date.now();
@@ -561,6 +516,33 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 cleanupPolicy: "explicit_cleanup_only",
                 status: "active",
             });
+            try {
+                await this.mutationService?.recordAuditEntry(
+                    character.MemberNumber,
+                    "bunny_punishment_applied",
+                    {
+                        operationId: context.operationId,
+                        configuration: config.name,
+                        restraintPieces: config.pieces.map(pieceKey),
+                        sign: {
+                            group: BUNNY_SIGN.group,
+                            asset: BUNNY_SIGN.asset,
+                            text: BUNNY_SIGN_TEXT,
+                            text2: BUNNY_SIGN_TEXT2,
+                        },
+                        appliedPieces,
+                    },
+                    character.MemberNumber,
+                );
+            } catch (auditError) {
+                this.logger.warn("Bunny punishment audit failed", {
+                    ...context,
+                    error:
+                        auditError instanceof Error
+                            ? auditError.message
+                            : String(auditError),
+                });
+            }
 
             const result: BunnyPunishmentResult = {
                 success: true,
@@ -569,8 +551,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification: true,
-                signPresent: settledFinalSign.present,
-                signVisible: settledFinalSign.visible,
+                signPresent: finalSign.present,
+                signVisible: finalSign.visible,
                 operationId: context.operationId,
             };
             this.logger.info("Bunny punishment applied", {
@@ -578,8 +560,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification: true,
-                signPresent: settledFinalSign.present,
-                signVisible: settledFinalSign.visible,
+                signPresent: finalSign.present,
+                signVisible: finalSign.visible,
             });
             return result;
         } catch (error) {

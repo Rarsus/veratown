@@ -104,6 +104,9 @@ function createCharacter(
                     SetCraft: (value: unknown) => {
                         data.Property.Craft = value;
                     },
+                    setProperty: (key: string, value: unknown) => {
+                        data.Property[key] = value;
+                    },
                 };
             },
         },
@@ -299,7 +302,7 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
     );
 });
 
-test("bunny punishment restores a sign lost before persistence verification", async () => {
+test("bunny punishment fails when the required sign is lost", async () => {
     const created = createCharacter(17, { dropSignOnBundleCall: 4 });
     const persisted: any[] = [];
     const system = new BunnyParkSystem(
@@ -316,21 +319,13 @@ test("bunny punishment restores a sign lost before persistence verification", as
         BUNNY_RESTRAINT_CONFIGS[0],
     );
 
-    assert.equal(result.success, true);
-    assert.equal(result.finalVerification, true);
-    assert.equal(result.signPresent, true);
-    assert.equal(result.signVisible, true);
-    assert.ok(
-        created
-            .appearance()
-            .some(
-                (item: any) =>
-                    item.Group === "ItemMisc" && item.Name === "WoodenSign",
-            ),
-    );
+    assert.equal(result.success, false);
+    assert.equal(result.finalVerification, false);
+    assert.equal(result.signPresent, false);
+    assert.equal(result.signVisible, false);
 });
 
-test("bunny punishment succeeds when optional sign synchronization removes the sign", async () => {
+test("bunny punishment fails when required sign synchronization removes the sign", async () => {
     const created = createCharacter(16);
     let syncCount = 0;
     const system = new BunnyParkSystem(
@@ -348,18 +343,10 @@ test("bunny punishment succeeds when optional sign synchronization removes the s
         BUNNY_RESTRAINT_CONFIGS[0],
     );
 
-    assert.equal(result.success, true);
-    assert.equal(result.finalVerification, true);
-    assert.equal(result.signPresent, true);
-    assert.equal(result.signVisible, true);
-    assert.ok(
-        created
-            .appearance()
-            .some(
-                (item: any) =>
-                    item.Group === "ItemArms" && item.Name === "HempRope",
-            ),
-    );
+    assert.equal(result.success, false);
+    assert.equal(result.finalVerification, false);
+    assert.equal(result.signPresent, false);
+    assert.equal(result.signVisible, false);
 });
 
 test("bunny punishment reports failures and rolls back partial appearance changes", async () => {
@@ -437,8 +424,9 @@ test("bunny punishment retries after transient persistence failure", async () =>
     await (system as any).onCharacterStepOnBunny(created.character);
 
     assert.equal(syncAttempts, 1);
-    assert.equal(created.messages.length, 1);
-    assert.match(created.messages[0], /binding you as punishment/);
+    assert.equal(created.messages.length, 2);
+    assert.match(created.messages[0], /Please do not step/);
+    assert.match(created.messages[1], /Please do not step/);
     assert.ok(
         created
             .appearance()
@@ -492,7 +480,7 @@ test("invalid bunny configuration fails before announcing punishment", async () 
     assert.deepEqual(created.messages, []);
 });
 
-test("duplicate bunny tile events do not reapply or reannounce punishment", async () => {
+test("duplicate bunny tile events do not reapply punishment", async () => {
     const created = createCharacter(12);
     const messages: string[] = [];
     let syncCount = 0;
@@ -513,9 +501,10 @@ test("duplicate bunny tile events do not reapply or reannounce punishment", asyn
         created.added.filter((key) => key === "ItemArms/HempRope").length,
         1,
     );
-    assert.equal(created.messages.length, 1);
+    assert.equal(created.messages.length, 2);
     messages.push(...created.messages);
-    assert.match(messages[0], /binding you as punishment/);
+    assert.match(messages[0], /Please do not step/);
+    assert.match(messages[1], /Please do not step/);
 });
 
 test("configured bunny locations trigger appearance and persistence updates", async () => {

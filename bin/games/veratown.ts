@@ -506,6 +506,13 @@ export class Veratown {
                         this.unifiedCharacterStore?.recordBunnyPunishmentArtifact(
                             artifact,
                         ) ?? Promise.resolve(),
+                    this.container.has(
+                        DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                    )
+                        ? this.container.get<GameStateMutationService>(
+                              DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                          )
+                        : undefined,
                 ),
         );
         this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
