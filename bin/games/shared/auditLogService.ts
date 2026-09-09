@@ -1,6 +1,26 @@
 import { Collection, Db } from "mongodb";
 import { AuditLogDocument } from "./unifiedCharacterTypes";
 
+export const AUDIT_RETENTION_DAYS = {
+    standard: 10,
+    security: 30,
+} as const;
+
+function getDefaultAuditExpiration(
+    retentionClass: RecordAuditLogInput["retentionClass"],
+): Date | undefined {
+    const retentionDays =
+        retentionClass === "standard"
+            ? AUDIT_RETENTION_DAYS.standard
+            : retentionClass === "security"
+              ? AUDIT_RETENTION_DAYS.security
+              : undefined;
+
+    return retentionDays === undefined
+        ? undefined
+        : new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
+}
+
 export interface RecordAuditLogInput {
     auditId: string;
     timestamp: number;
@@ -50,9 +70,13 @@ export class AuditLogService {
 
     async record(input: RecordAuditLogInput): Promise<string> {
         await this.init();
+        const retentionClass = input.retentionClass ?? "standard";
+        const expiresAt =
+            input.expiresAt ?? getDefaultAuditExpiration(retentionClass);
         const document: AuditLogDocument = {
             ...input,
-            retentionClass: input.retentionClass ?? "standard",
+            retentionClass,
+            ...(expiresAt ? { expiresAt } : {}),
         };
         await this.audits.updateOne(
             { auditId: document.auditId },

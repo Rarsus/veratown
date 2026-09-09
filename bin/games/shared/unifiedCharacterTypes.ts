@@ -423,6 +423,7 @@ export interface GameEvent {
     data: Record<string, unknown>;
     processed: boolean;
     processedBy?: ("casino" | "dare" | "veratown" | "kidnappers")[];
+    expiresAt?: Date;
     /** Stable identity used to deduplicate delivery across retries. */
     correlationId?: string;
     deliveryId?: string;

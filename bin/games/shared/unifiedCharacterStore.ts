@@ -76,6 +76,9 @@ import { releaseItemIdentity } from "../veratown/shared/releaseRemovalPolicy";
 import { AuditLogService } from "./auditLogService";
 import { randomUUID } from "node:crypto";
 
+export const GAME_EVENT_RETENTION_DAYS = 2;
+const GAME_EVENT_RETENTION_MS = GAME_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
 export function normalizeVeratownAuditLog(value: unknown): AuditLogEntry[] {
     if (!Array.isArray(value)) return [];
     return value.filter(
@@ -170,6 +173,14 @@ export class UnifiedCharacterStore {
 
         // Indexes for event queries
         await this.events.createIndex({ timestamp: -1 });
+        await this.events.createIndex(
+            { expiresAt: 1 },
+            {
+                expireAfterSeconds: 0,
+                sparse: true,
+                name: "game_event_retention",
+            },
+        );
         await this.events.createIndex({ target: 1, type: 1 });
         await this.events.createIndex({
             processed: 1,
@@ -774,7 +785,6 @@ export class UnifiedCharacterStore {
             processed: false,
         };
 
-        await this.recordEvent(event);
         await this.eventBus.publish(event);
     }
 
@@ -3261,7 +3271,14 @@ export class UnifiedCharacterStore {
         if (!event._id) {
             event._id = undefined; // Let MongoDB generate
         }
-        await this.events.insertOne(event);
+        const document =
+            event.processed && !event.expiresAt
+                ? {
+                      ...event,
+                      expiresAt: new Date(Date.now() + GAME_EVENT_RETENTION_MS),
+                  }
+                : event;
+        await this.events.insertOne(document);
     }
 
     /**
@@ -3300,6 +3317,9 @@ export class UnifiedCharacterStore {
             { _id: new ObjectId(eventId) },
             {
                 $addToSet: { processedBy: systemName },
+                $set: {
+                    expiresAt: new Date(Date.now() + GAME_EVENT_RETENTION_MS),
+                },
             },
         );
     }

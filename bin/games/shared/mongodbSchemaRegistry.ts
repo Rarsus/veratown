@@ -335,6 +335,10 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
             type: "array",
             description: "Systems that processed event",
         },
+        expiresAt: {
+            type: "timestamp",
+            description: "Automatic deletion time for processed events",
+        },
     },
 
     // ===== DARE GAMES (if separate collection)

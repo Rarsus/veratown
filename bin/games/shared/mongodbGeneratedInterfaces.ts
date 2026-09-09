@@ -167,6 +167,8 @@ export interface GameEvents {
     processed: boolean;
     /** Systems that processed event (MongoDB type: array) */
     processedBy?: unknown[];
+    /** Automatic deletion time for processed events (MongoDB type: date) */
+    expiresAt?: Date;
 }
 
 /**
