@@ -23,11 +23,7 @@ import { wait } from "../../hub/utils";
 import { durationString, remainingTimeString } from "../../utils";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { getLifecycleObjectId, guardHandler } from "./featureSystem";
-import {
-    CAGES,
-    CAGE_INFORMATION_SCREEN,
-    CRATE_LOCK_PASSWORD,
-} from "./veratownConfig";
+import { CAGES, CRATE_LOCK_PASSWORD } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
@@ -230,12 +226,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
     >();
     private readonly cageTrigger: ReturnType<typeof guardHandler>;
     private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
-    private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
     private boundRoom?: API_Chatroom;
     private boundMap?: API_Map;
     private boundCageTrigger?: (...args: any[]) => void;
     private boundCageEntryTrigger?: (...args: any[]) => void;
-    private boundCageInformationTrigger?: (...args: any[]) => void;
     private lastSuccessfulBindAt?: number;
     private lastSuccessfulReconciliationAt?: number;
 
@@ -252,10 +246,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
         this.cageEntryTrigger = this.guardTileHandler(
             this.onCharacterEnterCageEntry,
         );
-        this.cageInformationTrigger = guardHandler(
-            this.key,
-            this.onCharacterViewCageInformation as any,
-        );
     }
 
     public registerTriggers(): void {
@@ -264,26 +254,15 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     public attachToRoom(): void {
         const room = this.conn.chatRoom;
-        if (
-            room &&
-            this.boundRoom === room &&
-            this.boundMap === room.map &&
-            this.boundCageInformationTrigger
-        ) {
+        if (room && this.boundRoom === room && this.boundMap === room.map) {
             return;
         }
         this.detachFromRoom();
         if (!room) return;
 
         const map = room.map;
-        const informationTrigger = guardHandler(this.key, (...args: any[]) => {
-            if (this.boundRoom !== room || this.boundMap !== map) return;
-            this.cageInformationTrigger(...args);
-        });
         this.boundRoom = room;
         this.boundMap = map;
-        this.boundCageInformationTrigger = informationTrigger;
-        map.addEnterRegionTrigger(CAGE_INFORMATION_SCREEN, informationTrigger);
         this.lastSuccessfulBindAt = Date.now();
     }
 
@@ -297,12 +276,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
             return;
         }
         this.unregisterMapTriggers(map);
-        if (this.boundCageInformationTrigger) {
-            map.removeEnterRegionTrigger(this.boundCageInformationTrigger);
-        }
         this.boundRoom = undefined;
         this.boundMap = undefined;
-        this.boundCageInformationTrigger = undefined;
         this.triggersReady = false;
         this.recoveryReady = false;
         this.recoveryReadinessReason = "cage room or map is unavailable";
@@ -508,7 +483,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             tileTriggerCount:
                 (this.boundCageTrigger ? this.cagesByPos.size : 0) +
                 (this.boundCageEntryTrigger ? this.cageEntriesByPos.size : 0),
-            regionTriggerCount: this.boundCageInformationTrigger ? 1 : 0,
+            regionTriggerCount: 0,
             listenerBinding: {
                 roomBound: !!this.boundRoom,
                 mapBound: !!this.boundMap,
@@ -1111,12 +1086,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
         );
     }
 
-    private onCharacterViewCageInformation = async (
-        character: API_Character,
-    ) => {
+    public getOccupancyDisplay(): string {
         if (this.cagedCharacters.size === 0) {
-            character.Tell("Whisper", "All cages are currently empty.");
-            return;
+            return "All cages are currently empty.";
         }
 
         const info = Array.from(this.cagedCharacters.values())
@@ -1125,6 +1097,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
             })
             .join("\n");
 
-        character.Tell("Whisper", `Cage occupancy:\n${info}`);
-    };
+        return `Cage occupancy:\n${info}`;
+    }
 }

@@ -62,6 +62,11 @@ import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSyste
 import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
 import { DIContainer, DIServiceKeys } from "../di/container";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
+import {
+    BotHelpMonitorProvider,
+    CageOccupancyMonitorProvider,
+    LocationMonitorSystem,
+} from "./veratown/locationMonitorSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import { LiveCharacterStateSync } from "./veratown/liveCharacterStateSync";
 import {
@@ -204,6 +209,7 @@ export class Veratown {
     private furnitureInteractionSystem?: FurnitureInteractionSystem;
     private appearanceAuditTrail?: AppearanceAuditTrail;
     private locationEventSystem?: LocationEventSystem;
+    private locationMonitorSystem?: LocationMonitorSystem;
     private playerRoleSystem?: PlayerRoleSystem;
     private liveCharacterStateSync?: LiveCharacterStateSync;
     private unifiedCharacterStore?: UnifiedCharacterStore;
@@ -594,6 +600,17 @@ export class Veratown {
                     },
                 ),
         );
+        this.locationMonitorSystem = this.initFeature(
+            () =>
+                new LocationMonitorSystem(this.conn, [
+                    new CageOccupancyMonitorProvider(
+                        () =>
+                            this.cageSystem?.getOccupancyDisplay() ??
+                            "Cage information is currently unavailable.",
+                    ),
+                    new BotHelpMonitorProvider(() => Veratown.description),
+                ]),
+        );
 
         // Link ReleaseSystem to ShowerSystem for parole violation checking
         if (this.showerSystem && this.releaseSystem) {
@@ -756,6 +773,17 @@ export class Veratown {
                     : [];
 
                 if (this.locationStore) {
+                    const monitorLocationsChanged =
+                        await this.ensureLocationMonitorDefaults();
+                    if (monitorLocationsChanged) {
+                        this.locationSnapshot =
+                            await this.locationStore.reloadLocations(
+                                VERATOWN_LOCATIONS_FALLBACK,
+                            );
+                    }
+                }
+
+                if (this.locationStore) {
                     await this.regionManager.loadRegions(this.locationStore);
                     for (const [key, region] of FEATURE_REGIONS_STATIC) {
                         this.regionManager.addStaticRegion(region);
@@ -785,6 +813,50 @@ export class Veratown {
         })();
 
         return this.locationReload;
+    }
+
+    private async ensureLocationMonitorDefaults(): Promise<boolean> {
+        if (!this.locationStore) return false;
+
+        let changed = false;
+        const cageMonitor =
+            await this.locationStore.getLocation("cage_info_screen");
+        if (
+            cageMonitor &&
+            (cageMonitor.type === "cage_info_region" ||
+                cageMonitor.data?.displayKey !== "cage_occupancy")
+        ) {
+            await this.locationStore.updateLocation("cage_info_screen", {
+                type: "help_monitor",
+                data: {
+                    ...(cageMonitor.data ?? {}),
+                    displayKey: "cage_occupancy",
+                },
+            });
+            changed = true;
+        }
+
+        const helpMonitor =
+            await this.locationStore.getLocation("bot_help_monitor");
+        if (!helpMonitor) {
+            await this.locationStore.addLocation({
+                key: "bot_help_monitor",
+                name: "Bot Help Monitor",
+                type: "help_monitor",
+                x: 16,
+                y: 16,
+                data: {
+                    bottomRightX: 17,
+                    bottomRightY: 16,
+                    displayKey: "bot_help",
+                    cooldownMs: 3000,
+                },
+                enabled: true,
+            });
+            changed = true;
+        }
+
+        return changed;
     }
 
     public getStatus(): string {
@@ -941,6 +1013,7 @@ export class Veratown {
 
     private onBotDisconnected = () => {
         this.detachContainmentFeatures();
+        this.locationMonitorSystem?.detachFromRoom?.();
         this.setContainmentFeaturesEnabled(false);
         this.updateContainmentReadiness();
     };
