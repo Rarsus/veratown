@@ -43,6 +43,17 @@ The normal phase sequence is `lobby → night → resolving_night → day → vo
 and then `defense` or `resolving_day`, returning to `night` for the next round.
 `completed` and `aborted` are terminal.
 
+For private, range-independent commands use:
+
+```text
+/bot kg help
+/bot kg status
+```
+
+Sensitive Kidnappers commands are not processed from public room chat. The
+short `kg` alias uses the Hidden `/bot` transport and keeps role, target, and
+game-state information out of public map communication.
+
 ## Player commands
 
 All arguments shown in brackets are optional. A session argument can be omitted

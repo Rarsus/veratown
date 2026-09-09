@@ -730,6 +730,15 @@ export class Veratown {
                 );
             },
         );
+        this.commandParser.register("kg", async (sender, message, args) => {
+            const [command = "", ...commandArgs] = args;
+            await this.kidnappers?.processCommand(
+                sender,
+                message,
+                command,
+                commandArgs,
+            );
+        });
 
         // Register kennel commands (lock and escape)
         if (this.kennelSystem) {

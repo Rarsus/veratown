@@ -282,6 +282,9 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             conn,
             () => this.enabled && !this.lifecycleIsShutDown(),
             async (sender, message, command, args) => {
+                // Kidnappers commands may contain roles, targets, and game
+                // state. Never process or acknowledge public chat commands.
+                if (message.Type === "Chat") return;
                 const result = await this.dispatch(
                     sender,
                     [command, ...args],

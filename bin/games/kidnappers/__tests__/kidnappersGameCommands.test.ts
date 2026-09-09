@@ -178,11 +178,11 @@ describe("Kidnappers game commands", () => {
         assert.equal(phases.ok, true);
         assert.match(phases.message, /lobby.*night.*resolving_night/s);
 
-        await rootHandler!(character(30), {}, ["join"]);
+        await rootHandler!(character(30), { Type: "Hidden" }, ["join"]);
         assert.deepEqual(replies, []);
     });
 
-    test("whispers command results even when the command arrived as public chat", async () => {
+    test("does not process sensitive commands sent as public chat", async () => {
         const sent: Array<{
             type: string;
             message: string;
@@ -212,10 +212,7 @@ describe("Kidnappers game commands", () => {
 
         await rootHandler!(character(31), { Type: "Chat" }, ["help", "phases"]);
 
-        assert.equal(sent.length, 1);
-        assert.equal(sent[0].type, "Whisper");
-        assert.equal(sent[0].target, 31);
-        assert.match(sent[0].message, /Kidnappers phases/);
+        assert.deepEqual(sent, []);
     });
 
     test("routes the singular kidnapper alias through the same whisper path", async () => {
@@ -235,7 +232,7 @@ describe("Kidnappers game commands", () => {
 
         await controller.processCommand(
             character(32),
-            { Type: "Chat" } as any,
+            { Type: "Hidden" } as any,
             "help",
             ["overview"],
         );
