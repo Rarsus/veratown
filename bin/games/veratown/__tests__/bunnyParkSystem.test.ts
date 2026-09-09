@@ -29,6 +29,7 @@ function createCharacter(
             AddItem: (descriptor: any) => {
                 const key = `${descriptor.Group}/${descriptor.Name}`;
                 added.push(key);
+                if (options.omitOn === key) return null;
                 appearance = appearance.filter(
                     (item) => item.Group !== descriptor.Group,
                 );
@@ -126,16 +127,6 @@ function createCharacter(
                         data.Property.Effect = ["Lock"];
                     },
                 };
-            },
-            applyBundle: (items: any[]) => {
-                for (const item of items) {
-                    if (options.omitOn === `${item.Group}/${item.Name}`) {
-                        added.push(`${item.Group}/${item.Name}`);
-                        continue;
-                    }
-                    character.Appearance.AddItem(item);
-                }
-                return true;
             },
         },
         sendAppearanceUpdate: () =>
@@ -425,11 +416,7 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
 
     assert.equal(result.success, false);
     assert.equal(result.status, "partial");
-    assert.deepEqual(result.failedPieces, [
-        "ItemArms/HeavyYoke",
-        "ItemFeet/HeavySpreaderMetal",
-        "ItemMisc/WoodenSign",
-    ]);
+    assert.deepEqual(result.failedPieces, ["ItemArms/HeavyYoke"]);
     assert.match(result.failureReason, /failed to add/);
     assert.ok(
         created
@@ -439,14 +426,22 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
                     item.Group === "ItemHands" && item.Name === "OldCuffs",
             ),
     );
-    assert.equal(
+    assert.ok(
         created
             .appearance()
             .some(
                 (item: any) =>
                     item.Group === "ItemMisc" && item.Name === "WoodenSign",
             ),
-        false,
+    );
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemFeet" &&
+                    item.Name === "HeavySpreaderMetal",
+            ),
     );
     assert.equal(
         created

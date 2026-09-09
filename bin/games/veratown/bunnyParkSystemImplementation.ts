@@ -360,36 +360,19 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     character,
                     async () => {
                         const configurationErrors: string[] = [];
-                        try {
-                            character.Appearance.applyBundle(
-                                missingPieces.map((piece) =>
-                                    AssetGet(piece.group, piece.asset),
-                                ),
-                                {
-                                    appearance: false,
-                                    bodyCosplay: false,
-                                    clothing: false,
-                                    item: true,
-                                },
-                                [],
-                                false,
-                            );
-                        } catch (error) {
-                            bundleError =
-                                error instanceof Error
-                                    ? error.message
-                                    : String(error);
-                            return;
-                        }
                         for (const piece of piecesToConfigure) {
                             const key = bunnyPieceKey(piece);
                             try {
-                                const item = character.Appearance.InventoryGet(
-                                    piece.group as any,
-                                );
+                                const item = missingPieces.includes(piece)
+                                    ? character.Appearance.AddItem(
+                                          AssetGet(piece.group, piece.asset),
+                                      )
+                                    : character.Appearance.InventoryGet(
+                                          piece.group as any,
+                                      );
                                 if (!item)
                                     throw new Error(
-                                        `${key}: disappeared before configuration`,
+                                        `${key}: item was not returned after application`,
                                     );
                                 if (
                                     piece.group === BUNNY_SIGN.group &&
