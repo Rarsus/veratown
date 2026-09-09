@@ -57,6 +57,8 @@ export interface BotRecoveryStatus {
 
 const RECOVERY_BACKOFF_MS = [0, 100, 250] as const;
 const POSITION_VERIFICATION_BACKOFF_MS = [0, 100, 250] as const;
+const STARTUP_READINESS_POLL_MS = 100;
+const STARTUP_QUIET_PERIOD_MS = 2000;
 
 const recoveryStatuses = new WeakMap<API_Connector, BotRecoveryStatus>();
 const recoverySupervisors = new WeakMap<API_Connector, () => void>();
@@ -463,22 +465,30 @@ async function connectBotAccount(
  */
 export async function waitForConnectionStability(
     connection: API_Connector,
-    maxWaitMs: number = 5000,
+    maxWaitMs: number = 15000,
     signal?: AbortSignal,
+    quietPeriodMs: number = STARTUP_QUIET_PERIOD_MS,
 ): Promise<void> {
     const logger = createLogger("BotConnection");
     const botName = connection.Player?.Name || "<unknown>";
-
-    if (connection.isConnected()) {
-        logger.debug("Connection stable", { bot: botName });
-        return;
-    }
+    const roomAware = "chatRoom" in (connection as object);
+    const eventConnection = connection as API_Connector & {
+        on?: (...args: any[]) => void;
+        off?: (...args: any[]) => void;
+    };
 
     await new Promise<void>((resolve, reject) => {
         let settled = false;
+        let quietTimer: ReturnType<typeof setTimeout> | undefined;
+        let readinessPoll: ReturnType<typeof setInterval> | undefined;
         const cleanup = () => {
             clearTimeout(timeout);
-            connection.off("Connected", onConnected);
+            if (quietTimer) clearTimeout(quietTimer);
+            if (readinessPoll) clearInterval(readinessPoll);
+            eventConnection.off?.("Connected", onConnected);
+            eventConnection.off?.("RoomJoin", onReadinessSignal);
+            eventConnection.off?.("RoomUpdate", onReadinessSignal);
+            eventConnection.off?.("Disconnected", onDisconnected);
             signal?.removeEventListener("abort", onAbort);
         };
         const settle = (callback: () => void) => {
@@ -487,9 +497,52 @@ export async function waitForConnectionStability(
             cleanup();
             callback();
         };
-        const onConnected = () => {
-            logger.debug("Connection stable", { bot: botName });
-            settle(resolve);
+        const isReady = (): boolean => {
+            if (!connection.isConnected()) return false;
+            if (!roomAware) return true;
+            const room = connection.chatRoom;
+            return Boolean(
+                room?.map && room.findMember(connection.Player.MemberNumber),
+            );
+        };
+        const scheduleQuietPeriod = () => {
+            if (!isReady() || quietTimer) return;
+            logger.debug("Connection readiness verified; settling", {
+                bot: botName,
+                quietPeriodMs,
+                roomAware,
+                roomName: connection.chatRoom?.Name,
+                mapReady: Boolean(connection.chatRoom?.map),
+            });
+            quietTimer = setTimeout(
+                () => {
+                    if (isReady()) {
+                        logger.info("Connection stable", {
+                            bot: botName,
+                            roomName: connection.chatRoom?.Name,
+                            quietPeriodMs,
+                        });
+                        settle(resolve);
+                    } else {
+                        quietTimer = undefined;
+                    }
+                },
+                roomAware ? quietPeriodMs : 0,
+            );
+        };
+        const onConnected = () => scheduleQuietPeriod();
+        const onReadinessSignal = () => {
+            if (quietTimer && !isReady()) {
+                clearTimeout(quietTimer);
+                quietTimer = undefined;
+            }
+            scheduleQuietPeriod();
+        };
+        const onDisconnected = () => {
+            if (quietTimer) {
+                clearTimeout(quietTimer);
+                quietTimer = undefined;
+            }
         };
         const onAbort = () =>
             settle(() =>
@@ -502,19 +555,45 @@ export async function waitForConnectionStability(
         const timeout = setTimeout(
             () =>
                 settle(() => {
-                    logger.warn(
-                        "Connection did not stabilize in time, proceeding anyway",
-                        { bot: botName, maxWaitMs },
+                    const error = new Error(
+                        `Connection did not reach room/map readiness within ${maxWaitMs}ms`,
                     );
-                    resolve();
+                    if (roomAware) {
+                        logger.error("Connection readiness failed", error, {
+                            bot: botName,
+                            maxWaitMs,
+                            roomName: connection.chatRoom?.Name,
+                            mapReady: Boolean(connection.chatRoom?.map),
+                        });
+                        reject(error);
+                    } else {
+                        logger.warn(
+                            "Connection did not stabilize in time; transport-only fallback is allowed for a non-room connector",
+                            { bot: botName, maxWaitMs },
+                        );
+                        resolve();
+                    }
                 }),
             maxWaitMs,
         );
 
-        connection.once("Connected", onConnected);
+        if (typeof eventConnection.once === "function") {
+            eventConnection.once("Connected", onConnected);
+        } else {
+            eventConnection.on?.("Connected", onConnected);
+        }
+        eventConnection.on?.("RoomJoin", onReadinessSignal);
+        eventConnection.on?.("RoomUpdate", onReadinessSignal);
+        eventConnection.on?.("Disconnected", onDisconnected);
+        if (roomAware) {
+            readinessPoll = setInterval(
+                onReadinessSignal,
+                STARTUP_READINESS_POLL_MS,
+            );
+        }
         signal?.addEventListener("abort", onAbort, { once: true });
         if (signal?.aborted) onAbort();
-        else if (connection.isConnected()) onConnected();
+        else onConnected();
     });
 }
 

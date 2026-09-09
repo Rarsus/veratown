@@ -21,17 +21,11 @@ import {
     CommandParser,
 } from "bc-bot";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
-import {
-    VeratownLocationDoc,
-    VeratownLocationStore,
-} from "./veratownLocationStore";
 import { TimerManager } from "./shared/timerManager";
 import { createLogger } from "../../logging";
 import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
-import { KeypadLocationIntegration } from "./migrations/keypadLocationIntegration";
-import { KeypadBackwardCompatibility } from "./migrations/keypadBackwardCompatibility";
 import { KeypadDoorDefinitionDoc } from "./keypadTypes";
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
@@ -54,7 +48,7 @@ const AUTO_OPEN_TRIGGER_DELAY_MS = 1000;
  * 3. Manage door unlock timers
  * 4. Delegate admin commands to dispatcher
  *
- * @CROSS-SYSTEM Integrates with location changes via KeypadLocationIntegration
+ * Door definitions are the authoritative source for all map triggers.
  */
 export class KeypadDoorSystem implements VeratownFeatureSystem {
     public readonly key = "keypadDoor";
@@ -80,23 +74,24 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }> = [];
     private boundMap?: API_Map;
     private boundRoom?: API_Connector["chatRoom"];
-    private locations: VeratownLocationDoc[] = [];
     private messageTriggerRegistered = false;
     private messageTrigger?: (...args: any[]) => void;
 
     constructor(
         private conn: API_Connector,
-        private locationStore: VeratownLocationStore,
         private definitionService: KeypadDefinitionService,
         private accessService: KeypadAccessService,
         private commandDispatcher: KeypadCommandDispatcher,
-        private locationIntegration: KeypadLocationIntegration,
         private commandParser?: CommandParser,
     ) {
         // Register code command with CommandParser
         this.commandParser?.register(
             "code",
             guardHandler(`${this.key}:code-parser`, this.onCodeCommandParser),
+        );
+        this.commandParser?.register(
+            "door",
+            guardHandler(`${this.key}:door-parser`, this.onDoorCommandParser),
         );
     }
 
@@ -124,16 +119,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         this.boundRoom = room;
         this.boundMap = room.map;
-        this.locationStore.on("locationChanged", this.onLocationsChanged);
+        this.definitionService.on("doorChanged", this.onDoorChanged);
         this.registerMapTriggers();
     }
 
     detachFromRoom(): void {
         this.unregisterMapTriggers();
-        (this.locationStore as any).off?.(
-            "locationChanged",
-            this.onLocationsChanged,
-        );
+        this.definitionService.off("doorChanged", this.onDoorChanged);
         if (this.messageTrigger) {
             (this.conn as any).off?.("Message", this.messageTrigger);
         }
@@ -149,7 +141,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     async init(): Promise<void> {
         await this.definitionService.init();
         await this.accessService.init();
-        await this.reloadLocations(await this.locationStore.getAllLocations());
+        await this.reloadDoors();
+        this.attachToRoom();
     }
 
     /**
@@ -173,47 +166,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
     }
 
-    /**
-     * Migrate legacy location-backed keypads before loading definitions.
-     */
-    async reloadLocations(
-        locations: readonly VeratownLocationDoc[],
-    ): Promise<void> {
-        this.locations = [...locations];
-        this.attachToRoom();
-        const migration = await this.locationIntegration.healOrphanedKeypads([
-            ...locations,
-        ]);
-        if (migration.failed > 0) {
-            this.logger.warn(
-                `Failed to migrate ${migration.failed} legacy keypad location(s)`,
-            );
-        }
-
+    private onDoorChanged = async (): Promise<void> => {
         await this.reloadDoors();
         this.registerMapTriggers();
-
-        const errors = await this.locationIntegration.validateKeypadLocations([
-            ...locations,
-        ]);
-        if (errors.length > 0) {
-            this.logger.warn(`Keypad validation issues: ${errors.join(", ")}`);
-        }
-    }
-
-    /**
-     * Handle location changes (create/update/delete)
-     */
-    private onLocationsChanged = async (_changeType: string): Promise<void> => {
-        try {
-            await this.reloadLocations(
-                await this.locationStore.getAllLocations(),
-            );
-        } catch (error) {
-            this.logger.error(
-                `Error handling location changes: ${error instanceof Error ? error.message : String(error)}`,
-            );
-        }
     };
 
     private unregisterMapTriggers(): void {
@@ -233,19 +188,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         this.unregisterMapTriggers();
         for (const door of this.doors.values()) {
-            const linkedLocations = this.locations.filter(
-                (location) =>
-                    location.type === "keypad_door" &&
-                    location.enabled &&
-                    this.getDoorKey(location) === door.doorKey,
-            );
             const keypadTiles = this.uniquePositions([
                 ...(door.keypadTiles ?? []),
-                ...linkedLocations.flatMap((location) =>
-                    location.x !== undefined && location.y !== undefined
-                        ? [{ X: location.x, Y: location.y }]
-                        : [],
-                ),
             ]);
             const autoOpenTiles = this.uniquePositions([
                 ...(door.autoOpenTiles ?? []),
@@ -253,16 +197,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             ]);
 
             for (const position of keypadTiles) {
-                const location =
-                    linkedLocations.find(
-                        (candidate) =>
-                            candidate.x === position.X &&
-                            candidate.y === position.Y,
-                    ) ?? this.createSyntheticKeypadLocation(door, position);
                 const keypadCallback = guardHandler(
                     `${this.key}:keypad:${door.doorKey}:${position.X}:${position.Y}`,
                     (character: API_Character) =>
-                        this.onCharacterAtKeypad(character, location),
+                        this.onCharacterAtKeypad(character, door),
                 );
                 map.addTileTrigger(position, keypadCallback);
                 this.tileTriggerBindings.push({
@@ -274,13 +212,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             }
 
             for (const position of autoOpenTiles) {
-                const location =
-                    linkedLocations[0] ??
-                    this.createSyntheticKeypadLocation(door, position);
                 const autoOpenCallback = guardHandler(
                     `${this.key}:auto-open:${door.doorKey}:${position.X}:${position.Y}`,
                     (character: API_Character) =>
-                        this.onCharacterAtAutoOpenTile(character, location),
+                        this.onCharacterAtAutoOpenTile(character, door),
                 );
                 map.addTileTrigger(position, autoOpenCallback);
                 this.tileTriggerBindings.push({
@@ -305,44 +240,14 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         });
     }
 
-    private createSyntheticKeypadLocation(
-        door: KeypadDoorDefinitionDoc,
-        position: { X: number; Y: number },
-    ): VeratownLocationDoc {
-        return {
-            key: `${door.doorKey}:tile:${position.X}:${position.Y}`,
-            name: door.description ?? door.doorKey,
-            type: "keypad_door",
-            x: position.X,
-            y: position.Y,
-            data: { doorKey: door.doorKey },
-            enabled: door.enabled,
-            createdAt: door.createdAt,
-            updatedAt: door.updatedAt,
-        };
-    }
-
     /**
      * Handle keypad tile interaction (character steps on keypad)
      */
     private onCharacterAtKeypad = async (
         character: API_Character,
-        location: VeratownLocationDoc,
+        door: KeypadDoorDefinitionDoc,
     ): Promise<void> => {
-        if (location.type !== "keypad_door") return;
-
-        // Get door definition
-        const doorKey = this.getDoorKey(location);
-        if (!doorKey) return; // No door reference in location
-
-        const door = this.doors.get(doorKey);
-        if (!door) {
-            this.sendNotification(
-                character,
-                "The door appears to be malfunctioning.",
-            );
-            return;
-        }
+        const doorKey = door.doorKey;
 
         // Check if already unlocked
         if (this.doorUnlockTimers.has(doorKey)) {
@@ -379,15 +284,9 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     private onCharacterAtAutoOpenTile = async (
         character: API_Character,
-        location: VeratownLocationDoc,
+        door: KeypadDoorDefinitionDoc,
     ): Promise<void> => {
-        if (location.type !== "keypad_door") return;
-
-        const doorKey = this.getDoorKey(location);
-        if (!doorKey) return;
-
-        const door = this.doors.get(doorKey);
-        if (!door) return;
+        const doorKey = door.doorKey;
 
         // Prevent spam
         const timerId = `auto_open_${doorKey}`;
@@ -401,15 +300,6 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             AUTO_OPEN_TRIGGER_DELAY_MS,
         );
     };
-
-    private getDoorKey(location: VeratownLocationDoc): string | undefined {
-        const referencedDoorKey = (location.data as any)?.doorKey;
-        if (referencedDoorKey) return referencedDoorKey;
-
-        return KeypadBackwardCompatibility.isLegacyKeypadLocation(location)
-            ? `auto_location_${location.key}`
-            : undefined;
-    }
 
     /**
      * Handle "code <code>" command for keypad access
@@ -455,18 +345,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         y: number,
     ): KeypadDoorDefinitionDoc | undefined {
         for (const door of this.doors.values()) {
-            const keypadTiles = [
-                ...(door.keypadTiles ?? []),
-                ...this.locations.flatMap((location) =>
-                    location.type === "keypad_door" &&
-                    location.enabled &&
-                    this.getDoorKey(location) === door.doorKey &&
-                    location.x !== undefined &&
-                    location.y !== undefined
-                        ? [{ X: location.x, Y: location.y }]
-                        : [],
-                ),
-            ];
+            const keypadTiles = [...(door.keypadTiles ?? [])];
             if (
                 keypadTiles.some(
                     (position) => position.X === x && position.Y === y,
@@ -487,14 +366,26 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         character: API_Character,
         args: string,
     ): Promise<boolean> => {
+        if (!args.trim() || args.trim().toLowerCase() === "help") {
+            this.sendNotification(
+                character,
+                this.commandDispatcher.getHelpText(),
+            );
+            return true;
+        }
+
         if (!character.IsRoomAdmin()) {
+            this.sendNotification(
+                character,
+                "Permission denied. Door management commands require room administrator access. Use !door help for usage.",
+            );
             return false;
         }
 
         try {
             const result = await this.commandDispatcher.executeCommand(
                 character,
-                args,
+                this.normalizeDoorCommand(args),
                 true,
             );
 
@@ -513,11 +404,31 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
     };
 
+    private normalizeDoorCommand(args: string): string {
+        const parts = args.trim().split(/\s+/);
+        if (parts.length > 0 && parts[0] === "help") return "help";
+        if (
+            parts.length > 0 &&
+            ["create", "update", "delete", "list", "info"].includes(parts[0])
+        ) {
+            return `door ${args.trim()}`;
+        }
+        return args.trim();
+    }
+
     /**
      * Handle /code command via CommandParser
      */
     private onCodeCommandParser = async (): Promise<void> => {
         // CommandParser handles this, we just need to be registered
+    };
+
+    private onDoorCommandParser = async (
+        character: API_Character,
+        _message: unknown,
+        args: string[],
+    ): Promise<void> => {
+        await this.onAdminMessage(character, args.join(" "));
     };
 
     /**
@@ -563,7 +474,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
 
-        // Log notification instead of sending (sendNotification doesn't exist on API_Connector)
+        this.conn.SendMessage("Whisper", message, character.MemberNumber);
         this.logger.info(`Notification to ${character.Name}: ${message}`);
     }
 
@@ -571,13 +482,14 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Main message handler
      */
     private onMessage = async (message: API_Message): Promise<void> => {
-        const content = message.message.Content.toLowerCase();
+        const rawContent = message.message.Content.trim();
+        const content = rawContent.toLowerCase();
         const character = message.sender;
 
         // Handle whispered admin commands
         if (message.message.Type === "Whisper") {
-            if (content.startsWith("!door ")) {
-                const args = content.slice("!door ".length);
+            if (content === "!door" || content.startsWith("!door ")) {
+                const args = rawContent.slice("!door".length).trim();
                 await this.onAdminMessage(character, args);
             }
         }

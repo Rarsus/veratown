@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The refactored keypad system is active in `bin/games/veratown.ts`. Phase 2 migration and Phase 3 verification are complete. Phase 4 cleanup and documentation are complete in this change.
+The refactored keypad system is active in `bin/games/veratown.ts`. Phase 2 migration and Phase 3 verification are complete. Phase 4 cleanup and documentation are complete. Runtime map triggers are now registered exclusively from `keypadDoorDefinitions`; legacy location records are migration input only.
 
 ## Runtime Architecture
 

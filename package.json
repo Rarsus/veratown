@@ -23,6 +23,7 @@
         "reconcile:unified-profile-ids": "tsx scripts/reconcile-unified-character-profile-ids.ts --apply --approve-cleanup",
         "benchmark:keypad": "tsx scripts/benchmark-keypad-system.ts",
         "reconcile:keypad": "tsx scripts/reconcile-keypad-doors.ts",
+        "migrate:audit-log": "tsx scripts/migrate-audit-log.ts",
         "compile:bc-bot": "cd src && npm run compile",
         "bundle": "npm run compile:bc-bot && esbuild bin/main.ts --bundle --platform=node --outfile=dist/bundle.js --sourcemap",
         "start": "npm run compile:bc-bot && tsx bin/main.ts",

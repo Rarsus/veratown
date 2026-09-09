@@ -109,6 +109,10 @@ export class CreateDoorHandler extends KeypadCommandHandler {
                 autoOpenX !== undefined && autoOpenY !== undefined
                     ? { X: autoOpenX, Y: autoOpenY }
                     : undefined,
+            autoOpenTiles:
+                autoOpenX !== undefined && autoOpenY !== undefined
+                    ? [{ X: autoOpenX, Y: autoOpenY }]
+                    : [],
             enabled: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -152,6 +156,61 @@ export class UpdateDoorHandler extends KeypadCommandHandler {
         const doorCheck = await this.getDoorOrError(doorKey);
         if (!doorCheck.success)
             return { success: false, message: doorCheck.message };
+
+        const structuredFields = new Set([
+            "keypadTiles",
+            "autoOpenTiles",
+            "insideRegion",
+        ]);
+        if (structuredFields.has(fieldName)) {
+            try {
+                const parsed = JSON.parse(value);
+                if (
+                    fieldName === "keypadTiles" ||
+                    fieldName === "autoOpenTiles"
+                ) {
+                    if (
+                        !Array.isArray(parsed) ||
+                        !parsed.every(isMapPosition)
+                    ) {
+                        return {
+                            success: false,
+                            message: `${fieldName} must be a JSON array of {"X":number,"Y":number} objects`,
+                        };
+                    }
+                    const updates: Record<string, unknown> = {
+                        [fieldName]: dedupeMapPositions(parsed),
+                    };
+                    if (fieldName === "autoOpenTiles") {
+                        updates.autoOpenTile = parsed[0] ?? null;
+                    }
+                    await this.definitionService.updateDoor(doorKey, updates);
+                    return {
+                        success: true,
+                        message: `Updated door ${doorKey}: ${fieldName}`,
+                    };
+                }
+                if (!isMapRegion(parsed)) {
+                    return {
+                        success: false,
+                        message:
+                            "insideRegion must be JSON with TopLeft and BottomRight X/Y coordinates",
+                    };
+                }
+                await this.definitionService.updateDoor(doorKey, {
+                    insideRegion: parsed,
+                });
+                return {
+                    success: true,
+                    message: `Updated door ${doorKey}: insideRegion`,
+                };
+            } catch {
+                return {
+                    success: false,
+                    message: `${fieldName} must contain valid JSON`,
+                };
+            }
+        }
 
         // Parse value based on field type
         let parsedValue: any = value;
@@ -271,12 +330,17 @@ export class DoorInfoHandler extends KeypadCommandHandler {
         const door = doorCheck.door;
         const info = `
 Door: ${door.doorKey}
-Position: (${door.doorX}, ${door.doorY})
+    Physical Door Position: (${door.doorX}, ${door.doorY})
+    Keypad Tiles: ${JSON.stringify(door.keypadTiles ?? [])}
+    Auto-Open Tiles: ${JSON.stringify(door.autoOpenTiles ?? (door.autoOpenTile ? [door.autoOpenTile] : []))}
+    Inside Region: ${JSON.stringify(door.insideRegion ?? null)}
 Locked Tile: ${door.lockedTile}
 Unlocked Tile: ${door.unlockedTile}
 Unlock Duration: ${door.unlockDurationMs}ms
 Enabled: ${door.enabled}
+    Description: ${door.description ?? ""}
 Created: ${new Date(door.createdAt).toLocaleString()}
+    Updated: ${new Date(door.updatedAt).toLocaleString()}
         `.trim();
 
         return {
@@ -284,4 +348,28 @@ Created: ${new Date(door.createdAt).toLocaleString()}
             message: info,
         };
     }
+}
+
+function isMapPosition(value: unknown): value is { X: number; Y: number } {
+    if (!value || typeof value !== "object") return false;
+    const position = value as Record<string, unknown>;
+    return Number.isInteger(position.X) && Number.isInteger(position.Y);
+}
+
+function dedupeMapPositions(
+    positions: Array<{ X: number; Y: number }>,
+): Array<{ X: number; Y: number }> {
+    const seen = new Set<string>();
+    return positions.filter((position) => {
+        const key = `${position.X},${position.Y}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function isMapRegion(value: unknown): boolean {
+    if (!value || typeof value !== "object") return false;
+    const region = value as Record<string, unknown>;
+    return isMapPosition(region.TopLeft) && isMapPosition(region.BottomRight);
 }

@@ -57,6 +57,10 @@ pnpm reconcile:keypad -- --apply
 Apply mode creates a rollback snapshot first. The command prints the snapshot
 ID after a successful write.
 
+After reconciliation, `veratownLocations` is no longer authoritative for keypad
+runtime behavior. Door definitions own physical coordinates, keypad trigger
+tiles, and auto-open trigger tiles.
+
 ## Restore
 
 Use the snapshot ID printed by the migration:

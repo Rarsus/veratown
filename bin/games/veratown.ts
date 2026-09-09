@@ -46,7 +46,6 @@ import { FurnitureBondageSystem } from "./veratown/furnitureBondageSystem";
 import { KeypadDefinitionService } from "./veratown/services/keypadDefinitionService";
 import { KeypadAccessService } from "./veratown/services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./veratown/handlers/keypadCommandDispatcher";
-import { KeypadLocationIntegration } from "./veratown/migrations/keypadLocationIntegration";
 import {
     VeratownFeatureSystem,
     getLifecycleObjectId,
@@ -506,9 +505,9 @@ export class Veratown {
                 );
             }
 
-            if (!this.locationStore || !this.unifiedCharacterStore) {
+            if (!this.unifiedCharacterStore) {
                 throw new Error(
-                    "KeypadDoorSystem requires a database-backed location store",
+                    "KeypadDoorSystem requires a unified character store",
                 );
             }
 
@@ -521,7 +520,6 @@ export class Veratown {
             );
             const system = new KeypadDoorSystem(
                 this.conn,
-                this.locationStore,
                 definitionService,
                 accessService,
                 new KeypadCommandDispatcher(
@@ -529,7 +527,6 @@ export class Veratown {
                     accessService,
                     this.unifiedCharacterStore,
                 ),
-                new KeypadLocationIntegration(definitionService),
                 this.commandParser,
             );
             this.pendingFeatureRegistrations.push(

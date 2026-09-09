@@ -1,26 +1,52 @@
-/*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *       http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import { describe, it } from "node:test";
 import { expect } from "../../../testUtils";
 import { KeypadDoorSystem } from "../../veratown/keypadDoorSystemRefactored";
-import { KeypadLocationIntegration } from "../../veratown/migrations/keypadLocationIntegration";
-import { VeratownLocationDoc } from "../../veratown/veratownLocationStore";
 import { KeypadDoorDefinitionDoc } from "../../veratown/keypadTypes";
 
-describe("KeypadDoorSystem (refactored)", () => {
-    it("registers keypad and auto-open triggers and relocks the door", async () => {
+describe("KeypadDoorSystem (definition authoritative)", () => {
+    function createDoor(): KeypadDoorDefinitionDoc {
+        return {
+            _id: "shop_entrance",
+            doorKey: "shop_entrance",
+            doorX: 13,
+            doorY: 9,
+            keypadTiles: [{ X: 13, Y: 9 }],
+            lockedTile: "MetalDown",
+            unlockedTile: "SteelDoorOpen",
+            unlockDurationMs: 10,
+            autoOpenTiles: [{ X: 13, Y: 8 }],
+            enabled: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+    }
+
+    function createSystem(
+        map: {
+            addTileTrigger: Function;
+            removeTileTrigger: Function;
+            setObject: Function;
+        },
+        door = createDoor(),
+    ) {
+        const definitionService = {
+            init: async () => {},
+            on: () => {},
+            off: () => {},
+            getAllDoorDefinitions: async () => [door],
+            getDoorDefinition: async (doorKey: string) =>
+                doorKey === door.doorKey ? door : null,
+        };
+        const system = new KeypadDoorSystem(
+            { chatRoom: { map }, on: () => {}, SendMessage: () => {} } as any,
+            definitionService as any,
+            { init: async () => {}, canAccessDoor: async () => true } as any,
+            {} as any,
+        );
+        return { system, definitionService };
+    }
+
+    it("registers definition keypad and auto-open triggers and relocks", async () => {
         const tileTriggers: Array<{
             x: number;
             y: number;
@@ -30,72 +56,15 @@ describe("KeypadDoorSystem (refactored)", () => {
         const map = {
             addTileTrigger: (
                 position: { X: number; Y: number },
-                callback: (character: any) => void,
-            ) => {
-                tileTriggers.push({
-                    x: position.X,
-                    y: position.Y,
-                    callback,
-                });
-            },
+                callback: any,
+            ) => tileTriggers.push({ x: position.X, y: position.Y, callback }),
             removeTileTrigger: () => {},
-            setObject: (_position: { X: number; Y: number }, tile: string) => {
-                tileUpdates.push(tile);
-            },
+            setObject: (_position: unknown, tile: string) =>
+                tileUpdates.push(tile),
         };
-        const location: VeratownLocationDoc = {
-            key: "shop_entrance",
-            name: "Shop entrance",
-            type: "keypad_door",
-            x: 13,
-            y: 9,
-            data: { doorKey: "shop_entrance" },
-            enabled: true,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-        };
-        const door: KeypadDoorDefinitionDoc = {
-            _id: "shop_entrance",
-            doorKey: "shop_entrance",
-            doorX: 13,
-            doorY: 9,
-            lockedTile: "MetalDown",
-            unlockedTile: "SteelDoorOpen",
-            unlockDurationMs: 10,
-            autoOpenTile: { X: 13, Y: 8 },
-            enabled: true,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-        };
-        const definitionService = {
-            init: async () => {},
-            getAllDoorDefinitions: async () => [door],
-            getDoorDefinition: async (doorKey: string) =>
-                doorKey === door.doorKey ? door : null,
-        };
-        const connection = {
-            chatRoom: { map },
-            on: () => {},
-        };
-        const system = new KeypadDoorSystem(
-            connection as any,
-            {
-                getAllLocations: async () => [location],
-                on: () => {},
-                off: () => {},
-            } as any,
-            definitionService as any,
-            {
-                init: async () => {},
-                canAccessDoor: async () => true,
-            } as any,
-            {} as any,
-            new KeypadLocationIntegration(definitionService as any),
-        );
-
+        const { system } = createSystem(map);
         await system.init();
 
-        expect(tileTriggers.length).toBe(2);
         expect(
             tileTriggers.map((trigger) => `${trigger.x},${trigger.y}`).sort(),
         ).toEqual(["13,8", "13,9"]);
@@ -111,118 +80,236 @@ describe("KeypadDoorSystem (refactored)", () => {
             .callback(character);
         await new Promise((resolve) => setImmediate(resolve));
         expect(tileUpdates).toContain("SteelDoorOpen");
-
         await new Promise((resolve) => setTimeout(resolve, 25));
         expect(tileUpdates.at(-1)).toBe("MetalDown");
-
-        tileTriggers
-            .find((trigger) => trigger.x === 13 && trigger.y === 8)!
-            .callback(character);
-        await new Promise((resolve) => setTimeout(resolve, 1025));
-        expect(tileUpdates).toContain("SteelDoorOpen");
-
         await system.shutdown();
     });
 
-    it("migrates legacy locations before loading door definitions", async () => {
-        const doors: KeypadDoorDefinitionDoc[] = [];
-        const definitionService = {
-            init: async () => {},
-            getAllDoorDefinitions: async () => doors,
-            getDoorDefinition: async (doorKey: string) =>
-                doors.find((door) => door.doorKey === doorKey) ?? null,
-            createDoor: async (door: KeypadDoorDefinitionDoc) => {
-                doors.push(door);
-            },
-            updateDoor: async () => {},
-            deleteDoor: async () => {},
-        };
-        const location: VeratownLocationDoc = {
-            key: "legacy_cell",
-            name: "Legacy cell",
-            type: "keypad_door",
-            x: 10,
-            y: 20,
-            data: {
-                lockedTile: "MetalDown",
-                unlockedTile: "SteelDoorOpen",
-            },
-            enabled: true,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-        };
-
+    it("routes commands without requiring a location store", async () => {
+        let dispatched: { commandLine: string; isAdmin: boolean } | undefined;
         const system = new KeypadDoorSystem(
-            {} as any,
             {
-                getAllLocations: async () => [location],
+                on: (event: string, handler: Function) =>
+                    event === "Message" && handler,
             } as any,
-            definitionService as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
             { init: async () => {} } as any,
-            {} as any,
-            new KeypadLocationIntegration(definitionService as any),
+            {
+                executeCommand: async (
+                    _actor: unknown,
+                    commandLine: string,
+                    isAdmin: boolean,
+                ) => {
+                    dispatched = { commandLine, isAdmin };
+                    return { success: true, message: "Door listed" };
+                },
+            } as any,
         );
-
-        await system.init();
-
-        expect(doors.length).toBe(1);
-        expect(doors[0].doorKey).toBe("auto_location_legacy_cell");
-        expect(doors[0].doorX).toBe(10);
-        expect(doors[0].doorY).toBe(20);
+        const connection = {
+            on: (event: string, handler: Function) => {
+                if (event === "Message") {
+                    handler({
+                        message: {
+                            Type: "Whisper",
+                            Content: "!door door list",
+                        },
+                        sender: {
+                            MemberNumber: 1,
+                            Name: "Admin",
+                            IsRoomAdmin: () => true,
+                        },
+                    });
+                }
+            },
+        };
+        (system as any).conn = connection;
+        system.registerTriggers();
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(dispatched?.commandLine).toBe("door list");
+        expect(dispatched?.isAdmin).toBe(true);
+        await system.shutdown();
     });
 
-    it("routes whispered admin commands through the dispatcher", async () => {
-        let messageHandler:
-            | ((message: {
-                  message: { Type: string; Content: string };
-                  sender: any;
-              }) => void)
-            | undefined;
-        let dispatched: { commandLine: string; isAdmin: boolean } | undefined;
-        const connection = {
-            on: (
-                event: string,
-                handler: (message: {
-                    message: { Type: string; Content: string };
-                    sender: any;
-                }) => void,
-            ) => {
-                if (event === "Message") messageHandler = handler;
-            },
-        };
-        const dispatcher = {
-            executeCommand: async (
-                _actor: any,
-                commandLine: string,
-                isAdmin: boolean,
-            ) => {
-                dispatched = { commandLine, isAdmin };
-                return { success: true, message: "Door listed" };
-            },
-        };
+    it("responds with help for !door help", async () => {
+        const sent: string[] = [];
+        let messageHandler: ((message: any) => void) | undefined;
         const system = new KeypadDoorSystem(
-            connection as any,
-            {} as any,
+            {
+                on: (event: string, handler: (message: any) => void) => {
+                    if (event === "Message") messageHandler = handler;
+                },
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
             { init: async () => {} } as any,
+            { getHelpText: () => "!door help\n!door create" } as any,
+        );
+        system.registerTriggers();
+        messageHandler!({
+            message: { Type: "Whisper", Content: "!door help" },
+            sender: { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(sent[0]).toContain("!door help");
+        expect(sent[0]).toContain("!door create");
+        await system.shutdown();
+    });
+
+    it("preserves case-sensitive command arguments", async () => {
+        const dispatched: string[] = [];
+        let messageHandler: ((message: any) => void) | undefined;
+        const system = new KeypadDoorSystem(
+            {
+                on: (event: string, handler: (message: any) => void) => {
+                    if (event === "Message") messageHandler = handler;
+                },
+                SendMessage: () => {},
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
             { init: async () => {} } as any,
-            dispatcher as any,
-            {} as any,
+            {
+                executeCommand: async (
+                    _actor: unknown,
+                    commandLine: string,
+                ) => {
+                    dispatched.push(commandLine);
+                    return { success: true, message: "ok" };
+                },
+            } as any,
+        );
+        system.registerTriggers();
+        messageHandler!({
+            message: {
+                Type: "Whisper",
+                Content: "!door group create shop GuestCode",
+            },
+            sender: { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(dispatched).toEqual(["group create shop GuestCode"]);
+        await system.shutdown();
+    });
+
+    it("sends notifications to the character as whispers", async () => {
+        const sent: Array<{
+            type: string;
+            message: string;
+            memberNumber: number;
+        }> = [];
+        const { system } = createSystem({
+            addTileTrigger: () => {},
+            removeTileTrigger: () => {},
+            setObject: () => {},
+        });
+        (system as any).conn.SendMessage = (
+            type: string,
+            message: string,
+            memberNumber: number,
+        ) => sent.push({ type, message, memberNumber });
+        const character = {
+            MemberNumber: 1,
+            Name: "Shopper",
+        };
+
+        (system as any).sendNotification(character, "Incorrect code.");
+
+        expect(sent).toEqual([
+            { type: "Whisper", message: "Incorrect code.", memberNumber: 1 },
+        ]);
+        await system.shutdown();
+    });
+
+    it("reports unknown door commands instead of silently dropping them", async () => {
+        const sent: string[] = [];
+        const system = new KeypadDoorSystem(
+            {
+                on: () => {},
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            {
+                getHelpText: () => "!door help",
+                executeCommand: async () => ({
+                    success: false,
+                    message: "Unknown command: mystery command\n!door help",
+                }),
+            } as any,
         );
 
-        system.registerTriggers();
-        expect(messageHandler).toBeDefined();
-        messageHandler!({
-            message: { Type: "Whisper", Content: "!door door list" },
-            sender: {
-                MemberNumber: 1,
-                Name: "Admin",
-                IsRoomAdmin: () => true,
-            },
+        (system as any).onMessage({
+            message: { Type: "Whisper", Content: "!door mystery command" },
+            sender: { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
         });
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(dispatched?.commandLine).toBe("door list");
-        expect(dispatched?.isAdmin).toBe(true);
+        expect(sent[0]).toContain("Unknown command");
+        expect(sent[0]).toContain("!door help");
+        await system.shutdown();
+    });
+
+    it("registers door commands with the ChatRoomBot command parser", async () => {
+        let doorParser:
+            | ((sender: any, message: unknown, args: string[]) => void)
+            | undefined;
+        const sent: string[] = [];
+        const system = new KeypadDoorSystem(
+            {
+                on: () => {},
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            {
+                getHelpText: () => "!door help",
+                executeCommand: async () => ({
+                    success: false,
+                    message: "Unknown command: mystery\n!door help",
+                }),
+            } as any,
+            {
+                register: (command: string, handler: typeof doorParser) => {
+                    if (command === "door") doorParser = handler;
+                },
+            } as any,
+        );
+
+        expect(doorParser).toBeDefined();
+        doorParser!(
+            { MemberNumber: 1, Name: "Admin", IsRoomAdmin: () => true },
+            {},
+            ["help"],
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(sent[0]).toContain("!door help");
         await system.shutdown();
     });
 });

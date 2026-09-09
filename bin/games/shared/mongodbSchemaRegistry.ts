@@ -250,6 +250,10 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
             description: "Action audit trail",
             required: true,
         },
+        "veratown.auditSummary": {
+            type: "object",
+            description: "Compact summary of centralized audit history",
+        },
         "veratown.roles": {
             type: "array",
             description: "Character roles",
@@ -386,6 +390,11 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
     // ===== AUDIT LOGS
     auditLogs: {
         _id: { type: "object", description: "MongoDB ObjectId" },
+        auditId: {
+            type: "string",
+            description: "Stable deduplication identifier",
+            required: true,
+        },
         timestamp: {
             type: "timestamp",
             description: "Action timestamp",
@@ -396,11 +405,38 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
             description: "Action performed",
             required: true,
         },
+        source: {
+            type: "string",
+            description: "Owning system",
+            required: true,
+        },
+        targetMemberNumber: {
+            type: "int",
+            description: "Character affected by the action",
+            required: true,
+        },
+        actorMemberNumber: {
+            type: "int",
+            description: "Character or administrator performing the action",
+        },
+        operationId: {
+            type: "string",
+            description: "Stable mutation operation identifier",
+        },
         performedBy: {
             type: "int",
             description: "Member number who performed action",
         },
         details: { type: "object", description: "Action details" },
+        retentionClass: {
+            type: "string",
+            description: "Retention policy class",
+            required: true,
+        },
+        expiresAt: {
+            type: "timestamp",
+            description: "Optional TTL expiration time",
+        },
     },
 
     // ===== KEYPAD DOOR DEFINITIONS
