@@ -49,6 +49,11 @@ export const DARE_LOCATION: MapRegion = {
     BottomRight: { X: 16, Y: 14 },
 };
 
+export const KIDNAPPERS_LOCATION: MapRegion = {
+    TopLeft: { X: 0, Y: 21 },
+    BottomRight: { X: 4, Y: 24 },
+};
+
 // --- Feature Regions (Multi-Tile Areas) ---
 //
 // These regions span multiple tiles and should trigger commands only once per
@@ -79,6 +84,18 @@ export const FEATURE_REGIONS_STATIC: Map<string, VeratownRegion> = new Map([
             region: DARE_LOCATION,
             description:
                 "Dare game zone - commands only trigger once per entry",
+        } as VeratownRegion,
+    ],
+    [
+        "kidnappers_region",
+        {
+            key: "kidnappers_region",
+            type: "region",
+            regionType: "game",
+            region: KIDNAPPERS_LOCATION,
+            label: "Kidnappers Game Area",
+            description:
+                "Kidnappers game zone - commands only trigger inside this rectangle",
         } as VeratownRegion,
     ],
 ]);
@@ -551,6 +568,16 @@ export const VERATOWN_LOCATIONS_FALLBACK: VeratownLocationDoc[] = [
             bottomRightX: GAME_LOCATION.BottomRight.X,
             bottomRightY: GAME_LOCATION.BottomRight.Y,
         },
+        enabled: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    },
+    {
+        key: "kidnappers_region",
+        name: "Kidnappers Game Area",
+        type: "region" as const,
+        regionType: "game",
+        region: KIDNAPPERS_LOCATION,
         enabled: true,
         createdAt: Date.now(),
         updatedAt: Date.now(),

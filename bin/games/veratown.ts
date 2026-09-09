@@ -89,6 +89,7 @@ import {
 import {
     RECEPTIONIST_POSITION,
     GAME_LOCATION,
+    KIDNAPPERS_LOCATION,
     GAME_MISTRESS_POSITION,
     DARE_LOCATION,
     CHANGELOG,
@@ -390,7 +391,7 @@ export class Veratown {
                             Boolean(
                                 this.conn.chatRoom?.getCharacter(
                                     sender.MemberNumber,
-                                ),
+                                ) && this.isInKidnappersRegion(sender),
                             ),
                     },
                 );
@@ -856,7 +857,60 @@ export class Veratown {
             changed = true;
         }
 
+        const kidnappersRegion =
+            await this.locationStore.getLocation("kidnappers_region");
+        if (!kidnappersRegion) {
+            await this.locationStore.addLocation({
+                key: "kidnappers_region",
+                name: "Kidnappers Game Area",
+                type: "region",
+                regionType: "game",
+                region: KIDNAPPERS_LOCATION,
+                enabled: true,
+            });
+            changed = true;
+        }
+
         return changed;
+    }
+
+    private isInKidnappersRegion(character: API_Character): boolean {
+        const location = this.locationSnapshot.find(
+            (candidate) => candidate.key === "kidnappers_region",
+        );
+        if (location && !location.enabled) return false;
+        if (location?.region) {
+            return (
+                character.MapPos.X >= location.region.TopLeft.X &&
+                character.MapPos.X <= location.region.BottomRight.X &&
+                character.MapPos.Y >= location.region.TopLeft.Y &&
+                character.MapPos.Y <= location.region.BottomRight.Y
+            );
+        }
+        const bottomRightX = location?.data?.bottomRightX;
+        const bottomRightY = location?.data?.bottomRightY;
+        const topLeftX = location?.x;
+        const topLeftY = location?.y;
+        const region =
+            typeof topLeftX === "number" &&
+            typeof topLeftY === "number" &&
+            typeof bottomRightX === "number" &&
+            typeof bottomRightY === "number"
+                ? {
+                      TopLeft: { X: topLeftX, Y: topLeftY },
+                      BottomRight: {
+                          X: bottomRightX,
+                          Y: bottomRightY,
+                      },
+                  }
+                : KIDNAPPERS_LOCATION;
+
+        return (
+            character.MapPos.X >= region.TopLeft.X &&
+            character.MapPos.X <= region.BottomRight.X &&
+            character.MapPos.Y >= region.TopLeft.Y &&
+            character.MapPos.Y <= region.BottomRight.Y
+        );
     }
 
     public getStatus(): string {
