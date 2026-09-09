@@ -169,19 +169,19 @@ const HELP_PAGES: Readonly<Record<string, string>> = {
         "Join a session, wait for the lobby to start, and follow the active phase and turn instructions.",
         "The game is consensual roleplay. Respect player boundaries and keep private roles and objectives private.",
         "Pages: overview, commands, phases, capture, admin.",
-        "Use !kidnappers help <page>.",
+        "Use /bot kg help <page>.",
     ].join("\n"),
     commands: [
         "Kidnappers player commands:",
-        "!kidnappers join [session] - Join or create a lobby.",
-        "!kidnappers switch <session> - Change sessions.",
-        "!kidnappers leave [session] - Leave your session.",
-        "!kidnappers start [session] - Start with at least five players.",
-        "!kidnappers status [session] - View public phase and roster.",
-        "!kidnappers capture <member> - Attempt a capture on your turn.",
-        "!kidnappers accept|resist [session] - Respond to a capture.",
-        "!kidnappers escape [session] - Attempt escape after capture.",
-        "!kidnappers help <page> - Show a help page.",
+        "/bot kg join [session] - Join or create a lobby.",
+        "/bot kg switch <session> - Change sessions.",
+        "/bot kg leave [session] - Leave your session.",
+        "/bot kg start [session] - Start with at least five players.",
+        "/bot kg status [session] - View public phase and roster.",
+        "/bot kg capture <member> - Attempt a capture on your turn.",
+        "/bot kg accept|resist [session] - Respond to a capture.",
+        "/bot kg escape [session] - Attempt escape after capture.",
+        "/bot kg help <page> - Show a help page.",
     ].join("\n"),
     phases: [
         "Kidnappers phases:",
@@ -189,7 +189,7 @@ const HELP_PAGES: Readonly<Record<string, string>> = {
         "An accusation moves voting to defense; otherwise voting advances to resolving_day.",
         "resolving_day returns to night for the next round.",
         "completed and aborted are terminal phases.",
-        "Room admins advance phases with !kidnappers phase.",
+        "Room admins advance phases with /bot kg phase.",
     ].join("\n"),
     capture: [
         "Capture and escape:",
@@ -201,48 +201,24 @@ const HELP_PAGES: Readonly<Record<string, string>> = {
     ].join("\n"),
     admin: [
         "Kidnappers room-admin commands:",
-        "!kidnappers assign <member> <role> [session]",
-        "!kidnappers phase|complete|end|timeout|abandon [args] [session]",
-        "!kidnappers release <member> [session]",
-        "!kidnappers sessions",
-        "!kidnappers recover <session>",
+        "/bot kg assign <member> <role> [session]",
+        "/bot kg phase|complete|end|timeout|abandon [args] [session]",
+        "/bot kg release <member> [session]",
+        "/bot kg sessions",
+        "/bot kg recover <session>",
     ].join("\n"),
 };
 
 const HELP = HELP_PAGES.commands;
-
 const HELP_PAGE_ALIASES: Readonly<Record<string, string>> = {
     rules: "overview",
     flow: "phases",
     gameplay: "capture",
 };
-
-/*
- * The old single-page text remains the commands-board default; chat users can
- * request the smaller pages individually with `help <page>`.
- */
-const LEGACY_HELP = [
-    "Kidnappers commands:",
-    "!kidnappers join [session] - Join or create a lobby.",
-    "!kidnappers switch <session> - Join another session and leave your current one.",
-    "!kidnappers leave [session] - Leave your current session.",
-    "!kidnappers start [session] - Start once the lobby has enough players.",
-    "!kidnappers status [session] - Observe phase and public roster.",
-    "!kidnappers capture <member> - Capture a target on your turn.",
-    "!kidnappers accept|resist [session] - Respond to a capture.",
-    "!kidnappers escape [session] - Attempt to escape after capture.",
-    "!kidnappers help - Show this help.",
-    "",
-    "Room admins:",
-    "!kidnappers sessions|recover <session>",
-    "!kidnappers assign <member> <role> [session]",
-    "!kidnappers phase|end|timeout|abandon|release|complete [args] [session]",
-].join("\n");
-
 const KIDNAPPERS_ENTRY_MESSAGE = [
     "You are entering the Kidnappers game area.",
     "This is a consensual roleplay game built around capture, resistance, escape, and public game phases.",
-    "Join a session with !kidnappers join, then use !kidnappers help for commands.",
+    "Join a session with /bot kg join, then use /bot kg help for commands.",
     "Follow the current turn and phase instructions, respect other players, and remember that private roles and objectives are never revealed publicly.",
 ].join("\n");
 
@@ -479,7 +455,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             "During your turn, follow the command prompts and respect the current phase.",
             "Capture attempts can be answered with accept or resist; escape is available when the rules allow it.",
             "Roles and private objectives are never displayed on public boards.",
-            "Use !kidnappers status for the public session state.",
+            "Use /bot kg status for the public session state.",
         ].join("\n");
     }
 
@@ -502,7 +478,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             }
             if (!command) {
                 throw this.commandError(
-                    "Use !kidnappers help to list available commands.",
+                    "Use /bot kg help to list available commands.",
                     "MALFORMED_COMMAND",
                     command,
                 );
@@ -515,7 +491,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             }
             if (!PLAYER_COMMANDS.has(command) && !ADMIN_COMMANDS.has(command)) {
                 throw this.commandError(
-                    `Unknown Kidnappers command '${command}'. Use !kidnappers help.`,
+                    `Unknown Kidnappers command '${command}'. Use /bot kg help.`,
                     "UNKNOWN_COMMAND",
                     command,
                 );
@@ -1032,7 +1008,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                 for (const role of event.roles) {
                     addMessage(
                         role.memberNumber,
-                        `Kidnappers game started. Your role is: ${role.role}. Use !kidnappers help phases for the phase flow.`,
+                        `Kidnappers game started. Your role is: ${role.role}. Use /bot kg help phases for the phase flow.`,
                     );
                 }
                 break;
@@ -1044,20 +1020,20 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                 break;
             case "PHASE_CHANGED":
                 addToParticipants(
-                    `Kidnappers phase changed: ${event.from} -> ${event.to}. Use !kidnappers status for the public state.`,
+                    `Kidnappers phase changed: ${event.from} -> ${event.to}. Use /bot kg status for the public state.`,
                 );
                 break;
             case "CAPTURE_ATTEMPTED":
                 addMessage(
                     event.targetMemberNumber,
-                    "You have been selected as a capture target. Respond with !kidnappers accept or !kidnappers resist before the response window expires.",
+                    "You have been selected as a capture target. Respond with /bot kg accept or /bot kg resist before the response window expires.",
                 );
                 break;
             case "CAPTURE_RESOLVED":
                 addMessage(
                     event.targetMemberNumber,
                     event.outcome === "captured"
-                        ? "The capture succeeded. You are now captured; use !kidnappers escape when the rules allow it."
+                        ? "The capture succeeded. You are now captured; use /bot kg escape when the rules allow it."
                         : `The capture was resolved as ${event.outcome}.`,
                 );
                 addMessage(
@@ -1080,7 +1056,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             case "RESISTANCE_OFFERED":
                 addMessage(
                     event.targetMemberNumber,
-                    "You may respond to the pending capture with !kidnappers accept or !kidnappers resist.",
+                    "You may respond to the pending capture with /bot kg accept or /bot kg resist.",
                 );
                 break;
             case "TURN_ADVANCED":
@@ -1246,7 +1222,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             memberNumber <= 0
         ) {
             throw this.commandError(
-                `Usage: !kidnappers ${command} <member number>`,
+                `Usage: /bot kg ${command} <member number>`,
                 "MALFORMED_COMMAND",
                 command,
             );
@@ -1262,7 +1238,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
     ): void {
         if (args.length < min || args.length > max) {
             throw this.commandError(
-                `Invalid arguments for '${command}'. Use !kidnappers help for usage.`,
+                `Invalid arguments for '${command}'. Use /bot kg help for usage.`,
                 "MALFORMED_COMMAND",
                 command,
             );

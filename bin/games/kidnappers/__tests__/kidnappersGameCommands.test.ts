@@ -137,7 +137,7 @@ describe("Kidnappers game commands", () => {
         assert.equal(sent.length, 1);
         assert.match(sent[0], /entering the Kidnappers game area/i);
         assert.match(sent[0], /capture, resistance, escape/i);
-        assert.match(sent[0], /!kidnappers help/i);
+        assert.match(sent[0], /\/bot kg help/i);
         assert.match(sent[0], /private roles and objectives/i);
     });
 

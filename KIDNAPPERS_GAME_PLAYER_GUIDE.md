@@ -7,14 +7,14 @@ for the Phase 3 plugin integration; it does not describe the legacy
 
 ## Start and play
 
-The plugin router accepts both `!kidnappers <command>` and
+The plugin router accepts the private `/bot kg <command>` shortcut and
 `/bot kidnappers <command>`. A host must register
 `KidnappersGameCommandController` with the active
 `GamePluginCommandRouter`; the Phase 3 checklist records that bootstrap step.
 
-1. Join the game room and run `!kidnappers join [session]`.
+1. Join the game room and run `/bot kg join [session]`.
 2. Have at least five players join. A session holds at most nine players.
-3. Run `!kidnappers start [session]`.
+3. Run `/bot kg start [session]`.
 4. Use `status` to see the phase, public roster, and current turn. Your own
    role is visible to you; room admins can see every role.
 5. Follow the current turn: kidnapper turns use `capture`, targets answer with
@@ -26,11 +26,11 @@ The plugin router accepts both `!kidnappers <command>` and
 Help is split into focused pages so the game information can be read in parts:
 
 ```text
-!kidnappers help overview
-!kidnappers help commands
-!kidnappers help phases
-!kidnappers help capture
-!kidnappers help admin
+/bot kg help overview
+/bot kg help commands
+/bot kg help phases
+/bot kg help capture
+/bot kg help admin
 ```
 
 The three in-room whiteboards show the live session status, command reference,
@@ -115,7 +115,7 @@ shared mutation service.
 If the bot or process restarts, an administrator should:
 
 1. Confirm MongoDB is available.
-2. Run `!kidnappers recover <session>` for a current, valid session.
+2. Run `/bot kg recover <session>` for a current, valid session.
 3. Use `status` to verify the recovered phase and roster.
 4. Retry an uncertain command with its original correlation/operation key at
    the service boundary; persistence returns the recorded result rather than

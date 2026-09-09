@@ -4,7 +4,7 @@ This is the compact reference for the Phase 2B command controller. For
 lifecycle, outcomes, recovery, and exact admin argument rules, see the
 [player and room-admin guide](../KIDNAPPERS_GAME_PLAYER_GUIDE.md).
 
-Commands are sent in the active game room with the `!kidnappers` prefix.
+Commands are sent privately in the active game room with the `/bot kg` prefix.
 Aliases are accepted where shown.
 
 ## Players

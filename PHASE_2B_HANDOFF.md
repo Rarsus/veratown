@@ -55,7 +55,7 @@ The executable Phase 3 work breakdown is [PHASE_3_INTEGRATION_PLAN.md](PHASE_3_I
 - [x] Initialize persistence indexes before accepting commands and recover
       active sessions before registering the route.
 - [x] Register `KidnappersGameCommandController` with the shared
-      `GamePluginCommandRouter`; verify both `!kidnappers` and `/bot kidnappers`.
+      `GamePluginCommandRouter`; verify private `/bot kg` and `/bot kidnappers`.
 - [x] Supply the room-membership guard and verify admin checks use
       `IsRoomAdmin()`.
 - [ ] Attach character, inventory, audit, and lifecycle subscribers exactly
