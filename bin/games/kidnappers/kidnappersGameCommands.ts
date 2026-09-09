@@ -28,6 +28,8 @@ import { KidnappersGameLifecycleService } from "./kidnappersGameLifecycleService
 import type { KidnappersGamePersistence } from "./kidnappersGamePersistence";
 import { KidnappersGameCaptureService } from "./kidnappersGameCaptureService";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
+import type { VeratownFeatureSystem } from "../veratown/featureSystem";
+import type { VeratownLocationDoc } from "../veratown/veratownLocationStore";
 import type {
     KidnappersGameCommand,
     KidnappersGameEvent,
@@ -182,9 +184,10 @@ const HELP = [
  * registered by any active game/plugin router, while all state changes still
  * pass through the authoritative session and its typed domain errors.
  */
-export class KidnappersGameCommandController {
+export class KidnappersGameCommandController implements VeratownFeatureSystem {
     public readonly key = "kidnappers";
     public readonly label = "Kidnappers Game";
+    public enabled = true;
 
     private readonly messageFeatureSystem: KidnappersGameMessageFeatureSystem;
     private readonly inFlight = new Map<
@@ -202,7 +205,7 @@ export class KidnappersGameCommandController {
     ) {
         this.messageFeatureSystem = new KidnappersGameMessageFeatureSystem(
             conn,
-            () => !this.lifecycleIsShutDown(),
+            () => this.enabled && !this.lifecycleIsShutDown(),
             async (sender, message, command, args) => {
                 const result = await this.dispatch(
                     sender,
@@ -212,6 +215,27 @@ export class KidnappersGameCommandController {
                 this.reply(message, result.message);
             },
         );
+    }
+
+    public registerTriggers(): void {
+        // Command registration is performed by Veratown after all features
+        // have been constructed, using the shared plugin router.
+    }
+
+    public async reloadLocations(
+        _locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {}
+
+    public isReady(): boolean {
+        return !this.lifecycleIsShutDown();
+    }
+
+    public getDiagnostics(): Record<string, unknown> {
+        return {
+            activeSessionCount: this.lifecycle.listSessionIds().length,
+            activeSessionIds: this.lifecycle.listSessionIds(),
+            enabled: this.enabled,
+        };
     }
 
     public registerCommands(router: GamePluginCommandRouter): void {

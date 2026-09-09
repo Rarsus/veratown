@@ -378,22 +378,25 @@ export class Veratown {
                     this.container.get<KidnappersGamePersistence>(
                         DIServiceKeys.KIDNAPPERS_GAME_PERSISTENCE,
                     );
-                this.kidnappers = new KidnappersGameCommandController(
-                    this.conn,
-                    kidnappersLifecycle,
-                    kidnappersPersistence,
-                    {
-                        eventRouter: new KidnappersGameEventRouter(
-                            unifiedStore.getEventBus(),
+                this.kidnappers = this.initFeature(
+                    () =>
+                        new KidnappersGameCommandController(
+                            this.conn,
+                            kidnappersLifecycle,
+                            kidnappersPersistence,
+                            {
+                                eventRouter: new KidnappersGameEventRouter(
+                                    unifiedStore.getEventBus(),
+                                ),
+                                mutationService,
+                                isInGameRoom: (sender) =>
+                                    Boolean(
+                                        this.conn.chatRoom?.getCharacter(
+                                            sender.MemberNumber,
+                                        ) && this.isInKidnappersRegion(sender),
+                                    ),
+                            },
                         ),
-                        mutationService,
-                        isInGameRoom: (sender) =>
-                            Boolean(
-                                this.conn.chatRoom?.getCharacter(
-                                    sender.MemberNumber,
-                                ) && this.isInKidnappersRegion(sender),
-                            ),
-                    },
                 );
             }
         } else {
