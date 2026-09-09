@@ -151,7 +151,12 @@ function validateOutcome(
         !Number.isSafeInteger(outcome.captorScore) ||
         !Number.isSafeInteger(outcome.victimScore) ||
         typeof outcome.summary !== "string" ||
-        !Array.isArray(outcome.scores)
+        !Array.isArray(outcome.scores) ||
+        (outcome.specialWinners !== undefined &&
+            (!Array.isArray(outcome.specialWinners) ||
+                outcome.specialWinners.some(
+                    (memberNumber) => !Number.isSafeInteger(memberNumber),
+                )))
     ) {
         throw new Error("outcome fields are invalid");
     }
@@ -181,6 +186,7 @@ function validateSnapshot(
         "day",
         "voting",
         "defense",
+        "trial",
         "resolving_day",
         "completed",
         "aborted",
@@ -198,6 +204,9 @@ function validateSnapshot(
             !Number.isSafeInteger(snapshot.startedAt)) ||
         (snapshot.completedAt !== null &&
             !Number.isSafeInteger(snapshot.completedAt)) ||
+        (snapshot.phaseDeadlineAt !== undefined &&
+            snapshot.phaseDeadlineAt !== null &&
+            !Number.isSafeInteger(snapshot.phaseDeadlineAt)) ||
         !Array.isArray(snapshot.players)
     ) {
         throw new Error("snapshot fields are invalid");
@@ -242,6 +251,88 @@ function validateSnapshot(
             throw new Error("snapshot contains an invalid or duplicate player");
         }
         members.add(player.memberNumber as number);
+    }
+    if (
+        snapshot.daySkipVotes !== undefined &&
+        (!Array.isArray(snapshot.daySkipVotes) ||
+            snapshot.daySkipVotes.some(
+                (memberNumber) =>
+                    !Number.isSafeInteger(memberNumber) ||
+                    !members.has(memberNumber),
+            ))
+    ) {
+        throw new Error("snapshot day skip votes are invalid");
+    }
+    if (
+        snapshot.nightActions !== undefined &&
+        (!Array.isArray(snapshot.nightActions) ||
+            snapshot.nightActions.some(
+                (action) =>
+                    !isRecord(action) ||
+                    !Number.isSafeInteger(action.actorMemberNumber) ||
+                    !Number.isSafeInteger(action.targetMemberNumber) ||
+                    !members.has(action.actorMemberNumber as number) ||
+                    !members.has(action.targetMemberNumber as number) ||
+                    !["watch", "stalk", "protect"].includes(
+                        action.action as string,
+                    ) ||
+                    !Number.isSafeInteger(action.submittedAt) ||
+                    ![
+                        "kidnapper",
+                        "not_kidnapper",
+                        "maid",
+                        "not_maid",
+                        "protected",
+                        "unprotected",
+                    ].includes(action.result as string),
+            ))
+    ) {
+        throw new Error("snapshot night actions are invalid");
+    }
+    if (
+        snapshot.lastMistressTargetMemberNumber !== undefined &&
+        snapshot.lastMistressTargetMemberNumber !== null &&
+        (!Number.isSafeInteger(snapshot.lastMistressTargetMemberNumber) ||
+            !members.has(snapshot.lastMistressTargetMemberNumber as number))
+    ) {
+        throw new Error("snapshot mistress target is invalid");
+    }
+    if (snapshot.accusation !== undefined && snapshot.accusation !== null) {
+        const accusation = snapshot.accusation;
+        if (
+            !isRecord(accusation) ||
+            !Number.isSafeInteger(accusation.accusedMemberNumber) ||
+            !members.has(accusation.accusedMemberNumber as number) ||
+            typeof accusation.defenseSubmitted !== "boolean" ||
+            !Array.isArray(accusation.suspicions) ||
+            !Array.isArray(accusation.guiltyVotes) ||
+            !Array.isArray(accusation.innocentVotes) ||
+            (accusation.defenseDeadlineAt !== null &&
+                !Number.isSafeInteger(accusation.defenseDeadlineAt)) ||
+            (accusation.votingDeadlineAt !== null &&
+                !Number.isSafeInteger(accusation.votingDeadlineAt))
+        ) {
+            throw new Error("snapshot accusation is invalid");
+        }
+        for (const suspicion of accusation.suspicions) {
+            if (
+                !isRecord(suspicion) ||
+                !Number.isSafeInteger(suspicion.accuserMemberNumber) ||
+                !Number.isSafeInteger(suspicion.accusedMemberNumber) ||
+                !members.has(suspicion.accuserMemberNumber as number) ||
+                !members.has(suspicion.accusedMemberNumber as number)
+            ) {
+                throw new Error("snapshot suspicion is invalid");
+            }
+        }
+        for (const voter of [
+            ...accusation.guiltyVotes,
+            ...accusation.innocentVotes,
+        ]) {
+            if (!Number.isSafeInteger(voter) || !members.has(voter)) {
+                throw new Error("snapshot trial vote is invalid");
+            }
+        }
     }
     if (
         snapshot.progressions !== undefined &&

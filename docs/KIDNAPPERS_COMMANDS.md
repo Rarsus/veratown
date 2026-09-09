@@ -13,11 +13,15 @@ Aliases are accepted where shown.
 - `switch <session>` joins another lobby and leaves the current one.
 - `leave [session]` (`exit`, `quit`) leaves a session.
 - `start [session]` (`begin`) starts a ready lobby.
-- `status [session]` (`state`, `watch`, `observe`) shows the public roster and phase.
+- `status [session]` (`state`, `observe`) shows the public roster and phase.
 - `capture <member> [session]` (`kidnap`) attempts a capture.
 - `accept [session]` (`surrender`), `resist [session]` (`defend`), and
   `escape [session]` (`flee`) respond to a capture.
 - `accuse <member> [session]` (`vote`) raises an accusation during voting.
+- `defend [session]` submits the accused participant's defense.
+- `guilty [session]` (`trial`) or `innocent [session]` casts a trial vote.
+- `skip [session]` votes to end the day early.
+- `watch`, `stalk`, and `protect` submit the assigned role's night action.
 - `help` (`commands`) displays command help.
 
 ## Room administrators

@@ -1,3 +1,4 @@
+import type { KidnappersGameConfiguration } from "./kidnappersGameRules";
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +42,12 @@
  *
  * Phase graph (see ARCHITECTURE doc for the full diagram):
  *
- *   lobby -> night
+ *   lobby -> day -> voting
  *   night -> resolving_night
  *   resolving_night -> day | completed (if a win condition is met overnight)
  *   day -> voting
- *   voting -> defense (an accusation was raised) | resolving_day (no accusation)
- *   defense -> resolving_day
+ *   voting -> defense (two suspicions) | resolving_day (no accusation)
+ *   defense -> trial -> resolving_day
  *   resolving_day -> night | completed (if a win condition is met)
  *   any non-terminal phase -> aborted (explicit cancellation)
  *
@@ -61,6 +62,7 @@ export type KidnappersGamePhase =
     | "day"
     | "voting"
     | "defense"
+    | "trial"
     | "resolving_day"
     | "completed"
     | "aborted";
@@ -132,6 +134,7 @@ export interface KidnappersGameOutcome {
     readonly captorScore: number;
     readonly victimScore: number;
     readonly scores: readonly KidnappersPlayerScore[];
+    readonly specialWinners?: readonly number[];
     readonly summary: string;
 }
 
@@ -158,6 +161,39 @@ export interface KidnappersPlayerProgression {
     readonly capturedAt: number;
     readonly nextEscapeAt: number | null;
     readonly releasedAt: number | null;
+}
+
+export type KidnappersTrialVote = "guilty" | "innocent";
+
+export type KidnappersNightActionType = "watch" | "stalk" | "protect";
+
+export interface KidnappersNightAction {
+    readonly actorMemberNumber: number;
+    readonly action: KidnappersNightActionType;
+    readonly targetMemberNumber: number;
+    readonly submittedAt: number;
+    readonly result:
+        | "kidnapper"
+        | "not_kidnapper"
+        | "maid"
+        | "not_maid"
+        | "protected"
+        | "unprotected";
+}
+
+export interface KidnappersSuspicion {
+    readonly accuserMemberNumber: number;
+    readonly accusedMemberNumber: number;
+}
+
+export interface KidnappersAccusation {
+    readonly accusedMemberNumber: number;
+    readonly suspicions: readonly KidnappersSuspicion[];
+    readonly defenseSubmitted: boolean;
+    readonly guiltyVotes: readonly number[];
+    readonly innocentVotes: readonly number[];
+    readonly defenseDeadlineAt: number | null;
+    readonly votingDeadlineAt: number | null;
 }
 
 export interface KidnappersCleanupContainment {
@@ -200,7 +236,14 @@ export interface KidnappersSessionSnapshot {
     readonly startedAt: number | null;
     readonly completedAt: number | null;
     readonly winner: KidnappersWinner | null;
+    readonly phaseDeadlineAt?: number | null;
+    /** Configuration selected from the player count when the game started. */
+    readonly configuration?: KidnappersGameConfiguration | null;
     readonly outcome?: KidnappersGameOutcome | null;
+    readonly accusation?: KidnappersAccusation | null;
+    readonly daySkipVotes?: readonly number[];
+    readonly nightActions?: readonly KidnappersNightAction[];
+    readonly lastMistressTargetMemberNumber?: number | null;
     readonly players: readonly KidnappersPlayerState[];
     /**
      * The current capture turn. It is optional for backwards-compatible
@@ -245,6 +288,14 @@ export type KidnappersGameErrorReason =
     | "ESCAPE_COOLDOWN"
     | "NOT_CAPTURED"
     | "PROGRESSION_TERMINAL"
+    | "ACCUSATION_DUPLICATE"
+    | "ACCUSATION_REQUIRED"
+    | "TRIAL_VOTE_DUPLICATE"
+    | "INVALID_TRIAL_VOTE"
+    | "NO_ELIGIBLE_VOTERS"
+    | "NIGHT_ACTION_DUPLICATE"
+    | "INVALID_NIGHT_ACTION"
+    | "PHASE_NOT_EXPIRED"
     | "SESSION_READ_ONLY"
     | "UNKNOWN_COMMAND";
 
@@ -278,8 +329,32 @@ export type KidnappersGameCommand =
           readonly type: "ADVANCE_PHASE";
       })
     | (KidnappersGameCommandBase & {
+          readonly type: "TIMEOUT_PHASE";
+      })
+    | (KidnappersGameCommandBase & {
           readonly type: "RAISE_ACCUSATION";
           readonly memberNumber: number;
+          readonly targetMemberNumber?: number;
+          readonly accuserMemberNumber?: number;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "DEFEND_ACCUSATION";
+          readonly memberNumber: number;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "SUBMIT_TRIAL_VOTE";
+          readonly memberNumber: number;
+          readonly vote: KidnappersTrialVote;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "SKIP_DAY";
+          readonly memberNumber: number;
+      })
+    | (KidnappersGameCommandBase & {
+          readonly type: "SUBMIT_NIGHT_ACTION";
+          readonly memberNumber: number;
+          readonly action: KidnappersNightActionType;
+          readonly targetMemberNumber: number;
       })
     | (KidnappersGameCommandBase & {
           readonly type: "ATTEMPT_CAPTURE";
@@ -381,8 +456,50 @@ export type KidnappersGameEvent =
           readonly to: KidnappersGamePhase;
       })
     | (KidnappersGameEventBase & {
+          readonly type: "PHASE_TIMED_OUT";
+          readonly from: KidnappersGamePhase;
+          readonly to: KidnappersGamePhase;
+      })
+    | (KidnappersGameEventBase & {
           readonly type: "ACCUSATION_RAISED";
           readonly memberNumber: number;
+          readonly accuserMemberNumber?: number;
+          readonly accusedMemberNumber?: number;
+          readonly suspicionCount?: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "TRIAL_STARTED";
+          readonly accusedMemberNumber: number;
+          readonly votingDeadlineAt: number | null;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "ACCUSATION_DEFENDED";
+          readonly memberNumber: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "TRIAL_VOTE_CAST";
+          readonly memberNumber: number;
+          readonly vote: KidnappersTrialVote;
+          readonly guiltyVotes: number;
+          readonly innocentVotes: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "TRIAL_RESOLVED";
+          readonly accusedMemberNumber: number;
+          readonly result: "guilty" | "innocent" | "timeout";
+          readonly guiltyVotes: number;
+          readonly innocentVotes: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "DAY_SKIPPED";
+          readonly memberNumber: number;
+      })
+    | (KidnappersGameEventBase & {
+          readonly type: "NIGHT_ACTION_RESOLVED";
+          readonly memberNumber: number;
+          readonly action: KidnappersNightActionType;
+          readonly targetMemberNumber: number;
+          readonly result: KidnappersNightAction["result"];
       })
     | (KidnappersGameEventBase & {
           readonly type: "CAPTURE_ATTEMPTED";

@@ -213,6 +213,31 @@ export class KidnappersGameLifecycleService {
         return Array.from(this.sessions.keys());
     }
 
+    /**
+     * Advance sessions whose persisted phase deadline has elapsed. Hosts may
+     * call this from their shared scheduler; the command remains idempotent
+     * through the normal session persistence operation key.
+     */
+    public async advanceExpiredSessions(now = Date.now()): Promise<string[]> {
+        const advanced: string[] = [];
+        for (const session of this.sessions.values()) {
+            const deadline = session.getSnapshot().phaseDeadlineAt;
+            if (deadline === undefined || deadline === null || now < deadline)
+                continue;
+
+            const command = {
+                type: "TIMEOUT_PHASE" as const,
+                correlationId: `phase-timeout:${session.sessionId}:${deadline}`,
+                issuedAt: now,
+            };
+            const result = this.persistence
+                ? await session.dispatchPersisted(command, this.persistence)
+                : session.dispatch(command);
+            if (result.ok) advanced.push(session.sessionId);
+        }
+        return advanced;
+    }
+
     public isShutDown(): boolean {
         return this.shutDown;
     }

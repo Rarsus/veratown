@@ -31,6 +31,16 @@ function command<
     } as KidnappersGameCommand;
 }
 
+function advanceToSecondNight(session: KidnappersGameSession): void {
+    for (let index = 0; index < 8; index += 1) {
+        session.dispatch(
+            command({
+                type: "ADVANCE_PHASE",
+            }),
+        );
+    }
+}
+
 describe("KidnappersGameCaptureService", () => {
     test("applies captured outcomes through GameStateMutationService", async () => {
         const session = new KidnappersGameSession("session-1");
@@ -43,7 +53,19 @@ describe("KidnappersGameCaptureService", () => {
                 }),
             );
         }
-        session.dispatch(command({ type: "START_GAME" }));
+        session.dispatch(
+            command({
+                type: "START_GAME",
+                roles: {
+                    1: "kidnapper",
+                    2: "bystander",
+                    3: "bystander",
+                    4: "bystander",
+                    5: "bystander",
+                },
+            }),
+        );
+        advanceToSecondNight(session);
         const turn = session.getSnapshot().turn;
         assert.ok(turn);
         session.dispatch(
@@ -111,7 +133,19 @@ describe("KidnappersGameCaptureService", () => {
                 }),
             );
         }
-        session.dispatch(command({ type: "START_GAME" }));
+        session.dispatch(
+            command({
+                type: "START_GAME",
+                roles: {
+                    1: "kidnapper",
+                    2: "bystander",
+                    3: "bystander",
+                    4: "bystander",
+                    5: "bystander",
+                },
+            }),
+        );
+        advanceToSecondNight(session);
         const turn = session.getSnapshot().turn;
         assert.ok(turn);
         session.dispatch(

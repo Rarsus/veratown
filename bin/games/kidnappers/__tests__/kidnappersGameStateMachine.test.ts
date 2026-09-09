@@ -51,6 +51,15 @@ function joinPlayers(
     }
 }
 
+function advanceToSecondNight(machine: KidnappersGameStateMachine): void {
+    for (let index = 0; index < 8; index += 1) {
+        const result = machine.dispatch(
+            cmd({ type: "ADVANCE_PHASE" }, 200 + index),
+        );
+        assert.equal(result.ok, true);
+    }
+}
+
 describe("KidnappersGameStateMachine", () => {
     test("starts in the lobby phase with no players", () => {
         const machine = new KidnappersGameStateMachine("session-1");
@@ -150,15 +159,15 @@ describe("KidnappersGameStateMachine", () => {
         assert.equal(before.phase, "lobby");
     });
 
-    test("START_GAME transitions lobby -> night once enough players joined", () => {
+    test("START_GAME transitions lobby -> day once enough players joined", () => {
         const machine = new KidnappersGameStateMachine("session-1");
         joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
         const result = machine.dispatch(cmd({ type: "START_GAME" }));
         assert.equal(result.ok, true);
         if (!result.ok) return;
         assert.equal(result.event.type, "GAME_STARTED");
-        assert.equal(result.state.phase, "night");
-        assert.equal(result.state.round, 1);
+        assert.equal(result.state.phase, "day");
+        assert.equal(result.state.round, 0);
         assert.ok(result.state.startedAt !== null);
     });
 
@@ -198,11 +207,11 @@ describe("KidnappersGameStateMachine", () => {
         machine.dispatch(cmd({ type: "START_GAME" }));
 
         const expectedPhases = [
-            "resolving_night",
-            "day",
             "voting",
             "resolving_day",
             "night",
+            "resolving_night",
+            "day",
         ];
         for (const expected of expectedPhases) {
             const result = machine.dispatch(cmd({ type: "ADVANCE_PHASE" }));
@@ -211,10 +220,10 @@ describe("KidnappersGameStateMachine", () => {
             assert.equal(result.event.type, "PHASE_CHANGED");
             assert.equal(result.state.phase, expected);
         }
-        assert.equal(machine.getSnapshot().round, 2);
+        assert.equal(machine.getSnapshot().round, 1);
     });
 
-    test("RAISE_ACCUSATION is only legal during voting and moves to defense", () => {
+    test("two independent suspicions move voting into defense and trial", () => {
         const machine = new KidnappersGameStateMachine("session-1");
         joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
         machine.dispatch(cmd({ type: "START_GAME" }));
@@ -229,25 +238,40 @@ describe("KidnappersGameStateMachine", () => {
         }
         assert.deepEqual(machine.getSnapshot(), beforeVoting);
 
-        // Advance night -> resolving_night -> day -> voting
-        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }));
-        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }));
+        // Advance the opening day into the accusation phase.
         machine.dispatch(cmd({ type: "ADVANCE_PHASE" }));
         assert.equal(machine.getSnapshot().phase, "voting");
 
+        const first = machine.dispatch(
+            cmd({
+                type: "RAISE_ACCUSATION",
+                memberNumber: 100,
+                accuserMemberNumber: 101,
+                targetMemberNumber: 100,
+            }),
+        );
+        assert.equal(first.ok, true);
+        if (!first.ok) return;
+        assert.equal(first.event.type, "ACCUSATION_RAISED");
+        assert.equal(first.state.phase, "voting");
+
         const accepted = machine.dispatch(
-            cmd({ type: "RAISE_ACCUSATION", memberNumber: 100 }),
+            cmd({
+                type: "RAISE_ACCUSATION",
+                memberNumber: 100,
+                accuserMemberNumber: 102,
+                targetMemberNumber: 100,
+            }),
         );
         assert.equal(accepted.ok, true);
         if (!accepted.ok) return;
-        assert.equal(accepted.event.type, "ACCUSATION_RAISED");
         assert.equal(accepted.state.phase, "defense");
 
-        // From defense, ADVANCE_PHASE proceeds to resolving_day.
+        // From defense, ADVANCE_PHASE proceeds to trial.
         const afterDefense = machine.dispatch(cmd({ type: "ADVANCE_PHASE" }));
         assert.equal(afterDefense.ok, true);
         if (!afterDefense.ok) return;
-        assert.equal(afterDefense.state.phase, "resolving_day");
+        assert.equal(afterDefense.state.phase, "trial");
     });
 
     test("COMPLETE_GAME rejects before the game has started", () => {
@@ -347,7 +371,22 @@ describe("KidnappersGameStateMachine", () => {
     test("capture attempts require the current kidnapper turn and target an active victim", () => {
         const machine = new KidnappersGameStateMachine("session-1");
         joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
-        machine.dispatch(cmd({ type: "START_GAME" }, 100));
+        machine.dispatch(
+            cmd(
+                {
+                    type: "START_GAME",
+                    roles: {
+                        100: "kidnapper",
+                        101: "bystander",
+                        102: "bystander",
+                        103: "bystander",
+                        104: "bystander",
+                    },
+                },
+                100,
+            ),
+        );
+        advanceToSecondNight(machine);
         const turn = machine.getSnapshot().turn;
         assert.ok(turn);
 
@@ -405,6 +444,7 @@ describe("KidnappersGameStateMachine", () => {
                 },
             }),
         );
+        advanceToSecondNight(machine);
         const turn = machine.getSnapshot().turn;
         assert.ok(turn);
         machine.dispatch(
@@ -465,6 +505,7 @@ describe("KidnappersGameStateMachine", () => {
                 100,
             ),
         );
+        advanceToSecondNight(machine);
         const turn = machine.getSnapshot().turn;
         assert.ok(turn);
         machine.dispatch(
@@ -528,6 +569,7 @@ describe("KidnappersGameStateMachine", () => {
                 100,
             ),
         );
+        advanceToSecondNight(machine);
         const turn = machine.getSnapshot().turn;
         assert.ok(turn);
         machine.dispatch(
@@ -597,7 +639,22 @@ describe("KidnappersGameStateMachine", () => {
     test("timeout and disconnect resolve pending captures without polling", () => {
         const machine = new KidnappersGameStateMachine("session-1");
         joinPlayers(machine, KIDNAPPERS_MIN_PLAYERS);
-        machine.dispatch(cmd({ type: "START_GAME" }, 100));
+        machine.dispatch(
+            cmd(
+                {
+                    type: "START_GAME",
+                    roles: {
+                        100: "kidnapper",
+                        101: "bystander",
+                        102: "bystander",
+                        103: "bystander",
+                        104: "bystander",
+                    },
+                },
+                100,
+            ),
+        );
+        advanceToSecondNight(machine);
         const turn = machine.getSnapshot().turn;
         assert.ok(turn);
         machine.dispatch(
@@ -639,7 +696,22 @@ describe("KidnappersGameStateMachine", () => {
 
         const second = new KidnappersGameStateMachine("session-2");
         joinPlayers(second, KIDNAPPERS_MIN_PLAYERS);
-        second.dispatch(cmd({ type: "START_GAME" }, 100));
+        second.dispatch(
+            cmd(
+                {
+                    type: "START_GAME",
+                    roles: {
+                        100: "kidnapper",
+                        101: "bystander",
+                        102: "bystander",
+                        103: "bystander",
+                        104: "bystander",
+                    },
+                },
+                100,
+            ),
+        );
+        advanceToSecondNight(second);
         const secondTurn = second.getSnapshot().turn;
         assert.ok(secondTurn);
         second.dispatch(
@@ -666,5 +738,152 @@ describe("KidnappersGameStateMachine", () => {
                 )?.phase,
             "captured",
         );
+    });
+
+    test("resolves legacy night role actions privately in the domain event", () => {
+        const machine = new KidnappersGameStateMachine("night-actions");
+        joinPlayers(machine, 5, 1);
+        const started = machine.dispatch(
+            cmd({
+                type: "START_GAME",
+                roles: {
+                    1: "kidnapper",
+                    2: "maid",
+                    3: "stalker",
+                    4: "mistress",
+                    5: "bystander",
+                },
+            }),
+        );
+        assert.equal(started.ok, true);
+        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }, 10));
+        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }, 11));
+        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }, 12));
+        assert.equal(machine.getSnapshot().phase, "night");
+
+        const watch = machine.dispatch(
+            cmd(
+                {
+                    type: "SUBMIT_NIGHT_ACTION",
+                    memberNumber: 2,
+                    action: "watch",
+                    targetMemberNumber: 1,
+                },
+                13,
+            ),
+        );
+        assert.equal(watch.ok, true);
+        if (watch.ok) assert.equal(watch.event.type, "NIGHT_ACTION_RESOLVED");
+
+        const stalk = machine.dispatch(
+            cmd(
+                {
+                    type: "SUBMIT_NIGHT_ACTION",
+                    memberNumber: 3,
+                    action: "stalk",
+                    targetMemberNumber: 2,
+                },
+                14,
+            ),
+        );
+        assert.equal(stalk.ok, true);
+        if (stalk.ok) {
+            assert.equal(stalk.event.type, "NIGHT_ACTION_RESOLVED");
+            if (stalk.event.type === "NIGHT_ACTION_RESOLVED")
+                assert.equal(stalk.event.result, "maid");
+        }
+
+        const protect = machine.dispatch(
+            cmd(
+                {
+                    type: "SUBMIT_NIGHT_ACTION",
+                    memberNumber: 4,
+                    action: "protect",
+                    targetMemberNumber: 5,
+                },
+                15,
+            ),
+        );
+        assert.equal(protect.ok, true);
+        if (protect.ok) {
+            assert.equal(protect.event.type, "NIGHT_ACTION_RESOLVED");
+            if (protect.event.type === "NIGHT_ACTION_RESOLVED")
+                assert.equal(protect.event.result, "protected");
+        }
+    });
+
+    test("requires two suspicions and resolves a guilty trial by majority", () => {
+        const machine = new KidnappersGameStateMachine("trial-session");
+        joinPlayers(machine, 5, 1);
+        machine.dispatch(
+            cmd({
+                type: "START_GAME",
+                roles: {
+                    1: "kidnapper",
+                    2: "bystander",
+                    3: "bystander",
+                    4: "bystander",
+                    5: "bystander",
+                },
+            }),
+        );
+        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }, 10));
+
+        machine.dispatch(
+            cmd({
+                type: "RAISE_ACCUSATION",
+                memberNumber: 1,
+                accuserMemberNumber: 2,
+                targetMemberNumber: 1,
+            }),
+        );
+        const secondSuspicion = machine.dispatch(
+            cmd({
+                type: "RAISE_ACCUSATION",
+                memberNumber: 1,
+                accuserMemberNumber: 3,
+                targetMemberNumber: 1,
+            }),
+        );
+        assert.equal(secondSuspicion.ok, true);
+        assert.equal(machine.getSnapshot().phase, "defense");
+        machine.dispatch(cmd({ type: "ADVANCE_PHASE" }, 20));
+        assert.equal(machine.getSnapshot().phase, "trial");
+
+        for (const voter of [2, 3, 4]) {
+            const vote = machine.dispatch(
+                cmd({
+                    type: "SUBMIT_TRIAL_VOTE",
+                    memberNumber: voter,
+                    vote: "guilty",
+                }),
+            );
+            assert.equal(vote.ok, true);
+        }
+        assert.equal(machine.getSnapshot().phase, "resolving_day");
+        assert.equal(
+            machine
+                .getSnapshot()
+                .players.find((player) => player.memberNumber === 1)?.status,
+            "eliminated",
+        );
+    });
+
+    test("rejects an early phase timeout and accepts an expired deadline", () => {
+        const machine = new KidnappersGameStateMachine("deadline-session");
+        joinPlayers(machine, 5, 1);
+        machine.dispatch(cmd({ type: "START_GAME" }, 100));
+        const deadline = machine.getSnapshot().phaseDeadlineAt;
+        assert.ok(deadline);
+        const early = machine.dispatch(
+            cmd({ type: "TIMEOUT_PHASE" }, deadline - 1),
+        );
+        assert.equal(early.ok, false);
+        if (!early.ok) assert.equal(early.error.reason, "PHASE_NOT_EXPIRED");
+        const timedOut = machine.dispatch(
+            cmd({ type: "TIMEOUT_PHASE" }, deadline),
+        );
+        assert.equal(timedOut.ok, true);
+        assert.equal(machine.getSnapshot().phase, "voting");
     });
 });

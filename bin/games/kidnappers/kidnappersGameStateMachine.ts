@@ -31,12 +31,24 @@ import {
     type KidnappersGamePhase,
     type KidnappersContainment,
     type KidnappersCleanupContainment,
+    type KidnappersAccusation,
+    type KidnappersNightAction,
+    type KidnappersNightActionType,
+    type KidnappersTrialVote,
     type KidnappersPlayerState,
     type KidnappersPlayerRole,
     type KidnappersPlayerProgression,
     type KidnappersSessionSnapshot,
 } from "./kidnappersGameTypes";
-import { calculateKidnappersGameOutcome } from "./kidnappersGameOutcome";
+import {
+    calculateKidnappersGameOutcome,
+    determineKidnappersWinner,
+} from "./kidnappersGameOutcome";
+import {
+    assignConfiguredRoles,
+    getKidnappersConfiguration,
+    type KidnappersGameConfiguration,
+} from "./kidnappersGameRules";
 
 /** Result of dispatching a single command into the state machine. */
 export type KidnappersGameTransitionResult =
@@ -60,10 +72,11 @@ const ADVANCE_TARGETS: Partial<
     night: "resolving_night",
     resolving_night: "day",
     day: "voting",
-    // An accusation moves voting -> defense (see RAISE_ACCUSATION); with no
-    // accusation raised, ADVANCE_PHASE skips straight to resolution.
+    // An accusation moves voting -> defense -> trial; with no accusation
+    // raised, ADVANCE_PHASE skips straight to resolution.
     voting: "resolving_day",
-    defense: "resolving_day",
+    defense: "trial",
+    trial: "resolving_day",
     resolving_day: "night",
 };
 
@@ -78,6 +91,12 @@ interface InternalState {
     startedAt: number | null;
     completedAt: number | null;
     winner: KidnappersSessionSnapshot["winner"];
+    phaseDeadlineAt: number | null;
+    configuration: KidnappersGameConfiguration | null;
+    accusation: KidnappersAccusation | null;
+    daySkipVotes: Set<number>;
+    nightActions: Map<number, KidnappersNightAction>;
+    lastMistressTargetMemberNumber: number | null;
     outcome: KidnappersGameOutcome | null;
     players: Map<number, KidnappersPlayerState>;
     turn: KidnappersCaptureTurn | null;
@@ -102,12 +121,14 @@ interface InternalState {
 export class KidnappersGameStateMachine {
     private readonly sessionId: string;
     private readonly containment: KidnappersContainment;
+    private readonly random: () => number;
     private state: InternalState;
 
     constructor(
         sessionId: string,
         now: number = Date.now(),
         containment: KidnappersContainment = "bondage",
+        random: () => number = Math.random,
     ) {
         this.sessionId = sessionId;
         this.state = {
@@ -117,6 +138,12 @@ export class KidnappersGameStateMachine {
             startedAt: null,
             completedAt: null,
             winner: null,
+            phaseDeadlineAt: null,
+            configuration: null,
+            accusation: null,
+            daySkipVotes: new Set(),
+            nightActions: new Map(),
+            lastMistressTargetMemberNumber: null,
             outcome: null,
             players: new Map(),
             turn: null,
@@ -124,6 +151,7 @@ export class KidnappersGameStateMachine {
             progressions: new Map(),
         };
         this.containment = containment;
+        this.random = random;
     }
 
     public getSnapshot(): KidnappersSessionSnapshot {
@@ -148,6 +176,27 @@ export class KidnappersGameStateMachine {
             startedAt: snapshot.startedAt,
             completedAt: snapshot.completedAt,
             winner: snapshot.winner,
+            phaseDeadlineAt: snapshot.phaseDeadlineAt ?? null,
+            configuration: snapshot.configuration ?? null,
+            accusation: snapshot.accusation
+                ? {
+                      ...snapshot.accusation,
+                      suspicions: snapshot.accusation.suspicions.map(
+                          (suspicion) => ({ ...suspicion }),
+                      ),
+                      guiltyVotes: [...snapshot.accusation.guiltyVotes],
+                      innocentVotes: [...snapshot.accusation.innocentVotes],
+                  }
+                : null,
+            daySkipVotes: new Set(snapshot.daySkipVotes ?? []),
+            nightActions: new Map(
+                (snapshot.nightActions ?? []).map((action) => [
+                    action.actorMemberNumber,
+                    { ...action },
+                ]),
+            ),
+            lastMistressTargetMemberNumber:
+                snapshot.lastMistressTargetMemberNumber ?? null,
             outcome: snapshot.outcome ?? null,
             players: new Map(
                 snapshot.players.map((player) => [
@@ -219,7 +268,11 @@ export class KidnappersGameStateMachine {
             case "START_GAME": {
                 const guardError = this.guardStart(command);
                 if (guardError) return this.reject(guardError, before);
-                const roles = this.assignRoles(command.roles);
+                const configuration = getKidnappersConfiguration(
+                    this.state.players.size,
+                );
+                const roles = this.assignRoles(command.roles, configuration);
+                this.state.configuration = configuration;
                 for (const [memberNumber, role] of roles) {
                     const player = this.state.players.get(memberNumber);
                     if (player) {
@@ -229,10 +282,14 @@ export class KidnappersGameStateMachine {
                         });
                     }
                 }
-                this.state.phase = "night";
-                this.state.round = 1;
+                this.state.phase = "day";
+                this.state.round = 0;
                 this.state.startedAt = command.issuedAt;
-                this.state.turn = this.createTurn(command.issuedAt);
+                this.state.phaseDeadlineAt = this.phaseDeadline(
+                    "day",
+                    command.issuedAt,
+                );
+                this.state.turn = null;
                 return this.accept(
                     {
                         type: "GAME_STARTED",
@@ -274,16 +331,146 @@ export class KidnappersGameStateMachine {
                 if (guardError) return this.reject(guardError, before);
                 const from = this.state.phase;
                 const to = nextCyclePhase(from);
+                const automaticWinner =
+                    from === "resolving_night" || from === "resolving_day"
+                        ? determineKidnappersWinner(this.toSnapshot())
+                        : null;
+                if (automaticWinner) {
+                    const cleanupContainments = this.cleanupContainments();
+                    const outcome = this.finishGame(
+                        "normal",
+                        automaticWinner,
+                        command.issuedAt,
+                    );
+                    return this.accept(
+                        {
+                            type: "GAME_COMPLETED",
+                            winner: automaticWinner,
+                            reason: "normal",
+                            outcome,
+                            cleanupMemberNumbers: cleanupContainments.map(
+                                ({ memberNumber }) => memberNumber,
+                            ),
+                            cleanupContainments,
+                            correlationId: command.correlationId,
+                            emittedAt: command.issuedAt,
+                        },
+                        command,
+                    );
+                }
+                if (from === "defense" && this.state.accusation) {
+                    const votingDeadlineAt =
+                        command.issuedAt +
+                        (this.state.configuration?.votingDurationMs ?? 0);
+                    this.state.accusation = {
+                        ...this.state.accusation,
+                        votingDeadlineAt,
+                    };
+                    this.state.phase = to;
+                    this.state.phaseDeadlineAt = this.phaseDeadline(
+                        to,
+                        command.issuedAt,
+                    );
+                    return this.accept(
+                        {
+                            type: "TRIAL_STARTED",
+                            accusedMemberNumber:
+                                this.state.accusation.accusedMemberNumber,
+                            votingDeadlineAt,
+                            correlationId: command.correlationId,
+                            emittedAt: command.issuedAt,
+                        },
+                        command,
+                    );
+                }
+                if (from === "trial" && this.state.accusation) {
+                    const accusation = this.state.accusation;
+                    this.resolveTrial("timeout");
+                    this.state.phase = to;
+                    this.state.phaseDeadlineAt = this.phaseDeadline(
+                        to,
+                        command.issuedAt,
+                    );
+                    return this.accept(
+                        {
+                            type: "TRIAL_RESOLVED",
+                            accusedMemberNumber: accusation.accusedMemberNumber,
+                            result: "timeout",
+                            guiltyVotes: accusation.guiltyVotes.length,
+                            innocentVotes: accusation.innocentVotes.length,
+                            correlationId: command.correlationId,
+                            emittedAt: command.issuedAt,
+                        },
+                        command,
+                    );
+                }
                 this.state.phase = to;
                 if (to === "night") {
                     this.state.round += 1;
                     this.state.turn = this.createTurn(command.issuedAt);
+                    this.state.accusation = null;
+                    this.state.daySkipVotes.clear();
                 } else if (from === "night") {
                     this.state.turn = null;
                 }
+                this.state.phaseDeadlineAt = this.phaseDeadline(
+                    to,
+                    command.issuedAt,
+                );
+                if (to === "night") this.state.nightActions.clear();
                 return this.accept(
                     {
                         type: "PHASE_CHANGED",
+                        from,
+                        to,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "TIMEOUT_PHASE": {
+                const guardError = this.guardTimeoutPhase(command);
+                if (guardError) return this.reject(guardError, before);
+                const from = this.state.phase;
+                const to = nextCyclePhase(from);
+                if (from === "trial" && this.state.accusation) {
+                    const accusation = this.state.accusation;
+                    this.resolveTrial("timeout");
+                    this.state.phase = to;
+                    this.state.phaseDeadlineAt = this.phaseDeadline(
+                        to,
+                        command.issuedAt,
+                    );
+                    return this.accept(
+                        {
+                            type: "PHASE_TIMED_OUT",
+                            from,
+                            to,
+                            correlationId: command.correlationId,
+                            emittedAt: command.issuedAt,
+                        },
+                        command,
+                    );
+                }
+                this.state.phase = to;
+                if (to === "night") {
+                    this.state.round += 1;
+                    this.state.turn = this.createTurn(command.issuedAt);
+                    this.state.accusation = null;
+                    this.state.daySkipVotes.clear();
+                    this.state.nightActions.clear();
+                } else if (from === "night") {
+                    this.state.turn = null;
+                }
+                this.state.phaseDeadlineAt = this.phaseDeadline(
+                    to,
+                    command.issuedAt,
+                );
+                return this.accept(
+                    {
+                        type: "PHASE_TIMED_OUT",
                         from,
                         to,
                         correlationId: command.correlationId,
@@ -372,7 +559,14 @@ export class KidnappersGameStateMachine {
                         before,
                     );
                 }
-                if (outcome === "captured") {
+                const targetIsProtected = this.isProtectedTarget(
+                    pending.targetMemberNumber,
+                );
+                const effectiveOutcome =
+                    outcome === "captured" && targetIsProtected
+                        ? "resisted"
+                        : outcome;
+                if (effectiveOutcome === "captured") {
                     const target = this.state.players.get(
                         pending.targetMemberNumber,
                     );
@@ -384,7 +578,7 @@ export class KidnappersGameStateMachine {
                     }
                 }
                 const nextTurn = this.advanceCaptureTurn(command.issuedAt);
-                if (outcome === "captured") {
+                if (effectiveOutcome === "captured") {
                     this.state.progressions.set(pending.targetMemberNumber, {
                         memberNumber: pending.targetMemberNumber,
                         phase: "captured",
@@ -401,16 +595,16 @@ export class KidnappersGameStateMachine {
                         type: "CAPTURE_RESOLVED",
                         attackerMemberNumber: pending.attackerMemberNumber,
                         targetMemberNumber: pending.targetMemberNumber,
-                        outcome,
+                        outcome: effectiveOutcome,
                         containment:
-                            outcome === "captured"
+                            effectiveOutcome === "captured"
                                 ? this.containment
                                 : undefined,
                         turnId: turn.turnId,
                         nextTurnMemberNumber:
                             nextTurn?.ownerMemberNumber ?? null,
                         restraintLevel:
-                            outcome === "captured"
+                            effectiveOutcome === "captured"
                                 ? this.state.progressions.get(
                                       pending.targetMemberNumber,
                                   )?.restraintLevel
@@ -665,10 +859,186 @@ export class KidnappersGameStateMachine {
             case "RAISE_ACCUSATION": {
                 const guardError = this.guardAccusation(command);
                 if (guardError) return this.reject(guardError, before);
-                this.state.phase = "defense";
+                const accuserMemberNumber =
+                    command.accuserMemberNumber ?? command.memberNumber;
+                const accusedMemberNumber =
+                    command.targetMemberNumber ?? command.memberNumber;
+                const accusation = this.state.accusation ?? {
+                    accusedMemberNumber,
+                    suspicions: [],
+                    defenseSubmitted: false,
+                    guiltyVotes: [],
+                    innocentVotes: [],
+                    defenseDeadlineAt: null,
+                    votingDeadlineAt: null,
+                };
+                const suspicions = [
+                    ...accusation.suspicions,
+                    { accuserMemberNumber, accusedMemberNumber },
+                ];
+                const hasSecondSuspicion =
+                    suspicions.filter(
+                        (suspicion) =>
+                            suspicion.accusedMemberNumber ===
+                            accusation.accusedMemberNumber,
+                    ).length >= 2;
+                this.state.accusation = {
+                    ...accusation,
+                    suspicions,
+                    defenseDeadlineAt: hasSecondSuspicion
+                        ? command.issuedAt +
+                          (this.state.configuration?.defenseDurationMs ?? 0)
+                        : accusation.defenseDeadlineAt,
+                };
+                if (hasSecondSuspicion) {
+                    this.state.phase = "defense";
+                    this.state.phaseDeadlineAt = this.phaseDeadline(
+                        "defense",
+                        command.issuedAt,
+                    );
+                }
                 return this.accept(
                     {
                         type: "ACCUSATION_RAISED",
+                        memberNumber: accusedMemberNumber,
+                        accuserMemberNumber,
+                        accusedMemberNumber,
+                        suspicionCount: suspicions.filter(
+                            (suspicion) =>
+                                suspicion.accusedMemberNumber ===
+                                accusation.accusedMemberNumber,
+                        ).length,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "SUBMIT_NIGHT_ACTION": {
+                const guardError = this.guardNightAction(command);
+                if (guardError) return this.reject(guardError, before);
+                const target = this.state.players.get(
+                    command.targetMemberNumber,
+                )!;
+                const result = this.resolveNightAction(command.action, target);
+                const action: KidnappersNightAction = {
+                    actorMemberNumber: command.memberNumber,
+                    action: command.action,
+                    targetMemberNumber: command.targetMemberNumber,
+                    submittedAt: command.issuedAt,
+                    result,
+                };
+                this.state.nightActions.set(command.memberNumber, action);
+                if (command.action === "protect") {
+                    this.state.lastMistressTargetMemberNumber =
+                        command.targetMemberNumber;
+                }
+                return this.accept(
+                    {
+                        type: "NIGHT_ACTION_RESOLVED",
+                        memberNumber: command.memberNumber,
+                        action: command.action,
+                        targetMemberNumber: command.targetMemberNumber,
+                        result,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "DEFEND_ACCUSATION": {
+                const guardError = this.guardDefense(command);
+                if (guardError) return this.reject(guardError, before);
+                this.state.accusation = {
+                    ...this.state.accusation!,
+                    defenseSubmitted: true,
+                };
+                return this.accept(
+                    {
+                        type: "ACCUSATION_DEFENDED",
+                        memberNumber: command.memberNumber,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "SUBMIT_TRIAL_VOTE": {
+                const guardError = this.guardTrialVote(command);
+                if (guardError) return this.reject(guardError, before);
+                const accusation = this.state.accusation!;
+                const votes =
+                    command.vote === "guilty"
+                        ? {
+                              guiltyVotes: [
+                                  ...accusation.guiltyVotes,
+                                  command.memberNumber,
+                              ],
+                              innocentVotes: [...accusation.innocentVotes],
+                          }
+                        : {
+                              guiltyVotes: [...accusation.guiltyVotes],
+                              innocentVotes: [
+                                  ...accusation.innocentVotes,
+                                  command.memberNumber,
+                              ],
+                          };
+                this.state.accusation = { ...accusation, ...votes };
+                const eligibleVoters = this.eligibleTrialVoters().length;
+                const resolved =
+                    votes.guiltyVotes.length > eligibleVoters / 2
+                        ? "guilty"
+                        : votes.guiltyVotes.length +
+                                votes.innocentVotes.length >=
+                            eligibleVoters
+                          ? "innocent"
+                          : null;
+                if (resolved) {
+                    this.resolveTrial(resolved);
+                    this.state.phase = "resolving_day";
+                    this.state.phaseDeadlineAt = null;
+                    return this.accept(
+                        {
+                            type: "TRIAL_RESOLVED",
+                            accusedMemberNumber: accusation.accusedMemberNumber,
+                            result: resolved,
+                            guiltyVotes: votes.guiltyVotes.length,
+                            innocentVotes: votes.innocentVotes.length,
+                            correlationId: command.correlationId,
+                            emittedAt: command.issuedAt,
+                        },
+                        command,
+                    );
+                }
+                return this.accept(
+                    {
+                        type: "TRIAL_VOTE_CAST",
+                        memberNumber: command.memberNumber,
+                        vote: command.vote,
+                        guiltyVotes: votes.guiltyVotes.length,
+                        innocentVotes: votes.innocentVotes.length,
+                        correlationId: command.correlationId,
+                        emittedAt: command.issuedAt,
+                    },
+                    command,
+                );
+            }
+
+            case "SKIP_DAY": {
+                const guardError = this.guardSkipDay(command);
+                if (guardError) return this.reject(guardError, before);
+                this.state.daySkipVotes.add(command.memberNumber);
+                const eligible = this.eligibleDayVoters();
+                if (this.state.daySkipVotes.size >= eligible.length) {
+                    this.state.phase = "resolving_day";
+                    this.state.phaseDeadlineAt = null;
+                }
+                return this.accept(
+                    {
+                        type: "DAY_SKIPPED",
                         memberNumber: command.memberNumber,
                         correlationId: command.correlationId,
                         emittedAt: command.issuedAt,
@@ -886,8 +1256,39 @@ export class KidnappersGameStateMachine {
         this.state.winner = outcome.winner;
         this.state.outcome = outcome;
         this.state.turn = null;
+        this.state.phaseDeadlineAt = null;
         this.state.progressions.clear();
         return outcome;
+    }
+
+    private phaseDeadline(
+        phase: KidnappersGamePhase,
+        now: number,
+    ): number | null {
+        const configuration = this.state.configuration;
+        if (!configuration) return null;
+        switch (phase) {
+            case "day":
+                return (
+                    now +
+                    (this.state.round === 0
+                        ? configuration.firstDayDurationMs
+                        : configuration.dayDurationMs)
+                );
+            case "night":
+                return (
+                    now +
+                    (this.state.round === 1
+                        ? configuration.firstNightDurationMs
+                        : configuration.nightDurationMs)
+                );
+            case "defense":
+                return now + configuration.defenseDurationMs;
+            case "trial":
+                return now + configuration.votingDurationMs;
+            default:
+                return null;
+        }
     }
 
     private guardLeave(
@@ -1049,6 +1450,38 @@ export class KidnappersGameStateMachine {
         return null;
     }
 
+    private guardTimeoutPhase(
+        command: Extract<KidnappersGameCommand, { type: "TIMEOUT_PHASE" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (!(this.state.phase in ADVANCE_TARGETS)) {
+            return this.captureError(
+                `Cannot time out phase '${this.state.phase}'`,
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        if (
+            this.state.phaseDeadlineAt === null ||
+            command.issuedAt < this.state.phaseDeadlineAt
+        ) {
+            return this.captureError(
+                "The current phase has not expired",
+                "PHASE_NOT_EXPIRED",
+                command,
+            );
+        }
+        if (this.state.turn?.pendingCapture) {
+            return this.captureError(
+                "The pending capture must be resolved before the phase times out",
+                "CAPTURE_PENDING",
+                command,
+            );
+        }
+        return null;
+    }
+
     private guardAttemptCapture(
         command: Extract<KidnappersGameCommand, { type: "ATTEMPT_CAPTURE" }>,
     ): KidnappersGameError | null {
@@ -1057,6 +1490,17 @@ export class KidnappersGameStateMachine {
         if (this.state.phase !== "night") {
             return this.captureError(
                 "Capture attempts are only legal during night",
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        if (
+            this.state.round === 1 &&
+            this.state.configuration &&
+            !this.state.configuration.firstNightKidnapping
+        ) {
+            return this.captureError(
+                "Kidnapping is not allowed during the first night in this configuration",
                 "INVALID_TRANSITION",
                 command,
             );
@@ -1364,19 +1808,293 @@ export class KidnappersGameStateMachine {
                 },
             );
         }
-        if (!this.state.players.has(command.memberNumber)) {
+        const accuserMemberNumber =
+            command.accuserMemberNumber ?? command.memberNumber;
+        const accusedMemberNumber =
+            command.targetMemberNumber ?? command.memberNumber;
+        const accuser = this.state.players.get(accuserMemberNumber);
+        const accused = this.state.players.get(accusedMemberNumber);
+        if (!accuser || !accused) {
             return new KidnappersGameError(
-                "Accused player is not part of this session",
+                "Accuser and accused must be part of this session",
                 {
                     reason: "PLAYER_NOT_FOUND",
                     phase: this.state.phase,
                     command: command.type,
                     correlationId: command.correlationId,
-                    context: { memberNumber: command.memberNumber },
+                    context: { accuserMemberNumber, accusedMemberNumber },
+                },
+            );
+        }
+        if (accuser.status !== "active" || accused.status !== "active") {
+            return new KidnappersGameError(
+                "Only active participants may raise an accusation",
+                {
+                    reason: "PLAYER_DISCONNECTED",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        const existing = this.state.accusation;
+        if (existing && existing.accusedMemberNumber !== accusedMemberNumber) {
+            return new KidnappersGameError(
+                "Only one accused participant can be pending at a time",
+                {
+                    reason: "ACCUSATION_REQUIRED",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
+                },
+            );
+        }
+        if (
+            existing?.suspicions.some(
+                (suspicion) =>
+                    suspicion.accuserMemberNumber === accuserMemberNumber,
+            )
+        ) {
+            return new KidnappersGameError(
+                "You already voiced an accusation for this participant",
+                {
+                    reason: "ACCUSATION_DUPLICATE",
+                    phase: this.state.phase,
+                    command: command.type,
+                    correlationId: command.correlationId,
                 },
             );
         }
         return null;
+    }
+
+    private guardNightAction(
+        command: Extract<
+            KidnappersGameCommand,
+            { type: "SUBMIT_NIGHT_ACTION" }
+        >,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (this.state.phase !== "night") {
+            return this.captureError(
+                "Night actions are only legal during night",
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        const actor = this.state.players.get(command.memberNumber);
+        const target = this.state.players.get(command.targetMemberNumber);
+        if (!actor || !target) {
+            return this.captureError(
+                "Night action participants must be in the session",
+                "PLAYER_NOT_FOUND",
+                command,
+            );
+        }
+        if (actor.status !== "active" || target.status !== "active") {
+            return this.captureError(
+                "Night action participants must be active",
+                "PLAYER_DISCONNECTED",
+                command,
+            );
+        }
+        if (this.state.nightActions.has(command.memberNumber)) {
+            return this.captureError(
+                "This role has already submitted a night action",
+                "NIGHT_ACTION_DUPLICATE",
+                command,
+            );
+        }
+        const expectedRole: Record<KidnappersNightActionType, string> = {
+            watch: "maid",
+            stalk: "stalker",
+            protect: "mistress",
+        };
+        if (actor.role !== expectedRole[command.action]) {
+            return this.captureError(
+                `Only the ${expectedRole[command.action]} may use this night action`,
+                "NOT_IN_ROLE",
+                command,
+            );
+        }
+        if (
+            command.action === "protect" &&
+            command.targetMemberNumber === command.memberNumber &&
+            !this.state.configuration?.mistressCanProtectHerself
+        ) {
+            return this.captureError(
+                "This configuration does not allow the mistress to protect herself",
+                "INVALID_NIGHT_ACTION",
+                command,
+            );
+        }
+        if (
+            command.action === "protect" &&
+            command.targetMemberNumber ===
+                this.state.lastMistressTargetMemberNumber &&
+            !this.state.configuration?.mistressCanPickSameTargetTwice
+        ) {
+            return this.captureError(
+                "The mistress cannot protect the same participant on consecutive nights",
+                "INVALID_NIGHT_ACTION",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private resolveNightAction(
+        action: KidnappersNightActionType,
+        target: KidnappersPlayerState,
+    ): KidnappersNightAction["result"] {
+        if (action === "watch") {
+            return target.role === "kidnapper" ? "kidnapper" : "not_kidnapper";
+        }
+        if (action === "stalk") {
+            return target.role === "maid" ? "maid" : "not_maid";
+        }
+        return "protected";
+    }
+
+    private isProtectedTarget(memberNumber: number): boolean {
+        return Array.from(this.state.nightActions.values()).some(
+            (action) =>
+                action.action === "protect" &&
+                action.targetMemberNumber === memberNumber,
+        );
+    }
+
+    private guardDefense(
+        command: Extract<KidnappersGameCommand, { type: "DEFEND_ACCUSATION" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        const accusation = this.state.accusation;
+        if (this.state.phase !== "defense" || !accusation) {
+            return this.captureError(
+                "There is no active accusation defense",
+                "ACCUSATION_REQUIRED",
+                command,
+            );
+        }
+        if (accusation.accusedMemberNumber !== command.memberNumber) {
+            return this.captureError(
+                "Only the accused participant may submit a defense",
+                "INVALID_TRIAL_VOTE",
+                command,
+            );
+        }
+        if (accusation.defenseSubmitted) {
+            return this.captureError(
+                "The accused participant already submitted a defense",
+                "ACCUSATION_DUPLICATE",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private guardTrialVote(
+        command: Extract<KidnappersGameCommand, { type: "SUBMIT_TRIAL_VOTE" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        const accusation = this.state.accusation;
+        if (this.state.phase !== "trial" || !accusation) {
+            return this.captureError(
+                "Trial voting is not active",
+                "ACCUSATION_REQUIRED",
+                command,
+            );
+        }
+        if (accusation.accusedMemberNumber === command.memberNumber) {
+            return this.captureError(
+                "The accused participant cannot vote in their own trial",
+                "INVALID_TRIAL_VOTE",
+                command,
+            );
+        }
+        const player = this.state.players.get(command.memberNumber);
+        if (!player || player.status !== "active") {
+            return this.captureError(
+                "Only active participants may vote",
+                "PLAYER_DISCONNECTED",
+                command,
+            );
+        }
+        if (
+            accusation.guiltyVotes.includes(command.memberNumber) ||
+            accusation.innocentVotes.includes(command.memberNumber)
+        ) {
+            return this.captureError(
+                "You already voted in this trial",
+                "TRIAL_VOTE_DUPLICATE",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private guardSkipDay(
+        command: Extract<KidnappersGameCommand, { type: "SKIP_DAY" }>,
+    ): KidnappersGameError | null {
+        const terminalError = this.guardNotTerminal(command);
+        if (terminalError) return terminalError;
+        if (command.memberNumber <= 0 || this.state.phase !== "day") {
+            return this.captureError(
+                "Day skip votes are only legal during the day",
+                "INVALID_TRANSITION",
+                command,
+            );
+        }
+        const player = this.state.players.get(command.memberNumber);
+        if (!player || player.status !== "active") {
+            return this.captureError(
+                "Only active participants may skip the day",
+                "PLAYER_NOT_FOUND",
+                command,
+            );
+        }
+        if (this.state.daySkipVotes.has(command.memberNumber)) {
+            return this.captureError(
+                "You already voted to skip the day",
+                "ACCUSATION_DUPLICATE",
+                command,
+            );
+        }
+        return null;
+    }
+
+    private eligibleTrialVoters(): KidnappersPlayerState[] {
+        const accusedMemberNumber = this.state.accusation?.accusedMemberNumber;
+        return Array.from(this.state.players.values()).filter(
+            (player) =>
+                player.status === "active" &&
+                player.memberNumber !== accusedMemberNumber,
+        );
+    }
+
+    private eligibleDayVoters(): KidnappersPlayerState[] {
+        return Array.from(this.state.players.values()).filter(
+            (player) => player.status === "active",
+        );
+    }
+
+    private resolveTrial(result: "guilty" | "innocent" | "timeout"): void {
+        const accusation = this.state.accusation;
+        if (!accusation) return;
+        if (result === "guilty") {
+            const accused = this.state.players.get(
+                accusation.accusedMemberNumber,
+            );
+            if (accused) {
+                this.state.players.set(accused.memberNumber, {
+                    ...accused,
+                    status: "eliminated",
+                });
+            }
+        }
     }
 
     private guardComplete(
@@ -1442,6 +2160,7 @@ export class KidnappersGameStateMachine {
 
     private assignRoles(
         requested?: Readonly<Record<number, KidnappersPlayerRole>>,
+        configuration?: KidnappersGameConfiguration,
     ): Map<number, KidnappersPlayerRole> {
         if (requested) {
             return new Map(
@@ -1451,25 +2170,17 @@ export class KidnappersGameStateMachine {
                 ]),
             );
         }
-        const assigned = new Map<number, KidnappersPlayerRole>();
         const players = Array.from(this.state.players.values()).sort(
             (left, right) => left.memberNumber - right.memberNumber,
         );
-        const hasAssignedRole = players.some((player) => player.role !== null);
-        let assignedKidnapper = false;
+        const assigned = assignConfiguredRoles(
+            players,
+            configuration ?? getKidnappersConfiguration(players.length),
+            this.random,
+        );
         for (const player of players) {
-            const role =
-                player.role ?? (!assignedKidnapper ? "kidnapper" : "bystander");
-            if (role === "kidnapper") assignedKidnapper = true;
-            assigned.set(player.memberNumber, role);
-        }
-        if (hasAssignedRole && !assignedKidnapper) {
-            const firstUnassigned = players.find(
-                (player) => player.role === null,
-            );
-            if (firstUnassigned) {
-                assigned.set(firstUnassigned.memberNumber, "kidnapper");
-            }
+            if (player.role !== null)
+                assigned.set(player.memberNumber, player.role);
         }
         return assigned;
     }
@@ -1493,33 +2204,12 @@ export class KidnappersGameStateMachine {
     }
 
     private advanceCaptureTurn(now: number): KidnappersCaptureTurn | null {
-        const current = this.state.turn;
-        if (!current) return null;
-        const kidnappers = Array.from(this.state.players.values())
-            .filter(
-                (player) =>
-                    player.role === "kidnapper" && player.status === "active",
-            )
-            .sort((left, right) => left.memberNumber - right.memberNumber);
-        const currentIndex = kidnappers.findIndex(
-            (player) => player.memberNumber === current.ownerMemberNumber,
-        );
-        const next = kidnappers
-            .slice(currentIndex + 1)
-            .find((player) => player.status === "active");
-        if (!next) {
-            this.state.turn = null;
-            return null;
-        }
-        this.state.turnSequence += 1;
-        this.state.turn = {
-            turnId: `${this.sessionId}:${this.state.round}:${this.state.turnSequence}`,
-            ownerMemberNumber: next.memberNumber,
-            startedAt: now,
-            deadlineAt: now + KIDNAPPERS_CAPTURE_TIMEOUT_MS,
-            pendingCapture: null,
-        };
-        return this.state.turn;
+        // The legacy game has one shared kidnapping choice per night. The
+        // second kidnapper participates in the decision but does not receive
+        // a second independent capture turn.
+        void now;
+        this.state.turn = null;
+        return null;
     }
 
     private sequenceFromTurnId(turnId?: string): number {
@@ -1595,6 +2285,10 @@ export class KidnappersGameStateMachine {
             startedAt: this.state.startedAt,
             completedAt: this.state.completedAt,
             winner: this.state.winner,
+            phaseDeadlineAt: this.state.phaseDeadlineAt,
+            configuration: this.state.configuration
+                ? { ...this.state.configuration }
+                : null,
             outcome: this.state.outcome
                 ? {
                       ...this.state.outcome,
@@ -1603,6 +2297,22 @@ export class KidnappersGameStateMachine {
                       })),
                   }
                 : null,
+            accusation: this.state.accusation
+                ? {
+                      ...this.state.accusation,
+                      suspicions: this.state.accusation.suspicions.map(
+                          (suspicion) => ({ ...suspicion }),
+                      ),
+                      guiltyVotes: [...this.state.accusation.guiltyVotes],
+                      innocentVotes: [...this.state.accusation.innocentVotes],
+                  }
+                : null,
+            daySkipVotes: [...this.state.daySkipVotes],
+            nightActions: Array.from(this.state.nightActions.values()).map(
+                (action) => ({ ...action }),
+            ),
+            lastMistressTargetMemberNumber:
+                this.state.lastMistressTargetMemberNumber,
             players: Array.from(this.state.players.values()).map((player) => ({
                 ...player,
             })),

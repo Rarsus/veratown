@@ -40,6 +40,7 @@ The module boundaries are:
 | Event publication and subscribers                                      | `kidnappersGameMessaging.ts`                  |
 | Chat parsing, permissions, and router registration                     | `kidnappersGameCommands.ts`                   |
 | Deterministic scoring and terminal summaries                           | `kidnappersGameOutcome.ts`                    |
+| Legacy player-count configurations and role rules                      | `kidnappersGameRules.ts`                      |
 
 Guards run before mutation and rejected transitions return an unchanged,
 defensive snapshot with a typed `KidnappersGameError`. Do not mutate snapshots,
@@ -115,6 +116,13 @@ The Phase 3 bootstrap must also:
    active `GamePluginCommandRouter`.
 5. Supply the room-membership guard and event router.
 6. Attach cross-system subscribers and dispose them during shutdown.
+
+The lifecycle host should call `advanceExpiredSessions(now)` from its shared
+scheduler. Phase deadlines are persisted in the session snapshot and advance
+through `TIMEOUT_PHASE`; capture response deadlines remain explicit
+`TIMEOUT_TURN` commands. The state machine starts a session in the legacy
+daytime introduction, selects the five-to-nine-player role configuration, and
+enforces the first-night kidnapping flag.
 
 Supported extension points are `KidnappersGameCaptureOptions` for containment,
 `KidnappersSubscriberHandlers` for isolated effects, and the plugin router for

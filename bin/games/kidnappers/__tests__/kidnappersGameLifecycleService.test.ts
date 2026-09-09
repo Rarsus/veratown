@@ -65,7 +65,7 @@ describe("KidnappersGameLifecycleService", () => {
         }
         const startResult = session.dispatchCommand({ type: "START_GAME" });
         assert.equal(startResult.ok, true);
-        assert.equal(session.getSnapshot().phase, "night");
+        assert.equal(session.getSnapshot().phase, "day");
 
         service.shutdownAll();
         assert.equal(session.getSnapshot().phase, "aborted");

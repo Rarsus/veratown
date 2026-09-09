@@ -56,41 +56,29 @@ or mutate a previously returned snapshot to affect future state (see the
 ## Phase state machine
 
 ```
-                     ┌────────────────────────────────────────────┐
-                     │                                              │
-   lobby ──START_GAME──▶ night ──ADVANCE──▶ resolving_night ──ADVANCE──▶ day
-     ▲                                                                    │
-     │                                                                ADVANCE
-     │                                                                    │
-     │                                                                    ▼
-     │                                                                 voting
-     │                                                        RAISE_ACCUSATION │ ADVANCE (no accusation)
-     │                                                                    │           │
-     │                                                                    ▼           │
-     │                                                                defense         │
-     │                                                                    │           │
-     │                                                                ADVANCE         │
-     │                                                                    │           │
-     │                                                                    ▼           ▼
-     └──────────────────────────────────────────────────────────── resolving_day
-                                                                          │
-                                                                       ADVANCE
-                                                                          │
-                                                                          ▼
-                                                                       (back to night, round + 1)
+lobby --START_GAME--> day --ADVANCE--> voting --ADVANCE--> resolving_day
+  ^                     |                 |                    |
+  |                     |                 |                    +--ADVANCE--> night
+  |                     |                 +--two suspicions--> defense
+  |                     |                                    |
+  |                     |                                    +--ADVANCE--> trial
+  |                     |                                                   |
+  |                     +--TIMEOUT_PHASE-----------------------------------+
+  |                                                                         |
+  +---------------------------- resolving_day <-----------------------------+
 
-Any non-terminal phase ──ABORT_SESSION──▶ aborted (terminal)
-Any non-terminal phase ──COMPLETE_GAME (after lobby)──▶ completed (terminal)
-Any phase, including terminal ──SHUTDOWN_SESSION──▶ aborted (idempotent)
+Any non-terminal phase --ABORT_SESSION--> aborted
+Any non-terminal phase --COMPLETE_GAME--> completed
+Any phase --SHUTDOWN_SESSION--> aborted (idempotent)
 ```
 
 - **Terminal phases:** `completed`, `aborted`. Once reached, every command
   except `SHUTDOWN_SESSION` is rejected with reason `SESSION_TERMINAL`.
   `SHUTDOWN_SESSION` is idempotent from a terminal phase: calling it twice is
   safe and produces the same resulting snapshot.
-- **Round counting:** the `round` counter increments exactly once per full
-  `night → … → resolving_day → night` cycle, when `ADVANCE_PHASE` lands back
-  on `night`.
+- **Round counting:** the `round` counter increments when a phase transition
+  enters `night`; the opening daytime introduction remains round `0`, and the
+  first night is round `1`.
 - **Player registry invariants**, enforced only in the `lobby` phase:
     - `JOIN_SESSION` rejects a duplicate member number (`PLAYER_ALREADY_JOINED`)
       and rejects joins beyond `KIDNAPPERS_MAX_PLAYERS` (`SESSION_FULL`).
@@ -113,13 +101,15 @@ audit records — the same correlation pattern already used by
 `bin/games/shared/eventBus.ts`).
 
 Commands: `JOIN_SESSION`, `LEAVE_SESSION`, `ASSIGN_ROLE`, `START_GAME`,
-`ADVANCE_PHASE`, `ATTEMPT_CAPTURE`, `RESIST_CAPTURE`, `ESCAPE_CAPTURE`,
+`ADVANCE_PHASE`, `TIMEOUT_PHASE`, `SUBMIT_NIGHT_ACTION`, `RAISE_ACCUSATION`,
+`DEFEND_ACCUSATION`, `SUBMIT_TRIAL_VOTE`, `SKIP_DAY`, `ATTEMPT_CAPTURE`, `RESIST_CAPTURE`, `ESCAPE_CAPTURE`,
 `ACCEPT_CAPTURE`, `RESOLVE_CAPTURE`, `TIMEOUT_TURN`, `RESOLVE_TURN`,
 `PLAYER_DISCONNECTED`, `PLAYER_RECONNECTED`, `RAISE_ACCUSATION`,
 `COMPLETE_GAME`, `ABORT_SESSION`, `SHUTDOWN_SESSION`.
 
 Events: `PLAYER_JOINED`, `PLAYER_LEFT`, `GAME_STARTED`, `PHASE_CHANGED`,
-`ROLE_ASSIGNED`, `ACCUSATION_RAISED`, `CAPTURE_ATTEMPTED`,
+`PHASE_TIMED_OUT`, `ROLE_ASSIGNED`, `NIGHT_ACTION_RESOLVED`, `ACCUSATION_RAISED`,
+`TRIAL_STARTED`, `TRIAL_VOTE_CAST`, `TRIAL_RESOLVED`, `CAPTURE_ATTEMPTED`,
 `CAPTURE_RESOLVED`, `TURN_TIMED_OUT`, `PLAYER_DISCONNECTED`,
 `PLAYER_RECONNECTED`, `ACTION_REJECTED`, `GAME_COMPLETED`,
 `SESSION_ABORTED`, `SESSION_SHUT_DOWN`.

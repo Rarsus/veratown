@@ -27,6 +27,23 @@ const CAPTOR_ROLES: ReadonlySet<KidnappersPlayerRole> = new Set([
     "fan",
 ]);
 
+export function determineKidnappersWinner(
+    snapshot: KidnappersSessionSnapshot,
+): KidnappersWinner | null {
+    const active = snapshot.players.filter(
+        (player) => player.status === "active",
+    );
+    const kidnappers = active.filter((player) => player.role === "kidnapper");
+    const clubMembers = active.filter((player) => player.role !== "kidnapper");
+    if (kidnappers.length === 0) return "victims";
+    if (active.length <= 2 || clubMembers.length < 3) {
+        return active.some((player) => player.role === "switch")
+            ? "victims"
+            : "captors";
+    }
+    return null;
+}
+
 function sideForRole(role: KidnappersPlayerRole | null): "captors" | "victims" {
     return role && CAPTOR_ROLES.has(role) ? "captors" : "victims";
 }
@@ -110,6 +127,14 @@ export function calculateKidnappersGameOutcome(
         result === "captors" || result === "victims" || result === "tie"
             ? result
             : null;
+    const specialWinners = snapshot.players
+        .filter(
+            (player) =>
+                player.role === "masochist" &&
+                (player.status === "captured" ||
+                    player.status === "eliminated"),
+        )
+        .map((player) => player.memberNumber);
     const durationMs =
         snapshot.startedAt === null
             ? 0
@@ -117,7 +142,10 @@ export function calculateKidnappersGameOutcome(
     const summary =
         `Kidnappers session ${snapshot.sessionId} ended (${reason}); ` +
         `result=${result}; captors=${captorScore}; victims=${victimScore}; ` +
-        `round=${snapshot.round}; durationMs=${durationMs}.`;
+        `round=${snapshot.round}; durationMs=${durationMs}.` +
+        (specialWinners.length > 0
+            ? ` specialWinners=${specialWinners.join(",")}.`
+            : "");
 
     return {
         reason,
@@ -129,6 +157,7 @@ export function calculateKidnappersGameOutcome(
         captorScore,
         victimScore,
         scores,
+        specialWinners,
         summary,
     };
 }

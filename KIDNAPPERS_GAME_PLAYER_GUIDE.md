@@ -39,8 +39,10 @@ the configured Kidnappers region. The command route is registered on the
 shared Veratown bot connection, but commands from outside that region are
 rejected without sending a Kidnappers response.
 
-The normal phase sequence is `lobby → night → resolving_night → day → voting`
-and then `defense` or `resolving_day`, returning to `night` for the next round.
+The normal phase sequence opens with `lobby → day → voting`, then moves through
+`resolving_day → night → resolving_night → day`. Two suspicions move the game
+through `defense → trial`; a guilty majority eliminates the accused. Phase
+deadlines are persisted and advanced by the lifecycle scheduler.
 `completed` and `aborted` are terminal.
 
 For private, range-independent commands use:
@@ -59,19 +61,26 @@ game-state information out of public map communication.
 All arguments shown in brackets are optional. A session argument can be omitted
 when the player already has an active session.
 
-| Command                      | Aliases                     | Purpose                                              |
-| ---------------------------- | --------------------------- | ---------------------------------------------------- |
-| `help`                       | `commands`                  | Show the command help text.                          |
-| `join [session]`             | `enter`                     | Join a named lobby, or create/join the active lobby. |
-| `switch <session>`           | —                           | Join another session and leave the current one.      |
-| `leave [session]`            | `exit`, `quit`              | Leave a session.                                     |
-| `start [session]`            | `begin`                     | Start a lobby with at least five players.            |
-| `status [session]`           | `state`, `watch`, `observe` | Show the phase and public roster.                    |
-| `capture <member> [session]` | `kidnap`                    | Attempt a capture on the kidnapper's turn.           |
-| `accept [session]`           | `surrender`                 | Accept the pending capture as its target.            |
-| `resist [session]`           | `defend`                    | Resist the pending capture as its target.            |
-| `escape [session]`           | `flee`                      | Attempt escape from an active progression.           |
-| `accuse <member> [session]`  | `vote`                      | Raise an accusation during voting.                   |
+| Command                      | Aliases            | Purpose                                              |
+| ---------------------------- | ------------------ | ---------------------------------------------------- |
+| `help`                       | `commands`         | Show the command help text.                          |
+| `join [session]`             | `enter`            | Join a named lobby, or create/join the active lobby. |
+| `switch <session>`           | —                  | Join another session and leave the current one.      |
+| `leave [session]`            | `exit`, `quit`     | Leave a session.                                     |
+| `start [session]`            | `begin`            | Start a lobby with at least five players.            |
+| `status [session]`           | `state`, `observe` | Show the phase and public roster.                    |
+| `capture <member> [session]` | `kidnap`           | Attempt a capture on the kidnapper's turn.           |
+| `accept [session]`           | `surrender`        | Accept the pending capture as its target.            |
+| `resist [session]`           | —                  | Resist the pending capture as its target.            |
+| `escape [session]`           | `flee`             | Attempt escape from an active progression.           |
+| `accuse <member> [session]`  | `vote`             | Raise an accusation during voting.                   |
+| `defend [session]`           | —                  | Submit the accused participant's defense.            |
+| `guilty [session]`           | `trial`            | Vote guilty during an active trial.                  |
+| `innocent [session]`         | —                  | Vote innocent during an active trial.                |
+| `skip [session]`             | —                  | Vote to end the day early.                           |
+| `watch <member> [session]`   | —                  | Maid investigation during the night.                 |
+| `stalk <member> [session]`   | —                  | Stalker investigation during the night.              |
+| `protect <member> [session]` | —                  | Mistress protection during the night.                |
 
 The controller rejects malformed arguments, commands from outside the game
 room when the host supplies a room-membership guard, non-participants,

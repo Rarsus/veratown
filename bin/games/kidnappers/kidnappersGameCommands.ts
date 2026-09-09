@@ -113,13 +113,13 @@ const COMMAND_ALIASES: Readonly<Record<string, string>> = {
     exit: "leave",
     quit: "leave",
     state: "status",
-    watch: "status",
     observe: "status",
     kidnap: "capture",
-    defend: "resist",
+    defend: "defendaccusation",
     surrender: "accept",
     flee: "escape",
     vote: "accuse",
+    trial: "guilty",
     advance: "phase",
     stop: "end",
     abort: "end",
@@ -142,13 +142,20 @@ const ADMIN_COMMANDS = new Set([
 const PLAYER_COMMANDS = new Set([
     "accept",
     "accuse",
+    "defendaccusation",
     "capture",
     "escape",
+    "guilty",
+    "innocent",
     "join",
     "leave",
     "resist",
     "start",
     "status",
+    "skip",
+    "stalk",
+    "watch",
+    "protect",
     "switch",
 ]);
 
@@ -180,13 +187,19 @@ const HELP_PAGES: Readonly<Record<string, string>> = {
         "/bot kg status [session] - View public phase and roster.",
         "/bot kg capture <member> - Attempt a capture on your turn.",
         "/bot kg accept|resist [session] - Respond to a capture.",
+        "/bot kg accuse <member> [session] - Raise a suspicion against a participant.",
+        "/bot kg defend [session] - Submit the accused participant's defense.",
+        "/bot kg guilty|innocent [session] - Cast a trial vote.",
+        "/bot kg skip [session] - Vote to end the day early.",
+        "/bot kg watch|stalk|protect <member> [session] - Use an assigned night role.",
         "/bot kg escape [session] - Attempt escape after capture.",
         "/bot kg help <page> - Show a help page.",
     ].join("\n"),
     phases: [
         "Kidnappers phases:",
-        "lobby -> night -> resolving_night -> day -> voting.",
-        "An accusation moves voting to defense; otherwise voting advances to resolving_day.",
+        "lobby -> day -> voting -> resolving_day -> night -> resolving_night -> day.",
+        "Two suspicions move voting to defense, then trial; otherwise voting advances to resolving_day.",
+        "A guilty majority eliminates the accused; a complete or timed-out trial releases the accusation.",
         "resolving_day returns to night for the next round.",
         "completed and aborted are terminal phases.",
         "Room admins advance phases with /bot kg phase.",
@@ -737,6 +750,33 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                     "Escape attempt submitted.",
                 );
             }
+            case "watch":
+            case "stalk":
+            case "protect": {
+                this.assertArgumentCount(command, args, 1, 2);
+                const session = this.requireMemberSession(
+                    sender.MemberNumber,
+                    this.sessionArgument(args),
+                    command,
+                );
+                const result = await this.dispatchSessionCommand(
+                    session.sessionId,
+                    {
+                        type: "SUBMIT_NIGHT_ACTION",
+                        memberNumber: sender.MemberNumber,
+                        action: command,
+                        targetMemberNumber: this.memberNumberArgument(
+                            args[0],
+                            command,
+                        ),
+                    },
+                );
+                return this.resultFromTransition(
+                    result,
+                    session.sessionId,
+                    `Night action '${command}' submitted.`,
+                );
+            }
             case "accuse": {
                 this.assertArgumentCount(command, args, 1, 2);
                 const session = this.requireMemberSession(
@@ -748,7 +788,9 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                     session.sessionId,
                     {
                         type: "RAISE_ACCUSATION",
-                        memberNumber: this.memberNumberArgument(
+                        memberNumber: sender.MemberNumber,
+                        accuserMemberNumber: sender.MemberNumber,
+                        targetMemberNumber: this.memberNumberArgument(
                             args[0],
                             command,
                         ),
@@ -758,6 +800,68 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                     result,
                     session.sessionId,
                     "Accusation submitted.",
+                );
+            }
+            case "defendaccusation": {
+                this.assertArgumentCount(command, args, 0, 1);
+                const session = this.requireMemberSession(
+                    sender.MemberNumber,
+                    args[0],
+                    command,
+                );
+                const result = await this.dispatchSessionCommand(
+                    session.sessionId,
+                    {
+                        type: "DEFEND_ACCUSATION",
+                        memberNumber: sender.MemberNumber,
+                    },
+                );
+                return this.resultFromTransition(
+                    result,
+                    session.sessionId,
+                    "Defense submitted.",
+                );
+            }
+            case "guilty":
+            case "innocent": {
+                this.assertArgumentCount(command, args, 0, 1);
+                const session = this.requireMemberSession(
+                    sender.MemberNumber,
+                    args[0],
+                    command,
+                );
+                const result = await this.dispatchSessionCommand(
+                    session.sessionId,
+                    {
+                        type: "SUBMIT_TRIAL_VOTE",
+                        memberNumber: sender.MemberNumber,
+                        vote: command === "guilty" ? "guilty" : "innocent",
+                    },
+                );
+                return this.resultFromTransition(
+                    result,
+                    session.sessionId,
+                    `Trial vote '${command}' submitted.`,
+                );
+            }
+            case "skip": {
+                this.assertArgumentCount(command, args, 0, 1);
+                const session = this.requireMemberSession(
+                    sender.MemberNumber,
+                    args[0],
+                    command,
+                );
+                const result = await this.dispatchSessionCommand(
+                    session.sessionId,
+                    {
+                        type: "SKIP_DAY",
+                        memberNumber: sender.MemberNumber,
+                    },
+                );
+                return this.resultFromTransition(
+                    result,
+                    session.sessionId,
+                    "Day skip vote submitted.",
                 );
             }
             case "assign": {
@@ -1075,7 +1179,38 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                 break;
             case "ACCUSATION_RAISED":
                 addToParticipants(
-                    `An accusation was raised by member ${event.memberNumber}. The game is moving to defense.`,
+                    `A suspicion was raised against member ${event.accusedMemberNumber ?? event.memberNumber} (${event.suspicionCount ?? 1}/2).`,
+                );
+                break;
+            case "ACCUSATION_DEFENDED":
+                addToParticipants(
+                    `Member ${event.memberNumber} submitted a defense. An admin can advance the session into the trial phase.`,
+                );
+                break;
+            case "TRIAL_STARTED":
+                addToParticipants(
+                    `The trial for member ${event.accusedMemberNumber} has started. Vote with /bot kg guilty or /bot kg innocent.`,
+                );
+                break;
+            case "TRIAL_VOTE_CAST":
+                addToParticipants(
+                    `A trial vote was cast. Current tally: guilty ${event.guiltyVotes}, innocent ${event.innocentVotes}.`,
+                );
+                break;
+            case "TRIAL_RESOLVED":
+                addToParticipants(
+                    `The trial for member ${event.accusedMemberNumber} resolved as ${event.result}.`,
+                );
+                break;
+            case "DAY_SKIPPED":
+                addToParticipants(
+                    `Member ${event.memberNumber} voted to end the day early.`,
+                );
+                break;
+            case "NIGHT_ACTION_RESOLVED":
+                addMessage(
+                    event.memberNumber,
+                    `Your ${event.action} action against member ${event.targetMemberNumber} resolved as ${event.result}.`,
                 );
                 break;
             case "GAME_COMPLETED":

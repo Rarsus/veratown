@@ -24,7 +24,7 @@ describe("Kidnappers game commands", () => {
 
         const joined = await controller.dispatch(character(10), ["enter"]);
         assert.equal(joined.ok, true);
-        const status = await controller.dispatch(character(10), ["watch"]);
+        const status = await controller.dispatch(character(10), ["observe"]);
         assert.equal(status.ok, true);
         assert.match(status.message, /Session/);
 
@@ -176,7 +176,7 @@ describe("Kidnappers game commands", () => {
             "phases",
         ]);
         assert.equal(phases.ok, true);
-        assert.match(phases.message, /lobby.*night.*resolving_night/s);
+        assert.match(phases.message, /lobby.*day.*voting/s);
 
         await rootHandler!(character(30), { Type: "Hidden" }, ["join"]);
         assert.deepEqual(replies, []);
