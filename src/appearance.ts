@@ -184,7 +184,7 @@ export class AppearanceType {
         const idx = this.data.findIndex((i) => i.Group === slot);
         if (idx === -1) return;
 
-        const removed = this._items[idx];
+        const removed = this._items.find((item) => item.Group === slot);
 
         //this._items.splice(idx, 1);
         this.data.splice(idx, 1);
@@ -192,8 +192,10 @@ export class AppearanceType {
             (i) => new API_AppearanceItem(this.character, i),
         );
 
-        removed.setRemoved();
-        removed.queueUpdate();
+        if (removed) {
+            removed.setRemoved();
+            removed.queueUpdate();
+        }
     }
 
     public InventoryGet(

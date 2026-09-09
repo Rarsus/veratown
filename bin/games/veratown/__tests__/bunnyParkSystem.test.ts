@@ -10,6 +10,7 @@ function createCharacter(
     memberNumber = 42,
     options: {
         failOn?: string;
+        omitOn?: string;
         initialAppearance?: any[];
         accessible?: boolean;
         dropSignOnBundleCall?: number;
@@ -84,6 +85,10 @@ function createCharacter(
             },
             slowlyApplyBundle: async (items: any[]) => {
                 for (const item of items) {
+                    if (options.omitOn === `${item.Group}/${item.Name}`) {
+                        added.push(`${item.Group}/${item.Name}`);
+                        continue;
+                    }
                     character.Appearance.AddItem(item);
                 }
             },
@@ -351,7 +356,7 @@ test("bunny punishment fails when required sign synchronization removes the sign
     assert.equal(result.signVisible, false);
 });
 
-test("bunny punishment reports failures and rolls back partial appearance changes", async () => {
+test("bunny punishment keeps successful pieces when one restraint fails", async () => {
     const original = [{ Group: "ItemArms", Name: "OldCuffs", Property: {} }];
     const created = createCharacter(9, {
         failOn: "ItemLegs/HempRope",
@@ -383,6 +388,14 @@ test("bunny punishment reports failures and rolls back partial appearance change
                     item.Group === "ItemArms" && item.Name === "OldCuffs",
             ),
     );
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemMisc" && item.Name === "WoodenSign",
+            ),
+    );
     assert.equal(
         created
             .appearance()
@@ -391,6 +404,46 @@ test("bunny punishment reports failures and rolls back partial appearance change
                     item.Group === "ItemLegs" && item.Name === "HempRope",
             ),
         false,
+    );
+});
+
+test("bunny punishment continues when a restraint is silently omitted", async () => {
+    const created = createCharacter(20, {
+        omitOn: "ItemLegs/HempRope",
+    });
+    const system = new BunnyParkSystem(
+        createMessageConnection(created.character) as any,
+        async () => {},
+        deterministicRandom(0),
+        0,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, false);
+    assert.deepEqual(result.appliedPieces, [
+        "ItemArms/HempRope",
+        "ItemMisc/WoodenSign",
+    ]);
+    assert.deepEqual(result.failedPieces, ["ItemLegs/HempRope"]);
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemArms" && item.Name === "HempRope",
+            ),
+    );
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemMisc" && item.Name === "WoodenSign",
+            ),
     );
 });
 
