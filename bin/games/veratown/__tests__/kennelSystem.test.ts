@@ -19,6 +19,8 @@ function createCharacter(memberNumber = 7) {
     const character: any = {
         MemberNumber: memberNumber,
         MapPos: { X: 4, Y: 38 },
+        messages,
+        sendAppearanceUpdate: () => {},
         Tell: (_type: string, message: string) => messages.push(message),
         Appearance: {
             AddItem: () => {
@@ -91,6 +93,8 @@ function createConnector(characters: any[]) {
                 characters,
                 on: () => {},
             },
+            SendMessage: (_type: string, message: string) =>
+                characters[0]?.messages?.push(message),
             on: () => {},
         },
     };
@@ -556,7 +560,10 @@ test("KennelSystem rebinds idempotently and ignores stale room triggers", async 
 
 test("KennelSystem reports when containment is unavailable", async () => {
     const created = createCharacter();
-    const system = new KennelSystem({} as any);
+    const system = new KennelSystem({
+        SendMessage: (_type: string, message: string) =>
+            created.messages.push(message),
+    } as any);
     system.enabled = false;
 
     await (system as any).onCharacterEnterKennel(created.character);
