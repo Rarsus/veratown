@@ -21,6 +21,24 @@ The plugin router accepts both `!kidnappers <command>` and
    `accept` or `resist`, and captured players use `escape`.
 6. End the session normally or use the room-admin recovery commands below.
 
+## Multipage help
+
+Help is split into focused pages so the game information can be read in parts:
+
+```text
+!kidnappers help overview
+!kidnappers help commands
+!kidnappers help phases
+!kidnappers help capture
+!kidnappers help admin
+```
+
+The three in-room whiteboards show the live session status, command reference,
+and player guide. The whiteboards and the entry welcome message are limited to
+the configured Kidnappers region. The command route is registered on the
+shared Veratown bot connection, but commands from outside that region are
+rejected without sending a Kidnappers response.
+
 The normal phase sequence is `lobby → night → resolving_night → day → voting`
 and then `defense` or `resolving_day`, returning to `night` for the next round.
 `completed` and `aborted` are terminal.

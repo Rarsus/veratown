@@ -163,7 +163,65 @@ const PLAYER_ROLES: ReadonlySet<KidnappersPlayerRole> = new Set([
     "bystander",
 ]);
 
-const HELP = [
+const HELP_PAGES: Readonly<Record<string, string>> = {
+    overview: [
+        "Kidnappers game help (overview):",
+        "Join a session, wait for the lobby to start, and follow the active phase and turn instructions.",
+        "The game is consensual roleplay. Respect player boundaries and keep private roles and objectives private.",
+        "Pages: overview, commands, phases, capture, admin.",
+        "Use !kidnappers help <page>.",
+    ].join("\n"),
+    commands: [
+        "Kidnappers player commands:",
+        "!kidnappers join [session] - Join or create a lobby.",
+        "!kidnappers switch <session> - Change sessions.",
+        "!kidnappers leave [session] - Leave your session.",
+        "!kidnappers start [session] - Start with at least five players.",
+        "!kidnappers status [session] - View public phase and roster.",
+        "!kidnappers capture <member> - Attempt a capture on your turn.",
+        "!kidnappers accept|resist [session] - Respond to a capture.",
+        "!kidnappers escape [session] - Attempt escape after capture.",
+        "!kidnappers help <page> - Show a help page.",
+    ].join("\n"),
+    phases: [
+        "Kidnappers phases:",
+        "lobby -> night -> resolving_night -> day -> voting.",
+        "An accusation moves voting to defense; otherwise voting advances to resolving_day.",
+        "resolving_day returns to night for the next round.",
+        "completed and aborted are terminal phases.",
+        "Room admins advance phases with !kidnappers phase.",
+    ].join("\n"),
+    capture: [
+        "Capture and escape:",
+        "Only the active kidnapper can attempt a capture during night.",
+        "The target has a 30-second response window for accept or resist.",
+        "A successful capture starts the configured containment progression.",
+        "The first two escape attempts fail and apply restraint progression; the third valid attempt releases the player.",
+        "Escape attempts have a 30-second cooldown.",
+    ].join("\n"),
+    admin: [
+        "Kidnappers room-admin commands:",
+        "!kidnappers assign <member> <role> [session]",
+        "!kidnappers phase|complete|end|timeout|abandon [args] [session]",
+        "!kidnappers release <member> [session]",
+        "!kidnappers sessions",
+        "!kidnappers recover <session>",
+    ].join("\n"),
+};
+
+const HELP = HELP_PAGES.commands;
+
+const HELP_PAGE_ALIASES: Readonly<Record<string, string>> = {
+    rules: "overview",
+    flow: "phases",
+    gameplay: "capture",
+};
+
+/*
+ * The old single-page text remains the commands-board default; chat users can
+ * request the smaller pages individually with `help <page>`.
+ */
+const LEGACY_HELP = [
     "Kidnappers commands:",
     "!kidnappers join [session] - Join or create a lobby.",
     "!kidnappers switch <session> - Join another session and leave your current one.",
@@ -229,7 +287,8 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                     [command, ...args],
                     message,
                 );
-                this.reply(message, result.message);
+                if (this.shouldReply(result))
+                    this.reply(message, result.message);
             },
         );
     }
@@ -384,6 +443,15 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
         return HELP;
     }
 
+    public getHelpPage(page = "commands"): string {
+        const normalized =
+            HELP_PAGE_ALIASES[page.toLowerCase()] ?? page.toLowerCase();
+        return (
+            HELP_PAGES[normalized] ??
+            `${HELP_PAGES.overview}\n\nUnknown help page '${page}'.`
+        );
+    }
+
     public getPlayerGuide(): string {
         return [
             "Kidnappers game guide:",
@@ -419,7 +487,12 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                     command,
                 );
             }
-            if (command === "help") return { ok: true, message: HELP };
+            if (command === "help") {
+                return {
+                    ok: true,
+                    message: this.getHelpPage(args[0] ?? "commands"),
+                };
+            }
             if (!PLAYER_COMMANDS.has(command) && !ADMIN_COMMANDS.has(command)) {
                 throw this.commandError(
                     `Unknown Kidnappers command '${command}'. Use !kidnappers help.`,
@@ -1114,6 +1187,14 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
 
     private reply(message: BC_Server_ChatRoomMessage, text: string): void {
         this.conn.reply(message, text);
+    }
+
+    private shouldReply(result: KidnappersCommandResult): boolean {
+        return !(
+            !result.ok &&
+            result.error instanceof KidnappersCommandError &&
+            result.error.reason === "NOT_IN_ROOM"
+        );
     }
 
     private lifecycleIsShutDown(): boolean {

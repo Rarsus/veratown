@@ -140,4 +140,45 @@ describe("Kidnappers game commands", () => {
         assert.match(sent[0], /!kidnappers help/i);
         assert.match(sent[0], /private roles and objectives/i);
     });
+
+    test("serves paginated help and stays silent outside the game region", async () => {
+        const lifecycle = new KidnappersGameLifecycleService();
+        const replies: string[] = [];
+        let rootHandler:
+            | ((
+                  sender: API_Character,
+                  message: any,
+                  args: string[],
+              ) => Promise<void>)
+            | undefined;
+        const controller = new KidnappersGameCommandController(
+            {
+                reply: (_message: unknown, text: string) => replies.push(text),
+            } as never,
+            lifecycle,
+        );
+        const guardedController = new KidnappersGameCommandController(
+            {
+                reply: (_message: unknown, text: string) => replies.push(text),
+            } as never,
+            lifecycle,
+            undefined,
+            { isInGameRoom: () => false },
+        );
+        guardedController.registerCommands({
+            registerRoot: (handler: typeof rootHandler) => {
+                rootHandler = handler;
+            },
+        } as never);
+
+        const phases = await controller.dispatch(character(30), [
+            "help",
+            "phases",
+        ]);
+        assert.equal(phases.ok, true);
+        assert.match(phases.message, /lobby.*night.*resolving_night/s);
+
+        await rootHandler!(character(30), {}, ["join"]);
+        assert.deepEqual(replies, []);
+    });
 });
