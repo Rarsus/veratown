@@ -35,10 +35,12 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
+import { wait } from "../../hub/utils";
 
 const BUNNY_SIGN = { group: "ItemMisc", asset: "WoodenSign" } as const;
 const BUNNY_SIGN_TEXT = "I step on";
 const BUNNY_SIGN_TEXT2 = "Bunnies";
+const SIGN_REPAIR_DELAY_MS = 50;
 
 interface BunnySignVerification {
     present: boolean;
@@ -109,6 +111,29 @@ function verifyBunnySign(
                   reason: "WoodenSign is present but its render text properties are incomplete or invalid",
               }),
     };
+}
+
+async function repairBunnySign(
+    character: API_Character,
+    stateSync: ((character: API_Character) => Promise<void>) | undefined,
+): Promise<BunnySignVerification> {
+    const sign = character.Appearance.AddItem(
+        AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
+    );
+    if (!sign) {
+        return {
+            present: false,
+            visible: false,
+            reason: "WoodenSign could not be re-added after synchronization",
+        };
+    }
+    sign.setProperty("Text", BUNNY_SIGN_TEXT);
+    sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
+    character.Appearance.MakeAppearanceBundle();
+    character.sendAppearanceUpdate();
+    await wait(SIGN_REPAIR_DELAY_MS);
+    await stateSync?.(character);
+    return verifyBunnySign(character.Appearance.MakeAppearanceBundle());
 }
 
 export function validateBunnyRestraintConfig(
@@ -521,10 +546,17 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         signFailureReason: afterPersistence.reason,
                     });
                     if (!afterPersistence.visible) {
-                        throw new Error(
-                            afterPersistence.reason ??
-                                "WoodenSign was removed or normalized after persistence",
+                        const repaired = await repairBunnySign(
+                            current,
+                            this.stateSync,
                         );
+                        if (!repaired.visible) {
+                            throw new Error(
+                                repaired.reason ??
+                                    afterPersistence.reason ??
+                                    "WoodenSign was removed or normalized after persistence",
+                            );
+                        }
                     }
                 },
                 {
@@ -543,11 +575,19 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 ),
             );
             const finalSign = verifyBunnySign(finalAppearance);
+            let settledFinalSign = finalSign;
+            if (!settledFinalSign.visible) {
+                settledFinalSign = await repairBunnySign(
+                    character,
+                    this.stateSync,
+                );
+            }
             const finalVerification =
-                finalRestraintsVerified && finalSign.visible;
+                finalRestraintsVerified && settledFinalSign.visible;
             if (!finalVerification) {
                 throw new Error(
-                    finalSign.reason ?? "final appearance verification failed",
+                    settledFinalSign.reason ??
+                        "final appearance verification failed",
                 );
             }
             const appliedAt = Date.now();
@@ -572,8 +612,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification,
-                signPresent: finalSign.present,
-                signVisible: finalSign.visible,
+                signPresent: settledFinalSign.present,
+                signVisible: settledFinalSign.visible,
                 operationId: context.operationId,
             };
             this.logger.info("Bunny punishment applied", {
@@ -581,8 +621,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification,
-                signPresent: finalSign.present,
-                signVisible: finalSign.visible,
+                signPresent: settledFinalSign.present,
+                signVisible: settledFinalSign.visible,
             });
             return result;
         } catch (error) {

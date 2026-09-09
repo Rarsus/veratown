@@ -98,6 +98,7 @@ function createCharacter(
 
 function createConnector(callbacks: Array<(character: any) => void>) {
     return {
+        SendMessage: () => {},
         chatRoom: {
             map: {
                 addTileTrigger: (_position: unknown, callback: any) =>
@@ -106,6 +107,16 @@ function createConnector(callbacks: Array<(character: any) => void>) {
                 addEnterRegionTrigger: () => {},
                 removeEnterRegionTrigger: () => {},
             },
+        },
+    };
+}
+
+function createMessageConnection(character: any) {
+    return {
+        SendMessage: (_type: string, message: string, target?: number) => {
+            if (target === character.MemberNumber) {
+                character.Tell("Whisper", message);
+            }
         },
     };
 }
@@ -125,7 +136,7 @@ test("bunny punishment applies and persists each configured restraint set", asyn
         const created = createCharacter(index + 1);
         const persisted: any[] = [];
         const system = new BunnyParkSystem(
-            {} as any,
+            createMessageConnection(created.character) as any,
             async (character) => {
                 persisted.push(character.Appearance.MakeAppearanceBundle());
             },
@@ -164,7 +175,7 @@ test("bunny punishment applies and persists each configured restraint set", asyn
 test("bunny punishment sends the complete bundle for remote-character persistence", async () => {
     const created = createCharacter(19);
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
         0,
@@ -196,7 +207,7 @@ test("bunny punishment records a durable sign artifact", async () => {
     const created = createCharacter(18);
     let artifact: any;
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
         0,
@@ -234,7 +245,7 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
     });
     const persisted: any[] = [];
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async (character) => {
             persisted.push(character.Appearance.MakeAppearanceBundle());
         },
@@ -266,7 +277,7 @@ test("bunny punishment restores a sign lost before persistence verification", as
     const created = createCharacter(17, { dropSignOnBundleCall: 4 });
     const persisted: any[] = [];
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async (character) => {
             persisted.push(character.Appearance.MakeAppearanceBundle());
         },
@@ -295,10 +306,10 @@ test("bunny punishment fails when synchronization removes or hides the sign", as
     const created = createCharacter(16);
     let syncCount = 0;
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async (character) => {
             syncCount += 1;
-            if (syncCount === 1) character.Appearance.RemoveItem("ItemMisc");
+            character.Appearance.RemoveItem("ItemMisc");
         },
         deterministicRandom(0),
         0,
@@ -323,7 +334,7 @@ test("bunny punishment reports failures and rolls back partial appearance change
         initialAppearance: original,
     });
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
         0,
@@ -345,7 +356,7 @@ test("bunny punishment rolls back when persistence fails transiently", async () 
     const created = createCharacter(10, { initialAppearance: original });
     let syncAttempts = 0;
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {
             syncAttempts += 1;
             if (syncAttempts === 1)
@@ -369,7 +380,7 @@ test("bunny punishment retries after transient persistence failure", async () =>
     const created = createCharacter(14);
     let syncAttempts = 0;
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {
             syncAttempts += 1;
             if (syncAttempts === 1)
@@ -399,7 +410,7 @@ test("bunny punishment retries after transient persistence failure", async () =>
 test("bunny punishment reports permission failures separately", async () => {
     const created = createCharacter(11, { accessible: false });
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
         0,
@@ -418,7 +429,7 @@ test("bunny punishment reports permission failures separately", async () => {
 test("invalid bunny configuration fails before announcing punishment", async () => {
     const created = createCharacter(13);
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
         0,
@@ -444,7 +455,7 @@ test("duplicate bunny tile events do not reapply or reannounce punishment", asyn
     const messages: string[] = [];
     let syncCount = 0;
     const system = new BunnyParkSystem(
-        {} as any,
+        createMessageConnection(created.character) as any,
         async () => {
             syncCount += 1;
         },
