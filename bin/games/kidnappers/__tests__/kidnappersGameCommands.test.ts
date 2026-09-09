@@ -97,4 +97,47 @@ describe("Kidnappers game commands", () => {
             "MALFORMED_COMMAND",
         );
     });
+
+    test("whispers the game purpose and rules when entering the game region", async () => {
+        const callbacks: Array<(player: API_Character) => void> = [];
+        const sent: string[] = [];
+        const map = {
+            addEnterRegionTrigger: (_region: unknown, callback: any) =>
+                callbacks.push(callback),
+            removeEnterRegionTrigger: () => {},
+        };
+        const controller = new KidnappersGameCommandController(
+            {
+                chatRoom: { map },
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as never,
+            new KidnappersGameLifecycleService(),
+        );
+
+        controller.registerTriggers();
+        await controller.reloadLocations([
+            {
+                key: "kidnappers_region",
+                name: "Kidnappers Game Area",
+                type: "region",
+                region: {
+                    TopLeft: { X: 0, Y: 21 },
+                    BottomRight: { X: 4, Y: 24 },
+                },
+                enabled: true,
+                createdAt: 0,
+                updatedAt: 0,
+            },
+        ]);
+
+        callbacks[0](character(42));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        assert.equal(sent.length, 1);
+        assert.match(sent[0], /entering the Kidnappers game area/i);
+        assert.match(sent[0], /capture, resistance, escape/i);
+        assert.match(sent[0], /!kidnappers help/i);
+        assert.match(sent[0], /private roles and objectives/i);
+    });
 });

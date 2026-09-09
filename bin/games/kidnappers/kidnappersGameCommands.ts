@@ -17,6 +17,8 @@ import type {
     API_Character,
     API_Connector,
     BC_Server_ChatRoomMessage,
+    API_Map,
+    MapRegion,
 } from "bc-bot";
 import { ValidationError } from "../../errors";
 import type { GamePluginCommandRouter } from "../shared/gamePlugin";
@@ -28,8 +30,10 @@ import { KidnappersGameLifecycleService } from "./kidnappersGameLifecycleService
 import type { KidnappersGamePersistence } from "./kidnappersGamePersistence";
 import { KidnappersGameCaptureService } from "./kidnappersGameCaptureService";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
+import { MessageSender } from "../shared/messageSender";
 import type { VeratownFeatureSystem } from "../veratown/featureSystem";
 import type { VeratownLocationDoc } from "../veratown/veratownLocationStore";
+import { guardHandler } from "../veratown/featureSystem";
 import type {
     KidnappersGameCommand,
     KidnappersGameEvent,
@@ -177,6 +181,13 @@ const HELP = [
     "!kidnappers phase|end|timeout|abandon|release|complete [args] [session]",
 ].join("\n");
 
+const KIDNAPPERS_ENTRY_MESSAGE = [
+    "You are entering the Kidnappers game area.",
+    "This is a consensual roleplay game built around capture, resistance, escape, and public game phases.",
+    "Join a session with !kidnappers join, then use !kidnappers help for commands.",
+    "Follow the current turn and phase instructions, respect other players, and remember that private roles and objectives are never revealed publicly.",
+].join("\n");
+
 /**
  * Command boundary for the Kidnappers session service.
  *
@@ -196,6 +207,11 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
     >();
     private activeSessionId?: string;
     private registered = false;
+    private readonly messageSender: MessageSender;
+    private gameRegion?: MapRegion;
+    private boundRoom?: API_Connector["chatRoom"];
+    private boundMap?: API_Map;
+    private boundRegionTrigger?: (...args: any[]) => void;
 
     public constructor(
         private readonly conn: API_Connector,
@@ -203,6 +219,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
         private readonly persistence?: KidnappersGamePersistence,
         private readonly options: KidnappersGameCommandOptions = {},
     ) {
+        this.messageSender = new MessageSender(conn);
         this.messageFeatureSystem = new KidnappersGameMessageFeatureSystem(
             conn,
             () => this.enabled && !this.lifecycleIsShutDown(),
@@ -218,13 +235,45 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
     }
 
     public registerTriggers(): void {
-        // Command registration is performed by Veratown after all features
-        // have been constructed, using the shared plugin router.
+        this.attachToRoom();
+    }
+
+    public attachToRoom(): void {
+        const room = this.conn.chatRoom;
+        if (!room) {
+            this.detachFromRoom();
+            return;
+        }
+
+        if (this.boundRoom !== room || this.boundMap !== room.map) {
+            this.detachFromRoom();
+            this.boundRoom = room;
+            this.boundMap = room.map;
+        }
+        this.registerRegionTrigger();
+    }
+
+    public detachFromRoom(): void {
+        if (this.boundMap && this.boundRegionTrigger) {
+            this.boundMap.removeEnterRegionTrigger(
+                this.boundRegionTrigger as any,
+            );
+        }
+        this.boundRegionTrigger = undefined;
+        this.boundRoom = undefined;
+        this.boundMap = undefined;
     }
 
     public async reloadLocations(
-        _locations: readonly VeratownLocationDoc[],
-    ): Promise<void> {}
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        const location = locations.find(
+            (candidate) =>
+                candidate.key === "kidnappers_region" && candidate.enabled,
+        );
+        this.gameRegion = location ? this.toRegion(location) : undefined;
+        this.attachToRoom();
+    }
 
     public isReady(): boolean {
         return !this.lifecycleIsShutDown();
@@ -235,6 +284,52 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             activeSessionCount: this.lifecycle.listSessionIds().length,
             activeSessionIds: this.lifecycle.listSessionIds(),
             enabled: this.enabled,
+            regionConfigured: this.gameRegion !== undefined,
+            regionEntryTriggerRegistered: this.boundRegionTrigger !== undefined,
+        };
+    }
+
+    private registerRegionTrigger(): void {
+        if (!this.boundMap || !this.gameRegion) return;
+        if (this.boundRegionTrigger) {
+            this.boundMap.removeEnterRegionTrigger(
+                this.boundRegionTrigger as any,
+            );
+        }
+
+        this.boundRegionTrigger = guardHandler(
+            "kidnappers:region-entry",
+            (character: API_Character) => this.onEnterGameRegion(character),
+        );
+        this.boundMap.addEnterRegionTrigger(
+            this.gameRegion,
+            this.boundRegionTrigger as any,
+        );
+    }
+
+    private async onEnterGameRegion(character: API_Character): Promise<void> {
+        if (!this.enabled || this.lifecycleIsShutDown()) return;
+        this.messageSender.whisperToCharacter(
+            character,
+            KIDNAPPERS_ENTRY_MESSAGE,
+        );
+    }
+
+    private toRegion(location: VeratownLocationDoc): MapRegion | undefined {
+        if (location.region) return location.region;
+        const bottomRightX = location.data?.bottomRightX;
+        const bottomRightY = location.data?.bottomRightY;
+        if (
+            typeof location.x !== "number" ||
+            typeof location.y !== "number" ||
+            typeof bottomRightX !== "number" ||
+            typeof bottomRightY !== "number"
+        ) {
+            return undefined;
+        }
+        return {
+            TopLeft: { X: location.x, Y: location.y },
+            BottomRight: { X: bottomRightX, Y: bottomRightY },
         };
     }
 
