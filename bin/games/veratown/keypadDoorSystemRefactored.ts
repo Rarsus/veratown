@@ -57,6 +57,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     public enabled = true;
 
     private doors: Map<string, KeypadDoorDefinitionDoc> = new Map();
+    private readonly manuallyOpenDoors = new Set<string>();
     private readonly doorUnlockTimers = new TimerManager<string>(
         "KeypadDoorSystem.doorUnlock",
     );
@@ -253,7 +254,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         const doorKey = door.doorKey;
 
         // Check if already unlocked
-        if (this.doorUnlockTimers.has(doorKey)) {
+        if (this.isDoorOpen(doorKey)) {
             this.sendNotification(character, "The door is already unlocked.");
             return;
         }
@@ -320,7 +321,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Check if door is in unlock cooldown
-        if (this.doorUnlockTimers.has(doorDef.doorKey)) {
+        if (this.isDoorOpen(doorDef.doorKey)) {
             this.sendNotification(character, "The door is already unlocked.");
             return true;
         }
@@ -386,6 +387,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         try {
+            const runtimeResult = await this.handleRuntimeDoorCommand(args);
+            if (runtimeResult !== undefined) {
+                this.sendNotification(character, runtimeResult);
+                return true;
+            }
+
             const result = await this.commandDispatcher.executeCommand(
                 character,
                 this.normalizeDoorCommand(args),
@@ -406,6 +413,47 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             return true;
         }
     };
+
+    private async handleRuntimeDoorCommand(
+        args: string,
+    ): Promise<string | undefined> {
+        const parts = args.trim().split(/\s+/);
+        const action = parts[0]?.toLowerCase();
+        if (action !== "open" && action !== "close") return undefined;
+
+        const doorKey = parts[1];
+        if (!doorKey) {
+            return action === "open"
+                ? "Usage: !door open <doorKey> [durationMs]; use 0 for manual close only."
+                : "Usage: !door close <doorKey>";
+        }
+
+        const door = this.doors.get(doorKey);
+        if (!door) return `Door not found: ${doorKey}`;
+
+        if (action === "close") {
+            this.closeDoor(door);
+            return `Closed door: ${doorKey}`;
+        }
+
+        if (parts.length > 3) {
+            return "Usage: !door open <doorKey> [durationMs]; use 0 for manual close only.";
+        }
+        const duration =
+            parts[2] === undefined
+                ? door.unlockDurationMs
+                : Number.parseInt(parts[2], 10);
+        if (!Number.isSafeInteger(duration) || duration < 0) {
+            return "Duration must be a non-negative integer in milliseconds.";
+        }
+
+        // An admin open command is an override of any existing keypad timer.
+        this.closeDoor(door);
+        this.openDoor(door, duration);
+        return duration === 0
+            ? `Opened door ${doorKey} until an admin closes it.`
+            : `Opened door ${doorKey} for ${duration}ms.`;
+    }
 
     private normalizeDoorCommand(args: string): string {
         const parts = args.trim().split(/\s+/);
@@ -438,22 +486,38 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      * Unlock a door temporarily
      */
     private unlockDoor(door: KeypadDoorDefinitionDoc): void {
+        this.openDoor(door, door.unlockDurationMs);
+    }
+
+    private openDoor(door: KeypadDoorDefinitionDoc, durationMs: number): void {
         const timerId = door.doorKey;
 
-        if (this.doorUnlockTimers.has(timerId)) return;
+        if (this.isDoorOpen(timerId)) return;
         this.setDoorTile(door, door.unlockedTile);
+        this.manuallyOpenDoors.add(timerId);
 
-        // Start unlock timer - re-lock when timer expires
-        this.doorUnlockTimers.set(
-            timerId,
-            () => {
-                this.setDoorTile(door, door.lockedTile);
-                this.logger.debug(
-                    `Door ${door.doorKey} auto-locked after ${door.unlockDurationMs}ms`,
-                );
-            },
-            door.unlockDurationMs,
-        );
+        if (durationMs > 0) {
+            this.doorUnlockTimers.set(
+                timerId,
+                () => {
+                    this.closeDoor(door);
+                    this.logger.debug(
+                        `Door ${door.doorKey} auto-locked after ${durationMs}ms`,
+                    );
+                },
+                durationMs,
+            );
+        }
+    }
+
+    private closeDoor(door: KeypadDoorDefinitionDoc): void {
+        this.doorUnlockTimers.clear(door.doorKey);
+        this.manuallyOpenDoors.delete(door.doorKey);
+        this.setDoorTile(door, door.lockedTile);
+    }
+
+    private isDoorOpen(doorKey: string): boolean {
+        return this.manuallyOpenDoors.has(doorKey);
     }
 
     private setDoorTile(door: KeypadDoorDefinitionDoc, tile: string): void {
@@ -510,6 +574,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     async shutdown(): Promise<void> {
         this.detachFromRoom();
         this.doorUnlockTimers.clearAll();
+        this.manuallyOpenDoors.clear();
         this.notificationTimers.clearAll();
         this.autoOpenTimers.clearAll();
     }

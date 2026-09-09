@@ -22,6 +22,17 @@ Users can enter the code in any of these ways while standing on the keypad:
 The `/bot code` form is useful for hidden bot commands and preserves the code's
 original casing. All three forms use the same group validation and unlock behavior.
 
+Room admins can override the live door state with:
+
+```text
+!door open <doorKey> [durationMs]
+!door close <doorKey>
+```
+
+If `durationMs` is omitted, the configured `unlockDurationMs` is used. Use `0`
+to keep the door open until an admin explicitly closes it. This opens the live
+door tile for everyone without changing keypad codes or persisted access groups.
+
 The unlock is group-based and global. Once a code is accepted, every user can
 use the open door until the timer expires. This is intentional and is different
 from per-user door permissions.

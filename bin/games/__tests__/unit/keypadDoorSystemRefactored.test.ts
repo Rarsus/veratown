@@ -85,6 +85,66 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         await system.shutdown();
     });
 
+    it("supports timed admin opens and an explicit close override", async () => {
+        const tileUpdates: string[] = [];
+        const { system } = createSystem({
+            addTileTrigger: () => {},
+            removeTileTrigger: () => {},
+            setObject: (_position: unknown, tile: string) =>
+                tileUpdates.push(tile),
+        });
+        await system.init();
+
+        const admin = {
+            MemberNumber: 1,
+            Name: "Admin",
+            IsRoomAdmin: () => true,
+        };
+        const handled = await (system as any).onAdminMessage(
+            admin,
+            "open shop_entrance 20",
+        );
+        expect(handled).toBe(true);
+        expect(tileUpdates.at(-1)).toBe("SteelDoorOpen");
+        expect((system as any).doorUnlockTimers.has("shop_entrance")).toBe(
+            true,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        expect(tileUpdates.at(-1)).toBe("MetalDown");
+
+        await system.shutdown();
+    });
+
+    it("keeps an admin-opened door open until explicitly closed when duration is zero", async () => {
+        const tileUpdates: string[] = [];
+        const { system } = createSystem({
+            addTileTrigger: () => {},
+            removeTileTrigger: () => {},
+            setObject: (_position: unknown, tile: string) =>
+                tileUpdates.push(tile),
+        });
+        await system.init();
+
+        const admin = {
+            MemberNumber: 1,
+            Name: "Admin",
+            IsRoomAdmin: () => true,
+        };
+        await (system as any).onAdminMessage(admin, "open shop_entrance 0");
+        expect(tileUpdates.at(-1)).toBe("SteelDoorOpen");
+        expect((system as any).doorUnlockTimers.has("shop_entrance")).toBe(
+            false,
+        );
+
+        await (system as any).onAdminMessage(admin, "close shop_entrance");
+        expect(tileUpdates.at(-1)).toBe("MetalDown");
+        expect((system as any).manuallyOpenDoors.has("shop_entrance")).toBe(
+            false,
+        );
+        await system.shutdown();
+    });
+
     it("routes commands without requiring a location store", async () => {
         let dispatched: { commandLine: string; isAdmin: boolean } | undefined;
         const system = new KeypadDoorSystem(

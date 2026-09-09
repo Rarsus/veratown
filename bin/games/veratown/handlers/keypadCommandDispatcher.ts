@@ -280,6 +280,8 @@ Access Management:
     !door access check <memberNumber> <doorKey>
 
 Door Management:
+    !door open <doorKey> [durationMs]  (0 = open until !door close)
+    !door close <doorKey>
     !door create <doorKey> <x> <y> <lockedTile> <unlockedTile> [duration] [autoOpenX autoOpenY]
     !door update <doorKey> <fieldName> <value>...
     !door delete <doorKey>
