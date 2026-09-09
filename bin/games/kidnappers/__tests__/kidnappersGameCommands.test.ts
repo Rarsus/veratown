@@ -217,4 +217,29 @@ describe("Kidnappers game commands", () => {
         assert.equal(sent[0].target, 31);
         assert.match(sent[0].message, /Kidnappers phases/);
     });
+
+    test("routes the singular kidnapper alias through the same whisper path", async () => {
+        const sent: Array<{ type: string; target?: number }> = [];
+        const controller = new KidnappersGameCommandController(
+            {
+                SendMessage: (
+                    type: string,
+                    _message: string,
+                    target?: number,
+                ) => sent.push({ type, target }),
+            } as never,
+            new KidnappersGameLifecycleService(),
+            undefined,
+            { isInGameRoom: () => true },
+        );
+
+        await controller.processCommand(
+            character(32),
+            { Type: "Chat" } as any,
+            "help",
+            ["overview"],
+        );
+
+        assert.deepEqual(sent, [{ type: "Whisper", target: 32 }]);
+    });
 });

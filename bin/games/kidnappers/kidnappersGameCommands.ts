@@ -401,6 +401,20 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
         this.registered = true;
     }
 
+    public async processCommand(
+        sender: API_Character,
+        message: BC_Server_ChatRoomMessage,
+        command: string,
+        args: string[],
+    ): Promise<void> {
+        await this.messageFeatureSystem.processCommand(
+            sender,
+            message,
+            command,
+            args,
+        );
+    }
+
     public unregisterCommands(router: GamePluginCommandRouter): void {
         router.unregisterRoot?.();
         this.registered = false;
