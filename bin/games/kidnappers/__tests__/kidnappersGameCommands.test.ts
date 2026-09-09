@@ -242,4 +242,35 @@ describe("Kidnappers game commands", () => {
 
         assert.deepEqual(sent, [{ type: "Whisper", target: 32 }]);
     });
+
+    test("delivers private role notifications only to session participants", async () => {
+        const sent: Array<{ type: string; target?: number; message: string }> =
+            [];
+        const controller = new KidnappersGameCommandController(
+            {
+                SendMessage: (type: string, message: string, target?: number) =>
+                    sent.push({ type, message, target }),
+            } as never,
+            new KidnappersGameLifecycleService(),
+        );
+
+        for (let memberNumber = 1; memberNumber <= 5; memberNumber += 1) {
+            const joined = await controller.dispatch(character(memberNumber), [
+                "join",
+            ]);
+            assert.equal(joined.ok, true);
+        }
+        const started = await controller.dispatch(character(1), ["start"]);
+        assert.equal(started.ok, true);
+
+        assert.equal(sent.length, 5);
+        assert.ok(sent.every(({ type }) => type === "Whisper"));
+        assert.deepEqual(
+            sent
+                .map(({ target }) => target)
+                .sort((a, b) => (a ?? 0) - (b ?? 0)),
+            [1, 2, 3, 4, 5],
+        );
+        assert.ok(sent.every(({ message }) => /Your role is:/i.test(message)));
+    });
 });

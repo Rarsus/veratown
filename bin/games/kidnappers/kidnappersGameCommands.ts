@@ -971,6 +971,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             issuedAt: this.options.now?.() ?? Date.now(),
         } as KidnappersGameCommand;
         let result: KidnappersSessionCommandResult;
+        let eventPublished = false;
         if (this.persistence && this.options.mutationService) {
             result = await new KidnappersGameCaptureService(
                 session,
@@ -984,7 +985,7 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                 (id, event) =>
                     this.options.eventRouter!.publishGameEvent(id, event),
             );
-            return result;
+            eventPublished = true;
         } else if (this.persistence) {
             result = await session.dispatchPersisted(
                 fullCommand,
@@ -993,13 +994,125 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
         } else {
             result = session.dispatch(fullCommand);
         }
-        if (this.options.eventRouter) {
+        if (this.options.eventRouter && !eventPublished) {
             await this.options.eventRouter.publishGameEvent(
                 sessionId,
                 result.event,
             );
         }
+        if (result.ok) {
+            this.notifyPlayersForEvent(sessionId, result.event);
+        }
         return result;
+    }
+
+    private notifyPlayersForEvent(
+        sessionId: string,
+        event: KidnappersGameEvent,
+    ): void {
+        const session = this.lifecycle.getSession(sessionId);
+        if (!session) return;
+
+        const snapshot = session.getSnapshot();
+        const messages = new Map<number, string>();
+        const addMessage = (memberNumber: number, text: string): void => {
+            if (memberNumber > 0) messages.set(memberNumber, text);
+        };
+        const addToParticipants = (text: string): void => {
+            for (const player of snapshot.players) {
+                addMessage(player.memberNumber, text);
+            }
+        };
+
+        switch (event.type) {
+            case "GAME_STARTED":
+                for (const role of event.roles) {
+                    addMessage(
+                        role.memberNumber,
+                        `Kidnappers game started. Your role is: ${role.role}. Use !kidnappers help phases for the phase flow.`,
+                    );
+                }
+                break;
+            case "ROLE_ASSIGNED":
+                addMessage(
+                    event.memberNumber,
+                    `Your Kidnappers role is now: ${event.role}.`,
+                );
+                break;
+            case "PHASE_CHANGED":
+                addToParticipants(
+                    `Kidnappers phase changed: ${event.from} -> ${event.to}. Use !kidnappers status for the public state.`,
+                );
+                break;
+            case "CAPTURE_ATTEMPTED":
+                addMessage(
+                    event.targetMemberNumber,
+                    "You have been selected as a capture target. Respond with !kidnappers accept or !kidnappers resist before the response window expires.",
+                );
+                break;
+            case "CAPTURE_RESOLVED":
+                addMessage(
+                    event.targetMemberNumber,
+                    event.outcome === "captured"
+                        ? "The capture succeeded. You are now captured; use !kidnappers escape when the rules allow it."
+                        : `The capture was resolved as ${event.outcome}.`,
+                );
+                addMessage(
+                    event.attackerMemberNumber,
+                    `Your capture attempt was resolved as ${event.outcome}.`,
+                );
+                break;
+            case "ESCAPE_FAILED":
+                addMessage(
+                    event.memberNumber,
+                    `Your escape attempt failed. Restraint level: ${event.restraintLevel}. Try again after the cooldown.`,
+                );
+                break;
+            case "PLAYER_RELEASED":
+                addMessage(
+                    event.memberNumber,
+                    "You have been released from the Kidnappers capture progression.",
+                );
+                break;
+            case "RESISTANCE_OFFERED":
+                addMessage(
+                    event.targetMemberNumber,
+                    "You may respond to the pending capture with !kidnappers accept or !kidnappers resist.",
+                );
+                break;
+            case "TURN_ADVANCED":
+                if (event.toMemberNumber !== null) {
+                    addMessage(
+                        event.toMemberNumber,
+                        "It is now your Kidnappers turn. Check the current phase and act before the turn expires.",
+                    );
+                }
+                break;
+            case "TURN_TIMED_OUT":
+                addMessage(
+                    event.memberNumber,
+                    `Your Kidnappers turn timed out (${event.outcome}).`,
+                );
+                break;
+            case "ACCUSATION_RAISED":
+                addToParticipants(
+                    `An accusation was raised by member ${event.memberNumber}. The game is moving to defense.`,
+                );
+                break;
+            case "GAME_COMPLETED":
+            case "GAME_ENDED":
+                addToParticipants(
+                    event.outcome?.summary ??
+                        `The Kidnappers session has ended (${event.reason}).`,
+                );
+                break;
+            default:
+                break;
+        }
+
+        for (const [memberNumber, text] of messages) {
+            this.messageSender.whisper(memberNumber, text);
+        }
     }
 
     private resultFromTransition(
