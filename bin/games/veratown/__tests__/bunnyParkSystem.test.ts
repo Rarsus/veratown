@@ -72,7 +72,10 @@ function createCharacter(
             },
             MakeAppearanceBundle: () => {
                 bundleCalls += 1;
-                if (bundleCalls === options.dropSignOnBundleCall) {
+                if (
+                    options.dropSignOnBundleCall !== undefined &&
+                    bundleCalls >= options.dropSignOnBundleCall
+                ) {
                     appearance = appearance.filter(
                         (item) =>
                             !(
@@ -184,16 +187,20 @@ test("bunny punishment applies and persists each configured restraint set", asyn
         );
 
         assert.equal(result.success, true, config.name);
+        assert.equal(result.status, "completed", config.name);
         assert.equal(result.finalVerification, true, config.name);
         assert.equal(result.signPresent, true, config.name);
         assert.equal(result.signVisible, true, config.name);
-        assert.equal(persisted.length, 1, config.name);
+        assert.equal(persisted.length, config.pieces.length + 1, config.name);
         for (const piece of config.pieces) {
             assert.ok(
-                persisted[0].some(
-                    (item: any) =>
-                        item.Group === piece.group && item.Name === piece.asset,
-                ),
+                persisted
+                    .at(-1)
+                    .some(
+                        (item: any) =>
+                            item.Group === piece.group &&
+                            item.Name === piece.asset,
+                    ),
                 `${config.name}: ${piece.group}/${piece.asset}`,
             );
         }
@@ -223,6 +230,7 @@ test("bunny punishment sends the complete bundle for remote-character persistenc
     );
 
     assert.equal(result.success, true);
+    assert.equal(result.status, "completed");
     const update = created.appearanceUpdates.at(-1);
     assert.ok(update);
     for (const piece of [
@@ -258,6 +266,7 @@ test("bunny punishment records a durable sign artifact", async () => {
     );
 
     assert.equal(result.success, true);
+    assert.equal(result.status, "completed");
     assert.equal(artifact.memberNumber, 18);
     assert.equal(artifact.operationId, result.operationId);
     assert.deepEqual(artifact.sign, {
@@ -295,6 +304,7 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
     );
 
     assert.equal(result.success, true);
+    assert.equal(result.status, "completed");
     assert.equal(result.finalVerification, true);
     assert.equal(result.signPresent, true);
     assert.equal(result.signVisible, true);
@@ -310,7 +320,7 @@ test("bunny punishment restores a sign omitted after ropes were retained", async
 });
 
 test("bunny punishment fails when the required sign is lost", async () => {
-    const created = createCharacter(17, { dropSignOnBundleCall: 4 });
+    const created = createCharacter(17, { dropSignOnBundleCall: 8 });
     const persisted: any[] = [];
     const system = new BunnyParkSystem(
         createMessageConnection(created.character) as any,
@@ -327,6 +337,7 @@ test("bunny punishment fails when the required sign is lost", async () => {
     );
 
     assert.equal(result.success, false);
+    assert.equal(result.status, "partial");
     assert.equal(result.finalVerification, false);
     assert.equal(result.signPresent, false);
     assert.equal(result.signVisible, false);
@@ -375,6 +386,7 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
     );
 
     assert.equal(result.success, false);
+    assert.equal(result.status, "partial");
     assert.deepEqual(result.failedPieces, [
         "ItemArms/HempRope",
         "ItemLegs/HempRope",
@@ -424,6 +436,7 @@ test("bunny punishment continues when a restraint is silently omitted", async ()
     );
 
     assert.equal(result.success, false);
+    assert.equal(result.status, "partial");
     assert.deepEqual(result.appliedPieces, [
         "ItemArms/HempRope",
         "ItemMisc/WoodenSign",
@@ -467,7 +480,7 @@ test("bunny punishment keeps restraints when persistence fails transiently", asy
     );
 
     assert.equal(result.success, true);
-    assert.equal(syncAttempts, 1);
+    assert.equal(syncAttempts, 3);
     assert.notEqual(created.appearance().length, 0);
     assert.ok(
         created
@@ -496,7 +509,7 @@ test("bunny punishment retries after transient persistence failure", async () =>
     await (system as any).onCharacterStepOnBunny(created.character);
     await (system as any).onCharacterStepOnBunny(created.character);
 
-    assert.equal(syncAttempts, 1);
+    assert.equal(syncAttempts, 3);
     assert.equal(created.messages.length, 2);
     assert.match(created.messages[0], /Please do not step/);
     assert.match(created.messages[1], /Please do not step/);
@@ -525,6 +538,7 @@ test("bunny punishment reports permission failures separately", async () => {
     );
 
     assert.equal(result.success, false);
+    assert.equal(result.status, "failed");
     assert.match(result.failureReason, /permission denied/);
     assert.deepEqual(created.added, []);
 });
@@ -548,6 +562,7 @@ test("invalid bunny configuration fails before announcing punishment", async () 
     );
 
     assert.equal(result.success, false);
+    assert.equal(result.status, "failed");
     assert.match(result.failureReason, /asset unavailable/);
     assert.deepEqual(created.added, []);
     assert.deepEqual(created.messages, []);
@@ -569,7 +584,7 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
     await (system as any).onCharacterStepOnBunny(created.character);
     await (system as any).onCharacterStepOnBunny(created.character);
 
-    assert.equal(syncCount, 1);
+    assert.equal(syncCount, 3);
     assert.equal(
         created.added.filter((key) => key === "ItemArms/HempRope").length,
         1,
@@ -580,15 +595,39 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
     assert.match(messages[1], /Please do not step/);
 });
 
+test("bunny punishment classifies an already complete appearance as skipped", async () => {
+    const created = createCharacter(21);
+    const system = new BunnyParkSystem(
+        createMessageConnection(created.character) as any,
+        async () => {},
+        deterministicRandom(0),
+        0,
+    );
+
+    const first = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+    const second = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(first.status, "completed");
+    assert.equal(second.success, true);
+    assert.equal(second.status, "skipped");
+    assert.equal(second.skipped, true);
+});
+
 test("configured bunny locations trigger appearance and persistence updates", async () => {
     const callbacks: Array<(character: any) => void | Promise<void>> = [];
     const connector = createConnector(callbacks);
-    const persisted: number[] = [];
+    const persisted = new Set<number>();
     const configuredPositions = [...BUNNY_POSITIONS, { X: 32, Y: 25 }];
     const system = new BunnyParkSystem(
         connector as any,
         async (character) => {
-            persisted.push(character.MemberNumber);
+            persisted.add(character.MemberNumber);
         },
         deterministicRandom(0),
         0,
@@ -612,13 +651,13 @@ test("configured bunny locations trigger appearance and persistence updates", as
         const created = createCharacter(index + 100);
         created.character.MapPos = configuredPositions[index];
         await callback(created.character);
-        for (
-            let attempts = 0;
-            attempts < 20 && persisted.length <= index;
-            attempts += 1
-        ) {
+        for (let attempts = 0; attempts < 20; attempts += 1) {
+            if (persisted.has(index + 100)) break;
             await new Promise((resolve) => setTimeout(resolve, 50));
         }
     }
-    assert.deepEqual(persisted, [100, 101, 102, 103]);
+    assert.deepEqual(
+        [...persisted].sort((a, b) => a - b),
+        [100, 101, 102, 103],
+    );
 });
