@@ -352,7 +352,6 @@ export const RELEASE_COOLDOWN_MS = 0; // DISABLED: Temporarily no cooldown for t
 export const RELEASE_NUDITY_CHECK_INTERVAL_MS = 1000; // Check every 1 second (faster detection)
 export const RELEASE_NUDITY_TIMEOUT_MS = 60 * 1000; // 60 second max to strip
 export const RELEASE_PUNISHMENT_ROOM_KEY = "punishment_room_entrance"; // Location key
-export const RELEASE_KEYPAD_KEY = "keypad_punishment"; // Keypad location key
 export const RELEASE_PAROLE_DURATION_MS = 10 * 60 * 1000; // 10 minutes parole period
 
 // --- Shared helpers ---
@@ -578,6 +577,19 @@ export const VERATOWN_LOCATIONS_FALLBACK: VeratownLocationDoc[] = [
         type: "region" as const,
         regionType: "game",
         region: KIDNAPPERS_LOCATION,
+        enabled: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    },
+    {
+        key: RELEASE_PUNISHMENT_ROOM_KEY,
+        name: "Punishment Room Entrance",
+        type: "other" as const,
+        x: 14,
+        y: 13,
+        description:
+            "Where emergency-release players are placed before parole.",
+        data: {},
         enabled: true,
         createdAt: Date.now(),
         updatedAt: Date.now(),

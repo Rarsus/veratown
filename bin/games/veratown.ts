@@ -98,6 +98,7 @@ import {
     PET_EARS,
     VERATOWN_LOCATIONS_FALLBACK,
     FEATURE_REGIONS_STATIC,
+    RELEASE_PUNISHMENT_ROOM_KEY,
 } from "./veratown/veratownConfig";
 
 const logger = createLogger("Veratown");
@@ -869,6 +870,24 @@ export class Veratown {
                 type: "region",
                 regionType: "game",
                 region: KIDNAPPERS_LOCATION,
+                enabled: true,
+            });
+            changed = true;
+        }
+
+        const punishmentRoom = await this.locationStore.getLocation(
+            RELEASE_PUNISHMENT_ROOM_KEY,
+        );
+        if (!punishmentRoom) {
+            await this.locationStore.addLocation({
+                key: RELEASE_PUNISHMENT_ROOM_KEY,
+                name: "Punishment Room Entrance",
+                type: "other",
+                x: 14,
+                y: 13,
+                description:
+                    "Where emergency-release players are placed before parole.",
+                data: {},
                 enabled: true,
             });
             changed = true;

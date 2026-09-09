@@ -20,7 +20,7 @@ Replaces `/bot freeandleave` with an enhanced release system that:
 Player: /bot release
 Bot: Validation checks
   - Is player in room?
-  - Do punishment_room_entrance and keypad_punishment locations exist?
+  - Does the punishment_room_entrance location exist?
   - Is player in cooldown? (optional feature)
 Bot: Confirmation message
   "You press the emergency release button..."
@@ -70,7 +70,7 @@ Bot Messages (in sequence):
   1. "You've been released to the punishment room."
   2. "*The door slides shut behind you with a click.*"
   3. "**BEFORE YOU CAN ESCAPE**: You must remove ALL clothing."
-  4. "Stand on the punishment room entrance tile and wait..."
+  4. "You may leave the punishment room when ready."
 
 Bot Checks (every 2-3 seconds, max 60 seconds):
   - Is character still on punishment_room_entrance tile?
@@ -80,15 +80,13 @@ Bot Checks (every 2-3 seconds, max 60 seconds):
     - If clothed: Tell them what's still equipped
 ```
 
-### Stage 6: Grant Door Access
+### Stage 6: Allow Exit
 
 ```
 Bot Logic:
-  1. Query locationStore for "keypad_punishment"
-  2. Extract access code from location.data.codes.guest
-  3. Message: "The keypad activates with a 'CLICK'..."
-  4. Tell player: "CODE: [5-digit code]"
-  5. Optional: "This code will expire in 10 minutes."
+  1. Confirm the nudity check passed.
+  2. Tell the player that the punishment-room exit is available.
+  3. Begin parole monitoring immediately.
 
 Profile Tracking:
   - record "escaped" action
@@ -161,26 +159,9 @@ description: "Where players are released to"
 enabled: true
 ```
 
-### 2. `keypad_punishment`
-
-```
-Type: keypad_door
-Key: "keypad_punishment"
-x: <door location>
-y: <door location>
-data: {
-  doorX: <number>,
-  doorY: <number>,
-  lockedTile: "MetalDown",
-  unlockedTile: "SteelDoorOpen",
-  codes: {
-    admin: "ADMIN_CODE",
-    guest: "12345"      // <-- Given to released players
-  },
-  whitelistMemberNumbers: [],
-  unlockDurationMs: 10000
-}
-```
+The release flow no longer requires a keypad location. After the nudity check
+passes, the player is considered able to leave the punishment room and parole
+monitoring begins immediately.
 
 ---
 
@@ -252,15 +233,14 @@ class ReleaseSystem implements VeratownFeatureSystem {
 
 ## Error Handling
 
-| Scenario                             | Response                                                     |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `punishment_room_entrance` not in DB | "Release location not configured. Contact admins."           |
-| `keypad_punishment` not in DB        | Allow release but can't give code. "Find the exit yourself." |
-| Player teleport fails                | Fallback: free restraints and try kick instead               |
-| Player on cooldown                   | "Already released recently. Next available: X min"           |
-| Player won't strip within 60s        | "Timeout! You're free but no door code."                     |
-| Admin uses command                   | Bypass all cooldowns & checks                                |
-| Player still in cage after free      | "Warning: Still in cage. Admin intervention needed."         |
+| Scenario                             | Response                                             |
+| ------------------------------------ | ---------------------------------------------------- |
+| `punishment_room_entrance` not in DB | "Release location not configured. Contact admins."   |
+| Player teleport fails                | Fallback: free restraints and try kick instead       |
+| Player on cooldown                   | "Already released recently. Next available: X min"   |
+| Player won't strip within 60s        | "Timeout! Emergency release is incomplete."          |
+| Admin uses command                   | Bypass all cooldowns & checks                        |
+| Player still in cage after free      | "Warning: Still in cage. Admin intervention needed." |
 
 ---
 

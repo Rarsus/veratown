@@ -26,7 +26,6 @@ import {
     RELEASE_NUDITY_CHECK_INTERVAL_MS,
     RELEASE_NUDITY_TIMEOUT_MS,
     RELEASE_PUNISHMENT_ROOM_KEY,
-    RELEASE_KEYPAD_KEY,
     RELEASE_PAROLE_DURATION_MS,
     RELEASE_COOLDOWN_MS,
 } from "./veratownConfig";
@@ -396,7 +395,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
                 );
                 this.whisper(
                     character,
-                    "You failed to strip in time. No door code for you.",
+                    "You failed to strip in time. Emergency release is incomplete.",
                 );
                 if (this.characterProfileStore) {
                     await this.executeWithRetry(
@@ -426,33 +425,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             );
             this.escalatedParoleDurations.delete(character.MemberNumber);
 
-            // Stage 6: Grant door access
-            this.recordStage(
-                character.MemberNumber,
-                "granting_access",
-                "start",
-            );
-            const granted = await this.executeGrantDoorAccess(character);
-            this.recordStage(character.MemberNumber, "granting_access", "end");
-            if (!granted) {
-                this.whisper(
-                    character,
-                    "Door access could not be granted. Try finding the exit manually.",
-                );
-            }
-
-            // Stage 6b: Wait for character to leave
-            this.recordStage(character.MemberNumber, "waiting_exit", "start");
-            const punishmentRoom = await this.getPunishmentRoomLocation();
-            await this.waitForCharacterToLeaveRoom(character, {
-                X: punishmentRoom.x,
-                Y: punishmentRoom.y,
-            });
-            this.recordStage(character.MemberNumber, "waiting_exit", "end");
-
             this.whisper(
                 character,
-                "*You are now on parole!* You are NOT allowed to wear ANY clothing. Parole expires in 10 minutes.",
+                "*The punishment-room exit is available.* You can leave now. You are on parole and may not wear any clothing. Parole expires in 10 minutes.",
             );
 
             // Stage 7: Monitor parole
@@ -672,51 +647,8 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             }
         }
 
-        this.whisper(
-            character,
-            "Time's up! You're leaving, but without the door code.",
-        );
+        this.whisper(character, "Time's up! Emergency release is incomplete.");
         return false;
-    }
-
-    private async executeGrantDoorAccess(
-        character: API_Character,
-    ): Promise<boolean> {
-        this.logger?.info(`[ReleaseSystem] Stage 6: Granting door access`);
-
-        if (!this.locationStore) {
-            return false;
-        }
-
-        try {
-            const keypadLocation =
-                await this.locationStore.getLocation(RELEASE_KEYPAD_KEY);
-
-            if (!keypadLocation?.data) {
-                this.logger?.warn(`[ReleaseSystem] Keypad location not found`);
-                return false;
-            }
-
-            const codes = keypadLocation.data.codes as Record<string, string>;
-            const guestCode = codes?.guest;
-
-            if (!guestCode) {
-                this.logger?.warn(`[ReleaseSystem] Guest code not found`);
-                return false;
-            }
-
-            this.whisper(
-                character,
-                `*A panel lights up with the escape code*\n\n**KEYPAD CODE: ${guestCode}**\n\nThis code expires in 10 minutes. Use it to escape.`,
-            );
-            return true;
-        } catch (e) {
-            this.logger?.error(
-                `[ReleaseSystem] Failed to grant door access`,
-                e,
-            );
-            return false;
-        }
     }
 
     // ===== PAROLE MONITORING =====
@@ -1025,24 +957,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
 
             await wait(this.TIMINGS.BETWEEN_STAGES);
 
-            // Re-execute door access
-            const granted = await this.executeGrantDoorAccess(character);
-            if (!granted) {
-                this.whisper(
-                    character,
-                    "Door access could not be granted. Try finding the exit manually.",
-                );
-            }
-
-            // Wait for exit
-            await this.waitForCharacterToLeaveRoom(
-                character,
-                punishmentRoomPos,
-            );
-
             this.whisper(
                 character,
-                `*Parole restarted!* You are NOT allowed to wear ANY clothing. You have 10 minutes. (Attempt ${restartAttempt}/${this.MAX_PAROLE_RESTART_ATTEMPTS})`,
+                `*Parole restarted!* You can leave the punishment room now, but you are NOT allowed to wear ANY clothing. You have 10 minutes. (Attempt ${restartAttempt}/${this.MAX_PAROLE_RESTART_ATTEMPTS})`,
             );
 
             // Re-initialize parole metadata

@@ -159,7 +159,6 @@ test("release flow does not grant access until verified restraints are persisted
     await sync.reconcile();
     persisted.length = 0;
 
-    let accessGranted = false;
     const system = new ReleaseSystem(createConnection());
     const implementation = system as any;
     implementation.checkCanRelease = async () => true;
@@ -167,10 +166,6 @@ test("release flow does not grant access until verified restraints are persisted
     implementation.executeTeleport = async () => {};
     implementation.executeNudityCheck = async () => true;
     implementation.getPunishmentRoomLocation = async () => ({ x: 1, y: 1 });
-    implementation.executeGrantDoorAccess = async () => {
-        accessGranted = true;
-        return true;
-    };
     implementation.waitForCharacterToLeaveRoom = async () => {};
     implementation.monitorParoleExpiration = async () => {};
     implementation.initializeParoleMetadata = async () => {};
@@ -179,7 +174,6 @@ test("release flow does not grant access until verified restraints are persisted
 
     await system.executeRelease(created.character);
 
-    assert.equal(accessGranted, true);
     assert.deepEqual(
         created.appearance().map((item) => `${item.Group}/${item.Name}`),
         ["ItemDevices/OwnerDevice"],
