@@ -41,6 +41,7 @@ import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { KeypadDoorSystem } from "./veratown/keypadDoorSystemRefactored";
+import { KeypadLocationIntegration } from "./veratown/migrations/keypadLocationIntegration";
 import { CatDogSystem } from "./veratown/catDogSystem";
 import { FurnitureBondageSystem } from "./veratown/furnitureBondageSystem";
 import { KeypadDefinitionService } from "./veratown/services/keypadDefinitionService";
@@ -204,6 +205,7 @@ export class Veratown {
     private windowSystem?: WindowSystem;
     private trashcanSystem?: TrashcanSystem;
     private keypadDoorSystem?: KeypadDoorSystem;
+    private keypadLocationIntegration?: KeypadLocationIntegration;
     private catDogSystem?: CatDogSystem;
     private furnitureBondageSystem?: FurnitureBondageSystem;
     private releaseSystem?: ReleaseSystem;
@@ -510,6 +512,10 @@ export class Veratown {
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn),
         );
+        const keypadDefinitionService =
+            this.container.get<KeypadDefinitionService>(
+                DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
+            );
         this.keypadDoorSystem = this.initFeature(() => {
             if (this.container.has(DIServiceKeys.KEYPAD_DOOR_SYSTEM)) {
                 return this.container.get<KeypadDoorSystem>(
@@ -523,19 +529,15 @@ export class Veratown {
                 );
             }
 
-            const definitionService =
-                this.container.get<KeypadDefinitionService>(
-                    DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
-                );
             const accessService = this.container.get<KeypadAccessService>(
                 DIServiceKeys.KEYPAD_ACCESS_SERVICE,
             );
             const system = new KeypadDoorSystem(
                 this.conn,
-                definitionService,
+                keypadDefinitionService,
                 accessService,
                 new KeypadCommandDispatcher(
-                    definitionService,
+                    keypadDefinitionService,
                     accessService,
                     this.unifiedCharacterStore,
                 ),
@@ -551,6 +553,9 @@ export class Veratown {
             );
             return system;
         });
+        this.keypadLocationIntegration = new KeypadLocationIntegration(
+            keypadDefinitionService,
+        );
         this.catDogSystem = this.initFeature(
             () =>
                 new CatDogSystem(
@@ -827,6 +832,10 @@ export class Veratown {
                             );
                     }
                 }
+
+                await this.keypadLocationIntegration?.syncLegacyLocations(
+                    this.locationSnapshot,
+                );
 
                 if (this.locationStore) {
                     await this.regionManager.loadRegions(this.locationStore);

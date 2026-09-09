@@ -145,6 +145,59 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         await system.shutdown();
     });
 
+    it("reloads live map triggers when the definition service reports a database change", async () => {
+        const tileTriggers: Array<{ x: number; y: number }> = [];
+        let doorChanged: (() => void) | undefined;
+        let currentDoor = createDoor();
+        const definitionService = {
+            init: async () => {},
+            on: (event: string, listener: () => void) => {
+                if (event === "doorChanged") doorChanged = listener;
+            },
+            off: () => {},
+            getAllDoorDefinitions: async () => [currentDoor],
+            getDoorDefinition: async (doorKey: string) =>
+                doorKey === currentDoor.doorKey ? currentDoor : null,
+        };
+        const system = new KeypadDoorSystem(
+            {
+                chatRoom: {
+                    map: {
+                        addTileTrigger: (position: { X: number; Y: number }) =>
+                            tileTriggers.push({ x: position.X, y: position.Y }),
+                        removeTileTrigger: () => {},
+                        setObject: () => {},
+                    },
+                },
+                on: () => {},
+                SendMessage: () => {},
+            } as any,
+            definitionService as any,
+            { init: async () => {} } as any,
+            {} as any,
+        );
+        await system.init();
+        expect(tileTriggers.some(({ x, y }) => x === 13 && y === 9)).toBe(true);
+
+        tileTriggers.length = 0;
+        currentDoor = {
+            ...currentDoor,
+            keypadTiles: [{ X: 20, Y: 21 }],
+            autoOpenTiles: [],
+            autoOpenTile: undefined,
+        };
+        doorChanged!();
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(tileTriggers.some(({ x, y }) => x === 20 && y === 21)).toBe(
+            true,
+        );
+        expect(tileTriggers.some(({ x, y }) => x === 13 && y === 9)).toBe(
+            false,
+        );
+        await system.shutdown();
+    });
+
     it("routes commands without requiring a location store", async () => {
         let dispatched: { commandLine: string; isAdmin: boolean } | undefined;
         const system = new KeypadDoorSystem(

@@ -37,6 +37,60 @@ export class KeypadLocationIntegration {
     constructor(private definitionService: KeypadDefinitionService) {}
 
     /**
+     * Reconcile every legacy keypad location with its live door definition.
+     * This is intentionally idempotent so it can run after each location
+     * change, including changes made by another bot process.
+     */
+    async syncLegacyLocations(
+        locations: readonly VeratownLocationDoc[],
+    ): Promise<void> {
+        const legacyLocations = locations.filter((location) =>
+            KeypadBackwardCompatibility.isLegacyKeypadLocation(location),
+        );
+        const activeKeys = new Set(
+            legacyLocations.map((location) => `auto_location_${location.key}`),
+        );
+
+        for (const location of legacyLocations) {
+            const door =
+                KeypadBackwardCompatibility.extractLegacyDoorConfig(location);
+            if (!door) continue;
+
+            const existing = await this.definitionService.getDoorDefinition(
+                door.doorKey,
+            );
+            if (existing) {
+                await this.definitionService.updateDoor(door.doorKey, {
+                    doorX: door.doorX,
+                    doorY: door.doorY,
+                    lockedTile: door.lockedTile,
+                    unlockedTile: door.unlockedTile,
+                    unlockDurationMs: door.unlockDurationMs,
+                    keypadTiles: door.keypadTiles,
+                    insideRegion: door.insideRegion,
+                    autoOpenTile: door.autoOpenTile,
+                    autoOpenTiles: door.autoOpenTiles,
+                    enabled: door.enabled,
+                    description: door.description,
+                });
+            } else {
+                await this.definitionService.createDoor(door);
+            }
+        }
+
+        const existingDoors =
+            await this.definitionService.getAllDoorDefinitions(true);
+        for (const door of existingDoors) {
+            if (
+                KeypadBackwardCompatibility.isAutoMigrated(door.doorKey) &&
+                !activeKeys.has(door.doorKey)
+            ) {
+                await this.definitionService.deleteDoor(door.doorKey);
+            }
+        }
+    }
+
+    /**
      * Handle location creation
      * If location has keypad_door type, create corresponding door definition
      */

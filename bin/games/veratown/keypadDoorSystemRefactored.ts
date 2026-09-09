@@ -147,6 +147,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         await this.accessService.init();
         await this.reloadDoors();
         this.attachToRoom();
+        this.definitionService.on("doorWatchError", (error: unknown) => {
+            this.logger.warn("Door definition database watch stopped", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        });
+        await this.definitionService.watchDoorDefinitions?.();
     }
 
     /**
@@ -573,6 +579,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     async shutdown(): Promise<void> {
         this.detachFromRoom();
+        await this.definitionService.unwatchDoorDefinitions?.();
         this.doorUnlockTimers.clearAll();
         this.manuallyOpenDoors.clear();
         this.notificationTimers.clearAll();

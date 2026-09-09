@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-import { Collection, Db } from "mongodb";
+import { ChangeStream, ChangeStreamDocument, Collection, Db } from "mongodb";
 import { EventEmitter } from "node:events";
 import {
     KeypadDoorDefinitionDoc,
@@ -37,6 +37,7 @@ import {
 export class KeypadDefinitionService extends EventEmitter {
     private doorDefinitions: Collection<KeypadDoorDefinitionDoc>;
     private groupDefinitions: Collection<KeypadGroupDefinitionDoc>;
+    private doorChangeStream?: ChangeStream<KeypadDoorDefinitionDoc>;
 
     constructor(private db: Db) {
         super();
@@ -78,8 +79,38 @@ export class KeypadDefinitionService extends EventEmitter {
     /**
      * Get all door definitions
      */
-    async getAllDoorDefinitions(): Promise<KeypadDoorDefinitionDoc[]> {
-        return this.doorDefinitions.find({ enabled: true }).toArray();
+    async getAllDoorDefinitions(
+        includeDisabled = false,
+    ): Promise<KeypadDoorDefinitionDoc[]> {
+        return this.doorDefinitions
+            .find(includeDisabled ? {} : { enabled: true })
+            .toArray();
+    }
+
+    /** Watch direct database writes made outside this service instance. */
+    async watchDoorDefinitions(): Promise<void> {
+        if (this.doorChangeStream) return;
+        try {
+            this.doorChangeStream = this.doorDefinitions.watch();
+            this.doorChangeStream.on(
+                "change",
+                (_change: ChangeStreamDocument<KeypadDoorDefinitionDoc>) =>
+                    this.emit("doorChanged"),
+            );
+            this.doorChangeStream.on("error", (error) => {
+                this.doorChangeStream = undefined;
+                this.emit("doorWatchError", error);
+            });
+        } catch (error) {
+            this.doorChangeStream = undefined;
+            this.emit("doorWatchError", error);
+        }
+    }
+
+    async unwatchDoorDefinitions(): Promise<void> {
+        if (!this.doorChangeStream) return;
+        await this.doorChangeStream.close();
+        this.doorChangeStream = undefined;
     }
 
     /**
