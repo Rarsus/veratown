@@ -42,7 +42,7 @@ export interface BotMapPositionObservation {
     roomName?: string;
     mapReady: boolean;
     observedAt: Date;
-    source: "chatRoom.findMember" | "Player.MapPos";
+    source: "chatRoom.findMember" | "Player.MapPos" | "reposition-command";
 }
 
 export interface BotRecoveryStatus {

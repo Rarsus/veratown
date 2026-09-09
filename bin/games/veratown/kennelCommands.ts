@@ -201,7 +201,12 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
                     // Set timerpasswordlock property on the kennel
                     // Format: seconds until unlock (from now)
                     const durationSeconds = Math.ceil(durationMs / 1000);
-                    kennel.setProperty("timerPasswordLock", durationSeconds);
+                    const setRuntimeProperty =
+                        kennel.setProperty as unknown as (
+                            property: string,
+                            value: number,
+                        ) => void;
+                    setRuntimeProperty("timerPasswordLock", durationSeconds);
                 },
                 50,
                 undefined,

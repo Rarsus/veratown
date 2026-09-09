@@ -68,7 +68,13 @@ export class KidnappersGameCaptureService {
     public async dispatch(
         command: KidnappersGameCommand,
     ): Promise<KidnappersSessionCommandResult> {
-        const pendingCapture = this.session.getSnapshot().turn?.pendingCapture;
+        const snapshot = this.session.getSnapshot();
+        const pendingCapture = snapshot.turn?.pendingCapture
+            ? {
+                  ...snapshot.turn.pendingCapture,
+                  turnId: snapshot.turn.turnId,
+              }
+            : undefined;
         const result = await this.session.dispatchPersisted(
             command,
             this.persistence,
