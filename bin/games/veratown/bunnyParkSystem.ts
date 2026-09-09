@@ -505,18 +505,37 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 ),
             );
             const finalSign = verifyBunnySign(finalAppearance);
-            if (
-                !finalRestraintsVerified ||
-                !finalSign.visible ||
-                blockedPieces.length > 0
-            ) {
+            if (blockedPieces.length > 0) {
+                const result: BunnyPunishmentResult = {
+                    success: false,
+                    configuration: config.name,
+                    attemptedPieces,
+                    appliedPieces,
+                    failedPieces: blockedPieces.map(pieceKey),
+                    finalVerification: false,
+                    signPresent: finalSign.present,
+                    signVisible: finalSign.visible,
+                    signFailureReason: finalSign.reason,
+                    failureReason:
+                        "Bunny punishment preserved occupied appearance groups",
+                    operationId: context.operationId,
+                };
+                this.logger.warn("Bunny punishment partially applied", {
+                    ...context,
+                    appliedPieces,
+                    failedPieces: result.failedPieces,
+                    signPresent: result.signPresent,
+                    signVisible: result.signVisible,
+                    failureReason: result.failureReason,
+                });
+                return result;
+            }
+            if (!finalRestraintsVerified || !finalSign.visible) {
                 throw new Error(
-                    blockedPieces.length > 0
-                        ? "Bunny punishment preserved occupied appearance groups"
-                        : !finalRestraintsVerified
-                          ? "final restraint appearance verification failed"
-                          : (finalSign.reason ??
-                            "final WoodenSign verification failed"),
+                    !finalRestraintsVerified
+                        ? "final restraint appearance verification failed"
+                        : (finalSign.reason ??
+                              "final WoodenSign verification failed"),
                 );
             }
             const appliedAt = Date.now();

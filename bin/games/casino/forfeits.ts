@@ -239,7 +239,7 @@ export const SERVICES: Record<string, Service> = {
     cocktail: {
         name: "House Special Cocktail",
         description:
-            "Hand crafted by our expert mixologist. Please drink responsibly.",
+            "Choose from 30 real-world cocktails, each handcrafted by our expert mixologist. Use a cocktail key for a specific drink or omit it for a random selection. Please drink responsibly.",
         value: 10,
     },
     player: {
@@ -697,7 +697,11 @@ export function restraintsRemoveString(): string {
 function commandForService(name: string): string {
     return (
         `/bot buy ${name}` +
-        (name === "player" ? " <name or member number>" : "")
+        (name === "player"
+            ? " <name or member number>"
+            : name === "cocktail"
+              ? " [cocktail key]"
+              : "")
     );
 }
 

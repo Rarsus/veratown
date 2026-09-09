@@ -34,7 +34,7 @@ import {
     SERVICES,
     servicesString,
 } from "./casino/forfeits";
-import { Cocktail, COCKTAILS } from "./casino/cocktails";
+import { Cocktail, CocktailCatalogService } from "./casino/cocktails";
 import { Bet, Game } from "./casino/game";
 import { BlackjackGame } from "./casino/blackjack";
 import { ForfeitService } from "./casino/forfeitService";
@@ -113,6 +113,9 @@ export class Casino implements GamePlugin {
     private mutationService: GameStateMutationService;
     private readonly bioManager: BioManager;
     private cocktailOfTheDay: Cocktail | undefined;
+    private cocktailOfTheDayKey?: string;
+    private readonly cocktailCatalog: CocktailCatalogService;
+    private cocktailCatalogReady?: Promise<void>;
     public multiplier = 1;
     public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
     private gameRegion?: MapRegion;
@@ -227,21 +230,12 @@ export class Casino implements GamePlugin {
             this.messageSender,
         );
 
-        if (config?.cocktail) {
-            this.cocktailOfTheDay = COCKTAILS[config.cocktail];
-            if (this.cocktailOfTheDay === undefined) {
-                throw new Error(`Unknown cocktail: ${config.cocktail}`);
-            }
-        }
-
+        this.cocktailOfTheDayKey = config?.cocktail;
+        this.cocktailCatalog = new CocktailCatalogService(db);
         this.conn.setItemPermission(ItemPermissionLevel.OwnerOnly);
-
-        // Store config for later use in registerTriggers
-        this.gameConfig = config;
     }
 
     /**
-     * Get the unified store (Phase 5+: direct unified access)
      * Returns a wrapper object with the methods Casino needs
      */
     private getStore() {
@@ -398,6 +392,24 @@ export class Casino implements GamePlugin {
     public async init(): Promise<void> {
         // Casino doesn't need special async initialization
         // Stores are initialized in constructor
+        await this.ensureCocktailCatalog();
+        if (this.cocktailOfTheDayKey) {
+            this.cocktailOfTheDay =
+                (await this.cocktailCatalog.get(this.cocktailOfTheDayKey)) ??
+                undefined;
+            if (!this.cocktailOfTheDay) {
+                throw new Error(
+                    `Unknown cocktail: ${this.cocktailOfTheDayKey}`,
+                );
+            }
+        }
+    }
+
+    private async ensureCocktailCatalog(): Promise<void> {
+        if (!this.cocktailCatalogReady) {
+            this.cocktailCatalogReady = this.cocktailCatalog.init();
+        }
+        await this.cocktailCatalogReady;
     }
 
     /**
@@ -952,6 +964,40 @@ ${forfeitsString()}
             return;
         }
 
+        let selectedCocktail: Cocktail | undefined;
+        if (serviceName === "cocktail") {
+            await this.ensureCocktailCatalog();
+            if (args.length > 2) {
+                this.conn.reply(
+                    msg,
+                    "Usage: buy cocktail [cocktail key]. Use /bot buy cocktail for a random selection.",
+                );
+                return;
+            }
+            if (args[1]?.toLowerCase() === "list") {
+                const menu = (await this.cocktailCatalog.list())
+                    .map(
+                        ({ key, name, description }) =>
+                            `${key}: ${name} - ${description}`,
+                    )
+                    .join("\n");
+                this.conn.reply(msg, `Available cocktails:\n${menu}`);
+                return;
+            }
+            selectedCocktail = args[1]
+                ? ((await this.cocktailCatalog.get(args[1])) ?? undefined)
+                : (this.cocktailOfTheDay ??
+                  (await this.cocktailCatalog.random()) ??
+                  undefined);
+            if (!selectedCocktail) {
+                const menu = (await this.cocktailCatalog.list())
+                    .map(({ key, name }) => `${key} (${name})`)
+                    .join(", ");
+                this.conn.reply(msg, `Unknown cocktail. Available: ${menu}`);
+                return;
+            }
+        }
+
         let target: API_Character | undefined;
         if (serviceName === "player") {
             if (args.length < 2) {
@@ -1015,9 +1061,7 @@ ${forfeitsString()}
                 `${sender} has bought ${target} and is now the proud owner of an unfortunate gambler.`,
             );
         } else if (serviceName === "cocktail") {
-            const keys = Object.keys(COCKTAILS);
-            const randomKey = keys[Math.floor(Math.random() * keys.length)];
-            const cocktail = this.cocktailOfTheDay ?? COCKTAILS[randomKey];
+            const cocktail = selectedCocktail!;
 
             const cocktailItem = sender.Appearance.AddItem(
                 AssetGet("ItemHandheld", "GlassFilled"),
