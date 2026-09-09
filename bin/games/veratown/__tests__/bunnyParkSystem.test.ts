@@ -123,7 +123,9 @@ function createCharacter(
     };
 }
 
-function createConnector(callbacks: Array<(character: any) => void>) {
+function createConnector(
+    callbacks: Array<(character: any) => void | Promise<void>>,
+) {
     return {
         SendMessage: () => {},
         chatRoom: {
@@ -368,14 +370,16 @@ test("bunny punishment reports failures and rolls back partial appearance change
     );
 
     assert.equal(result.success, false);
-    assert.deepEqual(result.failedPieces, ["ItemLegs/HempRope"]);
+    assert.deepEqual(result.failedPieces, [
+        "ItemArms/HempRope",
+        "ItemLegs/HempRope",
+    ]);
     assert.match(result.failureReason, /failed to add ItemLegs\/HempRope/);
     assert.deepEqual(created.appearance(), original);
 });
 
 test("bunny punishment keeps restraints when persistence fails transiently", async () => {
-    const original = [{ Group: "ItemArms", Name: "OldCuffs", Property: {} }];
-    const created = createCharacter(10, { initialAppearance: original });
+    const created = createCharacter(10);
     let syncAttempts = 0;
     const system = new BunnyParkSystem(
         createMessageConnection(created.character) as any,
@@ -395,7 +399,7 @@ test("bunny punishment keeps restraints when persistence fails transiently", asy
 
     assert.equal(result.success, true);
     assert.equal(syncAttempts, 1);
-    assert.notDeepEqual(created.appearance(), original);
+    assert.notEqual(created.appearance().length, 0);
     assert.ok(
         created
             .appearance()
@@ -508,7 +512,7 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
 });
 
 test("configured bunny locations trigger appearance and persistence updates", async () => {
-    const callbacks: Array<(character: any) => void> = [];
+    const callbacks: Array<(character: any) => void | Promise<void>> = [];
     const connector = createConnector(callbacks);
     const persisted: number[] = [];
     const configuredPositions = [...BUNNY_POSITIONS, { X: 32, Y: 25 }];
@@ -538,8 +542,14 @@ test("configured bunny locations trigger appearance and persistence updates", as
     for (const [index, callback] of callbacks.entries()) {
         const created = createCharacter(index + 100);
         created.character.MapPos = configuredPositions[index];
-        callback(created.character);
-        await new Promise((resolve) => setImmediate(resolve));
+        await callback(created.character);
+        for (
+            let attempts = 0;
+            attempts < 10 && persisted.length <= index;
+            attempts += 1
+        ) {
+            await new Promise((resolve) => setImmediate(resolve));
+        }
     }
     assert.deepEqual(persisted, [100, 101, 102, 103]);
 });

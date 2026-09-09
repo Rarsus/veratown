@@ -326,6 +326,9 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
 
         const currentAppearance = character.Appearance.MakeAppearanceBundle();
         const currentSign = verifyBunnySign(currentAppearance);
+        const currentByGroup = new Map(
+            currentAppearance.map((item) => [item.Group, item]),
+        );
         if (
             BUNNY_RESTRAINT_CONFIGS.some((candidate) =>
                 candidate.pieces.every((piece) =>
@@ -360,7 +363,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         }
 
         const validationErrors = validateBunnyRestraintConfig(config);
-        const allAssets = config.pieces.map((piece) => ({
+        const requestedPieces = [...config.pieces, BUNNY_SIGN];
+        const allAssets = requestedPieces.map((piece) => ({
             ...piece,
             descriptor: AssetGet(piece.group, piece.asset),
         }));
@@ -409,82 +413,89 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             return result;
         }
 
-        const snapshot = character.Appearance.MakeAppearanceBundle();
+        const missingPieces = requestedPieces.filter(
+            (piece) => !currentByGroup.has(piece.group),
+        );
+        const blockedPieces = requestedPieces.filter((piece) => {
+            const existing = currentByGroup.get(piece.group);
+            return existing !== undefined && existing.Name !== piece.asset;
+        });
         const appliedPieces: string[] = [];
-        const failedPieces: string[] = [];
+        const failedPieces = blockedPieces.map(pieceKey);
         let mutationStarted = false;
 
         try {
-            await syncAppearanceMutation(
-                character,
-                async () => {
-                    mutationStarted = true;
-                    const restraintBundle = [
-                        ...config.pieces.map((piece) =>
+            if (missingPieces.length > 0) {
+                await syncAppearanceMutation(
+                    character,
+                    async () => {
+                        mutationStarted = true;
+                        const restraintBundle = missingPieces.map((piece) =>
                             AssetGet(piece.group, piece.asset),
-                        ),
-                        AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
-                    ];
-                    await character.Appearance.slowlyApplyBundle(
-                        restraintBundle,
-                        {
-                            appearance: false,
-                            bodyCosplay: false,
-                            clothing: false,
-                            item: true,
-                        },
-                    );
-                    for (const piece of config.pieces) {
-                        const key = pieceKey(piece);
-                        const item = character.Appearance.InventoryGet(
-                            piece.group as any,
                         );
-                        if (!item) {
-                            failedPieces.push(key);
-                            throw new Error(
-                                `Bundle application produced no item for ${key}`,
+                        await character.Appearance.slowlyApplyBundle(
+                            restraintBundle,
+                            {
+                                appearance: false,
+                                bodyCosplay: false,
+                                clothing: false,
+                                item: true,
+                            },
+                        );
+                        for (const piece of missingPieces.filter(
+                            (candidate) => candidate.group !== BUNNY_SIGN.group,
+                        ) as BunnyRestraintConfig["pieces"]) {
+                            const key = pieceKey(piece);
+                            const item = character.Appearance.InventoryGet(
+                                piece.group as any,
                             );
-                        }
-                        if (piece.extendedType) {
-                            if (!item.Extended) {
+                            if (!item) {
                                 failedPieces.push(key);
                                 throw new Error(
-                                    `extended item unavailable for ${key}`,
+                                    `Bundle application produced no item for ${key}`,
                                 );
                             }
-                            item.Extended.SetType(piece.extendedType);
+                            if (piece.extendedType) {
+                                if (!item.Extended) {
+                                    failedPieces.push(key);
+                                    throw new Error(
+                                        `extended item unavailable for ${key}`,
+                                    );
+                                }
+                                item.Extended.SetType(piece.extendedType);
+                            }
+                            item.SetColor(BUNNY_ROPE_COLOR);
+                            item.SetCraft({
+                                Name: piece.asset,
+                                Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
+                            });
+                            appliedPieces.push(key);
                         }
-                        item.SetColor(BUNNY_ROPE_COLOR);
-                        item.SetCraft({
-                            Name: piece.asset,
-                            Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
-                        });
-                        appliedPieces.push(key);
-                    }
-                    const sign = character.Appearance.InventoryGet(
-                        BUNNY_SIGN.group as any,
-                    );
-                    if (!sign) {
-                        failedPieces.push(pieceKey(BUNNY_SIGN));
-                        throw new Error(
-                            "Bundle application produced no WoodenSign",
-                        );
-                    }
-                    sign.setProperty("Text", BUNNY_SIGN_TEXT);
-                    sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
-                    appliedPieces.push(pieceKey(BUNNY_SIGN));
-                },
-                this.syncDelayMs,
-                async (current) => {
-                    await this.stateSync?.(current);
-                },
-                {
-                    throwOnSyncFailure: false,
-                    source: "bunny",
-                    reason: "bunny_punishment_applied",
-                    operationId: context.operationId,
-                },
-            );
+                        const sign = missingPieces.some(
+                            (piece) => piece.group === BUNNY_SIGN.group,
+                        )
+                            ? character.Appearance.InventoryGet(
+                                  BUNNY_SIGN.group as any,
+                              )
+                            : undefined;
+                        if (sign) {
+                            sign.setProperty("Text", BUNNY_SIGN_TEXT);
+                            sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
+                            appliedPieces.push(pieceKey(BUNNY_SIGN));
+                        }
+                    },
+                    this.syncDelayMs,
+                    async (current) => {
+                        await this.stateSync?.(current);
+                    },
+                    {
+                        throwOnSyncFailure: false,
+                        source: "bunny",
+                        reason: "bunny_punishment_applied",
+                        operationId: context.operationId,
+                    },
+                );
+            }
 
             const finalAppearance = character.Appearance.MakeAppearanceBundle();
             const finalRestraintsVerified = config.pieces.every((piece) =>
@@ -494,12 +505,18 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 ),
             );
             const finalSign = verifyBunnySign(finalAppearance);
-            if (!finalRestraintsVerified || !finalSign.visible) {
+            if (
+                !finalRestraintsVerified ||
+                !finalSign.visible ||
+                blockedPieces.length > 0
+            ) {
                 throw new Error(
-                    !finalRestraintsVerified
-                        ? "final restraint appearance verification failed"
-                        : (finalSign.reason ??
-                              "final WoodenSign verification failed"),
+                    blockedPieces.length > 0
+                        ? "Bunny punishment preserved occupied appearance groups"
+                        : !finalRestraintsVerified
+                          ? "final restraint appearance verification failed"
+                          : (finalSign.reason ??
+                            "final WoodenSign verification failed"),
                 );
             }
             const appliedAt = Date.now();
@@ -581,21 +598,16 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 }
             }
             let rollbackError: string | undefined;
-            if (mutationStarted) {
+            if (mutationStarted && missingPieces.length > 0) {
                 try {
+                    const ownedGroups = new Set(
+                        missingPieces.map((piece) => piece.group),
+                    );
                     await syncAppearanceMutation(
                         character,
                         () => {
-                            const currentGroups = new Set(
-                                character.Appearance.MakeAppearanceBundle().map(
-                                    (item) => item.Group,
-                                ),
-                            );
-                            for (const group of currentGroups) {
+                            for (const group of ownedGroups) {
                                 character.Appearance.RemoveItem(group as any);
-                            }
-                            for (const item of snapshot) {
-                                character.Appearance.AddItem(item);
                             }
                         },
                         0,
