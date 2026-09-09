@@ -64,6 +64,7 @@ import { DIContainer, DIServiceKeys } from "../di/container";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
 import {
     BotHelpMonitorProvider,
+    CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
 } from "./veratown/locationMonitorSystem";
@@ -614,6 +615,24 @@ export class Veratown {
                             "Cage information is currently unavailable.",
                     ),
                     new BotHelpMonitorProvider(() => Veratown.description),
+                    new CallbackMonitorProvider(
+                        "kidnappers_status",
+                        () =>
+                            this.kidnappers?.getStatus() ??
+                            "Kidnappers is currently unavailable.",
+                    ),
+                    new CallbackMonitorProvider(
+                        "kidnappers_commands",
+                        () =>
+                            this.kidnappers?.getHelpText() ??
+                            "Kidnappers commands are currently unavailable.",
+                    ),
+                    new CallbackMonitorProvider(
+                        "kidnappers_guide",
+                        () =>
+                            this.kidnappers?.getPlayerGuide() ??
+                            "The Kidnappers game is currently unavailable.",
+                    ),
                 ]),
         );
 
@@ -888,6 +907,48 @@ export class Veratown {
                 description:
                     "Where emergency-release players are placed before parole.",
                 data: {},
+                enabled: true,
+            });
+            changed = true;
+        }
+
+        const kidnappersBoards = [
+            {
+                key: "kidnappers_status_board",
+                name: "Kidnappers Status Board",
+                region: {
+                    TopLeft: { X: 0, Y: 21 },
+                    BottomRight: { X: 0, Y: 21 },
+                },
+                displayKey: "kidnappers_status",
+            },
+            {
+                key: "kidnappers_commands_board",
+                name: "Kidnappers Commands Board",
+                region: {
+                    TopLeft: { X: 2, Y: 21 },
+                    BottomRight: { X: 2, Y: 21 },
+                },
+                displayKey: "kidnappers_commands",
+            },
+            {
+                key: "kidnappers_guide_board",
+                name: "Kidnappers Guide Board",
+                region: {
+                    TopLeft: { X: 4, Y: 21 },
+                    BottomRight: { X: 4, Y: 21 },
+                },
+                displayKey: "kidnappers_guide",
+            },
+        ] as const;
+        for (const board of kidnappersBoards) {
+            if (await this.locationStore.getLocation(board.key)) continue;
+            await this.locationStore.addLocation({
+                key: board.key,
+                name: board.name,
+                type: "help_monitor",
+                region: board.region,
+                data: { displayKey: board.displayKey, cooldownMs: 5000 },
                 enabled: true,
             });
             changed = true;

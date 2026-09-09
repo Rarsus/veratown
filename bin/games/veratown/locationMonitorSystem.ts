@@ -45,6 +45,17 @@ export class BotHelpMonitorProvider implements LocationMonitorProvider {
     }
 }
 
+export class CallbackMonitorProvider implements LocationMonitorProvider {
+    public constructor(
+        public readonly key: string,
+        private readonly getDisplayText: () => string,
+    ) {}
+
+    public getDisplay(): string {
+        return this.getDisplayText();
+    }
+}
+
 interface MonitorBinding {
     map: API_Map;
     callback: (...args: any[]) => void;

@@ -285,6 +285,21 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
             : "No Kidnappers sessions are active.";
     }
 
+    public getHelpText(): string {
+        return HELP;
+    }
+
+    public getPlayerGuide(): string {
+        return [
+            "Kidnappers game guide:",
+            "Join a session, then wait for the lobby to start.",
+            "During your turn, follow the command prompts and respect the current phase.",
+            "Capture attempts can be answered with accept or resist; escape is available when the rules allow it.",
+            "Roles and private objectives are never displayed on public boards.",
+            "Use !kidnappers status for the public session state.",
+        ].join("\n");
+    }
+
     private async dispatchOnce(
         sender: API_Character,
         message: BC_Server_ChatRoomMessage,
