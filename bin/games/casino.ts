@@ -64,6 +64,7 @@ import { MessageSender } from "./shared/messageSender";
 const logger = createLogger("Casino");
 
 const FREE_CHIPS = 20;
+const CASINO_WELCOME_DEDUPE_MS = 5_000;
 
 export function getItemsBlockingForfeit(
     char: API_Character,
@@ -132,6 +133,7 @@ export class Casino implements GamePlugin {
         number
     >();
     private readonly lastDailyChipNotificationAt = new Map<number, number>();
+    private readonly lastCasinoWelcomeAt = new Map<number, number>();
 
     /**
      * Phase 5: Direct UnifiedCharacterStore access (no adapters)
@@ -233,6 +235,7 @@ export class Casino implements GamePlugin {
         this.cocktailOfTheDayKey = config?.cocktail;
         this.cocktailCatalog = new CocktailCatalogService(db);
         this.conn.setItemPermission(ItemPermissionLevel.OwnerOnly);
+        this.gameConfig = config;
     }
 
     /**
@@ -550,6 +553,7 @@ export class Casino implements GamePlugin {
             character.MemberNumber,
             character.toString(),
         );
+        await this.onCharacterEnterCasinoRegion(character);
     };
 
     private readonly casinoRegionEnterTrigger = guardHandler(
@@ -568,6 +572,7 @@ export class Casino implements GamePlugin {
                 ) ?? 0) + 1,
             );
             this.lastDailyChipNotificationAt.delete(character.MemberNumber);
+            this.lastCasinoWelcomeAt.delete(character.MemberNumber);
         },
     );
 
@@ -679,6 +684,18 @@ export class Casino implements GamePlugin {
         if (!this.enabled) return;
 
         await this.notifyDailyFreeChips(character);
+
+        const now = Date.now();
+        const lastWelcome = this.lastCasinoWelcomeAt.get(
+            character.MemberNumber,
+        );
+        if (
+            lastWelcome !== undefined &&
+            now - lastWelcome < CASINO_WELCOME_DEDUPE_MS
+        ) {
+            return;
+        }
+        this.lastCasinoWelcomeAt.set(character.MemberNumber, now);
 
         // this.game.HELPMESSAGE already includes the commands list (see
         // ROULETTEHELP/FULLBLACKJACKHELP), so don't also append
