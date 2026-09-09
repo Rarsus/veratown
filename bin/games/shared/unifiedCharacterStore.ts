@@ -12,8 +12,10 @@
  * limitations under the License.
  */
 
+import { isDeepStrictEqual } from "node:util";
 import { ClientSession, Collection, Db, ObjectId } from "mongodb";
 import { BC_AppearanceItem } from "bc-bot";
+import { DatabaseError, ValidationError } from "../../errors";
 import {
     UnifiedCharacterProfile,
     GameEvent,
@@ -90,6 +92,61 @@ export function normalizeVeratownAuditLog(value: unknown): AuditLogEntry[] {
     );
 }
 
+export interface MalformedProfileId {
+    id: unknown;
+    idType: string;
+    targetMemberNumber?: number;
+}
+
+export interface ProfileIdIntegrityReport {
+    numericProfileCount: number;
+    malformedProfileIds: MalformedProfileId[];
+    duplicateLogicalMemberNumbers: number[];
+}
+
+export type ProfileIdRepairDecision =
+    | "deleted_default_duplicate"
+    | "created_canonical_profile"
+    | "retained_for_manual_review";
+
+export interface ProfileIdRepairResult {
+    targetMemberNumber: number;
+    decision: ProfileIdRepairDecision;
+}
+
+function isFiniteInteger(value: unknown): value is number {
+    return (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        Number.isInteger(value)
+    );
+}
+
+function profileIdType(value: unknown): string {
+    if (value === null) return "null";
+    if (Array.isArray(value)) return "array";
+    return typeof value;
+}
+
+function objectTargetMemberNumber(value: unknown): number | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+    const target = (value as Record<string, unknown>).target;
+    return isFiniteInteger(target) ? target : undefined;
+}
+
+function withoutTimestamps(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(withoutTimestamps);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+            .filter(([, item]) => item !== undefined)
+            .filter(([key]) => !key.endsWith("At"))
+            .map(([key, item]) => [key, withoutTimestamps(item)]),
+    );
+}
+
 function dedupeReleaseItems(items: RemovedBondageItem[]): RemovedBondageItem[] {
     const seen = new Set<string>();
     return items.filter((item) => {
@@ -152,6 +209,142 @@ export class UnifiedCharacterStore {
         // For now, ensure clients always use proper type conversion on write
     }
 
+    private assertMemberNumber(
+        memberNumber: unknown,
+    ): asserts memberNumber is number {
+        if (!isFiniteInteger(memberNumber)) {
+            throw new ValidationError(
+                "Invalid member number: expected a finite integer",
+                { receivedType: profileIdType(memberNumber) },
+            );
+        }
+    }
+
+    private defaultProfile(
+        memberNumber: number,
+        characterName?: string,
+    ): UnifiedCharacterProfile {
+        const now = asTimestamp(Date.now());
+        return {
+            _id: memberNumber,
+            name: characterName ?? "",
+            createdAt: now,
+            bio: createCharacterBio(),
+            casino: createCasinoState(),
+            dare: createDareState(),
+            veratown: createVeratownState(),
+            progression: createProgressionState(),
+            crossSystem: createCrossSystemState(),
+            lastAccessedAt: now,
+            updatedAt: now,
+            version: 0,
+        };
+    }
+
+    private async configureProfileIdValidation(): Promise<boolean> {
+        // Unit-test doubles deliberately provide only the collection surface.
+        if (typeof this.db.command !== "function") return false;
+        try {
+            await this.db.command({
+                collMod: "unifiedCharacterProfiles",
+                validator: {
+                    $and: [
+                        {
+                            $jsonSchema: {
+                                bsonType: "object",
+                                required: ["_id"],
+                                properties: {
+                                    _id: {
+                                        bsonType: [
+                                            "double",
+                                            "int",
+                                            "long",
+                                            "decimal",
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            $expr: {
+                                $eq: [{ $mod: ["$_id", 1] }, 0],
+                            },
+                        },
+                    ],
+                },
+                validationLevel: "strict",
+                validationAction: "error",
+            });
+            return true;
+        } catch (error) {
+            throw new DatabaseError(
+                "Unable to enforce unified character profile ID validation",
+                undefined,
+                { cause: error },
+            );
+        }
+    }
+
+    private async inspectProfileIds(): Promise<ProfileIdIntegrityReport> {
+        const profiles = this.profiles as unknown as Collection<
+            Record<string, unknown>
+        >;
+        const ids = (
+            (await profiles
+                .find({}, { projection: { _id: 1 } })
+                .toArray()) as Array<Record<string, unknown> | null>
+        ).filter((profile): profile is Record<string, unknown> => !!profile);
+        const memberNumberCounts = new Map<number, number>();
+        const malformedProfileIds: MalformedProfileId[] = [];
+        let numericProfileCount = 0;
+
+        for (const profile of ids) {
+            if (isFiniteInteger(profile._id)) {
+                numericProfileCount++;
+                memberNumberCounts.set(
+                    profile._id,
+                    (memberNumberCounts.get(profile._id) ?? 0) + 1,
+                );
+                continue;
+            }
+            const targetMemberNumber = objectTargetMemberNumber(profile._id);
+            if (targetMemberNumber !== undefined) {
+                memberNumberCounts.set(
+                    targetMemberNumber,
+                    (memberNumberCounts.get(targetMemberNumber) ?? 0) + 1,
+                );
+            }
+            malformedProfileIds.push({
+                id: profile._id,
+                idType: profileIdType(profile._id),
+                ...(targetMemberNumber !== undefined
+                    ? { targetMemberNumber }
+                    : {}),
+            });
+        }
+
+        return {
+            numericProfileCount,
+            malformedProfileIds,
+            duplicateLogicalMemberNumbers: [...memberNumberCounts.entries()]
+                .filter(([, count]) => count > 1)
+                .map(([memberNumber]) => memberNumber)
+                .sort((a, b) => a - b),
+        };
+    }
+
+    private isDefaultProfile(
+        profile: Record<string, unknown>,
+        memberNumber: number,
+    ): boolean {
+        if (profile.name !== "" || profile.version !== 0) return false;
+        const candidate = { ...profile, _id: memberNumber };
+        return isDeepStrictEqual(
+            withoutTimestamps(candidate),
+            withoutTimestamps(this.defaultProfile(memberNumber)),
+        );
+    }
+
     private async init(): Promise<void> {
         if (this.inited) return;
 
@@ -189,7 +382,85 @@ export class UnifiedCharacterStore {
         });
         await this.auditLogService.init();
 
+        if (await this.configureProfileIdValidation()) {
+            const integrity = await this.inspectProfileIds();
+            if (integrity.malformedProfileIds.length > 0) {
+                console.error(
+                    "Unified character profile ID integrity alert:",
+                    JSON.stringify({
+                        malformedProfileIds:
+                            integrity.malformedProfileIds.length,
+                        duplicateLogicalMemberNumbers:
+                            integrity.duplicateLogicalMemberNumbers,
+                    }),
+                );
+            }
+        }
         this.inited = true;
+    }
+
+    public async initialize(): Promise<ProfileIdIntegrityReport> {
+        await this.init();
+        return this.inspectProfileIds();
+    }
+
+    public async getProfileIdIntegrityReport(): Promise<ProfileIdIntegrityReport> {
+        await this.init();
+        return this.inspectProfileIds();
+    }
+
+    public async repairMalformedProfileIds(
+        approved: boolean,
+    ): Promise<ProfileIdRepairResult[]> {
+        if (!approved) {
+            throw new ValidationError(
+                "Malformed profile ID repair requires explicit approval",
+            );
+        }
+        await this.init();
+        const profiles = this.profiles as unknown as Collection<
+            Record<string, unknown>
+        >;
+        const backups = this.db.collection<Record<string, unknown>>(
+            "unifiedCharacterProfileIdRepairBackups",
+        );
+        const malformedProfiles = await profiles.find({}).toArray();
+        const results: ProfileIdRepairResult[] = [];
+
+        for (const malformedProfile of malformedProfiles) {
+            const targetMemberNumber = objectTargetMemberNumber(
+                malformedProfile._id,
+            );
+            if (targetMemberNumber === undefined) continue;
+
+            const canonical = await profiles.findOne({
+                _id: targetMemberNumber,
+            } as any);
+            const decision: ProfileIdRepairDecision = canonical
+                ? this.isDefaultProfile(malformedProfile, targetMemberNumber)
+                    ? "deleted_default_duplicate"
+                    : "retained_for_manual_review"
+                : "created_canonical_profile";
+            await backups.insertOne({
+                sourceId: malformedProfile._id,
+                targetMemberNumber,
+                decision,
+                capturedAt: Date.now(),
+                sourceProfile: malformedProfile,
+            });
+
+            if (decision === "deleted_default_duplicate") {
+                await profiles.deleteOne({ _id: malformedProfile._id });
+            } else if (decision === "created_canonical_profile") {
+                await profiles.insertOne({
+                    ...malformedProfile,
+                    _id: targetMemberNumber,
+                } as any);
+                await profiles.deleteOne({ _id: malformedProfile._id });
+            }
+            results.push({ targetMemberNumber, decision });
+        }
+        return results;
     }
 
     /**
@@ -217,6 +488,8 @@ export class UnifiedCharacterStore {
         reason: string,
         actor: number = from,
     ): Promise<void> {
+        this.assertMemberNumber(from);
+        this.assertMemberNumber(to);
         if (from === to || !Number.isFinite(amount) || amount <= 0) {
             throw new Error("invalid chip transfer");
         }
@@ -322,6 +595,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         characterName?: string,
     ): Promise<UnifiedCharacterProfile> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         let profile = await this.profiles.findOne({ _id: memberNumber });
@@ -343,21 +617,7 @@ export class UnifiedCharacterStore {
         }
 
         // Create new profile with defaults using type-safe factory functions
-        const now = asTimestamp(Date.now());
-        const newProfile = {
-            _id: memberNumber,
-            name: characterName ?? "",
-            createdAt: now,
-            bio: createCharacterBio(),
-            casino: createCasinoState(),
-            dare: createDareState(),
-            veratown: createVeratownState(),
-            progression: createProgressionState(),
-            crossSystem: createCrossSystemState(),
-            lastAccessedAt: now,
-            updatedAt: now,
-            version: 0,
-        } as UnifiedCharacterProfile;
+        const newProfile = this.defaultProfile(memberNumber, characterName);
 
         // Validate types before inserting
         const validation = validateCharacterProfileTypes(newProfile as any);
@@ -385,6 +645,7 @@ export class UnifiedCharacterStore {
      * Returns only casino-relevant fields.
      */
     public async getCasinoView(memberNumber: number): Promise<CasinoView> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         return {
             memberNumber: profile._id,
@@ -424,6 +685,7 @@ export class UnifiedCharacterStore {
         nextClaimAt: number;
         remainingMs: number;
     }> {
+        this.assertMemberNumber(memberNumber);
         const { lastDailyClaimAt } = await this.getCasinoView(memberNumber);
         const hasValidClaim =
             typeof lastDailyClaimAt === "number" &&
@@ -442,6 +704,7 @@ export class UnifiedCharacterStore {
     }
 
     public async getBio(memberNumber: number): Promise<CharacterBio> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         if (profile.bio && typeof profile.bio === "object") {
             return profile.bio;
@@ -470,6 +733,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         updates: CharacterBioUpdate,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         const now = asTimestamp(Date.now());
@@ -504,6 +768,7 @@ export class UnifiedCharacterStore {
     public async getProgressionView(
         memberNumber: number,
     ): Promise<ProgressionView> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         const summary = computeProgressionSummary(profile.progression.totalXp);
         return {
@@ -531,6 +796,7 @@ export class UnifiedCharacterStore {
         rewardKey: string,
         actor?: number,
     ): Promise<ProgressionAwardResult> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         const previousLevel = profile.progression.level;
@@ -641,6 +907,7 @@ export class UnifiedCharacterStore {
         rewardKey: string,
         actor?: number,
     ): Promise<ProgressionRollbackResult> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         const record = profile.progression.claimedRewards.find(
@@ -739,6 +1006,7 @@ export class UnifiedCharacterStore {
         reason: string,
         actor?: number,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -797,6 +1065,7 @@ export class UnifiedCharacterStore {
         amount: number,
         actor = memberNumber,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.getProfile(memberNumber);
         const now = asTimestamp(Date.now());
         const cutoff = Number(now) - 24 * 60 * 60 * 1000;
@@ -861,6 +1130,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         updates: Partial<CasinoState>,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         await this.getProfile(memberNumber);
@@ -911,6 +1181,7 @@ export class UnifiedCharacterStore {
         reason: "bondage" | "parole" | "cage",
         lockUntil?: number,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -979,6 +1250,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         amountToUnlock: number = 0,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1047,6 +1319,7 @@ export class UnifiedCharacterStore {
      * Returns only dare-relevant fields.
      */
     public async getDareView(memberNumber: number): Promise<DareView> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         return {
             memberNumber: profile._id,
@@ -1075,6 +1348,7 @@ export class UnifiedCharacterStore {
         lockedUntil: number,
         appliedBy?: number,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1136,6 +1410,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         forfeitKey: string,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1193,6 +1468,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         escapeCost: number,
     ): Promise<{ success: boolean; message: string; bondageRemoved: number }> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1294,6 +1570,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         updates: Partial<DareState>,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1329,6 +1606,7 @@ export class UnifiedCharacterStore {
      * Stores game state snapshot for potential restoration.
      */
     public async suspendAllGames(memberNumber: number): Promise<number> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1402,6 +1680,7 @@ export class UnifiedCharacterStore {
      * Resume all suspended games when player exits cage.
      */
     public async resumeSuspendedGames(memberNumber: number): Promise<number> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1468,6 +1747,7 @@ export class UnifiedCharacterStore {
         context: Record<string, unknown>,
         actor?: number,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -1520,6 +1800,7 @@ export class UnifiedCharacterStore {
         startTime?: number,
         endTime?: number,
     ): Promise<Array<AuditLogDocument | GameEvent>> {
+        this.assertMemberNumber(memberNumber);
         const centralized = await this.auditLogService.getForCharacter(
             memberNumber,
             startTime,
@@ -1579,6 +1860,7 @@ export class UnifiedCharacterStore {
         lastEventTime?: number;
         firstEventTime?: number;
     }> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const events = await this.events
@@ -1615,6 +1897,7 @@ export class UnifiedCharacterStore {
      * Returns only veratown-relevant fields.
      */
     public async getVeratownView(memberNumber: number): Promise<VeratownView> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         return {
             memberNumber: profile._id,
@@ -1638,6 +1921,7 @@ export class UnifiedCharacterStore {
     public async getActiveReleaseRemoval(
         memberNumber: number,
     ): Promise<ReleaseRemovalOperation | undefined> {
+        this.assertMemberNumber(memberNumber);
         const operation = (await this.getVeratownView(memberNumber))
             .releaseParoleState?.releaseRemovalOperation;
         return operation &&
@@ -1653,6 +1937,7 @@ export class UnifiedCharacterStore {
         operationId: string,
         plan: ReleaseRemovalPlan,
     ): Promise<ReleaseRemovalOperation> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const now = Date.now();
         const operation: ReleaseRemovalOperation = {
@@ -1739,6 +2024,7 @@ export class UnifiedCharacterStore {
         item: RemovedBondageItem,
         result: ReleaseRemovalAttemptResult,
     ): Promise<ReleaseRemovalOperation> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         for (let retry = 0; retry < 3; retry++) {
             const profile = await this.getProfile(memberNumber);
@@ -1829,6 +2115,7 @@ export class UnifiedCharacterStore {
         operationId: string,
         finalSnapshot: ReleaseRemovalFinalSnapshot,
     ): Promise<ReleaseRemovalOperation> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         const current =
@@ -1913,6 +2200,7 @@ export class UnifiedCharacterStore {
         operationId: string,
         reason: string,
     ): Promise<ReleaseRemovalOperation> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         const current =
@@ -1978,6 +2266,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         position: ChatRoomMapPos,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         await this.getProfile(memberNumber);
@@ -2037,6 +2326,7 @@ export class UnifiedCharacterStore {
         restraints: CurrentRestraint[],
         forcePositionPersistence = false,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.getProfile(memberNumber);
         const now = asTimestamp(Date.now());
         const result = await this.profiles.updateOne(
@@ -2082,6 +2372,7 @@ export class UnifiedCharacterStore {
     public async recordBunnyPunishmentArtifact(
         artifact: BunnyPunishmentArtifact,
     ): Promise<void> {
+        this.assertMemberNumber(artifact.memberNumber);
         await this.getProfile(artifact.memberNumber);
         await this.profiles.updateOne(
             { _id: artifact.memberNumber },
@@ -2124,6 +2415,7 @@ export class UnifiedCharacterStore {
         reason: string,
         actor = memberNumber,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         const artifact = profile.veratown.bunnyPunishmentArtifact;
         if (
@@ -2179,6 +2471,7 @@ export class UnifiedCharacterStore {
         after: readonly BC_AppearanceItem[],
         context: AppearanceMutationContext,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         const diff = diffAppearance(before, after);
         const profile = await this.getProfile(memberNumber);
         const artifact = profile.veratown.bunnyPunishmentArtifact;
@@ -2388,6 +2681,7 @@ export class UnifiedCharacterStore {
         missingRestraintSnapshot: boolean;
         missingCasinoFields: string[];
     }> {
+        this.assertMemberNumber(memberNumber);
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
         const veratown = profile.veratown;
@@ -2438,6 +2732,7 @@ export class UnifiedCharacterStore {
         detailedBy?: number,
         enteredAt = Date.now(),
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -2511,6 +2806,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         releasedBy = memberNumber,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -2581,6 +2877,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         detailedBy?: number,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -2643,6 +2940,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         releasedBy = memberNumber,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -2709,6 +3007,7 @@ export class UnifiedCharacterStore {
         performedBy?: number,
         details?: Record<string, unknown>,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -2829,6 +3128,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         updates: Partial<VeratownState>,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -2861,6 +3161,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         updates: Partial<CrossSystemState>,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         const now = asTimestamp(Date.now());
@@ -2896,6 +3197,7 @@ export class UnifiedCharacterStore {
               },
         actor = memberNumber,
     ): Promise<InventoryMutationResult> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const now = asTimestamp(Date.now());
         let event: GameEvent | undefined;
@@ -3039,6 +3341,7 @@ export class UnifiedCharacterStore {
         effect: AppliedEffect,
         actor = memberNumber,
     ): Promise<EffectMutationResult> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const now = asTimestamp(Date.now());
         let event: GameEvent | undefined;
@@ -3122,6 +3425,7 @@ export class UnifiedCharacterStore {
         reason: string,
         actor = memberNumber,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const now = asTimestamp(Date.now());
         const updated = await this.profiles.updateOne(
@@ -3170,6 +3474,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         now = Date.now(),
     ): Promise<AppliedEffect[]> {
+        this.assertMemberNumber(memberNumber);
         await this.expireEffects(memberNumber, now);
         const profile = await this.getProfile(memberNumber);
         return (profile.crossSystem.effects ?? []).filter(
@@ -3183,6 +3488,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         now = Date.now(),
     ): Promise<number> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const updated = await this.profiles.updateOne(
             { _id: memberNumber },
@@ -3332,6 +3638,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         name: string,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         await this.profiles.updateOne(
             { _id: memberNumber },
@@ -3355,6 +3662,7 @@ export class UnifiedCharacterStore {
         memberNumber: number,
         access: KeypadAccessRecord,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -3392,6 +3700,7 @@ export class UnifiedCharacterStore {
         doorKey: string,
         groupName?: string,
     ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
 
         const profile = await this.getProfile(memberNumber);
@@ -3429,6 +3738,7 @@ export class UnifiedCharacterStore {
     public async getKeypadAccess(
         memberNumber: number,
     ): Promise<KeypadAccessRecord[]> {
+        this.assertMemberNumber(memberNumber);
         await this.init();
         const profile = await this.getProfile(memberNumber);
         return profile?.veratown?.keypadAccess ?? [];
@@ -3442,6 +3752,7 @@ export class UnifiedCharacterStore {
         doorKey: string,
         groupName?: string,
     ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
         const access = await this.getKeypadAccess(memberNumber);
 
         return access.some((a) => {

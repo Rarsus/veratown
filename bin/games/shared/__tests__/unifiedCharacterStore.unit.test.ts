@@ -13,6 +13,7 @@ import {
     createDareState,
     createVeratownState,
 } from "../mongodbTypeValidation";
+import { ValidationError } from "../../../errors";
 
 function createStore() {
     let profile: any = {
@@ -216,6 +217,22 @@ test("UnifiedCharacterStore creates profiles with default state", async () => {
     assert.equal(profile._id, 2);
     assert.equal(profile.name, "New Player");
     assert.equal(profile.casino.chips, 0);
+});
+
+test("UnifiedCharacterStore rejects non-integer member IDs", async () => {
+    const { store } = createStore();
+
+    await assert.rejects(
+        () => store.getProfile({ target: 251024 } as any),
+        (error: unknown) =>
+            error instanceof ValidationError &&
+            error.code === "VALIDATION_ERROR" &&
+            error.context.receivedType === "object",
+    );
+    await assert.rejects(
+        () => store.updateCharacterName(Number.NaN, "Invalid"),
+        ValidationError,
+    );
 });
 
 test("UnifiedCharacterStore rejects escape attempts without bondage or chips", async () => {

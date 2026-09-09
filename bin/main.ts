@@ -434,6 +434,7 @@ async function initializeVeratownGame(
 
     // Phase 2.3: Initialize unified store for cross-system coordination
     const unifiedStore = new UnifiedCharacterStore(db);
+    await unifiedStore.initialize();
     container.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, unifiedStore);
     logger.info("UnifiedCharacterStore initialized");
     container.register(
