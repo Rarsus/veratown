@@ -24,6 +24,7 @@ import { generatePassword } from "../../utils";
 import { createLogger } from "../../logging";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import { DeviceFactory } from "../shared/deviceFactory";
+import type { MessageSender } from "../shared/messageSender";
 
 /**
  * Result of forfeit validation
@@ -52,6 +53,7 @@ export class ForfeitService {
     public constructor(
         private readonly mutationService?: GameStateMutationService,
         deviceFactory = new DeviceFactory(),
+        private readonly messageSender?: MessageSender,
     ) {
         this.deviceFactory = deviceFactory;
     }
@@ -328,9 +330,15 @@ export class ForfeitService {
         strikeCount: number,
     ): void {
         if (strikeCount === 1) {
-            character.Tell("Whisper", "Cheating in the casino, hmm?");
+            this.messageSender?.whisperToCharacter(
+                character,
+                "Cheating in the casino, hmm?",
+            );
         } else if (strikeCount === 2) {
-            character.Tell("Whisper", `Still trying to cheat, ${character}?`);
+            this.messageSender?.whisperToCharacter(
+                character,
+                `Still trying to cheat, ${character}?`,
+            );
         } else if (strikeCount >= 3) {
             // Add dunce hat
             const dunceHat = character.Appearance.AddItem(

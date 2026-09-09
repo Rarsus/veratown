@@ -14,6 +14,7 @@ import {
     AssetGet,
 } from "bc-bot";
 import { createLogger } from "../../logging";
+import { MessageSender } from "../shared/messageSender";
 import { getXpRewardForSource } from "../shared/progressionRules";
 import type { GamePluginCommandRouter } from "../shared/gamePlugin";
 
@@ -188,6 +189,7 @@ type Hand = Card[];
 
 export class BlackjackGame implements Game {
     private readonly logger = createLogger("BlackjackGame");
+    private readonly messageSender: MessageSender;
     private casino: Casino;
     private deck: Card[] = [];
     private dealerHand: Hand = [];
@@ -269,6 +271,7 @@ export class BlackjackGame implements Game {
         casino: Casino,
     ) {
         this.casino = casino;
+        this.messageSender = new MessageSender(conn);
 
         setTimeout(() => {
             this.getPole();
@@ -1692,7 +1695,7 @@ export class BlackjackGame implements Game {
         });
 
         await this.persistGameState();
-        this.conn.SendMessage("Whisper", "Bet cancelled.", sender.MemberNumber);
+        this.messageSender.whisperToCharacter(sender, "Bet cancelled.");
     };
 
     getWinnings(playerHand: Hand, bet: BlackjackBet): number {

@@ -44,6 +44,7 @@ import {
 } from "./shared/releaseRemovalPolicy";
 
 import { createLogger } from "../../logging";
+import { MessageSender } from "../shared/messageSender";
 
 /**
  * Removed bondage item tracking
@@ -122,6 +123,7 @@ interface ParoleStatus {
 
 export class ReleaseSystem implements VeratownFeatureSystem {
     private readonly logger = createLogger("ReleaseSystem");
+    private readonly messageSender: MessageSender;
     public readonly key = "release";
     public readonly label = "Emergency Release System";
     public enabled = true;
@@ -176,6 +178,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             releaseOperation: string,
         ) => Promise<void>,
     ) {
+        this.messageSender = new MessageSender(conn);
         if (unifiedStore) {
             this.mutationService ??= new GameStateMutationServiceImpl(
                 unifiedStore,
@@ -1521,7 +1524,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     // ===== UTILITY METHODS =====
 
     private whisper(character: API_Character, message: string): void {
-        this.conn.SendMessage("Whisper", message, character.MemberNumber);
+        this.messageSender.whisperToCharacter(character, message);
     }
 
     private async getPunishmentRoomLocation(): Promise<{

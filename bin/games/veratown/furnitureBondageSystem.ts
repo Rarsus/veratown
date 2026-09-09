@@ -131,8 +131,8 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
             );
 
             if (!tile) {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     "(You are not standing on any bondage furniture.)",
                 );
                 return;
@@ -140,14 +140,17 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
 
             // Notify player once per session about this feature
             if (!this.notifiedPlayers.has(sender)) {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     `(You can use !bindme to manually activate bondage furniture instead of automatic triggering.)`,
                 );
                 this.notifiedPlayers.add(sender);
             }
 
-            character.Tell("Whisper", `(Activating ${tile.location.name}...)`);
+            this.messageSender.whisperToCharacter(
+                character,
+                `(Activating ${tile.location.name}...)`,
+            );
             this.activateFurniture(character, tile);
         }
     };
@@ -310,8 +313,8 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
 
             // Notify player once per session about !bindme option
             if (!this.notifiedPlayers.has(character.MemberNumber)) {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     `(Tip: You can use !bindme to manually activate ${tile.location.name} or use other bondage furniture. Type !bindme when standing on furniture to activate it.)`,
                 );
                 this.notifiedPlayers.add(character.MemberNumber);
@@ -493,8 +496,8 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
                 }
             }
 
-            character.Tell(
-                "Whisper",
+            this.messageSender.whisperToCharacter(
+                character,
                 `(Your time with the ${config.furnitureAsset} has ended. Restraints removed.)`,
             );
         } catch (e) {

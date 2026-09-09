@@ -42,6 +42,7 @@ import { createLogger } from "../logging";
 import type { GamePlugin, GamePluginCommandRouter } from "./shared/gamePlugin";
 import { GamePluginCommandRouterImpl } from "./shared/gamePluginCommandRouter";
 import { GamePluginMessageFeatureSystem } from "./shared/gamePluginMessageFeatureSystem";
+import { MessageSender } from "./shared/messageSender";
 import { syncAppearanceMutation } from "./veratown/shared/appearanceSync";
 
 // Epic 1.2 Manager Imports (Feature 1.2.7 Integration)
@@ -258,6 +259,7 @@ Game Overview
     private effectApplier: DareEffectApplier;
     private mutationService: GameStateMutationService;
     private readonly messageFeatureSystem: GamePluginMessageFeatureSystem;
+    private readonly messageSender: MessageSender;
 
     /**
      * DARE SYSTEM CONSTRUCTOR - Three-Layer Architecture
@@ -278,6 +280,7 @@ Game Overview
         private config?: DareConfig,
         mutationService?: GameStateMutationService,
     ) {
+        this.messageSender = new MessageSender(conn);
         // Initialize unified store (Layer 1: character state)
         this.unifiedStore =
             unifiedStore ||
@@ -452,7 +455,7 @@ Game Overview
     }
 
     private whisper = (memberNumber: number, text: string): void => {
-        this.conn.SendMessage("Whisper", text, memberNumber);
+        this.messageSender.whisper(memberNumber, text);
     };
 
     onDare = async (

@@ -247,8 +247,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
     private onCharacterEnterPark = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        character.Tell(
-            "Whisper",
+        this.messageSender.whisperToCharacter(
+            character,
             "(NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
                 "it is forbidden to step on the bunnies. Anyone caught doing so will be bound with " +
                 "hemp rope on the spot as punishment. Please watch your step.",
@@ -265,8 +265,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     Math.floor(this.random() * BUNNY_RESTRAINT_CONFIGS.length)
                 ];
             if (!config) {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     "(The bunny punishment is temporarily unavailable. Please notify an operator.)",
                 );
                 return;
@@ -276,14 +276,14 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 const result = await this.applyPunishment(character, config);
                 if (result.skipped) return;
                 if (result.success) {
-                    character.Tell(
-                        "Whisper",
+                    this.messageSender.whisperToCharacter(
+                        character,
                         "(You stepped on one of the park's bunnies! Rope seems to shoot out from nowhere, quickly " +
                             "binding you as punishment for your carelessness...)",
                     );
                 } else {
-                    character.Tell(
-                        "Whisper",
+                    this.messageSender.whisperToCharacter(
+                        character,
                         "(The bunny punishment could not be applied safely. Please notify an operator.)",
                     );
                 }
@@ -294,8 +294,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     configuration: config.name,
                     finalVerification: false,
                 });
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     "(The bunny punishment could not be applied safely. Please notify an operator.)",
                 );
             }

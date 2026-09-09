@@ -15,6 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ForfeitService } from "../forfeitService";
+import { MessageSender } from "../../shared/messageSender";
 
 /**
  * Mock API_Character for testing
@@ -262,26 +263,34 @@ test("ForfeitService: getBlockingItems returns empty list if no items blocking",
 // ============================================================================
 
 test("ForfeitService: applyCheatPunishment whispers on first strike", () => {
-    const service = new ForfeitService();
-    const mockChar = new MockCharacter();
-
     let message = "";
-    mockChar.Tell = (_type: string, msg: string) => {
-        message = msg;
-    };
+    const service = new ForfeitService(
+        undefined,
+        undefined,
+        new MessageSender({
+            SendMessage: (_type: string, text: string) => {
+                message = text;
+            },
+        } as any),
+    );
+    const mockChar = new MockCharacter();
 
     service.applyCheatPunishment(mockChar as any, 1);
     assert.ok(message.includes("Cheating in the casino"));
 });
 
 test("ForfeitService: applyCheatPunishment whispers on second strike", () => {
-    const service = new ForfeitService();
-    const mockChar = new MockCharacter();
-
     let message = "";
-    mockChar.Tell = (_type: string, msg: string) => {
-        message = msg;
-    };
+    const service = new ForfeitService(
+        undefined,
+        undefined,
+        new MessageSender({
+            SendMessage: (_type: string, text: string) => {
+                message = text;
+            },
+        } as any),
+    );
+    const mockChar = new MockCharacter();
 
     service.applyCheatPunishment(mockChar as any, 2);
     assert.ok(message.includes("Still trying to cheat"));
@@ -391,7 +400,16 @@ test("ForfeitService: persists applied forfeits through the mutation service", a
 // ============================================================================
 
 test("ForfeitService: Integration - Cheat tracking and punishment", () => {
-    const service = new ForfeitService();
+    let message = "";
+    const service = new ForfeitService(
+        undefined,
+        undefined,
+        new MessageSender({
+            SendMessage: (_type: string, text: string) => {
+                message = text;
+            },
+        } as any),
+    );
     const mockChar = new MockCharacter();
     const memberId = 12345;
 
@@ -404,11 +422,6 @@ test("ForfeitService: Integration - Cheat tracking and punishment", () => {
     assert.strictEqual(strike2, 2);
 
     // Apply punishment
-    let message = "";
-    mockChar.Tell = (_type: string, msg: string) => {
-        message = msg;
-    };
-
     service.applyCheatPunishment(mockChar as any, strike2);
     assert.ok(message.includes("Still trying to cheat"));
 });

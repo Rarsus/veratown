@@ -401,8 +401,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                         "[CatDogSystem] Bot char or MapPos missing, using fallback emote",
                     );
                     // Fallback: just send emote normally
-                    character.Tell(
-                        "Emote",
+                    this.messageSender.emoteToCharacter(
+                        character,
                         action.text || `*A ${petType} nuzzles you adorably*`,
                     );
                     return;
@@ -430,8 +430,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                 this.logger?.info(
                     `[CatDogSystem] Sending emote from bot location`,
                 );
-                character.Tell(
-                    "Emote",
+                this.messageSender.emoteToCharacter(
+                    character,
                     action.text || `*A ${petType} nuzzles you adorably*`,
                 );
 
@@ -450,8 +450,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                 this.logger?.info(
                     "[CatDogSystem] No bot connector, sending emote normally (may not be visible if out of range)",
                 );
-                character.Tell(
-                    "Emote",
+                this.messageSender.emoteToCharacter(
+                    character,
                     action.text || `*A ${petType} nuzzles you adorably*`,
                 );
             }
@@ -462,8 +462,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             );
             // Fallback: try sending emote anyway
             try {
-                character.Tell(
-                    "Emote",
+                this.messageSender.emoteToCharacter(
+                    character,
                     action.text || `*A ${petType} nuzzles you adorably*`,
                 );
             } catch (fallbackErr) {
@@ -663,8 +663,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
 
             if (vibrators.length > 0) {
                 // Send whisper with custom message
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`,
                 );
 

@@ -428,8 +428,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         this.maintenanceInProgress = true;
 
         try {
-            this.conn.SendMessage(
-                "Chat",
+            this.messageSender.chat(
                 "This room will be taken down for maintenance in one minute. " +
                     "Please wrap up - everyone present will be freed and removed, " +
                     "and the room will then be locked to admins only.",
@@ -638,10 +637,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                         );
                     }
 
-                    this.conn.SendMessage(
-                        "Whisper",
-                        details.join("\n"),
+                    this.messageSender.whisper(
                         sender.MemberNumber,
+                        details.join("\n"),
                     );
                 } catch (e: any) {
                     this.conn.reply(
@@ -834,10 +832,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                         )
                         .slice(0, 100); // Limit to 100 entries
 
-                    this.conn.SendMessage(
-                        "Whisper",
-                        `Locations${args[1] ? ` of type "${args[1]}"` : ""} (${locations.length} total):\n${lines.join("\n")}`,
+                    this.messageSender.whisper(
                         sender.MemberNumber,
+                        `Locations${args[1] ? ` of type "${args[1]}"` : ""} (${locations.length} total):\n${lines.join("\n")}`,
                     );
                 } catch (e: any) {
                     this.conn.reply(
@@ -917,10 +914,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
 
             case "types": {
                 const help = listLocationTypesHelp();
-                this.conn.SendMessage(
-                    "Whisper",
-                    `Available location types:\n${help.join("\n")}\n\nUse: !location template <type> for details, or !location search <keyword>`,
+                this.messageSender.whisper(
                     sender.MemberNumber,
+                    `Available location types:\n${help.join("\n")}\n\nUse: !location template <type> for details, or !location search <keyword>`,
                 );
                 break;
             }
@@ -944,10 +940,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                     (t) =>
                         `${t.type.padEnd(20)} - ${t.label} (${t.keywords.join(", ")})`,
                 );
-                this.conn.SendMessage(
-                    "Whisper",
-                    `Location types matching "${args[1]}":\n${lines.join("\n")}`,
+                this.messageSender.whisper(
                     sender.MemberNumber,
+                    `Location types matching "${args[1]}":\n${lines.join("\n")}`,
                 );
                 break;
             }
@@ -980,10 +975,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                     `Usage: !location add <key> <name> ${template.type} <x> <y> <data_json>`,
                 ];
 
-                this.conn.SendMessage(
-                    "Whisper",
-                    details.join("\n"),
+                this.messageSender.whisper(
                     sender.MemberNumber,
+                    details.join("\n"),
                 );
                 break;
             }
@@ -1023,10 +1017,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                     "  Manage multi-tile region locations.",
                 ];
 
-                this.conn.SendMessage(
-                    "Whisper",
-                    helpText.join("\n"),
+                this.messageSender.whisper(
                     sender.MemberNumber,
+                    helpText.join("\n"),
                 );
                 break;
             }
@@ -1132,10 +1125,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                         details.push(`Description: ${region.description}`);
                     }
 
-                    this.conn.SendMessage(
-                        "Whisper",
-                        details.join("\n"),
+                    this.messageSender.whisper(
                         sender.MemberNumber,
+                        details.join("\n"),
                     );
                 } catch (e: any) {
                     this.conn.reply(
@@ -1262,10 +1254,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                         )
                         .slice(0, 100);
 
-                    this.conn.SendMessage(
-                        "Whisper",
-                        `Regions${typeFilter ? ` of type "${typeFilter}"` : ""} (${filtered.length} total):\n${lines.join("\n")}`,
+                    this.messageSender.whisper(
                         sender.MemberNumber,
+                        `Regions${typeFilter ? ` of type "${typeFilter}"` : ""} (${filtered.length} total):\n${lines.join("\n")}`,
                     );
                 } catch (e: any) {
                     this.conn.reply(
@@ -1304,10 +1295,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                             "All regions are consistent with static definitions.",
                         );
                     } else {
-                        this.conn.SendMessage(
-                            "Whisper",
-                            `Region validation found ${warnings.length} issue(s):\n${warnings.join("\n")}`,
+                        this.messageSender.whisper(
                             sender.MemberNumber,
+                            `Region validation found ${warnings.length} issue(s):\n${warnings.join("\n")}`,
                         );
                     }
                 } catch (e: any) {

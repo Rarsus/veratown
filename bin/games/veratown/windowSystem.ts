@@ -94,10 +94,7 @@ export class WindowSystem extends AbstractTileFeatureSystem {
             await wait(WINDOW_PEEP_DELAY_MS);
             if (!stillThere()) return;
 
-            this.conn.SendMessage(
-                "Emote",
-                `*Peeping Tom detected: ${character}`,
-            );
+            this.messageSender.emote(`*Peeping Tom detected: ${character}`);
             this.logger.info("Peeping detected", {
                 memberNumber: character.MemberNumber,
                 location: "window",

@@ -60,7 +60,6 @@ export class LocationMonitorSystem
     public readonly label = "Location monitors";
     public enabled = true;
 
-    private readonly logger = createLogger("LocationMonitorSystem");
     private readonly providers = new Map<string, LocationMonitorProvider>();
     private readonly bindings: MonitorBinding[] = [];
     private readonly lastDisplayedAt = new Map<string, number>();

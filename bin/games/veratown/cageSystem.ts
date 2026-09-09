@@ -529,8 +529,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterCageEntry = async (character: API_Character) => {
         if (!this.enabled) {
-            character.Tell(
-                "Whisper",
+            this.messageSender.whisperToCharacter(
+                character,
                 "(Cage containment is currently unavailable. Please contact staff.)",
             );
             return;
@@ -542,8 +542,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
         const durationDescription =
             cage?.durationDescription ?? "an undetermined length of time";
 
-        character.Tell(
-            "Whisper",
+        this.messageSender.whisperToCharacter(
+            character,
             `(NOTICE: You are approaching the entrance to ${cageName}. ` +
                 `Veratown Facility Containment Protocol 7-Alpha requires that all visitors be informed of ` +
                 `the following before proceeding beyond this point: ` +
@@ -568,8 +568,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterCage = async (character: API_Character) => {
         if (!this.enabled) {
-            character.Tell(
-                "Whisper",
+            this.messageSender.whisperToCharacter(
+                character,
                 "(Cage containment is currently unavailable. Please contact staff.)",
             );
             return;
@@ -675,8 +675,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
             });
 
             if (persisted !== false) {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     `(You are locked in the Futuristic Crate for ${durationString(durationMs)}.`,
                 );
                 this.logger.info("Cage entry notified", {
@@ -800,8 +800,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     persistedAtMs,
                     authoritativeExpiryMs: cage.authoritativeExpiry,
                 });
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     "(The Futuristic Crate unlocks and releases you.",
                 );
                 this.logger.info("Cage release notified", {

@@ -24,6 +24,7 @@ import {
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createTimerManager } from "./shared";
 import { createLogger } from "../../logging";
+import { MessageSender } from "../shared/messageSender";
 
 // The trashcan easter egg: searching the trash (an "Emote" containing both
 // "search" and "trash") while standing at one of the trashcan tiles finds a
@@ -44,9 +45,12 @@ export class TrashcanSystem implements VeratownFeatureSystem {
         "TrashcanSystem.searchCooldown",
     );
     private readonly logger = createLogger("TrashcanSystem");
+    private readonly messageSender: MessageSender;
     private readonly COOLDOWN_MS = 7000; // 7 second cooldown between searches
 
-    public constructor(private conn: API_Connector) {}
+    public constructor(private conn: API_Connector) {
+        this.messageSender = new MessageSender(conn);
+    }
 
     public registerTriggers(): void {
         this.conn.on("Message", guardHandler(this.key, this.onMessage));
@@ -125,8 +129,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
             item,
         });
 
-        this.conn.SendMessage(
-            "Emote",
+        this.messageSender.emote(
             `*${character} found ${item} while digging through the trash!*`,
         );
     };

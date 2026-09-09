@@ -19,6 +19,8 @@ import {
 } from "bc-bot";
 import { createLogger } from "../../logging";
 import type { Logger } from "../../logging";
+import { MessageSender, type MessageSendResult } from "./messageSender";
+export type { MessageSendResult } from "./messageSender";
 
 /**
  * Result of command validation
@@ -44,15 +46,6 @@ export interface ParsedCommand {
 export interface PermissionCheckResult {
     allowed: boolean;
     reason?: string;
-}
-
-/**
- * Message send result
- */
-export interface MessageSendResult {
-    success: boolean;
-    message?: string;
-    error?: Error;
 }
 
 /**
@@ -104,7 +97,10 @@ export abstract class AbstractMessageFeatureSystem {
         protected systemLabel: string,
     ) {
         this.logger = createLogger(`${systemLabel}:MessageFeatureSystem`);
+        this.messageSender = new MessageSender(conn);
     }
+
+    protected readonly messageSender: MessageSender;
 
     /**
      * Main entry point for message processing.
@@ -271,21 +267,7 @@ export abstract class AbstractMessageFeatureSystem {
         targetMemberNumber: number,
         text: string,
     ): Promise<MessageSendResult> {
-        try {
-            this.conn.SendMessage("Whisper", text, targetMemberNumber);
-            return { success: true };
-        } catch (error) {
-            this.logger.error(
-                `Failed to send message to ${targetMemberNumber}`,
-                error,
-            );
-            return {
-                success: false,
-                message: "Failed to send message",
-                error:
-                    error instanceof Error ? error : new Error("Unknown error"),
-            };
-        }
+        return this.messageSender.whisper(targetMemberNumber, text);
     }
 
     /**

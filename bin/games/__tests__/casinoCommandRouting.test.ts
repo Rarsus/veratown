@@ -175,7 +175,8 @@ test("Casino dispatches the documented root-level game command", async () => {
                 },
                 setScriptPermissions: () => {},
             },
-            SendMessage: () => {},
+            SendMessage: (_type: string, message: string) =>
+                connection.replies.push(message),
         });
         const database = {
             collection: () => ({}),
@@ -260,7 +261,8 @@ test("Casino only sends daily-chip status from casino-region entry", async () =>
                 },
                 setScriptPermissions: () => {},
             },
-            SendMessage: () => {},
+            SendMessage: (_type: string, message: string) =>
+                connection.replies.push(message),
         });
         const casino = new Casino(
             connection,

@@ -27,6 +27,7 @@ import { KeypadDefinitionService } from "./services/keypadDefinitionService";
 import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
 import { KeypadDoorDefinitionDoc } from "./keypadTypes";
+import { MessageSender } from "../shared/messageSender";
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
 const AUTO_OPEN_TRIGGER_DELAY_MS = 1000;
@@ -66,6 +67,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         "KeypadDoorSystem.autoOpen",
     );
     private readonly logger = createLogger("KeypadDoorSystem");
+    private readonly messageSender: MessageSender;
     private readonly tileTriggerBindings: Array<{
         map: API_Map;
         x: number;
@@ -84,6 +86,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private commandDispatcher: KeypadCommandDispatcher,
         private commandParser?: CommandParser,
     ) {
+        this.messageSender = new MessageSender(conn);
         // Register code command with CommandParser
         this.commandParser?.register(
             "code",
@@ -474,7 +477,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
 
-        this.conn.SendMessage("Whisper", message, character.MemberNumber);
+        this.messageSender.whisperToCharacter(character, message);
         this.logger.info(`Notification to ${character.Name}: ${message}`);
     }
 

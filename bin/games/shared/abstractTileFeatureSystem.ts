@@ -18,6 +18,7 @@ import { createLogger } from "../../logging";
 import type { Logger } from "../../logging";
 import type { VeratownLocationDoc } from "../veratown/veratownLocationStore";
 import type { VeratownFeatureSystem } from "../veratown/featureSystem";
+import { MessageSender } from "./messageSender";
 
 /**
  * Tile data interface representing the state of a tile
@@ -90,6 +91,7 @@ export abstract class AbstractTileFeatureSystem
     implements VeratownFeatureSystem
 {
     protected logger: Logger;
+    protected readonly messageSender: MessageSender;
     public readonly key: string;
     public readonly label: string;
     public enabled = true;
@@ -106,6 +108,7 @@ export abstract class AbstractTileFeatureSystem
         this.key = key;
         this.label = label;
         this.logger = createLogger(`${label}:TileFeatureSystem`);
+        this.messageSender = new MessageSender(conn);
     }
 
     /**

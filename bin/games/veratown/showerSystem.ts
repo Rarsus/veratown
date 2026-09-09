@@ -142,8 +142,8 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                         error: e,
                     });
                     // If parole check fails, abort shower to be safe
-                    character.Tell(
-                        "Whisper",
+                    this.messageSender.whisperToCharacter(
+                        character,
                         "(Unable to enter shower due to system error. Please contact staff.)",
                     );
                     return;
@@ -173,8 +173,8 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
 
             const abortShower = async () => {
                 await this.syncMutation(character, () => undefined, 0);
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     "(You left the shower before finishing! Your clothes will not be returned to you.",
                 );
             };
@@ -182,8 +182,8 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             const savedOutfit = character.Appearance.MakeAppearanceBundle();
             const savedClothingItems = savedOutfit.filter(isClothing);
 
-            character.Tell(
-                "Whisper",
+            this.messageSender.whisperToCharacter(
+                character,
                 "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
             );
 
@@ -241,8 +241,8 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                 await wait(SHOWER_STEP_DELAY_MS);
             }
 
-            character.Tell(
-                "Whisper",
+            this.messageSender.whisperToCharacter(
+                character,
                 "(You finish your shower and get dressed again, feeling refreshed.",
             );
         });

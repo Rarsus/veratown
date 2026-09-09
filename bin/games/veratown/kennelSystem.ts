@@ -281,8 +281,8 @@ export class KennelSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterKennel = async (character: API_Character) => {
         if (!this.enabled) {
-            character.Tell(
-                "Whisper",
+            this.messageSender.whisperToCharacter(
+                character,
                 "(Kennel containment is currently unavailable. Please contact staff.)",
             );
             return;

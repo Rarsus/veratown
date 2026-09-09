@@ -59,6 +59,7 @@ import {
     CasinoVenueConfig,
     CasinoVenueSystem,
 } from "./shared/casinoVenueSystem";
+import { MessageSender } from "./shared/messageSender";
 
 const logger = createLogger("Casino");
 
@@ -118,6 +119,7 @@ export class Casino implements GamePlugin {
     private forfeitService: ForfeitService;
     public readonly venueSystem: CasinoVenueSystem;
     private readonly messageFeatureSystem: GamePluginMessageFeatureSystem;
+    private readonly messageSender: MessageSender;
     private readonly dailyChipNotificationInFlight = new Map<
         number,
         { generation: number; promise: Promise<void> }
@@ -172,6 +174,7 @@ export class Casino implements GamePlugin {
             this.unifiedStore,
             this.mutationService,
         );
+        this.messageSender = new MessageSender(conn);
         this.venueSystem = container?.has(DIServiceKeys.CASINO_VENUE_SYSTEM)
             ? container.get<CasinoVenueSystem>(
                   DIServiceKeys.CASINO_VENUE_SYSTEM,
@@ -218,7 +221,11 @@ export class Casino implements GamePlugin {
         );
         this.registerCommands(this.commandRouter);
 
-        this.forfeitService = new ForfeitService(this.mutationService);
+        this.forfeitService = new ForfeitService(
+            this.mutationService,
+            undefined,
+            this.messageSender,
+        );
 
         if (config?.cocktail) {
             this.cocktailOfTheDay = COCKTAILS[config.cocktail];
@@ -594,13 +601,13 @@ export class Casino implements GamePlugin {
             );
 
             if (granted) {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     `Welcome to the Casino, ${character}! Here are your ${FREE_CHIPS} free chips for today. See my bio for how to play. Good luck!`,
                 );
             } else {
-                character.Tell(
-                    "Whisper",
+                this.messageSender.whisperToCharacter(
+                    character,
                     `Welcome back, ${character}. ${durationString(status.remainingMs)} until your next free chips. See my bio for how to play.`,
                 );
             }
@@ -664,8 +671,8 @@ export class Casino implements GamePlugin {
         // this.game.HELPMESSAGE already includes the commands list (see
         // ROULETTEHELP/FULLBLACKJACKHELP), so don't also append
         // COMMANDSMESSAGE here or the commands get printed twice.
-        character.Tell(
-            "Whisper",
+        this.messageSender.whisperToCharacter(
+            character,
             `(Gambling is allowed in this part of town! ${this.game.HELPMESSAGE}`,
         );
     };
