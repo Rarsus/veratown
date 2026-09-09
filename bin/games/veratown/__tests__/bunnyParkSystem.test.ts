@@ -127,6 +127,16 @@ function createCharacter(
                     },
                 };
             },
+            applyBundle: (items: any[]) => {
+                for (const item of items) {
+                    if (options.omitOn === `${item.Group}/${item.Name}`) {
+                        added.push(`${item.Group}/${item.Name}`);
+                        continue;
+                    }
+                    character.Appearance.AddItem(item);
+                }
+                return true;
+            },
         },
         sendAppearanceUpdate: () =>
             appearanceUpdates.push(structuredClone(appearance)),
@@ -201,7 +211,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         assert.equal(result.finalVerification, true, config.name);
         assert.equal(result.signPresent, true, config.name);
         assert.equal(result.signVisible, true, config.name);
-        assert.equal(persisted.length, config.pieces.length + 1, config.name);
+        assert.equal(persisted.length, 1, config.name);
         for (const piece of config.pieces) {
             assert.ok(
                 persisted
@@ -415,7 +425,11 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
 
     assert.equal(result.success, false);
     assert.equal(result.status, "partial");
-    assert.deepEqual(result.failedPieces, ["ItemArms/HeavyYoke"]);
+    assert.deepEqual(result.failedPieces, [
+        "ItemArms/HeavyYoke",
+        "ItemFeet/HeavySpreaderMetal",
+        "ItemMisc/WoodenSign",
+    ]);
     assert.match(result.failureReason, /failed to add/);
     assert.ok(
         created
@@ -425,13 +439,14 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
                     item.Group === "ItemHands" && item.Name === "OldCuffs",
             ),
     );
-    assert.ok(
+    assert.equal(
         created
             .appearance()
             .some(
                 (item: any) =>
                     item.Group === "ItemMisc" && item.Name === "WoodenSign",
             ),
+        false,
     );
     assert.equal(
         created
@@ -497,7 +512,7 @@ test("bunny punishment keeps restraints when persistence fails transiently", asy
     );
 
     assert.equal(result.success, true);
-    assert.equal(syncAttempts, 3);
+    assert.equal(syncAttempts, 1);
     assert.notEqual(created.appearance().length, 0);
     assert.ok(
         created
@@ -526,7 +541,7 @@ test("bunny punishment retries after transient persistence failure", async () =>
     await (system as any).onCharacterStepOnBunny(created.character);
     await (system as any).onCharacterStepOnBunny(created.character);
 
-    assert.equal(syncAttempts, 3);
+    assert.equal(syncAttempts, 1);
     assert.equal(created.messages.length, 2);
     assert.match(created.messages[0], /Please do not step/);
     assert.match(created.messages[1], /Please do not step/);
@@ -601,7 +616,7 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
     await (system as any).onCharacterStepOnBunny(created.character);
     await (system as any).onCharacterStepOnBunny(created.character);
 
-    assert.equal(syncCount, 3);
+    assert.equal(syncCount, 1);
     assert.equal(
         created.added.filter((key) => key === "ItemArms/HeavyYoke").length,
         1,

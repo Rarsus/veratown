@@ -318,6 +318,7 @@ export class AppearanceType {
         items: BC_AppearanceItem[],
         cfg: BundleApplyConfig = DEFAULT_APPLY_CFG,
         skipGroups: AssetGroupName[] = [],
+        sendUpdate = true,
     ): boolean {
         const filteredItems = this.filterItems(items, cfg, skipGroups);
 
@@ -325,7 +326,7 @@ export class AppearanceType {
             this.bulkAddItem(item);
         }
 
-        this.character.sendAppearanceUpdate();
+        if (sendUpdate) this.character.sendAppearanceUpdate();
 
         return true;
     }
