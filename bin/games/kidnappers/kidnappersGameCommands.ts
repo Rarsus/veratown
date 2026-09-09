@@ -288,7 +288,10 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                     message,
                 );
                 if (this.shouldReply(result))
-                    this.reply(message, result.message);
+                    this.messageSender.whisperToCharacter(
+                        sender,
+                        result.message,
+                    );
             },
         );
     }
@@ -1183,10 +1186,6 @@ export class KidnappersGameCommandController implements VeratownFeatureSystem {
                 : "Current turn: none",
             snapshot.outcome?.summary ?? "",
         ].join("\n");
-    }
-
-    private reply(message: BC_Server_ChatRoomMessage, text: string): void {
-        this.conn.reply(message, text);
     }
 
     private shouldReply(result: KidnappersCommandResult): boolean {

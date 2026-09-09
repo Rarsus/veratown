@@ -181,4 +181,40 @@ describe("Kidnappers game commands", () => {
         await rootHandler!(character(30), {}, ["join"]);
         assert.deepEqual(replies, []);
     });
+
+    test("whispers command results even when the command arrived as public chat", async () => {
+        const sent: Array<{
+            type: string;
+            message: string;
+            target?: number;
+        }> = [];
+        let rootHandler:
+            | ((
+                  sender: API_Character,
+                  message: any,
+                  args: string[],
+              ) => Promise<void>)
+            | undefined;
+        const controller = new KidnappersGameCommandController(
+            {
+                SendMessage: (type: string, message: string, target?: number) =>
+                    sent.push({ type, message, target }),
+            } as never,
+            new KidnappersGameLifecycleService(),
+            undefined,
+            { isInGameRoom: () => true },
+        );
+        controller.registerCommands({
+            registerRoot: (handler: typeof rootHandler) => {
+                rootHandler = handler;
+            },
+        } as never);
+
+        await rootHandler!(character(31), { Type: "Chat" }, ["help", "phases"]);
+
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].type, "Whisper");
+        assert.equal(sent[0].target, 31);
+        assert.match(sent[0].message, /Kidnappers phases/);
+    });
 });
