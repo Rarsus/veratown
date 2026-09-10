@@ -19,6 +19,7 @@ import {
 } from "./veratownConfig";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
+import type { AppearanceMutationContext } from "./shared/appearanceLifecycle";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
 import {
@@ -93,6 +94,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         conn: API_Connector,
         private readonly stateSync?: (
             character: API_Character,
+            context?: AppearanceMutationContext,
         ) => Promise<void>,
         private readonly random: () => number = Math.random,
         private readonly syncDelayMs = 100,
@@ -329,12 +331,13 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     configuredPieces.push(bunnyPieceKey(BUNNY_SIGN));
                 },
                 this.syncDelayMs,
-                async (current) => this.stateSync?.(current),
+                async (current, context) => this.stateSync?.(current, context),
                 {
                     throwOnSyncFailure: false,
                     source: "bunny",
                     reason: "bunny_punishment_applied",
                     operationId,
+                    exclusiveContextHandoff: true,
                 },
             );
         } catch (error) {

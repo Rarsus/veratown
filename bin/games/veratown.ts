@@ -500,9 +500,14 @@ export class Veratown {
             () =>
                 new BunnyParkSystem(
                     this.conn,
-                    (character) =>
+                    (character, context) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
                     undefined,

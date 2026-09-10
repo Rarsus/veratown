@@ -120,7 +120,10 @@ export async function syncAppearanceMutation(
     character: API_Character,
     mutation: () => void | Promise<void>,
     delayMs: number = DEFAULT_SYNC_DELAY_MS,
-    onSynchronized?: (character: API_Character) => Promise<void>,
+    onSynchronized?: (
+        character: API_Character,
+        context?: AppearanceMutationContext,
+    ) => Promise<void>,
     options?: {
         throwOnSyncFailure?: boolean;
         context?: Partial<AppearanceMutationContext>;
@@ -129,10 +132,13 @@ export async function syncAppearanceMutation(
         operationId?: string;
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;
+        exclusiveContextHandoff?: boolean;
     },
 ): Promise<void> {
     const context = createMutationContext(character, options);
-    appearanceMutationContexts.set(character, context);
+    if (!options?.exclusiveContextHandoff) {
+        appearanceMutationContexts.set(character, context);
+    }
     try {
         // Execute the mutation
         await mutation();
@@ -171,7 +177,9 @@ export async function syncAppearanceMutation(
         );
         throw error;
     } finally {
-        appearanceMutationContexts.delete(character);
+        if (!options?.exclusiveContextHandoff) {
+            appearanceMutationContexts.delete(character);
+        }
     }
 }
 

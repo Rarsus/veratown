@@ -5,6 +5,7 @@ import {
     validateBunnyRestraintConfig,
 } from "../bunnyParkSystem";
 import { BUNNY_POSITIONS, BUNNY_RESTRAINT_CONFIGS } from "../veratownConfig";
+import { getAppearanceMutationContext } from "../shared/appearanceSync";
 
 function createCharacter(
     memberNumber = 42,
@@ -183,10 +184,14 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
     for (const [index, config] of BUNNY_RESTRAINT_CONFIGS.entries()) {
         const created = createCharacter(index + 1);
         const persisted: any[] = [];
+        let mutationContext: any;
+        let ambientContext: unknown;
         const system = new BunnyParkSystem(
             createMessageConnection(created.character) as any,
-            async (character) => {
+            async (character, context) => {
                 persisted.push(character.Appearance.MakeAppearanceBundle());
+                mutationContext = context;
+                ambientContext = getAppearanceMutationContext(character);
             },
             deterministicRandom(index),
             0,
@@ -202,6 +207,10 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         assert.equal(result.finalVerification, true, config.name);
         assert.equal(result.signPresent, true, config.name);
         assert.equal(result.signVisible, true, config.name);
+        assert.equal(mutationContext?.operationId, result.operationId);
+        assert.equal(mutationContext?.source, "bunny");
+        assert.equal(mutationContext?.reason, "bunny_punishment_applied");
+        assert.equal(ambientContext, undefined);
         assert.equal(persisted.length, 1, config.name);
         for (const piece of config.pieces) {
             assert.ok(
