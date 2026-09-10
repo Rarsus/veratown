@@ -167,9 +167,11 @@ export class GetAccessHandler extends KeypadCommandHandler {
         if (!charCheck.success)
             return { success: false, message: charCheck.message };
 
-        // Get access records
+        // Get authoritative group memberships
         const access =
-            await this.accessService.getCharacterAccess(memberNumber);
+            await this.accessService.getAuthoritativeMembershipsForMember(
+                memberNumber,
+            );
 
         if (access.length === 0) {
             return {
@@ -179,7 +181,10 @@ export class GetAccessHandler extends KeypadCommandHandler {
         }
 
         const records = access
-            .map((r) => this.formatAccessRecord(r))
+            .map(
+                (membership) =>
+                    `${membership.groupKey ?? `${membership.doorKey}:${membership.groupName}`} (member ${membership.memberNumber})`,
+            )
             .join(", ");
         return {
             success: true,

@@ -144,6 +144,93 @@ describe("KeypadAccessService", () => {
     });
 
     describe("Access Checking", () => {
+        it("should allow a dynamic room-whitelisted principal without membership rows", async () => {
+            await definitionService.createDoor({
+                _id: "room_whitelist_door",
+                doorKey: "room_whitelist_door",
+                doorX: 12,
+                doorY: 12,
+                lockedTile: "MetalDown",
+                unlockedTile: "SteelDoorOpen",
+                unlockDurationMs: 10000,
+                enabled: true,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            await definitionService.createGroup({
+                _id: "room_whitelist_door:room_whitelist",
+                doorKey: "room_whitelist_door",
+                groupKey: "room_whitelist",
+                groupName: "room_whitelist",
+                code: "",
+                groupType: "builtin",
+                principalType: "room_whitelist",
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            const dynamicAccess = new KeypadAccessService(
+                db,
+                definitionService,
+                characterStore,
+                undefined,
+                async (memberNumber) => memberNumber === 12345,
+            );
+            await dynamicAccess.init();
+
+            expect(
+                await dynamicAccess.canAccessDoor(
+                    12345,
+                    "room_whitelist_door",
+                    false,
+                ),
+            ).toBe(true);
+            expect(
+                await dynamicAccess.canAccessDoor(
+                    54321,
+                    "room_whitelist_door",
+                    false,
+                ),
+            ).toBe(false);
+        });
+
+        it("should reuse one group membership across doors", async () => {
+            await definitionService.createDoor({
+                _id: "test_door_2",
+                doorKey: "test_door_2",
+                doorX: 11,
+                doorY: 11,
+                lockedTile: "MetalDown",
+                unlockedTile: "SteelDoorOpen",
+                unlockDurationMs: 10000,
+                enabled: true,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            await definitionService.createGroup({
+                _id: "test_door_2:whitelist",
+                doorKey: "test_door_2",
+                groupKey: "shared:staff",
+                groupName: "whitelist",
+                code: "",
+                groupType: "custom",
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            await definitionService.updateGroup("test_door", "whitelist", {
+                groupKey: "shared:staff",
+            });
+            await accessService.grantAccess(
+                12345,
+                "test_door",
+                "whitelist",
+                99999,
+            );
+
+            expect(
+                await accessService.canAccessDoor(12345, "test_door_2", false),
+            ).toBe(true);
+        });
+
         it("should allow access if character has permission", async () => {
             await accessService.grantAccess(
                 12345,

@@ -602,7 +602,7 @@ export class KeypadDataMigrator {
                         { projection: { _id: 1, "veratown.keypadAccess": 1 } },
                     )
                     .toArray();
-                const validGroups = new Set(
+                const validGroups = new Map(
                     (
                         await this.db
                             .collection("keypadGroupDefinitions")
@@ -612,30 +612,31 @@ export class KeypadDataMigrator {
                                     projection: {
                                         doorKey: 1,
                                         groupName: 1,
+                                        groupKey: 1,
                                     },
                                 },
                             )
                             .toArray()
-                    ).map((group) => `${group.doorKey}:${group.groupName}`),
+                    ).map((group) => [
+                        `${group.doorKey}:${group.groupName}`,
+                        group.groupKey ?? `${group.doorKey}:${group.groupName}`,
+                    ]),
                 );
                 const recordsById = new Map<string, KeypadGroupMembershipDoc>();
-                let skippedOrphans = 0;
+                let legacyGroupFallbacks = 0;
                 for (const profile of profiles) {
                     const access = (profile.veratown?.keypadAccess ??
                         []) as KeypadAccessRecord[];
                     for (const record of access) {
-                        if (
-                            !validGroups.has(
-                                `${record.doorKey}:${record.groupName}`,
-                            )
-                        ) {
-                            skippedOrphans++;
-                            continue;
-                        }
+                        const legacyGroupKey = `${record.doorKey}:${record.groupName}`;
+                        const groupKey = validGroups.get(legacyGroupKey);
+                        const resolvedGroupKey = groupKey ?? legacyGroupKey;
+                        if (!groupKey) legacyGroupFallbacks++;
                         const membership: KeypadGroupMembershipDoc = {
                             _id: `${record.doorKey}:${record.groupName}:${profile._id}`,
                             doorKey: record.doorKey,
                             groupName: record.groupName,
+                            groupKey: resolvedGroupKey,
                             memberNumber: profile._id as unknown as number,
                             grantedAt: record.grantedAt,
                             grantedBy: record.grantedBy,
@@ -650,8 +651,8 @@ export class KeypadDataMigrator {
                 if (records.length > 0) await memberships.insertMany(records);
                 phaseResult.itemsProcessed = records.length;
                 phaseResult.itemsCreated = records.length;
-                if (skippedOrphans > 0) {
-                    phaseResult.message = `Skipped ${skippedOrphans} orphaned profile access records`;
+                if (legacyGroupFallbacks > 0) {
+                    phaseResult.message = `Migrated ${legacyGroupFallbacks} legacy access records using fallback group keys`;
                 }
             } else {
                 phaseResult.message =

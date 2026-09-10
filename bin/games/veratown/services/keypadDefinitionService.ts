@@ -188,13 +188,20 @@ export class KeypadDefinitionService extends EventEmitter {
         return this.groupDefinitions.find({ doorKey }).toArray();
     }
 
+    async getGroupsByKey(
+        groupKey: string,
+    ): Promise<KeypadGroupDefinitionDoc[]> {
+        return this.groupDefinitions.find({ groupKey }).toArray();
+    }
+
     /**
      * Create a new group definition
      */
     async createGroup(group: KeypadGroupDefinitionDoc): Promise<void> {
         await this.groupDefinitions.insertOne({
             ...group,
-            _id: `${group.doorKey}:${group.groupName}`,
+            groupKey: group.groupKey ?? `${group.doorKey}:${group.groupName}`,
+            _id: group._id || `${group.doorKey}:${group.groupName}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
@@ -236,6 +243,12 @@ export class KeypadDefinitionService extends EventEmitter {
             $or: [{ code }, { codes: code }],
         });
         return group ? group.groupName : null;
+    }
+
+    async getGroupDefinitionsForDoor(
+        doorKey: string,
+    ): Promise<KeypadGroupDefinitionDoc[]> {
+        return this.getGroupsForDoor(doorKey);
     }
 
     /**

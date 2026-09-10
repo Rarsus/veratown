@@ -26,13 +26,13 @@ import {
  * KeypadAccessService (Layer 2)
  *
  * Purpose: Manage character access to doors
- * - Grant/revoke access (modifies character profiles)
- * - Check character access (reads character profiles)
+ * - Grant/revoke authoritative group membership
+ * - Check group membership and dynamic principals
  * - Manage access expiration
  * - Admin override capabilities
  *
  * Characteristics:
- * - Reads/writes character-specific data (Layer 1)
+ * - Writes a compatibility projection to character profiles
  * - Uses door definitions (Layer 3)
  * - Coordinates between layers
  *
@@ -49,6 +49,9 @@ export class KeypadAccessService {
             unifiedStore,
             unifiedStore.getEventBus(),
         ),
+        private readonly roomWhitelistResolver: (
+            memberNumber: number,
+        ) => Promise<boolean> = async () => false,
     ) {
         this.memberships = this.db.collection("keypadGroupMemberships");
     }
@@ -67,6 +70,7 @@ export class KeypadAccessService {
             doorKey: 1,
             memberNumber: 1,
         });
+        await this.memberships.createIndex({ groupKey: 1, memberNumber: 1 });
         await this.memberships.createIndex({ expiresAt: 1 });
     }
 
@@ -83,6 +87,11 @@ export class KeypadAccessService {
         reason?: string,
         expiresAt?: number,
     ): Promise<void> {
+        const group = await this.definitionService.getGroupDefinition(
+            doorKey,
+            groupName,
+        );
+        const groupKey = group?.groupKey ?? `${doorKey}:${groupName}`;
         const access: KeypadAccessRecord = {
             doorKey,
             groupName,
@@ -99,19 +108,25 @@ export class KeypadAccessService {
             grantedBy,
         );
 
-        // Add to membership index (for admin UI queries)
+        // Authoritative group membership. The profile write above remains a
+        // compatibility projection until legacy access data is retired.
         await this.memberships.updateOne(
-            { doorKey, groupName, memberNumber },
+            { groupKey, memberNumber },
             {
                 $set: {
                     doorKey,
                     groupName,
+                    groupKey,
                     memberNumber,
                     grantedAt: access.grantedAt,
                     grantedBy,
                     grantedReason: reason,
-                    syncedFromProfile: true,
+                    expiresAt: access.expiresAt,
+                    syncedFromProfile: false,
                     updatedAt: Date.now(),
+                },
+                $setOnInsert: {
+                    _id: `${groupKey}:${memberNumber}`,
                 },
             },
             { upsert: true },
@@ -134,12 +149,77 @@ export class KeypadAccessService {
             groupName,
         );
 
-        // Remove from membership index
-        const query: Record<string, unknown> = { doorKey, memberNumber };
+        // Remove from authoritative group membership.
+        const group = groupName
+            ? await this.definitionService.getGroupDefinition(
+                  doorKey,
+                  groupName,
+              )
+            : undefined;
         if (groupName) {
-            query.groupName = groupName;
+            await this.memberships.deleteMany({
+                memberNumber,
+                doorKey,
+                groupName,
+            });
+            await this.memberships.deleteMany({
+                memberNumber,
+                groupKey: group?.groupKey ?? `${doorKey}:${groupName}`,
+            });
+        } else {
+            await this.memberships.deleteMany({ doorKey, memberNumber });
         }
-        await this.memberships.deleteMany(query as any);
+    }
+
+    async grantGroupMembership(
+        groupKey: string,
+        memberNumber: number,
+        grantedBy: number,
+        reason?: string,
+        expiresAt?: number,
+    ): Promise<void> {
+        const definitions =
+            await this.definitionService.getGroupsByKey(groupKey);
+        const definition = definitions[0];
+        if (!definition) throw new Error(`Group not found: ${groupKey}`);
+        await this.memberships.updateOne(
+            { groupKey, memberNumber },
+            {
+                $set: {
+                    doorKey: definition.doorKey,
+                    groupName: definition.groupName,
+                    groupKey,
+                    memberNumber,
+                    grantedAt: Date.now(),
+                    grantedBy,
+                    grantedReason: reason,
+                    expiresAt,
+                    syncedFromProfile: false,
+                    updatedAt: Date.now(),
+                },
+                $setOnInsert: { _id: `${groupKey}:${memberNumber}` },
+            },
+            { upsert: true },
+        );
+    }
+
+    async revokeGroupMembership(
+        groupKey: string,
+        memberNumber: number,
+    ): Promise<void> {
+        await this.memberships.deleteMany({ groupKey, memberNumber });
+    }
+
+    async getMembersInGroupKey(
+        groupKey: string,
+    ): Promise<KeypadGroupMembershipDoc[]> {
+        return this.memberships.find({ groupKey }).toArray();
+    }
+
+    async getAuthoritativeMembershipsForMember(
+        memberNumber: number,
+    ): Promise<KeypadGroupMembershipDoc[]> {
+        return this.memberships.find({ memberNumber }).toArray();
     }
 
     /**
@@ -196,18 +276,10 @@ export class KeypadAccessService {
 
         if (await this.isAccessRestricted(memberNumber)) return false;
 
-        // Check character's keypad access
-        const access = await this.getCharacterAccessToDoor(
-            memberNumber,
-            doorKey,
+        return (
+            (await this.getAccessLevel(memberNumber, doorKey, false)) !==
+            "denied"
         );
-        if (access.length > 0) {
-            // Check if any access is still valid (not expired)
-            const now = Date.now();
-            return access.some((a) => !a.expiresAt || a.expiresAt > now);
-        }
-
-        return false;
     }
 
     /**
@@ -223,30 +295,52 @@ export class KeypadAccessService {
 
         if (await this.isAccessRestricted(memberNumber)) return "denied";
 
-        const access = await this.getCharacterAccessToDoor(
-            memberNumber,
-            doorKey,
-        );
+        const groups = await this.definitionService.getGroupsForDoor(doorKey);
         const now = Date.now();
-
-        // Filter expired access
-        const validAccess = access.filter(
-            (a) => !a.expiresAt || a.expiresAt > now,
+        const memberships = await this.memberships
+            .find({ memberNumber })
+            .toArray();
+        const validMemberships = memberships.filter(
+            (membership) => !membership.expiresAt || membership.expiresAt > now,
         );
+        const validGroups = groups.filter((group) => {
+            if (group.principalType === "room_whitelist") {
+                return false;
+            }
+            const key = group.groupKey ?? `${doorKey}:${group.groupName}`;
+            return validMemberships.some(
+                (membership) =>
+                    membership.groupKey === key ||
+                    membership.groupName === group.groupName,
+            );
+        });
+        const roomWhitelistGroup = groups.some(
+            (group) => group.principalType === "room_whitelist",
+        );
+        const roomWhitelisted = roomWhitelistGroup
+            ? await this.roomWhitelistResolver(memberNumber)
+            : false;
 
-        if (validAccess.length === 0) {
-            return "denied";
-        }
-
-        // Check access levels (admin > whitelist > guest)
-        if (validAccess.some((a) => a.groupName === "admin")) {
+        if (
+            validGroups.some((group) => group.groupName === "admin") ||
+            validMemberships.some(
+                (membership) => membership.groupName === "admin",
+            )
+        ) {
             return "admin";
         }
-        if (validAccess.some((a) => a.groupName === "whitelist")) {
+        if (
+            roomWhitelisted ||
+            validGroups.some((group) => group.groupName === "whitelist") ||
+            validMemberships.some(
+                (membership) => membership.groupName === "whitelist",
+            )
+        ) {
             return "whitelist";
         }
-
-        return "guest";
+        return validGroups.length > 0 || validMemberships.length > 0
+            ? "guest"
+            : "denied";
     }
 
     /**
@@ -263,23 +357,40 @@ export class KeypadAccessService {
         if (await this.isAccessRestricted(memberNumber)) return false;
 
         // Verify the code is valid for this door
-        const groupName = await this.definitionService.verifyCode(
-            doorKey,
-            code,
-        );
-        if (!groupName) {
+        const codeGroup = (
+            await this.definitionService.getGroupsForDoor(doorKey)
+        ).find((group) => group.code === code || group.codes?.includes(code));
+        if (!codeGroup) {
             return false;
         }
+        const groupName = codeGroup.groupName;
 
-        // Check if character has access to this group
-        const access = await this.getCharacterAccess(memberNumber);
         const now = Date.now();
-
-        return access.some(
-            (a) =>
-                a.doorKey === doorKey &&
-                a.groupName === groupName &&
-                (!a.expiresAt || a.expiresAt > now),
+        const group = await this.definitionService.getGroupDefinition(
+            doorKey,
+            groupName,
+        );
+        const membership = (
+            await this.memberships.find({ memberNumber }).toArray()
+        ).find(
+            (candidate) =>
+                candidate.memberNumber === memberNumber &&
+                candidate.groupName === groupName &&
+                (candidate.doorKey === doorKey ||
+                    candidate.groupKey ===
+                        (group?.groupKey ?? `${doorKey}:${groupName}`)),
+        );
+        const legacyAccess = (
+            await this.getCharacterAccessToDoor(memberNumber, doorKey)
+        ).find(
+            (access) =>
+                access.groupName === groupName &&
+                (!access.expiresAt || access.expiresAt > now),
+        );
+        return Boolean(
+            (membership &&
+                (!membership.expiresAt || membership.expiresAt > now)) ||
+            legacyAccess,
         );
     }
 

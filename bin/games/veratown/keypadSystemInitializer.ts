@@ -203,6 +203,9 @@ export class KeypadSystemInitializer {
                 definitionService,
                 this.characterStore,
                 this.mutationService,
+                async (memberNumber) =>
+                    this.conn.chatRoom?.Whitelist.includes(memberNumber) ??
+                    false,
             );
             await accessService.init();
             this.logger.info("✓ KeypadAccessService initialized");

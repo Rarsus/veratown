@@ -38,6 +38,7 @@ import { DeleteGroupHandler } from "./groupCommandHandlers";
 import { ListGroupsHandler } from "./groupCommandHandlers";
 import { GroupInfoHandler } from "./groupCommandHandlers";
 import { ListGroupMembersHandler } from "./groupCommandHandlers";
+import { GroupMemberHandler } from "./groupCommandHandlers";
 
 /**
  * Keypad Command Dispatcher
@@ -196,6 +197,14 @@ export class KeypadCommandDispatcher {
                 this.unifiedStore,
             ),
         );
+        this.handlers.set(
+            "group/member",
+            new GroupMemberHandler(
+                this.definitionService,
+                this.accessService,
+                this.unifiedStore,
+            ),
+        );
     }
 
     /**
@@ -278,6 +287,7 @@ Access Management:
     !door access revoke <doorKey> <memberNumber> [groupName]
     !door access get <memberNumber>
     !door access check <memberNumber> <doorKey>
+    Access is authorized from authoritative group memberships; profile access is legacy compatibility data.
 
 Door Management:
     !door open <doorKey> [durationMs]  (0 = open until !door close)
@@ -289,7 +299,9 @@ Door Management:
     !door info <doorKey>
 
 Group Management:
-    !door group create <doorKey> <groupName> <code> [type] [description]
+    !door group create <doorKey> <groupName> <code> [type] [description] [groupKey=<key>] [principal=room_whitelist]
+    !door group member add <groupKey> <memberNumber> [reason]
+    !door group member remove <groupKey> <memberNumber>
     !door group update <doorKey> <groupName> <fieldName> <value>...
     !door group delete <doorKey> <groupName>
     !door group list <doorKey>

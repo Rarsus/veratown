@@ -213,6 +213,11 @@ export class KeypadCollectionSetup {
                                 bsonType: "string",
                                 description: "Reference to door",
                             },
+                            groupKey: {
+                                bsonType: ["string", "null"],
+                                description:
+                                    "Reusable group identity across doors",
+                            },
                             groupName: {
                                 bsonType: "string",
                                 description:
@@ -231,6 +236,11 @@ export class KeypadCollectionSetup {
                             groupType: {
                                 enum: ["builtin", "custom"],
                                 description: "Whether builtin or admin-created",
+                            },
+                            principalType: {
+                                enum: ["static", "room_whitelist", null],
+                                description:
+                                    "Static membership or dynamic room principal",
                             },
                             description: {
                                 bsonType: ["string", "null"],
@@ -275,6 +285,7 @@ export class KeypadCollectionSetup {
                 error.message.includes("already exists")
             ) {
                 await this.allowMultipleGroupCodes(db, collectionName);
+                await this.upgradeGroupAuthoritySchema(db, collectionName);
                 return;
             }
             throw error;
@@ -344,6 +355,11 @@ export class KeypadCollectionSetup {
                                 bsonType: "string",
                                 description: "Group name",
                             },
+                            groupKey: {
+                                bsonType: ["string", "null"],
+                                description:
+                                    "Reusable group identity across doors",
+                            },
                             memberNumber: {
                                 bsonType: "int",
                                 description: "Character member number",
@@ -367,7 +383,7 @@ export class KeypadCollectionSetup {
                             syncedFromProfile: {
                                 bsonType: "bool",
                                 description:
-                                    "Whether synced from character profile",
+                                    "Whether imported from the legacy profile projection",
                             },
                         },
                         additionalProperties: false,
@@ -379,11 +395,9 @@ export class KeypadCollectionSetup {
             const collection = db.collection(collectionName);
             await collection.createIndex({ doorKey: 1 });
             await collection.createIndex({ doorKey: 1, groupName: 1 });
+            await collection.createIndex({ groupKey: 1 });
             await collection.createIndex({ memberNumber: 1 });
-            await collection.createIndex(
-                { doorKey: 1, memberNumber: 1 },
-                { unique: true },
-            );
+            await collection.createIndex({ groupKey: 1, memberNumber: 1 });
             await collection.createIndex({ expiresAt: 1 });
             // TTL index for auto-cleanup of expired memberships
             await collection.createIndex(
@@ -395,10 +409,77 @@ export class KeypadCollectionSetup {
                 error instanceof Error &&
                 error.message.includes("already exists")
             ) {
+                await this.upgradeMembershipSchema(db, collectionName);
                 return;
             }
             throw error;
         }
+    }
+
+    private static async upgradeGroupAuthoritySchema(
+        db: Db,
+        collectionName: string,
+    ): Promise<void> {
+        const info = await db
+            .listCollections({ name: collectionName }, { nameOnly: false })
+            .next();
+        const schema = info?.options?.validator?.$jsonSchema;
+        if (!schema?.properties) return;
+        await db.command({
+            collMod: collectionName,
+            validator: {
+                $jsonSchema: {
+                    ...schema,
+                    properties: {
+                        ...schema.properties,
+                        groupKey: {
+                            bsonType: ["string", "null"],
+                            description: "Reusable group identity across doors",
+                        },
+                        principalType: {
+                            enum: ["static", "room_whitelist", null],
+                            description: "Static or dynamic group principal",
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    private static async upgradeMembershipSchema(
+        db: Db,
+        collectionName: string,
+    ): Promise<void> {
+        const info = await db
+            .listCollections({ name: collectionName }, { nameOnly: false })
+            .next();
+        const schema = info?.options?.validator?.$jsonSchema;
+        if (schema?.properties) {
+            await db.command({
+                collMod: collectionName,
+                validator: {
+                    $jsonSchema: {
+                        ...schema,
+                        properties: {
+                            ...schema.properties,
+                            groupKey: {
+                                bsonType: ["string", "null"],
+                                description:
+                                    "Reusable group identity across doors",
+                            },
+                        },
+                    },
+                },
+            });
+        }
+        const collection = db.collection(collectionName);
+        try {
+            await collection.dropIndex("doorKey_1_memberNumber_1");
+        } catch {
+            /* Existing deployments may already have the corrected indexes. */
+        }
+        await collection.createIndex({ groupKey: 1 });
+        await collection.createIndex({ groupKey: 1, memberNumber: 1 });
     }
 
     /**

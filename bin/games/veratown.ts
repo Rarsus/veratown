@@ -346,6 +346,10 @@ export class Veratown {
                       definitionService,
                       unifiedStore,
                       mutationService,
+                      async (memberNumber) =>
+                          this.conn.chatRoom?.Whitelist.includes(
+                              memberNumber,
+                          ) ?? false,
                   );
             if (!this.container.has(DIServiceKeys.KEYPAD_ACCESS_SERVICE)) {
                 this.container.register(

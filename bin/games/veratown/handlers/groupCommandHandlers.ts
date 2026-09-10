@@ -20,7 +20,7 @@ import {
 import { KeypadGroupDefinitionDoc } from "../keypadTypes";
 
 /**
- * /bot door group create <doorKey> <groupName> <code> [type] [description]
+ * /bot door group create <doorKey> <groupName> <code> [type] [description] [groupKey=<key>] [principal=room_whitelist]
  * Create a new group definition for a door
  */
 export class CreateGroupHandler extends KeypadCommandHandler {
@@ -44,7 +44,20 @@ export class CreateGroupHandler extends KeypadCommandHandler {
         const groupName = context.args[1];
         const code = context.args[2];
         const groupType = (context.args[3] as "builtin" | "custom") || "custom";
-        const description = context.args.slice(4).join(" ");
+        const groupKeyOption = context.args.find((arg) =>
+            arg.startsWith("groupKey="),
+        );
+        const principalOption = context.args.find((arg) =>
+            arg.startsWith("principal="),
+        );
+        const description = context.args
+            .slice(4)
+            .filter(
+                (arg) =>
+                    !arg.startsWith("groupKey=") &&
+                    !arg.startsWith("principal="),
+            )
+            .join(" ");
 
         // Verify door exists
         const doorCheck = await this.getDoorOrError(doorKey);
@@ -68,8 +81,13 @@ export class CreateGroupHandler extends KeypadCommandHandler {
             _id: `${doorKey}:${groupName}`,
             doorKey,
             groupName,
+            groupKey: groupKeyOption?.slice("groupKey=".length) || undefined,
             code,
             groupType,
+            principalType:
+                principalOption?.slice("principal=".length) === "room_whitelist"
+                    ? "room_whitelist"
+                    : "static",
             description: description || undefined,
             createdAt: Date.now(),
             createdBy: context.actor.MemberNumber,
@@ -207,7 +225,10 @@ export class ListGroupsHandler extends KeypadCommandHandler {
         }
 
         const groupList = groups
-            .map((g) => `${g.groupName} (code: "${g.code}")`)
+            .map(
+                (g) =>
+                    `${g.groupName} [key=${g.groupKey ?? `${g.doorKey}:${g.groupName}`}, principal=${g.principalType ?? "static"}, code="${g.code}"]`,
+            )
             .join(", ");
         return {
             success: true,
@@ -249,6 +270,8 @@ Group: ${group.groupName}
 Door: ${group.doorKey}
 Code: "${group.code}"
 Type: ${group.groupType}
+Group key: ${group.groupKey ?? `${group.doorKey}:${group.groupName}`}
+Principal: ${group.principalType ?? "static"}
 Description: ${group.description || "None"}
 Created: ${new Date(group.createdAt).toLocaleString()}
 Members: (use /bot door group members <doorKey> <groupName>)
@@ -289,15 +312,14 @@ export class ListGroupMembersHandler extends KeypadCommandHandler {
         if (!groupCheck.success)
             return { success: false, message: groupCheck.message };
 
-        const members = await this.accessService.getMembersInGroup(
-            doorKey,
-            groupName,
+        const members = await this.accessService.getMembersInGroupKey(
+            groupCheck.group.groupKey ?? `${doorKey}:${groupName}`,
         );
 
         if (members.length === 0) {
             return {
                 success: true,
-                message: `Group ${doorKey}:${groupName} has no members`,
+                message: `Group ${groupCheck.group.groupKey ?? `${doorKey}:${groupName}`} has no members`,
             };
         }
 
@@ -309,7 +331,60 @@ export class ListGroupMembersHandler extends KeypadCommandHandler {
             .join(", ");
         return {
             success: true,
-            message: `Members of ${doorKey}:${groupName}: ${memberList}`,
+            message: `Members of ${groupCheck.group.groupKey ?? `${doorKey}:${groupName}`}: ${memberList}`,
+        };
+    }
+}
+
+/** /bot door group member add <groupKey> <memberNumber> [reason] */
+export class GroupMemberHandler extends KeypadCommandHandler {
+    protected requiredPermission = "admin" as const;
+
+    protected validateContext(context: KeypadCommandContext) {
+        if (!context.args[0] || !context.args[1]) {
+            return {
+                valid: false,
+                message:
+                    "Usage: /bot door group member <add|remove> <groupKey> <memberNumber> [reason]",
+            };
+        }
+        if (!["add", "remove"].includes(context.args[0])) {
+            return {
+                valid: false,
+                message: "Member action must be add or remove",
+            };
+        }
+        if (!Number.isInteger(Number(context.args[2]))) {
+            return {
+                valid: false,
+                message: `Invalid member number: ${context.args[2]}`,
+            };
+        }
+        return { valid: true };
+    }
+
+    protected async handle(
+        context: KeypadCommandContext,
+    ): Promise<KeypadCommandResult> {
+        const action = context.args[0];
+        const groupKey = context.args[1];
+        const memberNumber = Number(context.args[2]);
+        if (action === "add") {
+            await this.accessService.grantGroupMembership(
+                groupKey,
+                memberNumber,
+                context.actor.MemberNumber,
+                context.args.slice(3).join(" ") || undefined,
+            );
+            return {
+                success: true,
+                message: `Added ${memberNumber} to group ${groupKey}`,
+            };
+        }
+        await this.accessService.revokeGroupMembership(groupKey, memberNumber);
+        return {
+            success: true,
+            message: `Removed ${memberNumber} from group ${groupKey}`,
         };
     }
 }

@@ -68,8 +68,14 @@ export interface KeypadGroupDefinitionDoc {
     doorKey: string; // Which door this group controls access to
     groupName: string; // "admin", "whitelist", "maintenance", "custom_xyz"
 
+    // Reusable group identity. Legacy records default to `${doorKey}:${groupName}`.
+    groupKey?: string;
+
     // Group type: builtin (admin/whitelist/guest) or custom (admin-created)
     groupType: "builtin" | "custom";
+
+    // Dynamic principals do not require membership documents.
+    principalType?: "static" | "room_whitelist";
 
     // Access code for this group
     code: string; // Empty string for admin group, specific code for others
@@ -84,10 +90,11 @@ export interface KeypadGroupDefinitionDoc {
 }
 
 /**
- * Layer 1: Group Membership Index (Optional, for admin queries)
+ * Layer 1: Authoritative Group Membership
  * Stored in keypadGroupMemberships collection
  * Indexed for fast "who has access?" queries
- * Synced from character profiles, used for admin UI performance
+ * Character profiles may retain a temporary compatibility projection, but
+ * authorization reads this collection as the source of truth.
  */
 export interface KeypadGroupMembershipDoc {
     _id: string;
@@ -95,6 +102,7 @@ export interface KeypadGroupMembershipDoc {
     // Identity
     doorKey: string;
     groupName: string;
+    groupKey?: string;
     memberNumber: number;
 
     // Tracking
