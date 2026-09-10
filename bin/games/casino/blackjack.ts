@@ -64,7 +64,7 @@ const BLACKJACKEXAMPLES = `
 /bot bet 10
     bets 10 chips
 /bot bet leg binder
-    bets the 'leg binder' forfeit (worth 7 chips)
+    bets the 'leg binder' forfeit - worth 7 chips
 `;
 const FULLBLACKJACKHELP = `${BLACKJACKHELP}
 
@@ -948,7 +948,7 @@ export class BlackjackGame implements Game {
             if (lockedChips > 0 && totalChips >= currentBet.stake) {
                 this.conn.SendMessage(
                     "Whisper",
-                    `Your chips are locked (${lockedChips} locked). You do not have enough available chips.`,
+                    `Your chips are locked [${lockedChips} locked]. You do not have enough available chips.`,
                     sender.MemberNumber,
                 );
             } else {
@@ -1101,7 +1101,7 @@ export class BlackjackGame implements Game {
             if (lockedChips > 0 && totalChips >= currentBet.stake) {
                 this.conn.SendMessage(
                     "Whisper",
-                    `Your chips are locked (${lockedChips} locked). You do not have enough available chips.`,
+                    `Your chips are locked [${lockedChips} locked]. You do not have enough available chips.`,
                     sender.MemberNumber,
                 );
             } else {
@@ -1219,7 +1219,7 @@ export class BlackjackGame implements Game {
                 const playerHand = this.playerHands.get(bet);
                 if (!playerHand) {
                     this.logger?.info(
-                        `No hand found for player ${player.memberName} (${player.memberNumber}) during resolution`,
+                        `No hand found for player ${player.memberName} [${player.memberNumber}] during resolution`,
                     );
                     continue;
                 }
@@ -1459,7 +1459,7 @@ export class BlackjackGame implements Game {
                 if (lockedChips > 0 && totalChips >= bet.stake) {
                     this.conn.SendMessage(
                         "Whisper",
-                        `Your chips are locked (${lockedChips} locked). You do not have enough available chips.`,
+                        `Your chips are locked [${lockedChips} locked]. You do not have enough available chips.`,
                         sender.MemberNumber,
                     );
                 } else {
@@ -1845,7 +1845,7 @@ export class BlackjackGame implements Game {
         const dealerHandString = dealerHidden
             ? `[${getCardString(this.dealerHand[0])}] [???]`
             : this.handToString(this.dealerHand);
-        let string = `Dealer's hand: ${dealerHandString} (${dealerHidden ? "???" : dealerValue})\n`;
+        let string = `Dealer's hand: ${dealerHandString} [${dealerHidden ? "???" : dealerValue}]\n`;
         for (const player of this.players) {
             for (let i = 0; i < player.bets.length; i++) {
                 const bet = player.bets[i];
@@ -1858,9 +1858,9 @@ export class BlackjackGame implements Game {
                     player.memberNumber === requestingPlayer.memberNumber &&
                     i === requestingPlayer.playingHand
                 ) {
-                    string += `> ${player.memberName} (${bet.memberNumber}) hand: ${handString} (${handValue})\n`;
+                    string += `> ${player.memberName} [${bet.memberNumber}] hand: ${handString} [${handValue}]\n`;
                 } else {
-                    string += `${player.memberName} (${bet.memberNumber}) hand: ${handString} (${handValue})\n`;
+                    string += `${player.memberName} [${bet.memberNumber}] hand: ${handString} [${handValue}]\n`;
                 }
             }
         }
