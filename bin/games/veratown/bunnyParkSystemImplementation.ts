@@ -26,17 +26,13 @@ import {
     BUNNY_SIGN_TEXT,
     BUNNY_SIGN_TEXT2,
     bunnyPieceKey,
-    hasBunnyPiece,
-    planBunnyPunishment,
-    verifyBunnySign,
 } from "./bunnyPunishmentEngine";
 
-type BunnyPunishmentStatus = "completed" | "partial" | "skipped" | "failed";
+type BunnyPunishmentStatus = "completed" | "partial" | "failed";
 
 export interface BunnyPunishmentResult {
     success: boolean;
     status?: BunnyPunishmentStatus;
-    skipped?: boolean;
     configuration: string;
     attemptedPieces: string[];
     appliedPieces: string[];
@@ -218,7 +214,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 // apply the punishment here and store in result
 
                 const result = await this.applyPunishment(character, config);
-                if (!result.skipped && !result.success) {
+                if (!result.success) {
                     this.messageSender.whisperToCharacter(
                         character,
                         "(The bunny punishment could not be applied safely. Please notify an operator.)",
@@ -254,59 +250,27 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             ...config.pieces.map(bunnyPieceKey),
             bunnyPieceKey(BUNNY_SIGN),
         ];
-        const initialAppearance = character.Appearance.MakeAppearanceBundle();
-        const plan = planBunnyPunishment(initialAppearance, config);
-        const initialSign = verifyBunnySign(initialAppearance);
         const appliedPieces: string[] = [];
-        const failedPieces = plan.blockedPieces.map(bunnyPieceKey);
-        const reasons = plan.blockedPieces.map(
-            (piece) =>
-                `${bunnyPieceKey(piece)}: appearance group is occupied by a different item`,
-        );
+        const failedPieces: string[] = [];
         const context = {
             memberNumber: character.MemberNumber,
             operationId,
             configuration: config.name,
-            currentPieces: plan.currentPieces,
-            requestedPieces: plan.requestedPieces.map(bunnyPieceKey),
-            appliedPieces,
-            blockedPieces: plan.blockedPieces.map(bunnyPieceKey),
-            failedPieces,
-            reasons,
-        };
-        const logContext = (extra: Record<string, unknown> = {}) => ({
-            ...context,
-            appliedPieces: [...appliedPieces],
-            failedPieces: [...failedPieces],
-            reasons: [...reasons],
-            ...extra,
-        });
-        const markFailed = (
-            piece: { group: string; asset: string },
-            reason: string,
-        ) => {
-            const key = bunnyPieceKey(piece);
-            if (!failedPieces.includes(key)) failedPieces.push(key);
-            reasons.push(`${key}: ${reason}`);
-        };
-        const markApplied = (piece: { group: string; asset: string }) => {
-            const key = bunnyPieceKey(piece);
-            if (!appliedPieces.includes(key)) appliedPieces.push(key);
+            requestedPieces: attemptedPieces,
         };
         const validationErrors = validateBunnyRestraintConfig(config);
-        this.logger.debug(
-            "Bunny punishment appearance plan",
-            logContext({
-                exactPieces: plan.exactPieces.map(bunnyPieceKey),
-                missingPieces: plan.missingPieces.map(bunnyPieceKey),
-            }),
-        );
-        if (validationErrors.length > 0) {
+        const signAsset = AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset);
+        if (!signAsset || !getAssetDef(signAsset)) {
+            validationErrors.push(
+                `asset unavailable: ${bunnyPieceKey(BUNNY_SIGN)}`,
+            );
+        }
+        if (validationErrors.length) {
             const failureReason = validationErrors.join("; ");
             this.logger.error(
                 "Bunny punishment rejected before mutation",
                 undefined,
-                logContext({ failureReason }),
+                { ...context, failureReason },
             );
             return {
                 success: false,
@@ -316,204 +280,129 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 appliedPieces,
                 failedPieces,
                 finalVerification: false,
-                signPresent: initialSign.present,
-                signVisible: initialSign.visible,
-                signFailureReason: initialSign.reason,
+                signPresent: false,
+                signVisible: false,
                 failureReason,
                 operationId,
             };
         }
 
-        const missingPieces = plan.missingPieces.filter((piece) => {
-            const descriptor = AssetGet(piece.group, piece.asset);
-            if (
-                !descriptor ||
-                !character.IsItemPermissionAccessible(descriptor)
-            ) {
-                markFailed(piece, `permission denied: ${bunnyPieceKey(piece)}`);
-                return false;
-            }
-            return true;
-        });
-        const signIsMissing = missingPieces.some(
-            (piece) => bunnyPieceKey(piece) === bunnyPieceKey(BUNNY_SIGN),
-        );
-        const signIsBlocked = plan.blockedPieces.some(
-            (piece) => bunnyPieceKey(piece) === bunnyPieceKey(BUNNY_SIGN),
-        );
-        const signNeedsConfiguration =
-            !signIsBlocked &&
-            (signIsMissing ||
-                (plan.exactPieces.some(
-                    (piece) =>
-                        bunnyPieceKey(piece) === bunnyPieceKey(BUNNY_SIGN),
-                ) &&
-                    !initialSign.visible));
-        const piecesToConfigure = [
-            ...missingPieces,
-            ...(signNeedsConfiguration && !signIsMissing ? [BUNNY_SIGN] : []),
-        ];
-        let bundleError: string | undefined;
-        if (piecesToConfigure.length > 0) {
-            try {
-                await syncAppearanceMutation(
-                    character,
-                    async () => {
-                        const configurationErrors: string[] = [];
-                        for (const piece of piecesToConfigure) {
-                            const key = bunnyPieceKey(piece);
-                            try {
-                                const item = missingPieces.includes(piece)
-                                    ? character.Appearance.AddItem(
-                                          AssetGet(piece.group, piece.asset),
-                                      )
-                                    : character.Appearance.InventoryGet(
-                                          piece.group as any,
-                                      );
-                                if (!item)
-                                    throw new Error(
-                                        `${key}: item was not returned after application`,
-                                    );
-                                if (
-                                    piece.group === BUNNY_SIGN.group &&
-                                    piece.asset === BUNNY_SIGN.asset
-                                ) {
-                                    item.setProperty("Text", BUNNY_SIGN_TEXT);
-                                    item.setProperty("Text2", BUNNY_SIGN_TEXT2);
-                                    continue;
-                                }
-                                const restraint =
-                                    piece as BunnyRestraintConfig["pieces"][number];
-                                if (restraint.extendedType) {
-                                    if (!item.Extended)
-                                        throw new Error(
-                                            `${key}: extended item API unavailable`,
-                                        );
-                                    item.Extended.SetType(
-                                        restraint.extendedType,
-                                    );
-                                }
-                                item.SetColor(BUNNY_ROPE_COLOR);
-                                item.SetCraft({
-                                    Name: piece.asset,
-                                    Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
-                                });
-                                if (restraint.lockType) {
-                                    if (
-                                        typeof (item as any).lock !== "function"
-                                    )
-                                        throw new Error(
-                                            `${key}: item lock API unavailable`,
-                                        );
-                                    (item as any).lock(
-                                        restraint.lockType,
-                                        this.conn.Player?.MemberNumber ??
-                                            character.MemberNumber,
-                                        {},
-                                    );
-                                }
-                            } catch (error) {
-                                configurationErrors.push(
-                                    error instanceof Error
-                                        ? error.message
-                                        : String(error),
-                                );
-                            }
+        const configuredPieces: string[] = [];
+        let mutationError: string | undefined;
+        try {
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    for (const piece of config.pieces) {
+                        const asset = AssetGet(piece.group, piece.asset);
+                        if (
+                            !asset ||
+                            !character.IsItemPermissionAccessible(asset)
+                        ) {
+                            throw new Error(
+                                `permission denied: ${bunnyPieceKey(piece)}`,
+                            );
                         }
-                        if (configurationErrors.length > 0) {
-                            bundleError = configurationErrors.join("; ");
+                        const item = character.Appearance.AddItem(asset);
+                        if (piece.extendedType) {
+                            item.Extended?.SetType(piece.extendedType);
                         }
-                    },
-                    this.syncDelayMs,
-                    async (current) => this.stateSync?.(current),
-                    {
-                        throwOnSyncFailure: false,
-                        source: "bunny",
-                        reason: "bunny_punishment_bundle_applied",
-                        operationId,
-                    },
-                );
-            } catch (error) {
-                bundleError =
-                    error instanceof Error ? error.message : String(error);
-            }
+                        item.SetColor(BUNNY_ROPE_COLOR);
+                        item.SetCraft({
+                            Name: piece.asset,
+                            Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
+                        });
+                        if (piece.lockType) {
+                            item.lock(
+                                piece.lockType,
+                                this.conn.Player?.MemberNumber ??
+                                    character.MemberNumber,
+                                {},
+                            );
+                        }
+                        configuredPieces.push(bunnyPieceKey(piece));
+                    }
+
+                    const sign = character.Appearance.AddItem(signAsset);
+                    sign.setProperty("Text", BUNNY_SIGN_TEXT);
+                    sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
+                    configuredPieces.push(bunnyPieceKey(BUNNY_SIGN));
+                },
+                this.syncDelayMs,
+                async (current) => this.stateSync?.(current),
+                {
+                    throwOnSyncFailure: false,
+                    source: "bunny",
+                    reason: "bunny_punishment_applied",
+                    operationId,
+                },
+            );
+        } catch (error) {
+            mutationError =
+                error instanceof Error ? error.message : String(error);
+            this.logger.error("Bunny punishment application failed", error, {
+                ...context,
+                configuredPieces,
+            });
         }
 
-        const observedAppearance = character.Appearance.MakeAppearanceBundle();
-        for (const piece of piecesToConfigure) {
-            if (hasBunnyPiece(observedAppearance, piece)) {
-                markApplied(piece);
-            } else if (bundleError) {
-                markFailed(piece, bundleError);
-            }
-        }
-        if (bundleError) {
-            reasons.push(`bundle application: ${bundleError}`);
-            this.logger.warn(
-                "Bunny punishment bundle was only partially observed",
-                logContext({ bundleError }),
+        const appliedAppearance = character.Appearance.MakeAppearanceBundle();
+        const hasPiece = (group: string, asset: string) =>
+            appliedAppearance.some(
+                (item) => item.Group === group && item.Name === asset,
             );
+        for (const piece of [...config.pieces, BUNNY_SIGN]) {
+            const key = bunnyPieceKey(piece);
+            if (hasPiece(piece.group, piece.asset)) appliedPieces.push(key);
+            else failedPieces.push(key);
         }
-
-        const finalAppearance = character.Appearance.MakeAppearanceBundle();
-        const finalRestraintsVerified = config.pieces.every((piece) =>
-            hasBunnyPiece(finalAppearance, piece),
+        const sign = appliedAppearance.find(
+            (item) =>
+                item.Group === BUNNY_SIGN.group &&
+                item.Name === BUNNY_SIGN.asset,
         );
-        const finalSign = verifyBunnySign(finalAppearance);
-        for (const piece of config.pieces) {
-            if (!hasBunnyPiece(finalAppearance, piece))
-                markFailed(
-                    piece,
-                    "required restraint is absent at final verification",
-                );
-        }
-        if (!finalSign.visible)
-            markFailed(
-                BUNNY_SIGN,
-                finalSign.reason ??
-                    "required sign is not visible at final verification",
-            );
-        const complete = finalRestraintsVerified && finalSign.visible;
-        const skipped = complete && plan.missingPieces.length === 0;
-        const status: BunnyPunishmentStatus = complete
-            ? skipped
-                ? "skipped"
-                : "completed"
-            : signNeedsConfiguration ||
-                appliedPieces.length > 0 ||
-                plan.exactPieces.length > 0
-              ? "partial"
-              : "failed";
+        const signVisible =
+            sign?.Property?.Text === BUNNY_SIGN_TEXT &&
+            sign?.Property?.Text2 === BUNNY_SIGN_TEXT2;
+        const complete = failedPieces.length === 0 && signVisible;
         const failureReason = complete
             ? undefined
-            : [...new Set(reasons)].join("; ") ||
-              "Bunny punishment final verification failed";
+            : (mutationError ??
+              `Missing Bunny equipment: ${failedPieces.join(", ")}`);
+        const status: BunnyPunishmentStatus = complete
+            ? "completed"
+            : appliedPieces.length > 0
+              ? "partial"
+              : "failed";
         const result: BunnyPunishmentResult = {
             success: complete,
             status,
-            ...(skipped ? { skipped: true } : {}),
             configuration: config.name,
             attemptedPieces,
-            appliedPieces,
-            failedPieces,
+            appliedPieces: [...new Set(appliedPieces)],
+            failedPieces: [...new Set(failedPieces)],
             finalVerification: complete,
-            signPresent: finalSign.present,
-            signVisible: finalSign.visible,
-            signFailureReason: finalSign.reason,
+            signPresent: Boolean(sign),
+            signVisible,
+            signFailureReason: sign
+                ? signVisible
+                    ? undefined
+                    : "WoodenSign text was not configured"
+                : "WoodenSign is missing",
             failureReason,
             operationId,
         };
         if (!complete) {
-            this.logger.warn(
-                "Bunny punishment partially applied",
-                logContext({
-                    status,
-                    finalVerification: false,
-                    signPresent: result.signPresent,
-                    signVisible: result.signVisible,
-                    failureReason,
-                }),
-            );
+            this.logger.warn("Bunny punishment was not fully applied", {
+                ...context,
+                appliedPieces: result.appliedPieces,
+                failedPieces: result.failedPieces,
+                status,
+                finalVerification: false,
+                signPresent: result.signPresent,
+                signVisible: result.signVisible,
+                failureReason,
+            });
             return result;
         }
 
@@ -537,7 +426,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             this.logger.error(
                 "Bunny punishment artifact persistence failed",
                 error,
-                logContext(),
+                { ...context, appliedPieces: result.appliedPieces },
             );
         }
         if (artifactRecorded) {
@@ -548,7 +437,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     {
                         operationId,
                         configuration: config.name,
-                        restraintPieces: config.pieces.map(bunnyPieceKey),
+                        restraintPieces: attemptedPieces,
                         sign: {
                             group: BUNNY_SIGN.group,
                             asset: BUNNY_SIGN.asset,
@@ -560,28 +449,22 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     character.MemberNumber,
                 );
             } catch (error) {
-                this.logger.warn(
-                    "Bunny punishment audit failed",
-                    logContext({
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    }),
-                );
+                this.logger.warn("Bunny punishment audit failed", {
+                    ...context,
+                    appliedPieces: result.appliedPieces,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
             }
         }
-        this.logger.info(
-            skipped
-                ? "Bunny punishment already applied"
-                : "Bunny punishment applied",
-            logContext({
-                status,
-                finalVerification: true,
-                signPresent: result.signPresent,
-                signVisible: result.signVisible,
-            }),
-        );
+        this.logger.info("Bunny punishment applied", {
+            ...context,
+            appliedPieces: result.appliedPieces,
+            status,
+            finalVerification: true,
+            signPresent: result.signPresent,
+            signVisible: result.signVisible,
+        });
         return result;
     }
 }
