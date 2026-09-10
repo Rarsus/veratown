@@ -1457,7 +1457,7 @@ ${forfeitsString()}
         // via the DI container. For now, send placeholder message
         this.conn.reply(
             msg,
-            `Escape feature requires unified store integration (${escapeCost} chips). Coming in Phase 3.2 full release.`,
+            `Escape feature requires unified store integration [${escapeCost} chips]. Coming in Phase 3.2 full release.`,
         );
     };
 }

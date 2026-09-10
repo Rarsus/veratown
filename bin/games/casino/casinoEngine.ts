@@ -305,7 +305,7 @@ export class CasinoEngine {
 
             return (
                 baseMsg +
-                ` (${multipliers.join(", ")})` +
+                ` [${multipliers.join(", ")}]` +
                 ` from ${outcome.betAmount} chip bet`
             );
         }

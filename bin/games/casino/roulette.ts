@@ -548,7 +548,7 @@ export class RouletteGame implements Game {
                 this.conn.reply(
                     msg,
                     lockedChips > 0 && totalChips >= bet.stake
-                        ? `Your chips are locked (${lockedChips} locked). You don't have enough available chips.`
+                        ? `Your chips are locked [${lockedChips} locked]. You don't have enough available chips.`
                         : `You don't have enough chips.`,
                 );
                 return;
