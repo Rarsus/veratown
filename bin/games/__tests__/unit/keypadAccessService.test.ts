@@ -247,6 +247,40 @@ describe("KeypadAccessService", () => {
             expect(canAccess).toBe(true);
         });
 
+        it("should deny access when membership belongs to another door", async () => {
+            await definitionService.createDoor({
+                _id: "other_door",
+                doorKey: "other_door",
+                doorX: 14,
+                doorY: 14,
+                lockedTile: "MetalDown",
+                unlockedTile: "SteelDoorOpen",
+                unlockDurationMs: 10000,
+                enabled: true,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            await definitionService.createGroup({
+                _id: "other_door:whitelist",
+                doorKey: "other_door",
+                groupName: "whitelist",
+                code: "other-door-code",
+                groupType: "builtin",
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            await accessService.grantAccess(
+                12345,
+                "test_door",
+                "whitelist",
+                99999,
+            );
+
+            expect(
+                await accessService.canAccessDoor(12345, "other_door", false),
+            ).toBe(false);
+        });
+
         it("should deny access if character has no permission", async () => {
             const canAccess = await accessService.canAccessDoor(
                 12345,

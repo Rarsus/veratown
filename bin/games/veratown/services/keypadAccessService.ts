@@ -300,8 +300,17 @@ export class KeypadAccessService {
         const memberships = await this.memberships
             .find({ memberNumber })
             .toArray();
+        const sharedGroupKeys = new Set(
+            groups
+                .filter((group) => group.principalType !== "room_whitelist")
+                .map((group) => group.groupKey),
+        );
         const validMemberships = memberships.filter(
-            (membership) => !membership.expiresAt || membership.expiresAt > now,
+            (membership) =>
+                (!membership.expiresAt || membership.expiresAt > now) &&
+                (membership.doorKey === doorKey ||
+                    (membership.groupKey !== undefined &&
+                        sharedGroupKeys.has(membership.groupKey))),
         );
         const validGroups = groups.filter((group) => {
             if (group.principalType === "room_whitelist") {
@@ -311,7 +320,8 @@ export class KeypadAccessService {
             return validMemberships.some(
                 (membership) =>
                     membership.groupKey === key ||
-                    membership.groupName === group.groupName,
+                    (membership.doorKey === doorKey &&
+                        membership.groupName === group.groupName),
             );
         });
         const roomWhitelistGroup = groups.some(
