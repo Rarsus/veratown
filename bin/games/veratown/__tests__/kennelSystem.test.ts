@@ -181,8 +181,48 @@ test("KennelSystem applies the device and records one session on tile entry", as
     callbacks[0](character, { X: 3, Y: 38 });
     await new Promise((resolve) => setTimeout(resolve, 75));
 
-    assert.equal(created.device?.Name, "Kennel");
+    assert.equal((created as any).device?.Name, "Kennel");
     assert.deepEqual(mutations.entries, [7]);
+    assert.equal((system as any).kennelStateCache.get(7)?.hasDevice, true);
+});
+
+test("KennelSystem does not recontain an escaped character until they leave", async () => {
+    const created = createCharacter(20);
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    system.markEscaped(created.character.MemberNumber);
+    await (system as any).reconcileCharacter(created.character);
+
+    assert.equal(created.device, undefined);
+    assert.deepEqual(mutations.entries, []);
+
+    created.character.MapPos = { X: 1, Y: 1 };
+    await (system as any).reconcileCharacter(created.character);
+    created.character.MapPos = { X: 4, Y: 38 };
+    callbacks[0](created.character, { X: 1, Y: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+
+    assert.equal((created as any).device?.Name, "Kennel");
+    assert.deepEqual(mutations.entries, [20]);
 });
 
 test("KennelSystem closes and persists the door on a reacquired raw item", async () => {

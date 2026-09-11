@@ -259,6 +259,8 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
         }
 
         try {
+            this.kennelSystem.markEscaped(sender.MemberNumber);
+
             // Remove the kennel device
             await syncAppearanceMutation(
                 sender,
@@ -297,6 +299,11 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
                 "You have removed the kennel device and are now free to leave.",
             );
         } catch (error) {
+            if (
+                sender.Appearance.getItemData("ItemDevices")?.Name === "Kennel"
+            ) {
+                this.kennelSystem.clearEscape(sender.MemberNumber);
+            }
             this.logger.error("Failed to escape kennel", error, {
                 memberNumber: sender.MemberNumber,
             });

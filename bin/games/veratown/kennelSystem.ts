@@ -70,6 +70,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         number,
         { hasDevice: boolean; timestamp: number }
     >();
+    private readonly escapedCharacters = new Set<number>();
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
@@ -279,6 +280,15 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         };
     }
 
+    public markEscaped(memberNumber: number): void {
+        this.escapedCharacters.add(memberNumber);
+        this.kennelStateCache.delete(memberNumber);
+    }
+
+    public clearEscape(memberNumber: number): void {
+        this.escapedCharacters.delete(memberNumber);
+    }
+
     private onCharacterEnterKennel = async (character: API_Character) => {
         if (!this.enabled) {
             this.messageSender.whisperToCharacter(
@@ -305,6 +315,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         entryRequested = false,
     ): Promise<void> {
         const memberNumber = character.MemberNumber;
+        if (this.escapedCharacters.has(memberNumber)) {
+            if (this.isKennelPosition(character)) return;
+            this.clearEscape(memberNumber);
+        }
         const inKennel = entryRequested || this.isKennelPosition(character);
         const wearingKennel = this.isWearingKennel(character);
         const activeSession =
@@ -382,22 +396,31 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         }
 
         // Cache the successful state to prevent redundant reconciliations
+        const hasDeviceAfterReconciliation = this.isWearingKennel(character);
         this.kennelStateCache.set(memberNumber, {
-            hasDevice: wearingKennel,
+            hasDevice: hasDeviceAfterReconciliation,
             timestamp: Date.now(),
         });
 
-        this.logger.info("Kennel entry completed", {
-            memberNumber: character.MemberNumber,
-            persisted: persisted !== false,
-            appearance: "Kennel",
-            position: character.MapPos,
-        });
-        /*        const currentKennel = character.Appearance.getItemData("ItemDevices");
+        if (createdSession) {
+            this.logger.info("Kennel entry completed", {
+                memberNumber: character.MemberNumber,
+                persisted: true,
+                appearance: "Kennel",
+                position: character.MapPos,
+            });
+        } else {
+            this.logger.debug("Kennel state reconciled", {
+                memberNumber: character.MemberNumber,
+                activeSession: Boolean(activeSession),
+                hasDevice: hasDeviceAfterReconciliation,
+                position: character.MapPos,
+            });
+        }
+        const currentKennel = character.Appearance.getItemData("ItemDevices");
         if (currentKennel?.Name === "Kennel") {
             this.scheduleDoorClose(character, currentKennel);
         }
-*/
     }
 
     private onCharacterLeaveKennel = async (character: API_Character) => {
@@ -447,7 +470,6 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             character.Appearance.getItemData("ItemDevices")?.Name === "Kennel"
         );
     }
-    /*
     private scheduleDoorClose(
         character: API_Character,
         kennel: BC_AppearanceItem,
@@ -492,7 +514,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             });
         });
     }
-*/
+
     private async closeDoorAfterDelay(
         character: API_Character,
         expectedKennel: BC_AppearanceItem,
@@ -634,7 +656,6 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             { cause: lastError },
         );
     }
-
     /**
      * Remove the Kennel device if the character is wearing one
      */
@@ -646,6 +667,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             await this.mutationService?.getActiveKennelSession?.(
                 character.MemberNumber,
             );
+        if (kennel?.Name === "Kennel" || activeSession) {
+            this.markEscaped(character.MemberNumber);
+        }
         if (kennel?.Name === "Kennel") {
             await syncAppearanceMutation(
                 character,
