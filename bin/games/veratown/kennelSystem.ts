@@ -18,7 +18,6 @@ import {
     API_Chatroom,
     API_Map,
     AssetGet,
-    type BC_AppearanceItem,
 } from "bc-bot";
 import { ConnectionError } from "../../errors";
 import { wait } from "../../hub/utils";
@@ -60,10 +59,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     private boundKennelExitTrigger?: (...args: any[]) => void;
     private lastSuccessfulBindAt?: number;
     private lastSuccessfulReconciliationAt?: number;
-    private readonly pendingDoorClosures = new Map<
-        number,
-        { kennel: BC_AppearanceItem; task: Promise<void> }
-    >();
+    private readonly pendingDoorClosures = new Map<number, Promise<void>>();
     private readonly monitor =
         createIdempotentMonitor<API_Character>("KennelSystem");
     private readonly kennelStateCache = new Map<
@@ -419,7 +415,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         }
         const currentKennel = character.Appearance.getItemData("ItemDevices");
         if (currentKennel?.Name === "Kennel") {
-            this.scheduleDoorClose(character, currentKennel);
+            this.scheduleDoorClose(character);
         }
     }
 
@@ -470,13 +466,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             character.Appearance.getItemData("ItemDevices")?.Name === "Kennel"
         );
     }
-    private scheduleDoorClose(
-        character: API_Character,
-        kennel: BC_AppearanceItem,
-    ): void {
+    private scheduleDoorClose(character: API_Character): void {
         const memberNumber = character.MemberNumber;
-        const pending = this.pendingDoorClosures.get(memberNumber);
-        if (pending?.kennel === kennel) {
+        if (this.pendingDoorClosures.has(memberNumber)) {
             this.logger.debug("Door close already scheduled for kennel", {
                 memberNumber,
             });
@@ -488,8 +480,8 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             delayMs: KENNEL_DOOR_CLOSE_DELAY_MS,
         });
 
-        const task = this.closeDoorAfterDelay(character, kennel).finally(() => {
-            if (this.pendingDoorClosures.get(memberNumber)?.task === task) {
+        const task = this.closeDoorAfterDelay(character).finally(() => {
+            if (this.pendingDoorClosures.get(memberNumber) === task) {
                 this.pendingDoorClosures.delete(memberNumber);
                 this.logger.debug(
                     "Pending door close task removed from queue",
@@ -499,14 +491,16 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 );
             }
         });
-        this.pendingDoorClosures.set(memberNumber, { kennel, task });
+        this.pendingDoorClosures.set(memberNumber, task);
         void task.catch((error) => {
             const errorContext =
                 error instanceof ConnectionError ? error.context : undefined;
             this.logger.error("Kennel door close failed", error, {
                 memberNumber,
                 attempts: errorContext?.attempts,
-                kennelState: kennel.Property?.TypeRecord,
+                kennelState:
+                    character.Appearance.getItemData("ItemDevices")?.Property
+                        ?.TypeRecord,
                 isStillWearingKennel:
                     character.Appearance.getItemData("ItemDevices")?.Name ===
                     "Kennel",
@@ -515,10 +509,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         });
     }
 
-    private async closeDoorAfterDelay(
-        character: API_Character,
-        expectedKennel: BC_AppearanceItem,
-    ): Promise<void> {
+    private async closeDoorAfterDelay(character: API_Character): Promise<void> {
         const memberNumber = character.MemberNumber;
         this.logger.debug("Starting 5-second kennel door close delay", {
             memberNumber,
@@ -538,14 +529,15 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             attempt++
         ) {
             const kennel = character.Appearance.getItemData("ItemDevices");
-            if (kennel !== expectedKennel || kennel?.Name !== "Kennel") {
-                this.logger.info(
+            if (kennel?.Name !== "Kennel") {
+                this.logger.warn(
                     "Kennel door close abandoned - kennel removed or replaced",
                     {
                         memberNumber,
                         hasKennel: !!kennel,
                         kennelName: kennel?.Name,
-                        isSameReference: kennel === expectedKennel,
+                        expectedName: "Kennel",
+                        currentTypeRecord: kennel?.Property?.TypeRecord,
                     },
                 );
                 return;
@@ -557,10 +549,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     () => {
                         const currentKennelData =
                             character.Appearance.getItemData("ItemDevices");
-                        if (
-                            currentKennelData !== expectedKennel ||
-                            currentKennelData?.Name !== "Kennel"
-                        ) {
+                        if (currentKennelData?.Name !== "Kennel") {
                             return;
                         }
                         // getItemData returns raw data; InventoryGet returns
@@ -587,10 +576,12 @@ export class KennelSystem extends AbstractTileFeatureSystem {
 
                 const verifiedKennel =
                     character.Appearance.getItemData("ItemDevices");
-                if (
-                    verifiedKennel !== expectedKennel ||
-                    verifiedKennel?.Name !== "Kennel"
-                ) {
+                if (verifiedKennel?.Name !== "Kennel") {
+                    this.logger.warn("Kennel door close verification aborted", {
+                        memberNumber,
+                        currentName: verifiedKennel?.Name,
+                        currentTypeRecord: verifiedKennel?.Property?.TypeRecord,
+                    });
                     return;
                 }
                 if (

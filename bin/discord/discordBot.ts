@@ -138,7 +138,7 @@ export async function initializeDiscordBot(
         globalBotConnections = botConnections;
 
         // Set up event listeners
-        discordClient.once("ready", (): void => {
+        discordClient.once("clientReady", (): void => {
             const readyClient = discordClient as Client<true>;
             logger.info("Discord bot ready", {
                 bot_user: readyClient.user?.tag ?? "unknown",

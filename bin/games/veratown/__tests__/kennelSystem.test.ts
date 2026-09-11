@@ -333,11 +333,57 @@ test("KennelSystem abandons delayed closure when the Kennel is replaced", async 
     assert.ok(releaseDelay);
     const original = created.device;
     created.character.Appearance.AddItem({});
+    created.device.Name = "OtherDevice";
     releaseDelay();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     assert.notEqual(created.device, original);
     assert.deepEqual(created.device?.Property?.TypeRecord, { d: 0, p: 1 });
+});
+
+test("KennelSystem closes a rebuilt Kennel appearance without reference equality", async () => {
+    const created = createCharacter(22);
+    let releaseDelay!: () => void;
+    const delay = async () =>
+        new Promise<void>((resolve) => {
+            releaseDelay = resolve;
+        });
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        delay,
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    callbacks[0](created.character, { X: 3, Y: 38 });
+    for (let attempt = 0; attempt < 10 && !releaseDelay; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.ok(releaseDelay);
+
+    created.character.Appearance.AddItem({
+        Group: "ItemDevices",
+        Name: "Kennel",
+        Property: { TypeRecord: { d: 0, p: 1 } },
+    });
+    releaseDelay();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.deepEqual(created.device?.Property?.TypeRecord, { d: 1, p: 1 });
 });
 
 test("KennelSystem exits cleanly when the Kennel is removed before closure", async () => {
