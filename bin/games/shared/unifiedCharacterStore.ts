@@ -3086,7 +3086,7 @@ export class UnifiedCharacterStore {
                                             },
                                         },
                                     },
-                                    [entry],
+                                    [{ $literal: entry }],
                                 ],
                             },
                             -10,

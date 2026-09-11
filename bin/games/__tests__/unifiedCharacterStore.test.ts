@@ -145,6 +145,49 @@ test("UnifiedCharacterStore repairs only verified default malformed profiles", a
     );
 });
 
+test("UnifiedCharacterStore stores appearance audit details as literal data", async (t) => {
+    const db = getTestDb(t, "test_appearance_audit_literal");
+    if (!db) return;
+    const store = new UnifiedCharacterStore(db);
+    const memberNumber = 1358;
+
+    await store.recordVeratownAuditEntry(
+        memberNumber,
+        "appearance_mutation",
+        memberNumber,
+        {
+            before: [
+                {
+                    Group: "Cloth_CustomLuzi",
+                    Name: "CustomAsset",
+                    Property: {
+                        "": "empty-key",
+                        $custom: "dollar-key",
+                        "nested.path": "dotted-key",
+                    },
+                },
+            ],
+        },
+    );
+
+    const profile = await store.getProfile(memberNumber);
+    const entry = profile.veratown.auditLog.at(-1);
+    assert.equal(entry?.action, "appearance_mutation");
+    assert.deepEqual(entry?.details, {
+        before: [
+            {
+                Group: "Cloth_CustomLuzi",
+                Name: "CustomAsset",
+                Property: {
+                    "": "empty-key",
+                    $custom: "dollar-key",
+                    "nested.path": "dotted-key",
+                },
+            },
+        ],
+    });
+});
+
 test("UnifiedCharacterStore retains non-default malformed profiles for review", async (t) => {
     const db = getTestDb(t, "test_non_default_profile_id_repair");
     if (!db) return;
