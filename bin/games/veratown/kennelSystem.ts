@@ -371,7 +371,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                             Description: `${character} is relaxing in their Kennel`,
                         });
                         // d: 0 = door open, p: 1 = padding enabled
-                        kennel.setProperty("TypeRecord", { d: 0, p: 1 });
+                        kennel.setProperty("TypeRecord", { d: 1, p: 1 });
                     },
                     50,
                     this.stateSync,
@@ -413,10 +413,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 position: character.MapPos,
             });
         }
-        const currentKennel = character.Appearance.getItemData("ItemDevices");
+        /*         const currentKennel = character.Appearance.getItemData("ItemDevices");
         if (currentKennel?.Name === "Kennel") {
             this.scheduleDoorClose(character);
-        }
+        } */
     }
 
     private onCharacterLeaveKennel = async (character: API_Character) => {
@@ -466,7 +466,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             character.Appearance.getItemData("ItemDevices")?.Name === "Kennel"
         );
     }
-    private scheduleDoorClose(character: API_Character): void {
+    /*    private scheduleDoorClose(character: API_Character): void {
         const memberNumber = character.MemberNumber;
         if (this.pendingDoorClosures.has(memberNumber)) {
             this.logger.debug("Door close already scheduled for kennel", {
@@ -647,6 +647,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             { cause: lastError },
         );
     }
+*/
     /**
      * Remove the Kennel device if the character is wearing one
      */
