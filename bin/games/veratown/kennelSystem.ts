@@ -375,7 +375,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                             Description: `${character} is relaxing in their Kennel`,
                         });
                         // d: 0 = door open, p: 1 = padding enabled
-                        kennel.setProperty("TypeRecord", { d: 1, p: 1 });
+                        kennel.setProperty("TypeRecord", { d: 0, p: 1 });
                     },
                     50,
                     this.stateSync,
