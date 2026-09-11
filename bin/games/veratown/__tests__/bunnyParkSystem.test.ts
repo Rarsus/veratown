@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { BunnyParkSystem } from "../bunnyParkSystem";
 import {
-    BunnyParkSystem,
+    BunnyPunishmentService,
     validateBunnyRestraintConfig,
-} from "../bunnyParkSystem";
+} from "../bunnyPunishmentService";
 import { BUNNY_POSITIONS, BUNNY_RESTRAINT_CONFIGS } from "../veratownConfig";
 import { getAppearanceMutationContext } from "../shared/appearanceSync";
 
@@ -170,6 +171,34 @@ function createMessageConnection(character: any) {
     };
 }
 
+function createBunnySystem(
+    connection: any,
+    stateSync: (
+        character: any,
+        context?: any,
+    ) => Promise<void> = async () => {},
+    random: () => number = Math.random,
+    syncDelay = 100,
+    recordArtifact: (artifact: any) => Promise<void> = async () => {},
+) {
+    const repository = {
+        recordArtifact,
+        incrementCount: async () => {},
+        recordAudit: async () => {},
+    };
+    const punishmentService = new BunnyPunishmentService(
+        connection as any,
+        repository,
+        stateSync,
+        random,
+        syncDelay,
+    );
+    const system = new BunnyParkSystem(connection as any, punishmentService);
+    (system as any).applyPunishment = (character: any, config: any) =>
+        punishmentService.punish(character, config);
+    return system;
+}
+
 function deterministicRandom(index: number): () => number {
     return () => (index + 0.01) / BUNNY_RESTRAINT_CONFIGS.length;
 }
@@ -186,7 +215,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         const persisted: any[] = [];
         let mutationContext: any;
         let ambientContext: unknown;
-        const system = new BunnyParkSystem(
+        const system = createBunnySystem(
             createMessageConnection(created.character) as any,
             async (character, context) => {
                 persisted.push(character.Appearance.MakeAppearanceBundle());
@@ -252,7 +281,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
 
 test("bunny punishment sends the complete bundle for remote-character persistence", async () => {
     const created = createCharacter(19);
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -285,7 +314,7 @@ test("bunny punishment sends the complete bundle for remote-character persistenc
 test("bunny punishment records a durable sign artifact", async () => {
     const created = createCharacter(18);
     let artifact: any;
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -327,7 +356,7 @@ test("bunny punishment restores a sign omitted after the yoke was retained", asy
         })),
     });
     const persisted: any[] = [];
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async (character) => {
             persisted.push(character.Appearance.MakeAppearanceBundle());
@@ -360,7 +389,7 @@ test("bunny punishment restores a sign omitted after the yoke was retained", asy
 test("bunny punishment fails when the required sign is lost", async () => {
     const created = createCharacter(17, { dropSignOnBundleCall: 4 });
     const persisted: any[] = [];
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async (character) => {
             persisted.push(character.Appearance.MakeAppearanceBundle());
@@ -384,7 +413,7 @@ test("bunny punishment fails when the required sign is lost", async () => {
 test("bunny punishment fails when required sign synchronization removes the sign", async () => {
     const created = createCharacter(16);
     let syncCount = 0;
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async (character) => {
             syncCount += 1;
@@ -411,7 +440,7 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
         failOn: "ItemArms/HeavyYoke",
         initialAppearance: original,
     });
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -467,7 +496,7 @@ test("bunny punishment continues when a restraint is silently omitted", async ()
     const created = createCharacter(20, {
         omitOn: "ItemArms/HeavyYoke",
     });
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -499,7 +528,7 @@ test("bunny punishment continues when a restraint is silently omitted", async ()
 test("bunny punishment keeps restraints when persistence fails transiently", async () => {
     const created = createCharacter(10);
     let syncAttempts = 0;
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {
             syncAttempts += 1;
@@ -531,7 +560,7 @@ test("bunny punishment keeps restraints when persistence fails transiently", asy
 test("bunny punishment retries after transient persistence failure", async () => {
     const created = createCharacter(14);
     let syncAttempts = 0;
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {
             syncAttempts += 1;
@@ -561,7 +590,7 @@ test("bunny punishment retries after transient persistence failure", async () =>
 
 test("bunny punishment reports permission failures separately", async () => {
     const created = createCharacter(11, { accessible: false });
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -581,7 +610,7 @@ test("bunny punishment reports permission failures separately", async () => {
 
 test("invalid bunny configuration fails before announcing punishment", async () => {
     const created = createCharacter(13);
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -608,7 +637,7 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
     const created = createCharacter(12);
     const messages: string[] = [];
     let syncCount = 0;
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {
             syncCount += 1;
@@ -633,7 +662,7 @@ test("duplicate bunny tile events do not reapply punishment", async () => {
 
 test("bunny punishment classifies an already complete appearance as skipped", async () => {
     const created = createCharacter(21);
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         createMessageConnection(created.character) as any,
         async () => {},
         deterministicRandom(0),
@@ -660,7 +689,7 @@ test("configured bunny locations trigger appearance and persistence updates", as
     const connector = createConnector(callbacks);
     const persisted = new Set<number>();
     const configuredPositions = [...BUNNY_POSITIONS, { X: 32, Y: 25 }];
-    const system = new BunnyParkSystem(
+    const system = createBunnySystem(
         connector as any,
         async (character) => {
             persisted.add(character.MemberNumber);

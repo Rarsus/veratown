@@ -59,6 +59,7 @@ import {
     getBunnySignState,
 } from "../veratown/shared/appearanceLifecycle";
 import {
+    asGameCounter,
     validateCharacterProfileTypes,
     createCasinoState,
     createDareState,
@@ -2407,6 +2408,30 @@ export class UnifiedCharacterStore {
             correlationId: artifact.operationId,
             deliveryId: `bunny-sign-added:${artifact.operationId}`,
         });
+    }
+
+    public async incrementBunnyPunishmentCount(
+        memberNumber: number,
+    ): Promise<void> {
+        this.assertMemberNumber(memberNumber);
+        const now = asTimestamp(Date.now());
+        await this.getProfile(memberNumber);
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $inc: {
+                    "veratown.bunnyPunishmentCount": asGameCounter(1),
+                    "veratown.version": asVersion(1),
+                    version: asVersion(1),
+                },
+                $set: {
+                    "veratown.updatedAt": now,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                },
+            },
+        );
     }
 
     public async cleanupBunnyPunishment(

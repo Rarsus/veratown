@@ -240,6 +240,7 @@ export interface VeratownState {
     currentRestraints: CurrentRestraint[];
     releaseParoleState?: ReleaseParoleState;
     bunnyPunishmentArtifact?: BunnyPunishmentArtifact;
+    bunnyPunishmentCount: number;
     roleplayFlags: RoleplayFlags;
     auditLog: AuditLogEntry[];
     auditSummary?: AuditSummary;

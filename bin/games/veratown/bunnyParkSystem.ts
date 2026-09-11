@@ -13,3 +13,5 @@
  */
 
 export * from "./bunnyParkSystemImplementation";
+export * from "./bunnyPunishmentRepository";
+export * from "./bunnyPunishmentService";

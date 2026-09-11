@@ -188,6 +188,21 @@ test("UnifiedCharacterStore stores appearance audit details as literal data", as
     });
 });
 
+test("UnifiedCharacterStore increments bunny punishment count", async (t) => {
+    const db = getTestDb(t, "test_bunny_punishment_count");
+    if (!db) return;
+    const store = new UnifiedCharacterStore(db);
+    const memberNumber = 1359;
+
+    await store.incrementBunnyPunishmentCount(memberNumber);
+    await store.incrementBunnyPunishmentCount(memberNumber);
+
+    assert.equal(
+        (await store.getProfile(memberNumber)).veratown.bunnyPunishmentCount,
+        2,
+    );
+});
+
 test("UnifiedCharacterStore retains non-default malformed profiles for review", async (t) => {
     const db = getTestDb(t, "test_non_default_profile_id_repair");
     if (!db) return;

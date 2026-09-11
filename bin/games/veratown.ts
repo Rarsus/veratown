@@ -38,6 +38,8 @@ import { KennelSystem } from "./veratown/kennelSystem";
 import { ShowerSystem } from "./veratown/showerSystem";
 import { BedSystem } from "./veratown/bedSystem";
 import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
+import { BunnyPunishmentService } from "./veratown/bunnyPunishmentService";
+import { UnifiedBunnyPunishmentRepository } from "./veratown/bunnyPunishmentRepository";
 import { WindowSystem } from "./veratown/windowSystem";
 import { TrashcanSystem } from "./veratown/trashcanSystem";
 import { KeypadDoorSystem } from "./veratown/keypadDoorSystemRefactored";
@@ -496,34 +498,33 @@ export class Veratown {
                             .then(() => undefined) ?? Promise.resolve(),
                 ),
         );
-        this.bunnyParkSystem = this.initFeature(
-            () =>
-                new BunnyParkSystem(
-                    this.conn,
-                    (character, context) =>
-                        this.liveCharacterStateSync
-                            ?.syncCharacter(
-                                character,
-                                character.MapPos,
-                                false,
-                                context,
-                            )
-                            .then(() => undefined) ?? Promise.resolve(),
-                    undefined,
-                    undefined,
-                    async (artifact) =>
-                        this.unifiedCharacterStore?.recordBunnyPunishmentArtifact(
-                            artifact,
-                        ) ?? Promise.resolve(),
-                    this.container.has(
-                        DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-                    )
-                        ? this.container.get<GameStateMutationService>(
-                              DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-                          )
-                        : undefined,
-                ),
-        );
+        this.bunnyParkSystem = this.initFeature(() => {
+            const mutationService = this.container.has(
+                DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+            )
+                ? this.container.get<GameStateMutationService>(
+                      DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
+                  )
+                : undefined;
+            const punishmentRepository = new UnifiedBunnyPunishmentRepository(
+                this.unifiedCharacterStore!,
+                mutationService,
+            );
+            const punishmentService = new BunnyPunishmentService(
+                this.conn,
+                punishmentRepository,
+                (character, context) =>
+                    this.liveCharacterStateSync
+                        ?.syncCharacter(
+                            character,
+                            character.MapPos,
+                            false,
+                            context,
+                        )
+                        .then(() => undefined) ?? Promise.resolve(),
+            );
+            return new BunnyParkSystem(this.conn, punishmentService);
+        });
         this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn),

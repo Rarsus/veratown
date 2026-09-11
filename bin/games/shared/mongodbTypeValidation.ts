@@ -334,6 +334,7 @@ export function createVeratownState(
         totalTimeInKennels: 0,
         currentRestraints: [],
         bunnyPunishmentArtifact: undefined,
+        bunnyPunishmentCount: 0,
         roleplayFlags: {
             lastFlagChange: now,
         },

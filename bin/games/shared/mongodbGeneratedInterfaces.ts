@@ -81,6 +81,8 @@ export interface VeratownState {
     totalTimeInKennels: number;
     /** Active restraints (MongoDB type: array) */
     currentRestraints: unknown[];
+    /** Number of successfully applied bunny punishments (MongoDB type: int) */
+    bunnyPunishmentCount: number;
     /** Roleplay state flags (MongoDB type: object) */
     roleplayFlags: Record<string, unknown>;
     /** Action audit trail (MongoDB type: array) */
