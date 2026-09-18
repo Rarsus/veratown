@@ -14,6 +14,41 @@
 
 import { ChatRoomMapViewGetObjectAtPos, ChatRoomMapViewGetConnectivityDirections, CurrentTime } from "./defs.ts";
 
+export type MapDirection = "" | "North" | "South" | "East" | "West";
+
+export interface MapElement {
+	ID: number;
+	Type: string;
+	Style: string;
+	Rotation?: number;
+	Top?: number;
+	Left?: number;
+	Width?: number;
+	Height?: number;
+	OccupiedStyle?: string;
+	AssetName?: string;
+	AssetGroup?: AssetGroupItemName;
+	Unique?: boolean;
+	Exit?: boolean;
+	CanEnter?: (direction: MapDirection) => boolean;
+	OnEnter?: () => void;
+	BlockVision?: boolean;
+	BlockHearing?: boolean;
+	Transparency?: number;
+	TransparencyCutoutHeight?: number;
+	CanPlaceOnFloors?: boolean;
+	CanPlaceOnWalls?: boolean;
+	CanPlaceInWalls?: boolean;
+	IsVisible?: () => boolean;
+	BuildImageName?: (x: number, y: number) => string;
+}
+
+export type MapTile = MapElement & {
+	Type: "Floor" | "FloorExterior" | "Wall" | "Water";
+};
+
+export type MapObject = MapElement;
+
 // dummy definitions so the below can be copied from BC as verbatim as possible
 const Player = {
 	Title: "",
@@ -31,7 +66,7 @@ const Player = {
 const ChatRoomPlayerIsAdmin = () => false;
 
 // Taken from BC (with just conversion into TS syntax)
-export const ChatRoomMapViewTileList: ChatRoomMapTile[] = [
+export const ChatRoomMapViewTileList: MapTile[] = [
 	{ ID: 100, Type: "Floor", Style: "OakWood" },
 	{ ID: 110, Type: "Floor", Style: "Stone" },
 	{ ID: 115, Type: "Floor", Style: "Pavement" },
@@ -60,6 +95,70 @@ export const ChatRoomMapViewTileList: ChatRoomMapTile[] = [
 	{ ID: 270, Type: "FloorExterior", Style: "ScatteredLeavesDirt" },
 	{ ID: 280, Type: "FloorExterior", Style: "ScatteredLeavesThick" },
 
+	// R132 color variants and additional floor materials
+	{ ID: 101, Type: "Floor", Style: "WoodWhite" },
+	{ ID: 102, Type: "Floor", Style: "WoodPine" },
+	{ ID: 103, Type: "Floor", Style: "WoodMaple" },
+	{ ID: 104, Type: "Floor", Style: "WoodAcacia" },
+	{ ID: 105, Type: "Floor", Style: "WoodMahogany" },
+	{ ID: 106, Type: "Floor", Style: "WoodMangrove" },
+	{ ID: 107, Type: "Floor", Style: "WoodCherry" },
+	{ ID: 108, Type: "Floor", Style: "Tatami" },
+	{ ID: 500, Type: "Floor", Style: "PaddedBlack" },
+	{ ID: 501, Type: "Floor", Style: "PaddedGray" },
+	{ ID: 502, Type: "Floor", Style: "PaddedBlue" },
+	{ ID: 503, Type: "Floor", Style: "PaddedGreen" },
+	{ ID: 504, Type: "Floor", Style: "PaddedRed" },
+	{ ID: 505, Type: "Floor", Style: "PaddedOrange" },
+	{ ID: 506, Type: "Floor", Style: "PaddedYellow" },
+	{ ID: 507, Type: "Floor", Style: "PaddedLightBlue" },
+	{ ID: 508, Type: "Floor", Style: "PaddedPink" },
+	{ ID: 509, Type: "Floor", Style: "PaddedPurple" },
+	{ ID: 510, Type: "Floor", Style: "PaddedBrown" },
+	{ ID: 520, Type: "Floor", Style: "LatexFloorGray" },
+	{ ID: 521, Type: "Floor", Style: "LatexFloorBlue" },
+	{ ID: 522, Type: "Floor", Style: "LatexFloorGreen" },
+	{ ID: 523, Type: "Floor", Style: "LatexFloorRed" },
+	{ ID: 524, Type: "Floor", Style: "LatexFloorOrange" },
+	{ ID: 525, Type: "Floor", Style: "LatexFloorYellow" },
+	{ ID: 526, Type: "Floor", Style: "LatexFloorLightBlue" },
+	{ ID: 527, Type: "Floor", Style: "LatexFloorPink" },
+	{ ID: 528, Type: "Floor", Style: "LatexFloorPurple" },
+	{ ID: 529, Type: "Floor", Style: "LatexFloorBrown" },
+	{ ID: 530, Type: "Floor", Style: "LatexFloorWhite" },
+	{ ID: 540, Type: "Floor", Style: "TileGray" },
+	{ ID: 541, Type: "Floor", Style: "TileBlue" },
+	{ ID: 542, Type: "Floor", Style: "TileGreen" },
+	{ ID: 543, Type: "Floor", Style: "TileRed" },
+	{ ID: 544, Type: "Floor", Style: "TileOrange" },
+	{ ID: 545, Type: "Floor", Style: "TileYellow" },
+	{ ID: 546, Type: "Floor", Style: "TileLightBlue" },
+	{ ID: 547, Type: "Floor", Style: "TilePink" },
+	{ ID: 548, Type: "Floor", Style: "TilePurple" },
+	{ ID: 549, Type: "Floor", Style: "TileBrown" },
+	{ ID: 550, Type: "Floor", Style: "TileBlack" },
+	{ ID: 560, Type: "Floor", Style: "CarpetGreen" },
+	{ ID: 561, Type: "Floor", Style: "CarpetRed2" },
+	{ ID: 562, Type: "Floor", Style: "CarpetOrange" },
+	{ ID: 563, Type: "Floor", Style: "CarpetYellow" },
+	{ ID: 564, Type: "Floor", Style: "CarpetLightBlue" },
+	{ ID: 565, Type: "Floor", Style: "CarpetPurple" },
+	{ ID: 566, Type: "Floor", Style: "CarpetBrown" },
+	{ ID: 567, Type: "Floor", Style: "CarpetBlack" },
+	{ ID: 568, Type: "Floor", Style: "CarpetGray" },
+	{ ID: 570, Type: "Floor", Style: "CheckerCarpetWhite" },
+	{ ID: 571, Type: "Floor", Style: "CheckerCarpetGray" },
+	{ ID: 572, Type: "Floor", Style: "CheckerCarpetBlue" },
+	{ ID: 573, Type: "Floor", Style: "CheckerCarpetGreen" },
+	{ ID: 574, Type: "Floor", Style: "CheckerCarpetRed" },
+	{ ID: 575, Type: "Floor", Style: "CheckerCarpetOrange" },
+	{ ID: 576, Type: "Floor", Style: "CheckerCarpetYellow" },
+	{ ID: 577, Type: "Floor", Style: "CheckerCarpetLightBlue" },
+	{ ID: 578, Type: "Floor", Style: "CheckerCarpetPink" },
+	{ ID: 579, Type: "Floor", Style: "CheckerCarpetPurple" },
+	{ ID: 580, Type: "Floor", Style: "CheckerCarpetBrown" },
+	{ ID: 581, Type: "Floor", Style: "CheckerCarpetBlack" },
+
 	{ ID: 1000, Type: "Wall", Style: "MixedWood", BlockVision: true, CanEnter: () => false, },
 	{ ID: 1001, Type: "Wall", Style: "CedarWood", BlockVision: true, CanEnter: () => false, },
 	{ ID: 1010, Type: "Wall", Style: "Log", BlockVision: true, CanEnter: () => false, },
@@ -78,6 +177,44 @@ export const ChatRoomMapViewTileList: ChatRoomMapTile[] = [
 	{ ID: 1203, Type: "Wall", Style: "PipePurple", BlockVision: true, CanEnter: () => false, },
 	{ ID: 1204, Type: "Wall", Style: "SteelBlack", BlockVision: true, CanEnter: () => false, },
 	{ ID: 1205, Type: "Wall", Style: "SteelGary", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1500, Type: "Wall", Style: "WoodPine", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1501, Type: "Wall", Style: "WoodMaple", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1502, Type: "Wall", Style: "WoodAcacia", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1503, Type: "Wall", Style: "WoodMahogany", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1504, Type: "Wall", Style: "WoodMangrove", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1505, Type: "Wall", Style: "WoodCherry", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1506, Type: "Wall", Style: "WoodWhite", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1507, Type: "Wall", Style: "WoodOak", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1510, Type: "Wall", Style: "LogPine", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1511, Type: "Wall", Style: "LogMaple", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1512, Type: "Wall", Style: "LogAcacia", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1513, Type: "Wall", Style: "LogMahogany", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1514, Type: "Wall", Style: "LogMangrove", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1515, Type: "Wall", Style: "LogCherry", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1516, Type: "Wall", Style: "LogWhite", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1517, Type: "Wall", Style: "LogOak", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1530, Type: "Wall", Style: "PaddedBlack", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1531, Type: "Wall", Style: "PaddedGray", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1532, Type: "Wall", Style: "PaddedBlue", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1533, Type: "Wall", Style: "PaddedGreen", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1534, Type: "Wall", Style: "PaddedRed", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1535, Type: "Wall", Style: "PaddedYellow", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1536, Type: "Wall", Style: "PaddedBrown", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1539, Type: "Wall", Style: "PaddedOrange", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1540, Type: "Wall", Style: "PaddedPurple", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1541, Type: "Wall", Style: "PaddedPink", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1542, Type: "Wall", Style: "PaddedLightBlue", BlockVision: true, BlockHearing: true, CanEnter: () => false, },
+	{ ID: 1550, Type: "Wall", Style: "TileGray", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1551, Type: "Wall", Style: "TileBlue", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1552, Type: "Wall", Style: "TileGreen", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1553, Type: "Wall", Style: "TileRed", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1554, Type: "Wall", Style: "TileYellow", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1555, Type: "Wall", Style: "TileBrown", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1559, Type: "Wall", Style: "TileOrange", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1560, Type: "Wall", Style: "TilePurple", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1561, Type: "Wall", Style: "TilePink", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1562, Type: "Wall", Style: "TileLightBlue", BlockVision: true, CanEnter: () => false, },
+	{ ID: 1563, Type: "Wall", Style: "TileBlack", BlockVision: true, CanEnter: () => false, },
 
 	{ ID: 2000, Type: "Water", Style: "Pool", Transparency: 0.5, TransparencyCutoutHeight: 0.45 },
 	{ ID: 2010, Type: "Water", Style: "Sea", Transparency: 0.5, TransparencyCutoutHeight: 0.45 },
@@ -90,7 +227,7 @@ export const ChatRoomMapViewTileList: ChatRoomMapTile[] = [
 	{ ID: 2090, Type: "Water", Style: "Lava", Transparency: 0.9, TransparencyCutoutHeight: 0.3, CanEnter: () => Player.Title === "Dragon"},
 ];
 
-export const ChatRoomMapViewObjectList: ChatRoomMapObject[] = [
+export const ChatRoomMapViewObjectList: MapObject[] = [
 
 	{ ID: 100, Type: "FloorDecoration", Style: "Blank" },
 	{ ID: 110, Type: "FloorDecoration", Style: "EntryFlag", Top: -0.125, Exit: true, Unique: true },
@@ -450,6 +587,9 @@ export const ChatRoomMapViewObjectList: ChatRoomMapObject[] = [
 	{ ID: 1090, Type: "FloorItem", Style: "Pole", Top: -0.85, Height: 1.8, AssetName: "Pole", AssetGroup: "ItemDevices" },
 	{ ID: 1095, Type: "FloorItem", Style: "MedicalBed", Top: -0.82, Left: 0.05, Height: 1.8, Width: 0.90, AssetName: "MedicalBed", AssetGroup: "ItemDevices" },
 	{ ID: 1096, Type: "FloorItem", Style: "FuturisticCrate", Top: -0.95, Height: 2, AssetName: "FuturisticCrate", AssetGroup: "ItemDevices" },
+	{ ID: 1097, Type: "ABDL", Style: "HighChair", Top: -0.95, Height: 2, AssetName: "Highchair", AssetGroup: "ItemDevices" },
+	{ ID: 1098, Type: "ABDL", Style: "Crib", Top: -0.95, Height: 2, AssetName: "Crib", AssetGroup: "ItemDevices" },
+	{ ID: 1099, Type: "ABDL", Style: "PinkCrib", Top: -0.95, Height: 2, AssetName: "Crib", AssetGroup: "ItemDevices" },
 
 	{ ID: 1100, Type: "FloorNumber", Style: "Blank" },
 	{ ID: 1110, Type: "FloorNumber", Style: "Number0" },
@@ -501,6 +641,10 @@ export const ChatRoomMapViewObjectList: ChatRoomMapObject[] = [
 	{ ID: 1307, Type: "FloorIcon", Style: "IconArrowDown" },
 	{ ID: 1308, Type: "FloorIcon", Style: "IconArrowLeft" },
 	{ ID: 1309, Type: "FloorIcon", Style: "IconArrowRight" },
+	{ ID: 1399, Type: "ABDL", Style: "Blank" },
+	{ ID: 1400, Type: "ABDL", Style: "PinkPotty", AssetName: "Potty", AssetGroup: "ItemDevices" },
+	{ ID: 1401, Type: "ABDL", Style: "BluePotty", AssetName: "Potty", AssetGroup: "ItemDevices" },
+	{ ID: 1402, Type: "ABDL", Style: "ChangingTable", Top: -1, Height: 2, AssetName: "ChangingTable", AssetGroup: "ItemDevices" },
 
 	{ ID: 2000, Type: "FloorObstacle", Style: "Blank", CanEnter: () => false, },
 	{ ID: 2004, Type: "FloorObstacle", Style: "Stalagmite", Top: -0.125, Height: 1, CanEnter: () => false, },
@@ -550,6 +694,12 @@ export const ChatRoomMapViewObjectList: ChatRoomMapObject[] = [
 	{ ID: 3000, Type: "WallDecoration", Style: "Blank" },
 	{ ID: 3010, Type: "WallDecoration", Style: "Painting" },
 	{ ID: 3020, Type: "WallDecoration", Style: "Mirror" },
+	{ ID: 3021, Type: "Bathroom", Style: "BlueBathroomMat" },
+	{ ID: 3022, Type: "Bathroom", Style: "GreenBathroomMat" },
+	{ ID: 3023, Type: "Bathroom", Style: "PinkBathroomMat" },
+	{ ID: 3024, Type: "Bathroom", Style: "Sink" },
+	{ ID: 3025, Type: "Bathroom", Style: "ToiletPaper" },
+	{ ID: 3026, Type: "Bathroom", Style: "Bathtub" },
 	{
 		ID: 3030,
 		Type: "WallDecoration",
@@ -583,6 +733,29 @@ export const ChatRoomMapViewObjectList: ChatRoomMapObject[] = [
 	{ ID: 3301, Type: "WallDecoration", Style: "MonitorSmall" },
 	{ ID: 3302, Type: "WallDecoration", Style: "MonitorBigLeft" },
 	{ ID: 3303, Type: "WallDecoration", Style: "MonitorBigRight" },
+	{ ID: 3201, Type: "School", Style: "Clock", Top: 0.25, Left: 0.13, Height: 0.75, Width: 0.75 },
+	{ ID: 3499, Type: "Functional", Style: "Blank" },
+	{ ID: 3500, Type: "Functional", Style: "ConveyorBelt1" },
+	{ ID: 3501, Type: "Functional", Style: "ConveyorBelt1", Rotation: 180 },
+	{ ID: 3502, Type: "Functional", Style: "ConveyorBelt1", Rotation: 270 },
+	{ ID: 3503, Type: "Functional", Style: "ConveyorBelt1", Rotation: 90 },
+	{ ID: 3510, Type: "Functional", Style: "ConveyorBeltFast1" },
+	{ ID: 3511, Type: "Functional", Style: "ConveyorBeltFast1", Rotation: 180 },
+	{ ID: 3512, Type: "Functional", Style: "ConveyorBeltFast1", Rotation: 270 },
+	{ ID: 3513, Type: "Functional", Style: "ConveyorBeltFast1", Rotation: 90 },
+	{ ID: 4500, Type: "FloorFoamTiles", Style: "Blank" },
+	{ ID: 4501, Type: "FloorFoamTiles", Style: "PlayTileWhite" },
+	{ ID: 4502, Type: "FloorFoamTiles", Style: "PlayTileGray" },
+	{ ID: 4503, Type: "FloorFoamTiles", Style: "PlayTileBlack" },
+	{ ID: 4504, Type: "FloorFoamTiles", Style: "PlayTileBlue" },
+	{ ID: 4505, Type: "FloorFoamTiles", Style: "PlayTileGreen" },
+	{ ID: 4506, Type: "FloorFoamTiles", Style: "PlayTileRed" },
+	{ ID: 4507, Type: "FloorFoamTiles", Style: "PlayTileYellow" },
+	{ ID: 4508, Type: "FloorFoamTiles", Style: "PlayTileOrange" },
+	{ ID: 4509, Type: "FloorFoamTiles", Style: "PlayTilePurple" },
+	{ ID: 4510, Type: "FloorFoamTiles", Style: "PlayTilePink" },
+	{ ID: 4511, Type: "FloorFoamTiles", Style: "PlayTileBrown" },
+	{ ID: 4512, Type: "FloorFoamTiles", Style: "PlayTileLightBlue" },
 
 
 	{ ID: 4000, Type: "WallPath", Style: "Blank", CanEnter: function() { return false; } },
@@ -593,8 +766,8 @@ export const ChatRoomMapViewObjectList: ChatRoomMapObject[] = [
 	{ ID: 4014, Type: "WallPath", Style: "WoodLockedSilver", OccupiedStyle: "WoodOpen", Top: -1, Height: 2, CanEnter: function() { return Player.MapData.PrivateState.HasKeySilver == true; } },
 	{ ID: 4015, Type: "WallPath", Style: "WoodLockedGold", OccupiedStyle: "WoodOpen", Top: -1, Height: 2, CanEnter: function() { return Player.MapData.PrivateState.HasKeyGold == true; } },
 	{ ID: 4020, Type: "WallPath", Style: "Metal", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function() { return true; } },
-	{ ID: 4021, Type: "WallPath", Style: "MetalUp", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function(Direction) { return Direction === "U" || Direction === "";  } },
-	{ ID: 4022, Type: "WallPath", Style: "MetalDown", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function (Direction) { return Direction === "D" || Direction === ""; } },
+	{ ID: 4021, Type: "WallPath", Style: "MetalUp", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function(Direction) { return Direction === "North" || Direction === "";  } },
+	{ ID: 4022, Type: "WallPath", Style: "MetalDown", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function (Direction) { return Direction === "South" || Direction === ""; } },
 	{ ID: 4023, Type: "WallPath", Style: "MetalLockedBronze", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function () { return Player.MapData.PrivateState.HasKeyBronze == true; } },
 	{ ID: 4024, Type: "WallPath", Style: "MetalLockedSilver", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function () { return Player.MapData.PrivateState.HasKeySilver == true; } },
 	{ ID: 4025, Type: "WallPath", Style: "MetalLockedGold", OccupiedStyle: "MetalOpen", Top: -1, Height: 2, CanEnter: function () { return Player.MapData.PrivateState.HasKeyGold == true; } },

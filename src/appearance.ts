@@ -15,7 +15,11 @@
 import { API_Character, API_Character_Data } from "./apiCharacter.ts";
 import { isBind, isBody, isClothing, isCosplay } from "./assetHelpers.ts";
 import { wait } from "./util/wait.ts";
-import { API_AppearanceItem, BC_AppearanceItem } from "./item.ts";
+import {
+    API_AppearanceItem,
+    BC_AppearanceItem,
+    toAppearanceBundle,
+} from "./item.ts";
 import lzString from "lz-string";
 
 /*
@@ -163,7 +167,7 @@ export class AppearanceType {
     }
 
     public getAppearanceData(): BC_AppearanceItem[] {
-        return this.data;
+        return this.data.map(toAppearanceBundle);
     }
 
     public AddItem(desc: BC_AppearanceItem): API_AppearanceItem {

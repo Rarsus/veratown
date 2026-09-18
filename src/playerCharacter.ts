@@ -66,7 +66,9 @@ export class API_PlayerCharacter extends API_Character {
 
     public sendAppearanceUpdate(): void {
         super.sendAppearanceUpdate();
-        this.connection.accountUpdate({ Appearance: this.data.Appearance });
+        this.connection.accountUpdate({
+            Appearance: this.Appearance.getAppearanceData(),
+        });
     }
 
     get friendList(): number[] {

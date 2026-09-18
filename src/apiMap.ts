@@ -18,6 +18,8 @@ import { API_Chatroom_Data } from "./apiChatroom.ts";
 import { API_Connector } from "./apiConnector.ts";
 import { EventEmitter } from "node:events";
 import {
+    MapObject,
+    MapTile,
     ChatRoomMapViewObjectList,
     ChatRoomMapViewTileList,
 } from "./bcdata/ChatRoomMap.ts";
@@ -28,7 +30,7 @@ export interface MapRegion {
 }
 
 // https://github.com/FriendsOfBC/ropeybot/issues/4
-function mapTileByName(name: string, type?: string): ChatRoomMapTile | null {
+function mapTileByName(name: string, type?: string): MapTile | null {
     return (
         ChatRoomMapViewTileList.find(
             (tile) =>
@@ -38,7 +40,7 @@ function mapTileByName(name: string, type?: string): ChatRoomMapTile | null {
     );
 }
 
-function mapObjectByName(name: string): ChatRoomMapObject | null {
+function mapObjectByName(name: string): MapObject | null {
     return (
         ChatRoomMapViewObjectList.find((tile) => tile.Style === name) ?? null
     );

@@ -22,6 +22,31 @@ import { AssetFemale3DCGExtended } from "./bcdata/Female3DCGExtended.ts";
 
 export type BC_AppearanceItem = ServerItemBundle;
 
+/**
+ * Convert local appearance data to the compact form expected by BC's server.
+ * Default values must be omitted rather than sent as literal placeholders.
+ */
+export function toAppearanceBundle(item: BC_AppearanceItem): BC_AppearanceItem {
+    const bundle = { ...item };
+    const asset = getAssetDef(item);
+    const defaultColor = asset?.DefaultColor;
+
+    if (
+        bundle.Color === undefined ||
+        bundle.Color === "Default" ||
+        (Array.isArray(bundle.Color) &&
+            Array.isArray(defaultColor) &&
+            bundle.Color.length === defaultColor.length &&
+            bundle.Color.every((color, index) => color === defaultColor[index]))
+    ) {
+        delete bundle.Color;
+    }
+
+    if (bundle.Difficulty === 0) delete bundle.Difficulty;
+
+    return bundle;
+}
+
 interface PartialCraftingData {
     Name: string;
     Description: string;
