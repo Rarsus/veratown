@@ -491,7 +491,7 @@ test("CageSystem reports when containment is unavailable", async () => {
     );
 });
 
-test("CageSystem blocks entry before persistence when appearance permission is denied", async () => {
+test("CageSystem allows a targeted item when full wardrobe access is disabled", async () => {
     const timer = new FakeTimer();
     const mutations = createMutationService();
     const created = createCharacter(251024, {
@@ -507,17 +507,14 @@ test("CageSystem blocks entry before persistence when appearance permission is d
 
     const pending = (system as any).onCharacterEnterCage(created.character);
     await timer.advance(100);
-    await pending;
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
-    assert.deepEqual(mutations.entries, []);
+    assert.deepEqual(mutations.entries, [251024]);
     assert.equal(
-        created.character.Appearance.getItemData("ItemDevices"),
-        undefined,
+        created.character.Appearance.getItemData("ItemDevices")?.Name,
+        "FuturisticCrate",
     );
-    assert.match(
-        created.messages.at(-1) ?? "",
-        /not enabled permission for others to alter your whole appearance/,
-    );
+    void pending;
 });
 
 test("CageSystem blocks entry before persistence when item permission is denied", async () => {

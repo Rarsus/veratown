@@ -40,12 +40,16 @@ let mutationSequence = 0;
 
 export async function preflightAppearanceMutation(
     character: API_Character,
+    options: { requireFullWardrobeAccess?: boolean } = {},
 ): Promise<boolean> {
     if (character.MemberNumber === character.connection.Player.MemberNumber) {
         return true;
     }
 
-    if (!character.allowFullWardrobeAccess) {
+    if (
+        options.requireFullWardrobeAccess !== false &&
+        !character.allowFullWardrobeAccess
+    ) {
         logger.warn("Appearance mutation blocked by wardrobe permission", {
             memberNumber: character.MemberNumber,
             reason: "AllowFullWardrobeAccess is disabled",
@@ -183,11 +187,12 @@ export async function syncAppearanceMutation(
         deferStateSync?: boolean;
         exclusiveContextHandoff?: boolean;
         skipAuthorizationPreflight?: boolean;
+        requireFullWardrobeAccess?: boolean;
     },
 ): Promise<boolean> {
     if (
         !options?.skipAuthorizationPreflight &&
-        !(await preflightAppearanceMutation(character))
+        !(await preflightAppearanceMutation(character, options))
     ) {
         return false;
     }

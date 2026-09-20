@@ -587,7 +587,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
             await this.timer.wait(100);
             if (!stillInCage()) return;
 
-            if (!(await preflightAppearanceMutation(character))) return;
+            if (
+                !(await preflightAppearanceMutation(character, {
+                    requireFullWardrobeAccess: false,
+                }))
+            )
+                return;
             if (!stillInCage()) return;
 
             const posKey = this.getTileKey(cagePos.X, cagePos.Y);
@@ -664,7 +669,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     },
                     50,
                     this.stateSync,
-                    { skipAuthorizationPreflight: true },
+                    {
+                        skipAuthorizationPreflight: true,
+                        requireFullWardrobeAccess: false,
+                    },
                 );
             }
             this.cagedCharacters.set(character.MemberNumber, {
