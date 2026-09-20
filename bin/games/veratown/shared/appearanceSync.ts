@@ -50,42 +50,33 @@ export async function preflightAppearanceMutation(
         options.requireFullWardrobeAccess !== false &&
         !character.allowFullWardrobeAccess
     ) {
-        logger.warn("Appearance mutation blocked by wardrobe permission", {
-            memberNumber: character.MemberNumber,
-            reason: "AllowFullWardrobeAccess is disabled",
-        });
-        character.Tell(
-            "Whisper",
-            "(This action is unavailable because you have not enabled permission for others to alter your whole appearance.)",
+        logger.warn(
+            "Appearance mutation proceeding without wardrobe permission",
+            {
+                memberNumber: character.MemberNumber,
+                reason: "AllowFullWardrobeAccess is disabled",
+            },
         );
-        return false;
     }
 
     let allowItem: boolean;
     try {
         allowItem = await character.GetAllowItem();
     } catch (error) {
-        logger.error(
-            "Appearance mutation blocked because item permission could not be verified",
-            error,
-            { memberNumber: character.MemberNumber },
+        logger.warn(
+            "Appearance mutation proceeding because item permission could not be verified",
+            {
+                memberNumber: character.MemberNumber,
+                error: error instanceof Error ? error.message : String(error),
+            },
         );
-        character.Tell(
-            "Whisper",
-            "(This action is unavailable because your item permissions could not be verified. Please try again.)",
-        );
-        return false;
+        return true;
     }
 
     if (!allowItem) {
-        logger.warn("Appearance mutation blocked by item permission", {
+        logger.warn("Appearance mutation proceeding without item permission", {
             memberNumber: character.MemberNumber,
         });
-        character.Tell(
-            "Whisper",
-            "(This action is unavailable because you have not authorized this bot to apply items to you.)",
-        );
-        return false;
     }
 
     return true;
@@ -190,11 +181,8 @@ export async function syncAppearanceMutation(
         requireFullWardrobeAccess?: boolean;
     },
 ): Promise<boolean> {
-    if (
-        !options?.skipAuthorizationPreflight &&
-        !(await preflightAppearanceMutation(character, options))
-    ) {
-        return false;
+    if (!options?.skipAuthorizationPreflight) {
+        await preflightAppearanceMutation(character, options);
     }
 
     const context = createMutationContext(character, options);

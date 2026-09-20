@@ -200,7 +200,7 @@ test("KennelSystem applies the device and records one session on tile entry", as
     assert.equal((system as any).kennelStateCache.get(7)?.hasDevice, true);
 });
 
-test("KennelSystem blocks entry before persistence when item permission is denied", async () => {
+test("KennelSystem logs and proceeds when item permission is denied", async () => {
     const created = createCharacter(8, {
         sourceMemberNumber: 99,
         allowItem: false,
@@ -228,12 +228,8 @@ test("KennelSystem blocks entry before persistence when item permission is denie
     ]);
     await (system as any).reconcileCharacterState(created.character, true);
 
-    assert.deepEqual(mutations.entries, []);
-    assert.equal(created.device, undefined);
-    assert.match(
-        created.messages.at(-1) ?? "",
-        /not authorized this bot to apply items to you/,
-    );
+    assert.deepEqual(mutations.entries, [8]);
+    assert.equal(created.device?.Name, "Kennel");
 });
 
 test("KennelSystem does not recontain an escaped character until they leave", async () => {

@@ -349,13 +349,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             return;
         }
 
-        if (
-            !wearingKennel &&
-            !(await preflightAppearanceMutation(character, {
+        if (!wearingKennel) {
+            await preflightAppearanceMutation(character, {
                 requireFullWardrobeAccess: false,
-            }))
-        ) {
-            return;
+            });
         }
 
         const persisted = activeSession

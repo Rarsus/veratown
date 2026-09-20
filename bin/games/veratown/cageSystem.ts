@@ -587,12 +587,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
             await this.timer.wait(100);
             if (!stillInCage()) return;
 
-            if (
-                !(await preflightAppearanceMutation(character, {
-                    requireFullWardrobeAccess: false,
-                }))
-            )
-                return;
+            await preflightAppearanceMutation(character, {
+                requireFullWardrobeAccess: false,
+            });
             if (!stillInCage()) return;
 
             const posKey = this.getTileKey(cagePos.X, cagePos.Y);
