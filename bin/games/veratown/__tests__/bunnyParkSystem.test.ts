@@ -25,6 +25,9 @@ function createCharacter(
     const appearanceUpdates: any[][] = [];
     const character: any = {
         MemberNumber: memberNumber,
+        connection: { Player: { MemberNumber: memberNumber } },
+        allowFullWardrobeAccess: true,
+        GetAllowItem: async () => true,
         MapPos: { X: 29, Y: 6 },
         IsItemPermissionAccessible: () => options.accessible !== false,
         Appearance: {

@@ -18,6 +18,9 @@ function createCharacter(memberNumber = 7) {
     });
     const character: any = {
         MemberNumber: memberNumber,
+        connection: { Player: { MemberNumber: memberNumber } },
+        allowFullWardrobeAccess: true,
+        GetAllowItem: async () => true,
         MapPos: { X: 4, Y: 38 },
         messages,
         sendAppearanceUpdate: () => {},

@@ -22,6 +22,121 @@ import { AssetFemale3DCGExtended } from "./bcdata/Female3DCGExtended.ts";
 
 export type BC_AppearanceItem = ServerItemBundle;
 
+const EXTENDED_INIT_PROPERTY_IGNORE = new Set([
+    "OverridePriority",
+    "DrawingTop",
+    "DrawingLeft",
+    "Opacity",
+    "LayerTranslationX",
+    "LayerTranslationY",
+    "LayerScaleX",
+    "LayerScaleY",
+    "LayerRotation",
+    "TranslationX",
+    "TranslationY",
+    "ScaleX",
+    "ScaleY",
+    "Rotation",
+    "LayerOverrides",
+    "wceOverrideHide",
+]);
+
+function equalPropertyValues(left: unknown, right: unknown): boolean {
+    if (Array.isArray(left) && Array.isArray(right)) {
+        return (
+            left.length === right.length &&
+            left.every((value) => right.includes(value))
+        );
+    }
+    return left === right;
+}
+
+function compressExtendedProperties(
+    item: BC_AppearanceItem,
+): Record<string, unknown> | undefined {
+    const property = item.Property;
+    if (!property) return undefined;
+
+    const config = resolveExtendedAsset(item.Group, item.Name) as any;
+    if (!config) return undefined;
+
+    const baseline: Record<string, unknown> = {
+        ...(config.BaselineProperty ?? {}),
+    };
+    const allowed = new Set(EXTENDED_INIT_PROPERTY_IGNORE);
+    const typeRecord = (property as any).TypeRecord ?? {};
+
+    if (config.Archetype === "typed") {
+        const option = config.Options?.[typeRecord.typed];
+        Object.assign(baseline, option?.Property ?? {});
+        allowed.add("TypeRecord");
+    } else if (config.Archetype === "modular") {
+        for (const module of config.Modules ?? []) {
+            const option = module.Options?.[typeRecord[module.Key]];
+            Object.assign(baseline, option?.Property ?? {});
+        }
+        allowed.add("TypeRecord");
+    } else if (config.Archetype === "vibrating") {
+        Object.assign(baseline, {
+            Mode: "Off",
+            Intensity: -1,
+            Effect: ["Egged"],
+        });
+        allowed.add("TypeRecord");
+        allowed.add("Mode");
+        allowed.add("Intensity");
+        allowed.add("Effect");
+    }
+
+    for (const key of Object.keys(baseline)) allowed.add(key);
+
+    if ((item as any).Property?.LockedBy) {
+        for (const key of [
+            "LockedBy",
+            "LockMemberNumber",
+            "LockMemberName",
+            "LockMessage",
+        ])
+            allowed.add(key);
+    }
+
+    const compressed: Record<string, unknown> = {};
+    for (const key of allowed) {
+        const value = (property as any)[key];
+        if (value === undefined) continue;
+        if (key === "TypeRecord") {
+            const record = Object.fromEntries(
+                Object.entries(value as Record<string, unknown>),
+            );
+            if (
+                Object.keys(record).length > 0 &&
+                Object.values(record).some((entry) => Boolean(entry))
+            ) {
+                compressed[key] = record;
+            }
+        } else if (key === "Effect") {
+            const effects = Array.isArray(value) ? value : [];
+            if (
+                effects.includes("IsLeashed") &&
+                (getAssetDef(item)?.AllowEffect ?? []).includes(
+                    "IsLeashed" as any,
+                )
+            ) {
+                compressed.IsLeashed = true;
+            } else if (!equalPropertyValues(effects, baseline.Effect)) {
+                compressed.Effect = value;
+            }
+        } else if (
+            !equalPropertyValues(value, baseline[key]) ||
+            (key === "LockedBy" && value)
+        ) {
+            compressed[key] = value;
+        }
+    }
+
+    return compressed;
+}
+
 /**
  * Convert local appearance data to the compact form expected by BC's server.
  * Default values must be omitted rather than sent as literal placeholders.
@@ -51,12 +166,14 @@ export function toAppearanceBundle(item: BC_AppearanceItem): BC_AppearanceItem {
     if (bundle.Difficulty === 0) delete bundle.Difficulty;
 
     if (bundle.Property) {
-        const property = { ...bundle.Property };
+        const compressed = compressExtendedProperties(bundle);
+        const property = compressed ?? { ...bundle.Property };
         if (property.LockedBy && Array.isArray(property.Effect)) {
-            property.Effect = property.Effect.filter(
+            property.Effect = (property.Effect as unknown[]).filter(
                 (effect) => effect !== "Lock",
             );
-            if (property.Effect.length === 0) delete property.Effect;
+            if ((property.Effect as unknown[]).length === 0)
+                delete property.Effect;
         }
         if (Object.keys(property).length === 0) delete bundle.Property;
         else bundle.Property = property;

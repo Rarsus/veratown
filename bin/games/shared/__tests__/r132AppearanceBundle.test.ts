@@ -39,3 +39,67 @@ test("R132 appearance bundles keep lock metadata without redundant Lock effect",
         LockMemberNumber: 123,
     });
 });
+
+test("R132 typed baselines omit default properties but retain a non-default TypeRecord", () => {
+    const baseline = toAppearanceBundle({
+        Group: "ItemBreast",
+        Name: "ForbiddenChastityBra",
+        Property: {
+            TypeRecord: { typed: 0 },
+            ShockLevel: 0,
+            TriggerCount: 0,
+            ShowText: true,
+            BlinkState: false,
+            PunishOrgasm: false,
+            PunishStandup: false,
+            PunishStruggle: false,
+        },
+    } as any);
+    assert.equal(baseline.Property, undefined);
+
+    const nonDefault = toAppearanceBundle({
+        Group: "ItemBreast",
+        Name: "ForbiddenChastityBra",
+        Property: {
+            TypeRecord: { typed: 1 },
+            ShockLevel: 0,
+            TriggerCount: 0,
+            ShowText: true,
+            BlinkState: false,
+            PunishOrgasm: false,
+            PunishStandup: false,
+            PunishStruggle: false,
+        },
+    } as any);
+    assert.deepEqual(nonDefault.Property, { TypeRecord: { typed: 1 } });
+});
+
+test("R132 modular TypeRecord compression omits all-default records", () => {
+    const baseline = toAppearanceBundle({
+        Group: "Cloth",
+        Name: "LittleFormalShirt",
+        Property: { TypeRecord: { t: 0 } },
+    } as any);
+    assert.equal(baseline.Property, undefined);
+
+    const nonDefault = toAppearanceBundle({
+        Group: "Cloth",
+        Name: "LittleFormalShirt",
+        Property: { TypeRecord: { t: 1 } },
+    } as any);
+    assert.deepEqual(nonDefault.Property, { TypeRecord: { t: 1 } });
+});
+
+test("R132 vibrator defaults are omitted from appearance bundles", () => {
+    const bundle = toAppearanceBundle({
+        Group: "ItemBreast",
+        Name: "TickleBra",
+        Property: {
+            Mode: "Off",
+            Intensity: -1,
+            Effect: ["Egged"],
+        },
+    } as any);
+
+    assert.equal(bundle.Property, undefined);
+});
