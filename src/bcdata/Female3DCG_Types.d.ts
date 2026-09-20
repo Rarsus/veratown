@@ -1321,7 +1321,7 @@ interface ModularItemOption extends Omit<ModularItemOptionConfig, "ArchetypeConf
 /** Partially parsed extended item option subtype for vibrating items */
 interface VibratingItemOptionConfig extends ExtendedItemOptionConfig {
 	Name: VibratorMode;
-	Property: ItemProperties & Pick<Required<ItemProperties>, "Intensity" | "Effect"> & Omit<ItemProperties, "TypeRecord">;
+	Property: ItemProperties & Pick<Required<ItemProperties>, "Effect"> & Omit<ItemProperties, "TypeRecord">;
 	ArchetypeConfig?: null;
 	/** Whether this option should be picked as default for NPC's (rather than just going for the first option) */
 	NPCDefault?: boolean;
@@ -1331,7 +1331,7 @@ interface VibratingItemOptionConfig extends ExtendedItemOptionConfig {
 interface VibratingItemOption extends Omit<VibratingItemOptionConfig, "ArchetypeConfig">, Omit<ExtendedItemOption, "Name" | "Property"> {
 	OptionType: "VibratingItemOption";
 	ParentData: VibratingItemData;
-	Property: ItemProperties & Pick<Required<ItemProperties>, "TypeRecord" | "Intensity" | "Effect">;
+	Property: ItemProperties & Pick<Required<ItemProperties>, "TypeRecord" | "Effect">;
 	ArchetypeData?: null;
 	Advanced: boolean;
 }

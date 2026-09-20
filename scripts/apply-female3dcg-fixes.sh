@@ -37,7 +37,7 @@ CHANGES=0
 if grep -q "^const AssetUpperOverflowAlpha" "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^const AssetUpperOverflowAlpha/export const AssetUpperOverflowAlpha/' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetUpperOverflowAlpha${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export const AssetUpperOverflowAlpha" "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: AssetUpperOverflowAlpha${NC}"
 fi
@@ -46,7 +46,7 @@ fi
 if grep -q "^const AssetLowerOverflowAlpha" "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^const AssetLowerOverflowAlpha/export const AssetLowerOverflowAlpha/' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetLowerOverflowAlpha${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export const AssetLowerOverflowAlpha" "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: AssetLowerOverflowAlpha${NC}"
 fi
@@ -77,7 +77,7 @@ export const PoseAllKneeling = Object.freeze([\"Kneel\", \"KneelingSpread\"]);\\
 export const PoseAllStanding = Object.freeze([\"BaseLower\", \"LegsClosed\", \"Spread\"]);\\
 " "$FEMALE3DCG_FILE"
             echo -e "${GREEN}✓ Added: PoseType, PoseAllKneeling, PoseAllStanding constants${NC}"
-            ((CHANGES++))
+            ((CHANGES += 1))
         fi
     fi
 fi
@@ -86,7 +86,7 @@ fi
 if grep -q "^const E = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^const E = /export const E = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: E (effects namespace)${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export const E = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: E${NC}"
 fi
@@ -95,7 +95,7 @@ fi
 if grep -q "^const AssetPoseMapping = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^const AssetPoseMapping = /export const AssetPoseMapping = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetPoseMapping${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export const AssetPoseMapping = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: AssetPoseMapping${NC}"
 fi
@@ -104,7 +104,7 @@ fi
 if grep -q "^var AssetFemale3DCG = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^var AssetFemale3DCG = /export var AssetFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetFemale3DCG${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export var AssetFemale3DCG = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: AssetFemale3DCG${NC}"
 fi
@@ -113,7 +113,7 @@ fi
 if grep -q "^var PoseFemale3DCG = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^var PoseFemale3DCG = /export var PoseFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: PoseFemale3DCG${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export var PoseFemale3DCG = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: PoseFemale3DCG${NC}"
 fi
@@ -122,7 +122,7 @@ fi
 if grep -q "^var PoseFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^var PoseFemale3DCGNames = /export var PoseFemale3DCGNames = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: PoseFemale3DCGNames${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export var PoseFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: PoseFemale3DCGNames${NC}"
 fi
@@ -131,7 +131,7 @@ fi
 if grep -q "^var ActivityFemale3DCG = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^var ActivityFemale3DCG = /export var ActivityFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: ActivityFemale3DCG${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export var ActivityFemale3DCG = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: ActivityFemale3DCG${NC}"
 fi
@@ -140,7 +140,7 @@ fi
 if grep -q "^let ActivityFemale3DCGOrdering = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^let ActivityFemale3DCGOrdering = /export let ActivityFemale3DCGOrdering = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: ActivityFemale3DCGOrdering${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export let ActivityFemale3DCGOrdering = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: ActivityFemale3DCGOrdering${NC}"
 fi
@@ -149,7 +149,7 @@ fi
 if grep -q "^var FetishFemale3DCG = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^var FetishFemale3DCG = /export var FetishFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: FetishFemale3DCG${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export var FetishFemale3DCG = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: FetishFemale3DCG${NC}"
 fi
@@ -158,7 +158,7 @@ fi
 if grep -q "^const FetishFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
     sed -i.tmp 's/^const FetishFemale3DCGNames = /export const FetishFemale3DCGNames = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: FetishFemale3DCGNames${NC}"
-    ((CHANGES++))
+    ((CHANGES += 1))
 elif grep -q "^export const FetishFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: FetishFemale3DCGNames${NC}"
 fi
@@ -178,7 +178,7 @@ if [[ $CHANGES -gt 0 ]]; then
             echo -e "${GREEN}  ✓ $export${NC}"
         else
             echo -e "${RED}  ✗ $export (MISSING)${NC}"
-            ((MISSING++))
+            ((MISSING += 1))
         fi
     done
     

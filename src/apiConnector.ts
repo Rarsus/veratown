@@ -62,7 +62,7 @@ export interface RoomDefinition {
 }
 
 // What the bot advertises as its game version
-const GAMEVERSION = "R131";
+const GAMEVERSION = "R132";
 const LZSTRING_MAGIC = "╬";
 
 const ServerChatMessageMaxLength = 2000; // from bc-server
@@ -552,24 +552,18 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         const existing = char.Appearance.InventoryGet(
             resp.Group as AssetGroupName,
         );
-        char.Appearance.updateItemData({
-            ...(existing?.getData() ?? {
-                Group: resp.Group as AssetGroupName,
-                Name: resp.Name,
-            }),
-            Property: {
-                ...existing?.getData().Property,
-                Expression: resp.Name as ExpressionName,
-            },
-        });
+        if (!existing) return;
 
-        const item = new API_AppearanceItem(char, {
-            Group: resp.Group as AssetGroupName,
-            Name: resp.Name,
+        const updatedData = {
+            ...existing.getData(),
             Property: {
+                ...existing.getData().Property,
                 Expression: resp.Name as ExpressionName,
             },
-        });
+        };
+        char.Appearance.updateItemData(updatedData);
+
+        const item = new API_AppearanceItem(char, updatedData);
         this.bot?.onCharacterEventPub(this, {
             name: "ItemChange",
             item,

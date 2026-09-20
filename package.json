@@ -31,7 +31,7 @@
     },
     "dependencies": {
         "bc-bot": "link:src",
-        "bc-stubs": "131.0.0",
+        "bc-stubs": "132.0.0",
         "discord.js": "^14.27.0",
         "lodash": "^4.18.1",
         "lz-string": "^1.5.0",

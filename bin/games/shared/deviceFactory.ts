@@ -49,8 +49,10 @@ export class DeviceFactory {
             Description:
                 config.craftDescription ??
                 `A locked ${config.assetName.toLowerCase()}`,
+            Effects: {},
             Lock: "",
             MemberNumber: config.owner,
+            Private: false,
         } as typeof device.Craft;
         device.Property = {
             ...(device.Property ?? {}),

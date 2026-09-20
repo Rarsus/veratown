@@ -11,6 +11,11 @@ function createCharacter(
 ) {
     return {
         MemberNumber: memberNumber,
+        connection: {
+            Player: {
+                MemberNumber: memberNumber,
+            },
+        },
         MapPos: position,
         Appearance: {
             MakeAppearanceBundle: () => structuredClone(appearance),

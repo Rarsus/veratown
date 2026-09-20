@@ -15,8 +15,8 @@ importers:
         specifier: link:src
         version: link:src
       bc-stubs:
-        specifier: 131.0.0
-        version: 131.0.0
+        specifier: 132.0.0
+        version: 132.0.0
       discord.js:
         specifier: ^14.27.0
         version: 14.27.0
@@ -345,8 +345,8 @@ packages:
   bare-url@2.5.4:
     resolution: {integrity: sha512-Gxa7UVWBr0/edU1b+TJhn/AZvMQUj9OGspvYsaTYQrAbZA4BOTZGL3LiZxvD+CeMlDH4juwD84+eTAp/bLYW5g==}
 
-  bc-stubs@131.0.0:
-    resolution: {integrity: sha512-uGEX42Qims1iWgAp3Tc2EInsYtmbuw/KUk/kzx+0HBdxoW+6oj5ED84vlefxe9ko7yy8haOc/AIr1gAYg7Dvbw==}
+  bc-stubs@132.0.0:
+    resolution: {integrity: sha512-mYQx/aBFyZ+Ma4wQ1Sr8hJuxR16czg5Bo2F/w0Ynx6iEMmOMHSwyAXKe5hTCUNirruJTzTQWlMi0vYTFHpQ2GQ==}
 
   bintrees@1.0.2:
     resolution: {integrity: sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==}
@@ -866,7 +866,7 @@ snapshots:
     dependencies:
       bare-path: 3.1.2
 
-  bc-stubs@131.0.0:
+  bc-stubs@132.0.0:
     dependencies:
       '@total-typescript/ts-reset': 0.6.1
       socket.io-client: 4.8.3

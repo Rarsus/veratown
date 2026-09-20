@@ -434,7 +434,7 @@ export function getExtendedAssetDef(
             `Extended definition not found: ${desc.Group}/${desc.Name}. Item may not have extended properties.`,
         );
     }
-    return result;
+    return result ?? null;
 }
 
 function makeAssetType(desc: BC_AppearanceItem) {

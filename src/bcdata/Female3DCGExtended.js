@@ -30,6 +30,18 @@ const ExtendedArchetype = /** @type {const} */ ({
  * @const
  */
 var AssetFemale3DCGExtended = {
+	ItemScript: {
+		// Mark as an extended item in order to declare its customizable baseline properties (important for `Item` -> `ItemBundle` conversion)
+		Script: {
+			Archetype: ExtendedArchetype.NOARCH,
+			BaselineProperty: {
+				Hide: [],
+				Block: [],
+				UnHide: [],
+				HideItem: [],
+			},
+		}, // Script
+	},
 	BodyUpper: {
 		// NOTE: Switch to the `MODULAR` archetype if we'd want to allow for the simultaneous use of multiple overlays
 		Small: {
@@ -19619,6 +19631,10 @@ var AssetFemale3DCGExtended = {
 				Draw: InventoryItemMiscTimerPadlockDrawHook,
 				Click: InventoryItemMiscTimerPadlockClickHook,
 			},
+			BaselineProperty: {
+				RemoveItem: false,
+				RemoveTimer: 0,
+			},
 		}, // TimerPadlock
 		PasswordPadlock: {
 			Archetype: ExtendedArchetype.NOARCH,
@@ -19664,6 +19680,7 @@ var AssetFemale3DCGExtended = {
 			BaselineProperty: {
 				RemoveItem: false,
 				ShowTimer: true,
+				RemoveTimer: 0,
 				EnableRandomInput: false,
 				MemberNumberList: [],
 			},
@@ -19715,6 +19732,7 @@ var AssetFemale3DCGExtended = {
 			BaselineProperty: {
 				RemoveItem: false,
 				ShowTimer: true,
+				RemoveTimer: 0,
 				EnableRandomInput: false,
 				MemberNumberList: [],
 			},
@@ -19754,6 +19772,7 @@ var AssetFemale3DCGExtended = {
 				Hint: "Take a guess...",
 				LockSet: false,
 				RemoveItem: false,
+				RemoveTimer: 0,
 				ShowTimer: true,
 				EnableRandomInput: false,
 				MemberNumberList: [],
@@ -21349,22 +21368,40 @@ var AssetFemale3DCGExtended = {
 			],
 		}, // PullDownPanties
 		RoyalDiaper: {
-			Archetype: ExtendedArchetype.TYPED,
-			Options: [
+			Archetype: ExtendedArchetype.MODULAR,
+			Modules: [
 				{
-					Name: "None",
+					Name: "Design",
+					Key: "d",
+					Options: [
+						{
+							//d0 - plain white
+							Property: { DefaultColor: "#f9f9f9" },
+						},
+						{
+							//d1 - ABU AlphaGatorz
+							Property: { DefaultColor: "Default" },
+						},
+						{
+							//d2 - ABU BunnyHopps
+							Property: { DefaultColor: "Default" },
+						},
+						{
+							//d2 - LilComforts LacyLove
+							Property: { DefaultColor: "Default" },
+						},
+					],
 				},
 				{
-					Name: "Simple",
-				},
-				{
-					Name: "HisMajesty",
-				},
-				{
-					Name: "HerMajesty",
-				},
-				{
-					Name: "Lock",
+					Name: "Motiv",
+					Key: "m",
+					Options: [
+						{}, //m0 - None
+						{}, //m1 - Simple
+						{}, //m2 - His Majesty
+						{}, //m3 - HerMajesty
+						{}, //m4 - Lock
+					],
 				},
 			],
 		}, // RoyalDiaper
@@ -24116,6 +24153,7 @@ var AssetFemale3DCGExtended = {
 						{}, // Nel
 						{}, // Fallen
 						{}, // Reina
+						{}, // Viola
 					],
 					DrawData: {
 						elementData: [
@@ -24125,6 +24163,7 @@ var AssetFemale3DCGExtended = {
 								imagePath: "Assets/Female3DCG/ItemHandheld/Plushie_Fallen.png",
 							},
 							{ imagePath: "Assets/Female3DCG/ItemHandheld/Plushie_Reina.png" },
+							{ imagePath: "Assets/Female3DCG/ItemHandheld/Plushie_Viola.png" },
 						],
 					},
 				},
@@ -24291,6 +24330,64 @@ var AssetFemale3DCGExtended = {
 				CommonChatTags.ASSET_NAME,
 			],
 		}, // Laptop
+		R18Baton: {
+			Archetype: ExtendedArchetype.TYPED,
+			DrawImages: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Options: [
+				{
+					Name: "1",
+					Property: { AllowActivity: ["PenetrateItem", "SpankItem"] },
+				},
+				{
+					Name: "2",
+					Property: {
+						AllowActivity: ["MasturbateItem", "PenetrateItem", "SpankItem"],
+					},
+				},
+			],
+		}, // R18Baton
+		GrilledSausage: {
+			Archetype: ExtendedArchetype.TYPED,
+			Options: [{ Name: "FiveSpiceJuicyFlavor" }, { Name: "SmokyHoneyFlavor" }],
+		}, // GrilledSausage
+		Foldingfan: {
+			Archetype: ExtendedArchetype.MODULAR,
+			DrawImages: false,
+			Modules: [
+				{
+					Name: "OpenFan",
+					Key: "n",
+					Options: [{}, {}],
+				},
+				{
+					Name: "Pattern",
+					Key: "p",
+					Options: [{}, {}, {}, {}, {}, {}, {}],
+				},
+			],
+		}, // Foldingfan
+		Oilpaperumbrella: {
+			Archetype: ExtendedArchetype.TYPED,
+			DrawImages: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Options: [
+				{ Name: "NoPattern" },
+				{ Name: "Flower1" },
+				{ Name: "Flower2" },
+				{ Name: "Landscape" },
+				{ Name: "Bamboo" },
+				{ Name: "Cartoon" },
+			],
+		}, // Oilpaperumbrella
 	}, // ItemHandheld
 	EyeShadow: {
 		Running: {

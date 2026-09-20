@@ -12,8 +12,8 @@ importers:
         specifier: ^3.1.2
         version: 3.1.2
       bc-stubs:
-        specifier: 131.0.0
-        version: 131.0.0
+        specifier: 132.0.0
+        version: 132.0.0
       lz-string:
         specifier: ^1.5.0
         version: 1.5.0
@@ -366,8 +366,8 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
-  bc-stubs@131.0.0:
-    resolution: {integrity: sha512-uGEX42Qims1iWgAp3Tc2EInsYtmbuw/KUk/kzx+0HBdxoW+6oj5ED84vlefxe9ko7yy8haOc/AIr1gAYg7Dvbw==}
+  bc-stubs@132.0.0:
+    resolution: {integrity: sha512-mYQx/aBFyZ+Ma4wQ1Sr8hJuxR16czg5Bo2F/w0Ynx6iEMmOMHSwyAXKe5hTCUNirruJTzTQWlMi0vYTFHpQ2GQ==}
 
   debug@4.3.7:
     resolution: {integrity: sha512-Er2nc/H7RrMXZBFCEim6TCmMk02Z8vLC2Rbi1KEBggpo0fS6l0S1nnapwmIi3yW/+GOJap1Krg4w0Hg80oCqgQ==}
@@ -659,7 +659,7 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  bc-stubs@131.0.0:
+  bc-stubs@132.0.0:
     dependencies:
       '@total-typescript/ts-reset': 0.6.1
       socket.io-client: 4.6.1
