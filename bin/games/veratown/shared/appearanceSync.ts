@@ -38,6 +38,55 @@ const deferredAppearanceMutationContexts = new WeakMap<
 >();
 let mutationSequence = 0;
 
+export async function preflightAppearanceMutation(
+    character: API_Character,
+): Promise<boolean> {
+    if (character.MemberNumber === character.connection.Player.MemberNumber) {
+        return true;
+    }
+
+    if (!character.allowFullWardrobeAccess) {
+        logger.warn("Appearance mutation blocked by wardrobe permission", {
+            memberNumber: character.MemberNumber,
+            reason: "AllowFullWardrobeAccess is disabled",
+        });
+        character.Tell(
+            "Whisper",
+            "(This action is unavailable because you have not enabled permission for others to alter your whole appearance.)",
+        );
+        return false;
+    }
+
+    let allowItem: boolean;
+    try {
+        allowItem = await character.GetAllowItem();
+    } catch (error) {
+        logger.error(
+            "Appearance mutation blocked because item permission could not be verified",
+            error,
+            { memberNumber: character.MemberNumber },
+        );
+        character.Tell(
+            "Whisper",
+            "(This action is unavailable because your item permissions could not be verified. Please try again.)",
+        );
+        return false;
+    }
+
+    if (!allowItem) {
+        logger.warn("Appearance mutation blocked by item permission", {
+            memberNumber: character.MemberNumber,
+        });
+        character.Tell(
+            "Whisper",
+            "(This action is unavailable because you have not authorized this bot to apply items to you.)",
+        );
+        return false;
+    }
+
+    return true;
+}
+
 export function getAppearanceMutationContext(
     character: API_Character,
 ): AppearanceMutationContext | undefined {
@@ -133,8 +182,16 @@ export async function syncAppearanceMutation(
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;
         exclusiveContextHandoff?: boolean;
+        skipAuthorizationPreflight?: boolean;
     },
-): Promise<void> {
+): Promise<boolean> {
+    if (
+        !options?.skipAuthorizationPreflight &&
+        !(await preflightAppearanceMutation(character))
+    ) {
+        return false;
+    }
+
     const context = createMutationContext(character, options);
     if (!options?.exclusiveContextHandoff) {
         appearanceMutationContexts.set(character, context);
@@ -181,6 +238,8 @@ export async function syncAppearanceMutation(
             appearanceMutationContexts.delete(character);
         }
     }
+
+    return true;
 }
 
 /**

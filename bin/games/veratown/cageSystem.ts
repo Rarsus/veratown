@@ -28,7 +28,10 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
-import { syncAppearanceMutation } from "./shared/appearanceSync";
+import {
+    preflightAppearanceMutation,
+    syncAppearanceMutation,
+} from "./shared/appearanceSync";
 import type { CageSession } from "../shared/unifiedCharacterTypes";
 
 export interface CageTimer {
@@ -584,6 +587,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
             await this.timer.wait(100);
             if (!stillInCage()) return;
 
+            if (!(await preflightAppearanceMutation(character))) return;
+            if (!stillInCage()) return;
+
             const posKey = this.getTileKey(cagePos.X, cagePos.Y);
             const cage = this.cagesByPos.get(posKey);
             const cageName = cage?.doc.name ?? "Unknown cage";
@@ -658,6 +664,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     },
                     50,
                     this.stateSync,
+                    { skipAuthorizationPreflight: true },
                 );
             }
             this.cagedCharacters.set(character.MemberNumber, {

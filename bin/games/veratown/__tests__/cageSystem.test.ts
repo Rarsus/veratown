@@ -35,12 +35,32 @@ class FakeTimer implements CageTimer {
     }
 }
 
-function createCharacter(memberNumber = 251024) {
+function createCharacter(
+    memberNumber = 251024,
+    options: {
+        sourceMemberNumber?: number;
+        allowFullWardrobeAccess?: boolean;
+        allowItem?: boolean;
+    } = {},
+) {
     const messages: string[] = [];
     let crate: any;
+    const connection = {
+        Player: {
+            MemberNumber: options.sourceMemberNumber ?? memberNumber,
+        },
+        SendMessage: (_type: string, message: string) => messages.push(message),
+    };
     const character = {
         MemberNumber: memberNumber,
+        MapPos: { X: 0, Y: 0 },
+        X: 0,
+        Y: 0,
+        connection,
+        allowFullWardrobeAccess: options.allowFullWardrobeAccess ?? true,
+        GetAllowItem: async () => options.allowItem ?? true,
         Tell: (_type: string, message: string) => messages.push(message),
+        sendAppearanceUpdate: () => {},
         Appearance: {
             AddItem: () => {
                 crate = {
@@ -72,6 +92,7 @@ function createCharacter(memberNumber = 251024) {
     };
     return {
         character,
+        connection,
         messages,
         setCrate: (value: any) => {
             crate = value;
@@ -157,7 +178,7 @@ function startRelease(
     expiry: number,
 ) {
     const system = new CageSystem(
-        {} as any,
+        character.connection as any,
         mutations as any,
         undefined,
         timer,
@@ -283,7 +304,7 @@ test("CageSystem recovers a persisted cage expiry without duplicate entry notice
         Property: { RemoveTimer: 1 },
     });
     const system = new CageSystem(
-        {} as any,
+        character.connection as any,
         mutations as any,
         undefined,
         timer,
@@ -316,7 +337,7 @@ test("CageSystem restores a missing crate from persisted containment state", asy
     });
     const character = createCharacter();
     const system = new CageSystem(
-        {} as any,
+        character.connection as any,
         mutations as any,
         undefined,
         timer,
@@ -378,7 +399,7 @@ test("CageSystem ignores an ordinary character during recovery", async () => {
     });
     const character = createCharacter();
     const system = new CageSystem(
-        {} as any,
+        character.connection as any,
         mutations as any,
         undefined,
         timer,
@@ -402,7 +423,7 @@ test("CageSystem preserves a live crate while creating durable state", async () 
         Property: { RemoveTimer: 300_000 },
     });
     const system = new CageSystem(
-        {} as any,
+        character.connection as any,
         mutations as any,
         undefined,
         timer,
@@ -459,7 +480,7 @@ test("CageSystem rebinds map triggers without retaining stale room callbacks", a
 
 test("CageSystem reports when containment is unavailable", async () => {
     const created = createCharacter();
-    const system = new CageSystem({} as any);
+    const system = new CageSystem(created.connection as any);
     system.enabled = false;
 
     await (system as any).onCharacterEnterCage(created.character);
@@ -467,5 +488,63 @@ test("CageSystem reports when containment is unavailable", async () => {
     assert.match(
         created.messages[0],
         /Cage containment is currently unavailable/,
+    );
+});
+
+test("CageSystem blocks entry before persistence when appearance permission is denied", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const created = createCharacter(251024, {
+        sourceMemberNumber: 252643,
+        allowFullWardrobeAccess: false,
+    });
+    const system = new CageSystem(
+        created.connection as any,
+        mutations as any,
+        undefined,
+        timer,
+    );
+
+    const pending = (system as any).onCharacterEnterCage(created.character);
+    await timer.advance(100);
+    await pending;
+
+    assert.deepEqual(mutations.entries, []);
+    assert.equal(
+        created.character.Appearance.getItemData("ItemDevices"),
+        undefined,
+    );
+    assert.match(
+        created.messages.at(-1) ?? "",
+        /not enabled permission for others to alter your whole appearance/,
+    );
+});
+
+test("CageSystem blocks entry before persistence when item permission is denied", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const created = createCharacter(251024, {
+        sourceMemberNumber: 252643,
+        allowItem: false,
+    });
+    const system = new CageSystem(
+        created.connection as any,
+        mutations as any,
+        undefined,
+        timer,
+    );
+
+    const pending = (system as any).onCharacterEnterCage(created.character);
+    await timer.advance(100);
+    await pending;
+
+    assert.deepEqual(mutations.entries, []);
+    assert.equal(
+        created.character.Appearance.getItemData("ItemDevices"),
+        undefined,
+    );
+    assert.match(
+        created.messages.at(-1) ?? "",
+        /not authorized this bot to apply items to you/,
     );
 });
