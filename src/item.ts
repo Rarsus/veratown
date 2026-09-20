@@ -40,9 +40,27 @@ export function toAppearanceBundle(item: BC_AppearanceItem): BC_AppearanceItem {
             bundle.Color.every((color, index) => color === defaultColor[index]))
     ) {
         delete bundle.Color;
+    } else if (
+        Array.isArray(bundle.Color) &&
+        bundle.Color.length > 0 &&
+        bundle.Color.every((color) => color === bundle.Color?.[0])
+    ) {
+        bundle.Color = bundle.Color[0];
     }
 
     if (bundle.Difficulty === 0) delete bundle.Difficulty;
+
+    if (bundle.Property) {
+        const property = { ...bundle.Property };
+        if (property.LockedBy && Array.isArray(property.Effect)) {
+            property.Effect = property.Effect.filter(
+                (effect) => effect !== "Lock",
+            );
+            if (property.Effect.length === 0) delete property.Effect;
+        }
+        if (Object.keys(property).length === 0) delete bundle.Property;
+        else bundle.Property = property;
+    }
 
     return bundle;
 }

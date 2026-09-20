@@ -313,5 +313,5 @@ test("self synchronization persists observed position and diagnostics", async ()
     assert.equal(calls[0]?.[4], true);
     assert.deepEqual(diagnostic?.observedPosition, { X: 10, Y: 8 });
     assert.deepEqual(diagnostic?.persistedPosition, { X: 10, Y: 8 });
-    assert.equal(diagnostic?.verificationSource, "chatRoom.findMember");
+    assert.equal(diagnostic?.verificationSource, "reposition-command");
 });
