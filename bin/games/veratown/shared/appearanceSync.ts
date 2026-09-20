@@ -179,6 +179,7 @@ export async function syncAppearanceMutation(
         exclusiveContextHandoff?: boolean;
         skipAuthorizationPreflight?: boolean;
         requireFullWardrobeAccess?: boolean;
+        sendFullAppearanceUpdate?: boolean;
     },
 ): Promise<boolean> {
     if (!options?.skipAuthorizationPreflight) {
@@ -193,11 +194,14 @@ export async function syncAppearanceMutation(
         // Execute the mutation
         await mutation();
 
-        // Send the complete bundle so mutations on remote characters are
-        // persisted by ChatRoomCharacterUpdate. Item updates are broadcast
-        // only and do not update the target account on the server.
-        character.Appearance.MakeAppearanceBundle();
-        character.sendAppearanceUpdate();
+        // AddItem() and RemoveItem() queue incremental item updates. A full
+        // bundle is opt-in because sending it after every item mutation can
+        // overwrite a preceding incremental update while a multi-step
+        // operation is still in flight.
+        if (options?.sendFullAppearanceUpdate) {
+            character.Appearance.MakeAppearanceBundle();
+            character.sendAppearanceUpdate();
+        }
 
         // Wait to ensure sync is visible
         if (delayMs > 0) {
