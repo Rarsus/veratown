@@ -27,7 +27,10 @@ import { NarratorBot } from "./veratownNarrationUtils";
 import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
-import { syncAppearanceMutation } from "./shared/appearanceSync";
+import {
+    preflightAppearanceMutation,
+    syncAppearanceMutation,
+} from "./shared/appearanceSync";
 import { getLifecycleObjectId } from "./featureSystem";
 import { KennelCommandController } from "./kennelCommands";
 
@@ -346,6 +349,15 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             return;
         }
 
+        if (
+            !wearingKennel &&
+            !(await preflightAppearanceMutation(character, {
+                requireFullWardrobeAccess: false,
+            }))
+        ) {
+            return;
+        }
+
         const persisted = activeSession
             ? false
             : await this.mutationService?.enterKennel(character.MemberNumber);
@@ -375,7 +387,11 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     },
                     50,
                     this.stateSync,
-                    { throwOnSyncFailure: true },
+                    {
+                        throwOnSyncFailure: true,
+                        skipAuthorizationPreflight: true,
+                        requireFullWardrobeAccess: false,
+                    },
                 );
             } else if (createdSession) {
                 await this.stateSync?.(character);

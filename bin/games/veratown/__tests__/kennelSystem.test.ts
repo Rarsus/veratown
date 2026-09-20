@@ -3,7 +3,14 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { KennelSystem } from "../kennelSystem";
 
-function createCharacter(memberNumber = 7) {
+function createCharacter(
+    memberNumber = 7,
+    options: {
+        sourceMemberNumber?: number;
+        allowFullWardrobeAccess?: boolean;
+        allowItem?: boolean;
+    } = {},
+) {
     let device: any;
     const messages: string[] = [];
     const createDeviceWrapper = () => ({
@@ -18,9 +25,13 @@ function createCharacter(memberNumber = 7) {
     });
     const character: any = {
         MemberNumber: memberNumber,
-        connection: { Player: { MemberNumber: memberNumber } },
-        allowFullWardrobeAccess: true,
-        GetAllowItem: async () => true,
+        connection: {
+            Player: {
+                MemberNumber: options.sourceMemberNumber ?? memberNumber,
+            },
+        },
+        allowFullWardrobeAccess: options.allowFullWardrobeAccess ?? true,
+        GetAllowItem: async () => options.allowItem ?? true,
         MapPos: { X: 4, Y: 38 },
         messages,
         sendAppearanceUpdate: () => {},
@@ -187,6 +198,42 @@ test("KennelSystem applies the device and records one session on tile entry", as
     assert.equal((created as any).device?.Name, "Kennel");
     assert.deepEqual(mutations.entries, [7]);
     assert.equal((system as any).kennelStateCache.get(7)?.hasDevice, true);
+});
+
+test("KennelSystem blocks entry before persistence when item permission is denied", async () => {
+    const created = createCharacter(8, {
+        sourceMemberNumber: 99,
+        allowItem: false,
+    });
+    const mutations = createMutationService();
+    const { callbacks, connector } = createConnector([]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([
+        {
+            key: "kennel",
+            name: "Kennel",
+            type: "kennel",
+            x: 4,
+            y: 38,
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+    await (system as any).reconcileCharacterState(created.character, true);
+
+    assert.deepEqual(mutations.entries, []);
+    assert.equal(created.device, undefined);
+    assert.match(
+        created.messages.at(-1) ?? "",
+        /not authorized this bot to apply items to you/,
+    );
 });
 
 test("KennelSystem does not recontain an escaped character until they leave", async () => {

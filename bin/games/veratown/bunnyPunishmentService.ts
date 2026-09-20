@@ -255,6 +255,7 @@ export class BunnyPunishmentService {
                     reason: "bunny_punishment_applied",
                     operationId,
                     exclusiveContextHandoff: true,
+                    requireFullWardrobeAccess: false,
                 },
             );
         } catch (error) {
