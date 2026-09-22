@@ -71,6 +71,10 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         private reloadLocations?: () => Promise<void>,
         private getStatus?: () => string,
         private roomKey: string = "main",
+        private canEnableFeature?: (featureKey: string) => {
+            allowed: boolean;
+            reason?: string;
+        },
     ) {
         super(
             conn,
@@ -239,6 +243,17 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                 `Unknown feature "${key}". Use "/bot feature list" to see available features.`,
             );
             return;
+        }
+
+        if (sub === "enable") {
+            const activation = this.canEnableFeature?.(feature.key);
+            if (activation && !activation.allowed) {
+                this.conn.reply(
+                    msg,
+                    `${feature.label} cannot be enabled in this room: ${activation.reason ?? "a required dependency is unavailable"}.`,
+                );
+                return;
+            }
         }
 
         feature.enabled = sub === "enable";

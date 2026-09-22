@@ -1,0 +1,662 @@
+[
+    {
+        "_id": "bed_4",
+        "key": "bed_4",
+        "name": "bed4",
+        "type": "bed",
+        "x": 24,
+        "y": 37,
+        "data": null,
+        "enabled": true,
+        "createdAt": 1785793121027,
+        "updatedAt": 1785793121027
+    },
+    {
+        "_id": "bed_5",
+        "key": "bed_5",
+        "name": "bed_5",
+        "type": "bed",
+        "x": 25,
+        "y": 37,
+        "data": null,
+        "enabled": true,
+        "createdAt": 1785793296619,
+        "updatedAt": 1785793296619
+    },
+    {
+        "_id": "bot_help_monitor",
+        "key": "bot_help_monitor",
+        "name": "Bot Help Monitor",
+        "type": "help_monitor",
+        "x": 16,
+        "y": 16,
+        "data": {
+            "bottomRightX": 17,
+            "bottomRightY": 16,
+            "displayKey": "bot_help",
+            "cooldownMs": 3000
+        },
+        "enabled": true,
+        "createdAt": 1788945866487,
+        "updatedAt": 1788945866487
+    },
+    {
+        "_id": "cross_7_38",
+        "key": "cross_7_38",
+        "name": "cross_7_38",
+        "type": "furniture",
+        "x": 7,
+        "y": 38,
+        "data": {
+            "furnitureAsset": "X-Cross",
+            "durationMS": 300000,
+            "restraints": [
+                {
+                    "group": "ItemArms",
+                    "asset": "LeatherCuffs",
+                    "difficulty": 20
+                },
+                {
+                    "group": "ItemLegs",
+                    "asset": "LeatherCuffs",
+                    "difficulty": 20
+                }
+            ]
+        },
+        "enabled": false,
+        "createdAt": 1787321230126,
+        "updatedAt": 1787431063184
+    },
+    {
+        "_id": "entrance_kitten",
+        "key": "entrance_kitten",
+        "name": "entrance_kitten",
+        "type": "cat",
+        "x": 20,
+        "y": 16,
+        "data": {
+            "actions": [
+                {
+                    "type": "vibrator",
+                    "message": "to increase in intensity",
+                    "intensityIncrease": 2
+                }
+            ]
+        },
+        "enabled": true,
+        "createdAt": 1787323353490,
+        "updatedAt": 1788792315143
+    },
+    {
+        "_id": "kidnappers_commands_board",
+        "key": "kidnappers_commands_board",
+        "createdAt": 1788948795516,
+        "data": {
+            "displayKey": "kidnappers_commands",
+            "cooldownMs": 5000
+        },
+        "enabled": true,
+        "name": "Kidnappers Commands Board",
+        "region": {
+            "TopLeft": {
+                "X": 2,
+                "Y": 21
+            },
+            "BottomRight": {
+                "X": 2,
+                "Y": 21
+            }
+        },
+        "type": "help_monitor",
+        "updatedAt": 1788948795516
+    },
+    {
+        "_id": "kidnappers_guide_board",
+        "key": "kidnappers_guide_board",
+        "createdAt": 1788948795516,
+        "data": {
+            "displayKey": "kidnappers_guide",
+            "cooldownMs": 5000
+        },
+        "enabled": true,
+        "name": "Kidnappers Guide Board",
+        "region": {
+            "TopLeft": {
+                "X": 4,
+                "Y": 21
+            },
+            "BottomRight": {
+                "X": 4,
+                "Y": 21
+            }
+        },
+        "type": "help_monitor",
+        "updatedAt": 1788948795516
+    },
+    {
+        "_id": "kidnappers_region",
+        "key": "kidnappers_region",
+        "name": "Kidnappers Game Area",
+        "type": "region",
+        "regionType": "game",
+        "region": {
+            "TopLeft": {
+                "X": 0,
+                "Y": 21
+            },
+            "BottomRight": {
+                "X": 4,
+                "Y": 25
+            }
+        },
+        "enabled": true,
+        "createdAt": 1788947741685,
+        "updatedAt": 1788947741685
+    },
+    {
+        "_id": "kidnappers_status_board",
+        "key": "kidnappers_status_board",
+        "createdAt": 1788948795516,
+        "data": {
+            "displayKey": "kidnappers_status",
+            "cooldownMs": 5000
+        },
+        "enabled": true,
+        "name": "Kidnappers Status Board",
+        "region": {
+            "TopLeft": {
+                "X": 0,
+                "Y": 21
+            },
+            "BottomRight": {
+                "X": 0,
+                "Y": 21
+            }
+        },
+        "type": "help_monitor",
+        "updatedAt": 1788948795516
+    },
+    {
+        "_id": "punishment_room_entrance",
+        "key": "punishment_room_entrance",
+        "createdAt": 1788948448604,
+        "data": {},
+        "description": "Where emergency-release players are placed before parole.",
+        "enabled": true,
+        "name": "Punishment Room Entrance",
+        "type": "other",
+        "updatedAt": 1788948448604,
+        "x": 14,
+        "y": 13
+    },
+    {
+        "_id": "shower_pool_1",
+        "key": "shower_pool_1",
+        "name": "shower_pool_1",
+        "type": "shower",
+        "x": 0,
+        "y": 6,
+        "data": {
+            "broadcastX": 0,
+            "broadcastY": 5
+        },
+        "enabled": true,
+        "createdAt": 1785832286726,
+        "updatedAt": 1785832286726
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1deb",
+        "key": "cage_1",
+        "name": "Cage 1",
+        "type": "cage",
+        "x": 12,
+        "y": 39,
+        "data": {
+            "entryX": 12,
+            "entryY": 38,
+            "durationMs": 300000,
+            "durationDescription": "approximately 5 minutes"
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dec",
+        "key": "cage_2",
+        "name": "Cage 2",
+        "type": "cage",
+        "x": 14,
+        "y": 39,
+        "data": {
+            "entryX": 14,
+            "entryY": 38,
+            "durationMs": 900000,
+            "durationDescription": "approximately 15 minutes"
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1ded",
+        "key": "cage_3",
+        "name": "Cage 3",
+        "type": "cage",
+        "x": 16,
+        "y": 39,
+        "data": {
+            "entryX": 16,
+            "entryY": 38,
+            "durationMs": 865480,
+            "durationDescription": "somewhere between 5 and 15 minutes, randomly determined"
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dee",
+        "key": "bed_1",
+        "name": "Bed 1",
+        "type": "bed",
+        "x": 23,
+        "y": 22,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1def",
+        "key": "bed_2",
+        "name": "Bed 2",
+        "type": "bed",
+        "x": 29,
+        "y": 22,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df0",
+        "key": "bed_3",
+        "name": "Bed 3",
+        "type": "bed",
+        "x": 35,
+        "y": 22,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df1",
+        "key": "kennel_1",
+        "name": "Kennel 1",
+        "type": "kennel",
+        "x": 4,
+        "y": 38,
+        "data": {
+            "delayMs": 5000
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df2",
+        "key": "kennel_2",
+        "name": "Kennel 2",
+        "type": "kennel",
+        "x": 9,
+        "y": 38,
+        "data": {
+            "delayMs": 5000
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df5",
+        "key": "shower_3",
+        "name": "Shower 3",
+        "type": "shower",
+        "x": 33,
+        "y": 21,
+        "data": {
+            "broadcastX": 33,
+            "broadcastY": 20
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df6",
+        "key": "shower_4",
+        "name": "Shower 4",
+        "type": "shower",
+        "x": 39,
+        "y": 21,
+        "data": {
+            "broadcastX": 39,
+            "broadcastY": 20
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df8",
+        "key": "window_1",
+        "name": "Window 1",
+        "type": "window",
+        "x": 8,
+        "y": 27,
+        "data": {
+            "peepDelayMs": 5000
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1df9",
+        "key": "window_2",
+        "name": "Window 2",
+        "type": "window",
+        "x": 9,
+        "y": 27,
+        "data": {
+            "peepDelayMs": 5000
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dfa",
+        "key": "window_3",
+        "name": "Window 3",
+        "type": "window",
+        "x": 10,
+        "y": 27,
+        "data": {
+            "peepDelayMs": 5000
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dfb",
+        "key": "window_4",
+        "name": "Window 4",
+        "type": "window",
+        "x": 11,
+        "y": 27,
+        "data": {
+            "peepDelayMs": 5000
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dfc",
+        "key": "trashcan_1",
+        "name": "Trash 1",
+        "type": "trashcan",
+        "x": 18,
+        "y": 21,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dfd",
+        "key": "trashcan_2",
+        "name": "Trash 2",
+        "type": "trashcan",
+        "x": 19,
+        "y": 20,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dfe",
+        "key": "trashcan_3",
+        "name": "Trash 3",
+        "type": "trashcan",
+        "x": 17,
+        "y": 18,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1dff",
+        "key": "trashcan_4",
+        "name": "Trash 4",
+        "type": "trashcan",
+        "x": 16,
+        "y": 19,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e00",
+        "key": "bunny_1",
+        "name": "Bunny 1",
+        "type": "bunny",
+        "x": 29,
+        "y": 6,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e01",
+        "key": "bunny_2",
+        "name": "Bunny 2",
+        "type": "bunny",
+        "x": 28,
+        "y": 7,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e02",
+        "key": "bunny_3",
+        "name": "Bunny 3",
+        "type": "bunny",
+        "x": 27,
+        "y": 10,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e03",
+        "key": "park",
+        "name": "Bunny Park",
+        "type": "park_region",
+        "x": 22,
+        "y": 5,
+        "data": {
+            "bottomRightX": 39,
+            "bottomRightY": 15
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e04",
+        "key": "dare_location",
+        "name": "Dare Command Zone",
+        "type": "dare_region",
+        "x": 4,
+        "y": 6,
+        "data": {
+            "bottomRightX": 11,
+            "bottomRightY": 14
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e05",
+        "key": "game_location",
+        "name": "Casino Game Area",
+        "type": "game_region",
+        "x": 32,
+        "y": 36,
+        "data": {
+            "bottomRightX": 38,
+            "bottomRightY": 39
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e06",
+        "key": "cage_info_screen",
+        "name": "Cage Information Screen",
+        "type": "help_monitor",
+        "x": 15,
+        "y": 36,
+        "data": {
+            "bottomRightX": 16,
+            "bottomRightY": 36,
+            "displayKey": "cage_occupancy"
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1788945866463
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e07",
+        "key": "receptionist_position",
+        "name": "Receptionist Position",
+        "type": "bot_position",
+        "x": 10,
+        "y": 8,
+        "data": {
+            "role": "receptionist"
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a70d77af2e0400ff51d1e08",
+        "key": "game_mistress_position",
+        "name": "Game Mistress Position",
+        "type": "bot_position",
+        "x": 38,
+        "y": 38,
+        "data": {
+            "role": "game_mistress"
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6a7209dce101a0e67c9da492",
+        "key": "shower_pool_2",
+        "name": "Shower Pool 2",
+        "type": "shower",
+        "x": 0,
+        "y": 14,
+        "data": {
+            "broadcastX": 0,
+            "broadcastY": 15
+        },
+        "enabled": true,
+        "createdAt": 1785832286726,
+        "updatedAt": 1785832286726
+    },
+    {
+        "_id": "6a86147fc3c29c91fc3dbf70",
+        "key": "silly_bunny",
+        "name": "Silly Bunny",
+        "type": "bunny",
+        "x": 32,
+        "y": 25,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6ab0f68603854a26791e0dc4",
+        "key": "shower_room_4",
+        "name": "Shower Room 4",
+        "type": "shower",
+        "x": 13,
+        "y": 29,
+        "data": {
+            "broadcastX": 13,
+            "broadcastY": 28
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6ab0f6ee03854a26791e0dc5",
+        "key": "shower_room_5",
+        "name": "Shower Room 5",
+        "type": "shower",
+        "x": 13,
+        "y": 24,
+        "data": {
+            "broadcastX": 13,
+            "broadcastY": 23
+        },
+        "enabled": true,
+        "createdAt": 1785780087479,
+        "updatedAt": 1785780087479
+    },
+    {
+        "_id": "6ab0f79903854a26791e0dc6",
+        "key": "bed_room_5",
+        "name": "Bed Room 5",
+        "type": "bed",
+        "x": 16,
+        "y": 24,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785793121027,
+        "updatedAt": 1785793121027
+    },
+    {
+        "_id": "6ab0f7f703854a26791e0dc7",
+        "key": "bed_room_4",
+        "name": "Bed Room 4",
+        "type": "bed",
+        "x": 16,
+        "y": 29,
+        "data": {},
+        "enabled": true,
+        "createdAt": 1785793121027,
+        "updatedAt": 1785793121027
+    }
+]

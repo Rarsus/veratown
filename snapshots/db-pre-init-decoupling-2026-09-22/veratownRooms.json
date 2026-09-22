@@ -1,0 +1,41 @@
+[
+    {
+        "_id": "main",
+        "room": {
+            "Name": "Veratown",
+            "Language": "EN",
+            "Description": "[Romantic][Roleplay][Relaxation]",
+            "Admin": [252643, 250927, 252648, 254731, 254890, 234704],
+            "Whitelist": [],
+            "Ban": [],
+            "Background": "PartyBasement",
+            "Limit": 20,
+            "Game": "",
+            "SourceMemberNumber": 252643,
+            "Visibility": ["All"],
+            "Access": ["All"],
+            "Private": false,
+            "Locked": false,
+            "BlockCategory": [],
+            "Space": "X"
+        },
+        "updatedAt": 1790105177680,
+        "updatedBy": 250927
+    },
+    {
+        "_id": "veratownpark",
+        "room": {
+            "Name": "veratown park",
+            "Description": "Veratown Park - Welcome to frolic in the grass. Be aware of bunnies!",
+            "Background": "PartyBasement",
+            "Private": true,
+            "Locked": false,
+            "Space": "X",
+            "Limit": 20,
+            "Language": "EN",
+            "Admin": [250927, 260953]
+        },
+        "updatedAt": 1790105192751,
+        "updatedBy": null
+    }
+]

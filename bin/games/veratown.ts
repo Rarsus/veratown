@@ -801,6 +801,7 @@ export class Veratown {
             () => this.reloadLocations(),
             () => this.getStatus(),
             this.roomKey,
+            (featureKey) => this.getFeatureActivationStatus(featureKey),
         ).registerCommands();
         this.kidnappers?.registerCommands(
             new GamePluginCommandRouterImpl(this.commandParser, "kidnappers"),
@@ -873,9 +874,15 @@ export class Veratown {
     public async init(): Promise<void> {
         await Promise.all(this.pendingFeatureRegistrations);
 
-        // Watch for database changes and automatically reload affected locations
+        this.setContainmentFeaturesEnabled(false);
+        await this.setupRoom();
+        await this.setupCharacter();
+        this.attachContainmentFeatures();
+        await this.reloadLocations();
+        this.updateContainmentReadiness();
+
+        // Change watching is a recovery mechanism, not a room readiness gate.
         if (this.locationStore) {
-            await this.locationStore.watchLocations();
             this.locationStore.on("locationChanged", async (operationType) => {
                 logger.info(
                     "Database change detected, reloading locations...",
@@ -883,14 +890,27 @@ export class Veratown {
                 );
                 await this.reloadLocations();
             });
+            void this.locationStore
+                .watchLocations()
+                .then(() => {
+                    logger.info("Location change watcher active", {
+                        roomKey: this.roomKey,
+                    });
+                })
+                .catch((error) => {
+                    logger.warn("Location change watcher unavailable", {
+                        roomKey: this.roomKey,
+                        error: String(error),
+                    });
+                });
         }
+    }
 
-        this.setContainmentFeaturesEnabled(false);
-        await this.setupRoom();
-        await this.setupCharacter();
-        this.attachContainmentFeatures();
-        await this.reloadLocations();
-        this.updateContainmentReadiness();
+    public async shutdown(): Promise<void> {
+        await this.locationStore?.unwatchLocations();
+        this.locationStore?.removeAllListeners("locationChanged");
+        this.detachContainmentFeatures();
+        this.locationMonitorSystem?.detachFromRoom?.();
     }
 
     public async reloadLocations(): Promise<void> {
@@ -1237,6 +1257,33 @@ export class Veratown {
         return this.features;
     }
 
+    private getFeatureActivationStatus(featureKey: string): {
+        allowed: boolean;
+        reason?: string;
+    } {
+        if (featureKey === "casino") {
+            const status = this.containmentReadiness.get("casino");
+            return {
+                allowed: status?.ready ?? false,
+                reason:
+                    status?.reason ??
+                    "the casino bot is not connected and ready in this room",
+            };
+        }
+
+        if (featureKey === "shower") {
+            const status = this.containmentReadiness.get("shower");
+            return {
+                allowed: status?.ready ?? false,
+                reason:
+                    status?.reason ??
+                    "the main bot or shower narration dependency is unavailable",
+            };
+        }
+
+        return { allowed: true };
+    }
+
     private onChatRoomCreated = async () => {
         this.detachContainmentFeatures();
         await this.setupRoom();
@@ -1534,7 +1581,7 @@ export class Veratown {
         const showerReady =
             !this.conn2 || atPosition(this.conn2, SHOWER_BOT2_HOME_POSITION);
         const casinoReady =
-            !this.conn3 || atPosition(this.conn3, GAME_MISTRESS_POSITION);
+            !!this.conn3 && atPosition(this.conn3, GAME_MISTRESS_POSITION);
         const kennelTriggersReady = this.kennelSystem?.isReady() ?? false;
         const cageTriggersReady = this.cageSystem?.isReady() ?? false;
         const persistenceReady = this.container.has(
@@ -1640,6 +1687,7 @@ export class Veratown {
         } satisfies Record<ContainmentFeature, ContainmentReadinessDiagnostic>;
         const previous = this.containmentReadiness;
         this.setContainmentReadiness(readiness);
+        this.casino?.setDependencyAvailable(readiness.casino.ready);
 
         for (const [feature, status] of Object.entries(readiness) as Array<
             [ContainmentFeature, ContainmentReadinessDiagnostic]

@@ -379,23 +379,14 @@ export async function restartBotConnections(): Promise<void> {
         const previousConnections = activeConnections;
 
         try {
-            // Close existing game instance (if running Veratown)
-            if (activeVeratownGame) {
-                logger.info("Closing active Veratown game instance");
-                const container = activeVeratownGame.getDIContainer();
-                if (
-                    container.has(
-                        DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
-                    )
-                ) {
-                    container
-                        .get<KidnappersGameLifecycleService>(
-                            DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
-                        )
-                        .shutdownAll();
-                }
-                activeVeratownGame = undefined;
+            logger.info("Closing active Veratown room runtimes");
+            for (const game of activeVeratownRooms.values()) {
+                await game.shutdown();
             }
+            activeVeratownRooms.clear();
+            activeVeratownGame = undefined;
+            activeSharedVeratownServices?.kidnappersLifecycle.shutdownAll();
+            activeSharedVeratownServices = undefined;
 
             // Global state cleanup removed - using DI container exclusively
             // The container is recreated fresh on each game initialization
@@ -503,6 +494,7 @@ async function initializeVeratownGame(
     connections: BotConnections,
     database: DatabaseConnection | undefined,
     config: ConfigFile,
+    sharedServices: SharedVeratownServices,
     roomKey: string = "main",
 ): Promise<Veratown> {
     const logger = createLogger("VeratownInit");
@@ -519,9 +511,12 @@ async function initializeVeratownGame(
     const container = new DIContainer();
     container.register(DIServiceKeys.CONFIGURATION, config);
 
-    // Phase 2.3: Initialize unified store for cross-system coordination
-    const unifiedStore = new UnifiedCharacterStore(db);
-    await unifiedStore.initialize();
+    const {
+        unifiedStore,
+        mutationService,
+        kidnappersPersistence,
+        kidnappersLifecycle,
+    } = sharedServices;
     container.register(DIServiceKeys.UNIFIED_CHARACTER_STORE, unifiedStore);
     logger.info("UnifiedCharacterStore initialized");
     container.register(
@@ -531,67 +526,30 @@ async function initializeVeratownGame(
     container.register(DIServiceKeys.DEVICE_FACTORY, new DeviceFactory());
     container.register(
         DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-        new GameStateMutationServiceImpl(
-            unifiedStore,
-            unifiedStore.getEventBus(),
-        ),
+        mutationService,
     );
-    const kidnappersPersistence = new KidnappersGamePersistence(db);
-    await kidnappersPersistence.initialize();
     container.register(
         DIServiceKeys.KIDNAPPERS_GAME_PERSISTENCE,
         kidnappersPersistence,
     );
-    const kidnappersLifecycle = new KidnappersGameLifecycleService(
-        createLogger("KidnappersGameLifecycle"),
-        kidnappersPersistence,
-    );
-    await kidnappersLifecycle.recoverActiveSessions();
     container.register(
         DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
         kidnappersLifecycle,
     );
 
     // EPIC 2: Initialize CasinoVenueSystem for location-based bonuses
-    const venueSystem = new CasinoVenueSystem(
-        { venues: config.casino?.venues },
-        container.get<GameStateMutationService>(
-            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-        ),
+    container.register(
+        DIServiceKeys.CASINO_VENUE_SYSTEM,
+        sharedServices.venueSystem,
     );
-    container.register(DIServiceKeys.CASINO_VENUE_SYSTEM, venueSystem);
-    logger.info("CasinoVenueSystem initialized (location bonuses, EPIC 2)");
-
-    // EPIC 2: Initialize CasinoEngine for core game logic
-    const casinoEngine = new CasinoEngine(
-        unifiedStore,
-        venueSystem,
-        container.get<GameStateMutationService>(
-            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-        ),
+    container.register(
+        DIServiceKeys.CASINO_ENGINE,
+        sharedServices.casinoEngine,
     );
-    container.register(DIServiceKeys.CASINO_ENGINE, casinoEngine);
-    logger.info("CasinoEngine initialized (game logic extraction, EPIC 2)");
-
-    // Phase 5: Initialize cross-system subscribers
-    const subscribers = new CrossSystemSubscribers(
-        unifiedStore,
-        undefined,
-        undefined,
-        undefined,
-        container.get<GameStateMutationService>(
-            DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-        ),
+    container.register(
+        DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS,
+        sharedServices.subscribers,
     );
-    container.register(DIServiceKeys.CROSS_SYSTEM_SUBSCRIBERS, subscribers);
-    subscribers.initializeKidnappersGameSubscribers({
-        audit: createKidnappersAuditSubscriber(
-            container.get<GameStateMutationService>(
-                DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
-            ),
-        ),
-    });
-    logger.info("CrossSystemSubscribers initialized");
 
     // Phase 2A.4: Initialize Keypad Access Control System
     const keypadDefService = new KeypadDefinitionService(db, roomKey);
@@ -639,17 +597,26 @@ async function initializeVeratownGame(
         bot: connections.main.Player.Name,
         room: connections.main.chatRoom?.Name,
     });
-    await game.init();
+    try {
+        await game.init();
+    } catch (error) {
+        await game.shutdown().catch((shutdownError) => {
+            logger.error(
+                "Failed to clean up room initialization",
+                shutdownError,
+                {
+                    roomKey,
+                },
+            );
+        });
+        throw error;
+    }
     logger.info("Veratown room runtime initialized", {
         roomKey,
         bot: connections.main.Player.Name,
         room: connections.main.chatRoom?.Name,
         status: game.getStatus(),
     });
-
-    // Phase 5: Activate event subscriptions after systems are ready
-    await subscribers.initialize();
-    logger.info("Cross-system event subscriptions activated");
 
     const containmentReadiness = game.getContainmentReadiness();
     if (game.isContainmentReady()) {
@@ -671,6 +638,66 @@ async function initializeVeratownGame(
     return game;
 }
 
+interface SharedVeratownServices {
+    unifiedStore: UnifiedCharacterStore;
+    mutationService: GameStateMutationService;
+    kidnappersPersistence: KidnappersGamePersistence;
+    kidnappersLifecycle: KidnappersGameLifecycleService;
+    venueSystem: CasinoVenueSystem;
+    casinoEngine: CasinoEngine;
+    subscribers: CrossSystemSubscribers;
+}
+
+async function initializeSharedVeratownServices(
+    db: Db,
+    config: ConfigFile,
+): Promise<SharedVeratownServices> {
+    const logger = createLogger("VeratownInit");
+    const unifiedStore = new UnifiedCharacterStore(db);
+    await unifiedStore.initialize();
+    const mutationService = new GameStateMutationServiceImpl(
+        unifiedStore,
+        unifiedStore.getEventBus(),
+    );
+    const kidnappersPersistence = new KidnappersGamePersistence(db);
+    await kidnappersPersistence.initialize();
+    const kidnappersLifecycle = new KidnappersGameLifecycleService(
+        createLogger("KidnappersGameLifecycle"),
+        kidnappersPersistence,
+    );
+    await kidnappersLifecycle.recoverActiveSessions();
+    const venueSystem = new CasinoVenueSystem(
+        { venues: config.casino?.venues },
+        mutationService,
+    );
+    const casinoEngine = new CasinoEngine(
+        unifiedStore,
+        venueSystem,
+        mutationService,
+    );
+    const subscribers = new CrossSystemSubscribers(
+        unifiedStore,
+        undefined,
+        undefined,
+        undefined,
+        mutationService,
+    );
+    subscribers.initializeKidnappersGameSubscribers({
+        audit: createKidnappersAuditSubscriber(mutationService),
+    });
+    await subscribers.initialize();
+    logger.info("Shared Veratown services initialized");
+    return {
+        unifiedStore,
+        mutationService,
+        kidnappersPersistence,
+        kidnappersLifecycle,
+        venueSystem,
+        casinoEngine,
+        subscribers,
+    };
+}
+
 export interface RopeyBot {
     connector: API_Connector;
     config: ConfigFile;
@@ -689,6 +716,7 @@ let activeDatabase: DatabaseConnection | undefined;
 let activeDiscordClient: any | undefined;
 let activeVeratownGame: Veratown | undefined;
 const activeVeratownRooms = new Map<string, Veratown>();
+let activeSharedVeratownServices: SharedVeratownServices | undefined;
 let shutdownPromise: Promise<void> | undefined;
 let cachedServerUrl: string | undefined;
 let cachedConfig: ConfigFile | undefined;
@@ -699,9 +727,26 @@ async function initializeVeratownRooms(
     config: ConfigFile,
 ): Promise<Veratown> {
     const logger = createLogger("VeratownInit");
+    if (!database) {
+        throw new Error(
+            "Database connection required for Veratown initialization",
+        );
+    }
+    const sharedServices = await initializeSharedVeratownServices(
+        database.db,
+        config,
+    );
+    activeSharedVeratownServices = sharedServices;
+    activeVeratownRooms.clear();
     const mainPromise = (async () => {
         logger.info("Starting Veratown room runtime", { roomKey: "main" });
-        return initializeVeratownGame(connections, database, config, "main");
+        return initializeVeratownGame(
+            connections,
+            database,
+            config,
+            sharedServices,
+            "main",
+        );
     })();
 
     const secondaryRoomKey = connections.roomKeys?.secondRoom;
@@ -711,6 +756,7 @@ async function initializeVeratownRooms(
                   { main: connections.secondRoom },
                   database,
                   config,
+                  sharedServices,
                   secondaryRoomKey,
               ).catch((error) => {
                   logger.error(
@@ -732,14 +778,19 @@ async function initializeVeratownRooms(
         });
     }
 
-    const mainGame = await mainPromise;
-    activeVeratownRooms.clear();
-    activeVeratownRooms.set("main", mainGame);
-
-    const secondaryGame = await secondaryPromise;
-    if (secondaryGame && secondaryRoomKey) {
-        activeVeratownRooms.set(secondaryRoomKey, secondaryGame);
+    if (secondaryPromise) {
+        void secondaryPromise.then((secondaryGame) => {
+            if (secondaryGame && secondaryRoomKey) {
+                activeVeratownRooms.set(secondaryRoomKey, secondaryGame);
+                logger.info("Secondary Veratown room runtime active", {
+                    roomKey: secondaryRoomKey,
+                });
+            }
+        });
     }
+
+    const mainGame = await mainPromise;
+    activeVeratownRooms.set("main", mainGame);
 
     return mainGame;
 }
@@ -762,29 +813,29 @@ async function shutdown(): Promise<void> {
             }
         }
 
-        if (activeVeratownGame) {
+        for (const [roomKey, game] of activeVeratownRooms) {
             try {
-                const container = activeVeratownGame.getDIContainer();
-                if (
-                    container.has(
-                        DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
-                    )
-                ) {
-                    container
-                        .get<KidnappersGameLifecycleService>(
-                            DIServiceKeys.KIDNAPPERS_GAME_LIFECYCLE_SERVICE,
-                        )
-                        .shutdownAll();
-                    logger.info("KidnappersGameLifecycleService shut down");
-                }
+                await game.shutdown();
+                logger.info("Veratown room shut down", { roomKey });
             } catch (error) {
-                logger.error(
-                    "Error shutting down KidnappersGameLifecycleService",
-                    error,
-                    {},
-                );
+                logger.error("Error shutting down Veratown room", error, {
+                    roomKey,
+                });
             }
         }
+        activeVeratownRooms.clear();
+
+        try {
+            activeSharedVeratownServices?.kidnappersLifecycle.shutdownAll();
+            logger.info("KidnappersGameLifecycleService shut down");
+        } catch (error) {
+            logger.error(
+                "Error shutting down KidnappersGameLifecycleService",
+                error,
+                {},
+            );
+        }
+        activeSharedVeratownServices = undefined;
 
         // Shutdown BC bot connections
         await closeBotConnections(activeConnections);
@@ -841,10 +892,16 @@ async function startConfiguredGame({
                 process.exit(1);
             }
             main.accountUpdate({ Nickname: "Kidnappers Bot" });
+            const sharedServices = await initializeSharedVeratownServices(
+                database.db,
+                config,
+            );
+            activeSharedVeratownServices = sharedServices;
             activeVeratownGame = await initializeVeratownGame(
                 connections,
                 database,
                 config,
+                sharedServices,
                 "main",
             );
             return;

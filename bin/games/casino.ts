@@ -105,6 +105,7 @@ export class Casino implements GamePlugin {
     public readonly label = "Casino";
     public readonly critical = false;
     public enabled = true;
+    private dependencyAvailable = true;
 
     private game: Game;
     private commandParser?: CommandParser;
@@ -211,7 +212,7 @@ export class Casino implements GamePlugin {
             this.conn,
             this.key,
             this.label,
-            () => this.enabled,
+            () => this.enabled && this.dependencyAvailable,
             async (sender, msg, command, args) => {
                 const handler = this.casinoCommandHandlers[command];
                 if (handler) {
@@ -236,6 +237,10 @@ export class Casino implements GamePlugin {
         this.cocktailCatalog = new CocktailCatalogService(db);
         this.conn.setItemPermission(ItemPermissionLevel.OwnerOnly);
         this.gameConfig = config;
+    }
+
+    public setDependencyAvailable(available: boolean): void {
+        this.dependencyAvailable = available;
     }
 
     /**
