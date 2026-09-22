@@ -267,6 +267,30 @@ export class Veratown {
             undefined,
             roomKey === "main" ? [GAME_LOCATION] : undefined,
         );
+        this.conn.on("Message", (ev) => {
+            const content =
+                ev.message.Content.startsWith("(") &&
+                ev.message.Content.endsWith(")")
+                    ? ev.message.Content.slice(1, -1)
+                    : ev.message.Content;
+            const isCommand =
+                (ev.message.Type === "Whisper" || ev.message.Type === "Chat") &&
+                content.startsWith("!") &&
+                content.length > 1;
+            const isHiddenCommand =
+                ev.message.Type === "Hidden" &&
+                content.startsWith("ChatRoomBot ");
+            if (isCommand || isHiddenCommand) {
+                logger.info("Veratown command message received", {
+                    roomKey: this.roomKey,
+                    bot: this.conn.Player.Name,
+                    room: this.conn.chatRoom?.Name,
+                    sender: ev.sender.MemberNumber,
+                    messageType: ev.message.Type,
+                    command: content.slice(0, 120),
+                });
+            }
+        });
         this.regionManager = new RegionManager();
 
         if (db) {
