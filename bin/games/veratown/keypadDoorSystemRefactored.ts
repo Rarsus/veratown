@@ -476,8 +476,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     /**
      * Handle /code command via CommandParser
      */
-    private onCodeCommandParser = async (): Promise<void> => {
-        // CommandParser handles this, we just need to be registered
+    private onCodeCommandParser = async (
+        character: API_Character,
+        _message: unknown,
+        args: string[],
+    ): Promise<void> => {
+        await this.onCodeMessage(character, args.join(" "));
     };
 
     private onDoorCommandParser = async (

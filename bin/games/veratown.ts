@@ -1450,20 +1450,21 @@ export class Veratown {
     };
 
     private setupCharacter = async () => {
-        const mainPositioned = await this.moveBotToPosition(
-            this.conn,
-            RECEPTIONIST_POSITION,
-            "main",
-        );
-        this.conn.Player.SetActivePose(["Kneel"]);
-        if (mainPositioned) {
-            await this.syncVerifiedBotPosition(
-                this.conn,
-                RECEPTIONIST_POSITION,
-            );
-        }
-
         await Promise.all([
+            (async () => {
+                const mainPositioned = await this.moveBotToPosition(
+                    this.conn,
+                    RECEPTIONIST_POSITION,
+                    "main",
+                );
+                this.conn.Player.SetActivePose(["Kneel"]);
+                if (mainPositioned) {
+                    await this.syncVerifiedBotPosition(
+                        this.conn,
+                        RECEPTIONIST_POSITION,
+                    );
+                }
+            })(),
             this.conn2
                 ? (async () => {
                       const showerPositioned = await this.moveBotToPosition(

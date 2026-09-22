@@ -41,6 +41,18 @@ interface VeratownMapBackupDoc {
 
 const MAX_BACKUPS = 10; // Keep last 10 map versions
 
+function validateMapData(mapData: ServerChatRoomMapData): void {
+    if (
+        typeof mapData?.Type !== "string" ||
+        typeof mapData.Tiles !== "string" ||
+        typeof mapData.Objects !== "string" ||
+        mapData.Tiles.length !== 1600 ||
+        mapData.Objects.length !== 1600
+    ) {
+        throw new Error("Veratown map must contain 40x40 tile and object data");
+    }
+}
+
 export class VeratownMapStore {
     private collection: Collection<VeratownMapDoc>;
     private backupCollection: Collection<VeratownMapBackupDoc>;
@@ -72,6 +84,8 @@ export class VeratownMapStore {
         mapData: ServerChatRoomMapData,
         updatedBy?: number,
     ): Promise<void> {
+        validateMapData(mapData);
+
         // 1. Load current map (if it exists)
         const currentDoc = await this.collection.findOne({
             $or: [
