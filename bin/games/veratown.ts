@@ -54,6 +54,7 @@ import {
     getLifecycleObjectId,
 } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
+import { VeratownRoomStore } from "./veratown/roomStore";
 import {
     VeratownLocationStore,
     VeratownLocationDoc,
@@ -132,6 +133,7 @@ export interface VeratownConnections {
     main: API_Connector;
     shower?: API_Connector;
     casino?: API_Connector;
+    secondRoom?: API_Connector;
 }
 
 export class Veratown {
@@ -170,6 +172,7 @@ export class Veratown {
         "/bot map reset - Restore default map layout",
         "/bot map export - Export current layout for backup",
         "!map import <data> - Import a previously exported layout. Send as a standalone message.",
+        "/bot room save - Save this room's configuration and map to the database",
         "/bot maintenance - Begin 1-minute shutdown sequence",
         "/bot adminhelp - View all admin commands",
         "/bot location help - View location management commands with examples",
@@ -194,6 +197,7 @@ export class Veratown {
     private conn: API_Connector;
     private conn2?: API_Connector;
     private conn3?: API_Connector;
+    private readonly roomKey: string;
 
     private dare?: Dare;
     private casino?: Casino;
@@ -238,6 +242,7 @@ export class Veratown {
     // layout falls back to the built-in default (MAP, from veratownConfig.ts)
     // and can't be saved/persisted across restarts.
     private mapStore?: VeratownMapStore;
+    private roomStore?: VeratownRoomStore;
 
     // Stores location data (cages, keypads, monitors, etc.) in the database,
     // with config fallback. Only set when mongo_uri/mongo_db are configured.
@@ -249,10 +254,12 @@ export class Veratown {
         dareConfig?: DareConfig,
         private casinoConfig?: CasinoConfig,
         container?: DIContainer,
+        roomKey: string = "main",
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
         this.conn3 = connections.casino;
+        this.roomKey = roomKey;
         this.container = container || new DIContainer();
 
         this.commandParser = new CommandParser(this.conn, undefined, [
@@ -264,7 +271,8 @@ export class Veratown {
             const effectiveDareConfig: DareConfig | undefined =
                 dareConfig ??
                 (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
-            this.locationStore = new VeratownLocationStore(db);
+            this.locationStore = new VeratownLocationStore(db, this.roomKey);
+            this.roomStore = new VeratownRoomStore(db);
             this.dare = this.initFeature(() => {
                 // Phase 5: Direct UnifiedCharacterStore access (no adapters)
                 // Use DI container to get unified store
@@ -299,7 +307,7 @@ export class Veratown {
                     mutationService,
                 );
             });
-            this.mapStore = new VeratownMapStore(db);
+            this.mapStore = new VeratownMapStore(db, this.roomKey);
 
             // EPIC 1.3: Initialize Veratown Architecture Systems (Phase 2 Integration)
             // These systems provide core functionality: access control, furniture interactions,
@@ -324,19 +332,11 @@ export class Veratown {
                       DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                   )
                 : undefined;
-            const definitionService = this.container.has(
-                DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
-            )
-                ? this.container.get<KeypadDefinitionService>(
-                      DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
-                  )
-                : new KeypadDefinitionService(db);
-            if (!this.container.has(DIServiceKeys.KEYPAD_DEFINITION_SERVICE)) {
-                this.container.register(
-                    DIServiceKeys.KEYPAD_DEFINITION_SERVICE,
-                    definitionService,
-                );
-            }
+            // Definitions are room-scoped; never reuse the shared main-room instance.
+            const definitionService = new KeypadDefinitionService(
+                db,
+                this.roomKey,
+            );
             const accessService = this.container.has(
                 DIServiceKeys.KEYPAD_ACCESS_SERVICE,
             )
@@ -730,12 +730,14 @@ export class Veratown {
             this.commandParser,
             this.features,
             this.mapStore,
+            this.roomStore,
             this.locationStore,
             this.regionManager,
             (character) => this.freeCharacter(character),
             this.conn2,
             () => this.reloadLocations(),
             () => this.getStatus(),
+            this.roomKey,
         ).registerCommands();
         this.kidnappers?.registerCommands(
             new GamePluginCommandRouterImpl(this.commandParser, "kidnappers"),

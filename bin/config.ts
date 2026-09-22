@@ -40,6 +40,10 @@ export interface ConfigFile {
     // with the main bot's appearance.
     user3?: string;
     password3?: string;
+    user4?: string;
+    password4?: string;
+
+    rooms?: VeratownRoomConfig[];
 
     // Discord Bot Configuration (optional)
     discord_enabled?: boolean;
@@ -50,6 +54,12 @@ export interface ConfigFile {
 
     casino?: CasinoConfig;
     dare?: DareConfig;
+}
+
+export interface VeratownRoomConfig {
+    key: string;
+    bot: "main" | "user2" | "user3" | "user4";
+    room?: RoomDefinition;
 }
 
 const nonEmptyString = z.string().trim().min(1);
@@ -89,6 +99,23 @@ export const configSchema = z
         password2: z.string().default(""),
         user3: nonEmptyString.optional(),
         password3: z.string().optional(),
+        user4: nonEmptyString.optional(),
+        password4: z.string().optional(),
+        rooms: z
+            .array(
+                z.object({
+                    key: nonEmptyString,
+                    bot: z.enum(["main", "user2", "user3", "user4"]),
+                    room: z
+                        .custom<RoomDefinition>(
+                            (value) =>
+                                typeof value === "object" && value !== null,
+                            "must be an object",
+                        )
+                        .optional(),
+                }),
+            )
+            .optional(),
         discord_enabled: z.boolean().default(false),
         discord_token: nonEmptyString.optional(),
         discord_guild_id: nonEmptyString.optional(),
@@ -136,6 +163,7 @@ export const configSchema = z
 
         requirePair("user2", "password2", "user2", "password2");
         requirePair("user3", "password3", "user3", "password3");
+        requirePair("user4", "password4", "user4", "password4");
         requirePair("mongo_uri", "mongo_db", "mongo_uri", "mongo_db");
 
         if (

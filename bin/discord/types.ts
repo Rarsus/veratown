@@ -124,6 +124,8 @@ export interface CommandContext {
     userId: string;
     guildId: string;
     isAdmin: boolean;
+    /** Room inferred by the caller when available; Discord commands must otherwise provide roomKey explicitly. */
+    roomKey?: string;
 }
 
 /**

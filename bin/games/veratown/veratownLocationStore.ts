@@ -19,6 +19,7 @@ import { createLogger } from "../../logging";
 
 export interface VeratownLocationDoc {
     _id?: string; // e.g. "cage_entrance", "basement_keypad"
+    roomKey?: string;
     key: string; // Unique identifier for this location type
     name: string;
     type:
@@ -70,7 +71,10 @@ export class VeratownLocationStore extends EventEmitter {
     private loadingLocations?: Promise<VeratownLocationDoc[]>;
     private changeStream?: ChangeStream<VeratownLocationDoc>;
 
-    constructor(private db: Db) {
+    constructor(
+        private db: Db,
+        private readonly roomKey: string = "main",
+    ) {
         super();
         this.locations =
             this.db.collection<VeratownLocationDoc>("veratownLocations");
@@ -78,8 +82,16 @@ export class VeratownLocationStore extends EventEmitter {
 
     public async init(): Promise<void> {
         if (this.inited) return;
-        await this.locations.createIndex({ key: 1 }, { unique: true });
-        await this.locations.createIndex({ type: 1 });
+        try {
+            await this.locations.dropIndex("key_1");
+        } catch {
+            // The legacy index is absent on new databases.
+        }
+        await this.locations.createIndex(
+            { roomKey: 1, key: 1 },
+            { unique: true },
+        );
+        await this.locations.createIndex({ roomKey: 1, type: 1 });
         this.inited = true;
     }
 
@@ -116,14 +128,20 @@ export class VeratownLocationStore extends EventEmitter {
     ): Promise<VeratownLocationDoc[]> {
         await this.init();
 
-        let docs = await this.locations.find({}).toArray();
+        let docs = await this.locations.find(this.roomFilter()).toArray();
         if (docs.length === 0 && fallbackConfig && fallbackConfig.length > 0) {
             // Database is empty - seed it from config
             this.logger?.info(
                 `[veratown] Database empty, seeding ${fallbackConfig.length} locations from config`,
             );
-            await this.locations.insertMany(fallbackConfig);
-            docs = await this.locations.find({}).toArray();
+            await this.locations.insertMany(
+                fallbackConfig.map((location) => ({
+                    ...location,
+                    roomKey: this.roomKey,
+                    _id: `${this.roomKey}:${location.key}`,
+                })),
+            );
+            docs = await this.locations.find(this.roomFilter()).toArray();
         }
 
         return docs;
@@ -138,7 +156,8 @@ export class VeratownLocationStore extends EventEmitter {
         await this.init();
         await this.locations.insertOne({
             ...location,
-            _id: location.key,
+            roomKey: this.roomKey,
+            _id: `${this.roomKey}:${location.key}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
@@ -153,7 +172,7 @@ export class VeratownLocationStore extends EventEmitter {
     ): Promise<boolean> {
         await this.init();
         const result = await this.locations.findOneAndUpdate(
-            { key },
+            { ...this.roomFilter(), key },
             {
                 $set: {
                     ...updates,
@@ -169,7 +188,7 @@ export class VeratownLocationStore extends EventEmitter {
      */
     public async getLocation(key: string): Promise<VeratownLocationDoc | null> {
         await this.init();
-        return this.locations.findOne({ key });
+        return this.locations.findOne({ ...this.roomFilter(), key });
     }
 
     /**
@@ -180,7 +199,7 @@ export class VeratownLocationStore extends EventEmitter {
     ): Promise<VeratownLocationDoc[]> {
         await this.init();
         return this.locations
-            .find({ type: type as any, enabled: true })
+            .find({ ...this.roomFilter(), type: type as any, enabled: true })
             .toArray();
     }
 
@@ -189,7 +208,7 @@ export class VeratownLocationStore extends EventEmitter {
      */
     public async getAllLocations(): Promise<VeratownLocationDoc[]> {
         await this.init();
-        return this.locations.find({}).toArray();
+        return this.locations.find(this.roomFilter()).toArray();
     }
 
     /**
@@ -197,7 +216,10 @@ export class VeratownLocationStore extends EventEmitter {
      */
     public async deleteLocation(key: string): Promise<boolean> {
         await this.init();
-        const result = await this.locations.deleteOne({ key });
+        const result = await this.locations.deleteOne({
+            ...this.roomFilter(),
+            key,
+        });
         return result.deletedCount > 0;
     }
 
@@ -216,7 +238,7 @@ export class VeratownLocationStore extends EventEmitter {
      */
     public async clearAllLocations(): Promise<void> {
         await this.init();
-        await this.locations.deleteMany({});
+        await this.locations.deleteMany(this.roomFilter());
     }
 
     /**
@@ -252,5 +274,11 @@ export class VeratownLocationStore extends EventEmitter {
             await this.changeStream.close();
             this.changeStream = undefined;
         }
+    }
+
+    private roomFilter(): Record<string, unknown> {
+        return this.roomKey === "main"
+            ? { $or: [{ roomKey: "main" }, { roomKey: { $exists: false } }] }
+            : { roomKey: this.roomKey };
     }
 }

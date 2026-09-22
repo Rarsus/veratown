@@ -22,6 +22,7 @@ import { KeypadAccessRecord } from "../shared/unifiedCharacterTypes";
  */
 export interface KeypadDoorDefinitionDoc {
     _id: string;
+    roomKey?: string;
     doorKey: string; // Unique identifier: "prison_cell_1_door"
 
     // Door tile position on map
@@ -63,6 +64,7 @@ export interface KeypadDoorDefinitionDoc {
  */
 export interface KeypadGroupDefinitionDoc {
     _id: string;
+    roomKey?: string;
 
     // Identity
     doorKey: string; // Which door this group controls access to

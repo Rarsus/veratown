@@ -20,6 +20,7 @@ import { Collection, Db } from "mongodb";
 // recreated, without needing a code change/redeploy.
 interface VeratownMapDoc {
     _id: string;
+    roomKey?: string;
     mapData: ServerChatRoomMapData;
     updatedAt: number;
     // Member number of the admin who last saved this layout via
@@ -30,6 +31,7 @@ interface VeratownMapDoc {
 // Backup document storing previous map versions for restore/rollback
 interface VeratownMapBackupDoc {
     _id: string; // e.g., "backup_1723814400000"
+    roomKey?: string;
     mapData: ServerChatRoomMapData;
     backedUpAt: number; // timestamp when this backup was created
     backedUpBy?: number; // member number of the admin who triggered the save
@@ -37,14 +39,16 @@ interface VeratownMapBackupDoc {
     version: number; // sequential version number for easy reference
 }
 
-const DOC_ID = "current";
 const MAX_BACKUPS = 10; // Keep last 10 map versions
 
 export class VeratownMapStore {
     private collection: Collection<VeratownMapDoc>;
     private backupCollection: Collection<VeratownMapBackupDoc>;
 
-    public constructor(private db: Db) {
+    public constructor(
+        private db: Db,
+        private readonly roomKey: string = "main",
+    ) {
         this.collection = this.db.collection<VeratownMapDoc>("veratownMap");
         this.backupCollection =
             this.db.collection<VeratownMapBackupDoc>("veratownMapBackups");
@@ -54,7 +58,12 @@ export class VeratownMapStore {
     // yet (eg. on a brand new database) - callers should fall back to the
     // built-in default map (veratownConfig.ts's MAP) in that case.
     public async load(): Promise<ServerChatRoomMapData | undefined> {
-        const doc = await this.collection.findOne({ _id: DOC_ID });
+        const doc = await this.collection.findOne({
+            $or: [
+                { _id: this.roomKey, roomKey: this.roomKey },
+                ...(this.roomKey === "main" ? [{ _id: "current" }] : []),
+            ],
+        });
         return doc?.mapData;
     }
 
@@ -64,13 +73,19 @@ export class VeratownMapStore {
         updatedBy?: number,
     ): Promise<void> {
         // 1. Load current map (if it exists)
-        const currentDoc = await this.collection.findOne({ _id: DOC_ID });
+        const currentDoc = await this.collection.findOne({
+            $or: [
+                { _id: this.roomKey, roomKey: this.roomKey },
+                ...(this.roomKey === "main" ? [{ _id: "current" }] : []),
+            ],
+        });
 
         // 2. Back it up before overwriting
         if (currentDoc?.mapData) {
             const backupId = `backup_${Date.now()}`;
             await this.backupCollection.insertOne({
                 _id: backupId,
+                roomKey: this.roomKey,
                 mapData: currentDoc.mapData,
                 backedUpAt: Date.now(),
                 backedUpBy: updatedBy,
@@ -84,37 +99,66 @@ export class VeratownMapStore {
 
         // 4. Update current map
         await this.collection.updateOne(
-            { _id: DOC_ID },
-            { $set: { mapData, updatedAt: Date.now(), updatedBy } },
+            { _id: this.roomKey },
+            {
+                $set: {
+                    roomKey: this.roomKey,
+                    mapData,
+                    updatedAt: Date.now(),
+                    updatedBy,
+                },
+            },
             { upsert: true },
         );
+        if (this.roomKey === "main") {
+            await this.collection.deleteOne({ _id: "current" });
+        }
     }
 
     // Removes the stored layout entirely, so the next load() falls back to
     // the built-in default map again.
     public async reset(): Promise<void> {
-        await this.collection.deleteOne({ _id: DOC_ID });
+        await this.collection.deleteOne({ _id: this.roomKey });
+        if (this.roomKey === "main") {
+            await this.collection.deleteOne({ _id: "current" });
+        }
     }
 
     // Get list of all backups, sorted by most recent first
     public async getBackups(): Promise<VeratownMapBackupDoc[]> {
         return this.backupCollection
-            .find({})
+            .find(this.roomBackupFilter())
             .sort({ backedUpAt: -1 })
             .toArray();
     }
 
     // Restore a specific backup by ID
     public async restoreBackup(backupId: string): Promise<void> {
-        const backup = await this.backupCollection.findOne({ _id: backupId });
+        const backup = await this.backupCollection.findOne({
+            _id: backupId,
+            ...(this.roomKey === "main"
+                ? {
+                      $or: [
+                          { roomKey: "main" },
+                          { roomKey: { $exists: false } },
+                      ],
+                  }
+                : { roomKey: this.roomKey }),
+        });
         if (!backup) throw new Error(`Backup ${backupId} not found`);
 
         // Save current as backup before restoring
-        const currentDoc = await this.collection.findOne({ _id: DOC_ID });
+        const currentDoc = await this.collection.findOne({
+            $or: [
+                { _id: this.roomKey, roomKey: this.roomKey },
+                ...(this.roomKey === "main" ? [{ _id: "current" }] : []),
+            ],
+        });
         if (currentDoc?.mapData) {
             const newBackupId = `backup_${Date.now()}`;
             await this.backupCollection.insertOne({
                 _id: newBackupId,
+                roomKey: this.roomKey,
                 mapData: currentDoc.mapData,
                 backedUpAt: Date.now(),
                 backedUpFrom: currentDoc.updatedAt,
@@ -124,8 +168,14 @@ export class VeratownMapStore {
 
         // Restore the backup
         await this.collection.updateOne(
-            { _id: DOC_ID },
-            { $set: { mapData: backup.mapData, updatedAt: Date.now() } },
+            { _id: this.roomKey },
+            {
+                $set: {
+                    roomKey: this.roomKey,
+                    mapData: backup.mapData,
+                    updatedAt: Date.now(),
+                },
+            },
             { upsert: true },
         );
 
@@ -133,7 +183,7 @@ export class VeratownMapStore {
     }
 
     private async getBackupCount(): Promise<number> {
-        return this.backupCollection.countDocuments({});
+        return this.backupCollection.countDocuments(this.roomBackupFilter());
     }
 
     private async pruneOldBackups(): Promise<void> {
@@ -141,7 +191,7 @@ export class VeratownMapStore {
         if (count > MAX_BACKUPS) {
             const toDelete = count - MAX_BACKUPS;
             const oldestBackups = await this.backupCollection
-                .find({})
+                .find(this.roomBackupFilter())
                 .sort({ backedUpAt: 1 })
                 .limit(toDelete)
                 .toArray();
@@ -150,5 +200,11 @@ export class VeratownMapStore {
                 await this.backupCollection.deleteOne({ _id: backup._id });
             }
         }
+    }
+
+    private roomBackupFilter(): Record<string, unknown> {
+        return this.roomKey === "main"
+            ? { $or: [{ roomKey: "main" }, { roomKey: { $exists: false } }] }
+            : { roomKey: this.roomKey };
     }
 }

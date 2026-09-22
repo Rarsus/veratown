@@ -143,6 +143,12 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         config.user3 = process.env.BOT_USER3;
     if (process.env.BOT_PASSWORD3 !== undefined)
         config.password3 = process.env.BOT_PASSWORD3;
+    if (process.env.BOT_USER4 !== undefined)
+        config.user4 = process.env.BOT_USER4;
+    if (process.env.BOT_PASSWORD4 !== undefined)
+        config.password4 = process.env.BOT_PASSWORD4;
+    const roomProfiles = parseJsonArray(process.env.BOT_ROOMS, "BOT_ROOMS");
+    if (roomProfiles) config.rooms = roomProfiles;
 
     // ============================================================================
     // ENVIRONMENT AND GAME SETTINGS
@@ -350,11 +356,23 @@ export async function restartBotConnections(): Promise<void> {
                 logger.info(
                     "Reinitializing Veratown with fresh configuration and map",
                 );
-                await initializeVeratownGame(
+                activeVeratownGame = await initializeVeratownGame(
                     newConnections,
                     activeDatabase,
                     cachedConfig,
+                    "main",
                 );
+                if (
+                    newConnections.secondRoom &&
+                    newConnections.roomKeys?.secondRoom
+                ) {
+                    await initializeVeratownGame(
+                        { main: newConnections.secondRoom },
+                        activeDatabase,
+                        cachedConfig,
+                        newConnections.roomKeys.secondRoom,
+                    );
+                }
                 logger.info(
                     "Veratown game reinitialized with room configuration and map loaded",
                 );
@@ -417,7 +435,8 @@ async function initializeVeratownGame(
     connections: BotConnections,
     database: DatabaseConnection | undefined,
     config: ConfigFile,
-): Promise<void> {
+    roomKey: string = "main",
+): Promise<Veratown> {
     const logger = createLogger("VeratownInit");
 
     if (!database) {
@@ -545,9 +564,9 @@ async function initializeVeratownGame(
         config.dare,
         config.casino,
         container,
+        roomKey,
     );
     await game.init();
-    activeVeratownGame = game;
 
     // Phase 5: Activate event subscriptions after systems are ready
     await subscribers.initialize();
@@ -570,6 +589,7 @@ async function initializeVeratownGame(
         );
     }
     connections.main.setBotDescription(Veratown.description);
+    return game;
 }
 
 export interface RopeyBot {
@@ -669,8 +689,20 @@ async function startConfiguredGame({
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
             // Use centralized initialization that handles both startup and restart
-            await initializeVeratownGame(connections, database, config);
-            activeVeratownGame = activeVeratownGame; // Reference already stored in function
+            activeVeratownGame = await initializeVeratownGame(
+                connections,
+                database,
+                config,
+                "main",
+            );
+            if (connections.secondRoom && connections.roomKeys?.secondRoom) {
+                await initializeVeratownGame(
+                    { main: connections.secondRoom },
+                    database,
+                    config,
+                    connections.roomKeys.secondRoom,
+                );
+            }
 
             logger.info(
                 "Phase 5 adapter cleanup complete - 100% unified architecture",
@@ -687,7 +719,12 @@ async function startConfiguredGame({
                 process.exit(1);
             }
             main.accountUpdate({ Nickname: "Kidnappers Bot" });
-            await initializeVeratownGame(connections, database, config);
+            activeVeratownGame = await initializeVeratownGame(
+                connections,
+                database,
+                config,
+                "main",
+            );
             return;
         }
         case "roleplay": {

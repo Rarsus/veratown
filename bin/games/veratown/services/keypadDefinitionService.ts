@@ -39,7 +39,10 @@ export class KeypadDefinitionService extends EventEmitter {
     private groupDefinitions: Collection<KeypadGroupDefinitionDoc>;
     private doorChangeStream?: ChangeStream<KeypadDoorDefinitionDoc>;
 
-    constructor(private db: Db) {
+    constructor(
+        private db: Db,
+        private readonly roomKey = "main",
+    ) {
         super();
         this.doorDefinitions = this.db.collection("keypadDoorDefinitions");
         this.groupDefinitions = this.db.collection("keypadGroupDefinitions");
@@ -51,17 +54,17 @@ export class KeypadDefinitionService extends EventEmitter {
     async init(): Promise<void> {
         // Door definition indexes
         await this.doorDefinitions.createIndex(
-            { doorKey: 1 },
+            { roomKey: 1, doorKey: 1 },
             { unique: true },
         );
         await this.doorDefinitions.createIndex({ enabled: 1 });
 
         // Group definition indexes
         await this.groupDefinitions.createIndex(
-            { doorKey: 1, groupName: 1 },
+            { roomKey: 1, doorKey: 1, groupName: 1 },
             { unique: true },
         );
-        await this.groupDefinitions.createIndex({ doorKey: 1 });
+        await this.groupDefinitions.createIndex({ roomKey: 1, doorKey: 1 });
         await this.groupDefinitions.createIndex({ groupType: 1 });
     }
 
@@ -73,7 +76,7 @@ export class KeypadDefinitionService extends EventEmitter {
     async getDoorDefinition(
         doorKey: string,
     ): Promise<KeypadDoorDefinitionDoc | null> {
-        return this.doorDefinitions.findOne({ doorKey });
+        return this.doorDefinitions.findOne({ roomKey: this.roomKey, doorKey });
     }
 
     /**
@@ -83,7 +86,10 @@ export class KeypadDefinitionService extends EventEmitter {
         includeDisabled = false,
     ): Promise<KeypadDoorDefinitionDoc[]> {
         return this.doorDefinitions
-            .find(includeDisabled ? {} : { enabled: true })
+            .find({
+                roomKey: this.roomKey,
+                ...(includeDisabled ? {} : { enabled: true }),
+            })
             .toArray();
     }
 
@@ -119,7 +125,8 @@ export class KeypadDefinitionService extends EventEmitter {
     async createDoor(door: KeypadDoorDefinitionDoc): Promise<void> {
         await this.doorDefinitions.insertOne({
             ...door,
-            _id: door.doorKey,
+            roomKey: this.roomKey,
+            _id: `${this.roomKey}:${door.doorKey}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
@@ -134,7 +141,7 @@ export class KeypadDefinitionService extends EventEmitter {
         updates: Partial<KeypadDoorDefinitionDoc>,
     ): Promise<void> {
         await this.doorDefinitions.updateOne(
-            { doorKey },
+            { roomKey: this.roomKey, doorKey },
             {
                 $set: {
                     ...updates,
@@ -149,7 +156,10 @@ export class KeypadDefinitionService extends EventEmitter {
      * Delete a door definition
      */
     async deleteDoor(doorKey: string): Promise<void> {
-        await this.doorDefinitions.deleteOne({ doorKey });
+        await this.doorDefinitions.deleteOne({
+            roomKey: this.roomKey,
+            doorKey,
+        });
         this.emit("doorChanged");
     }
 
@@ -161,6 +171,7 @@ export class KeypadDefinitionService extends EventEmitter {
         y: number,
     ): Promise<KeypadDoorDefinitionDoc | null> {
         return this.doorDefinitions.findOne({
+            roomKey: this.roomKey,
             doorX: x,
             doorY: y,
             enabled: true,
@@ -176,7 +187,11 @@ export class KeypadDefinitionService extends EventEmitter {
         doorKey: string,
         groupName: string,
     ): Promise<KeypadGroupDefinitionDoc | null> {
-        return this.groupDefinitions.findOne({ doorKey, groupName });
+        return this.groupDefinitions.findOne({
+            roomKey: this.roomKey,
+            doorKey,
+            groupName,
+        });
     }
 
     /**
@@ -185,13 +200,17 @@ export class KeypadDefinitionService extends EventEmitter {
     async getGroupsForDoor(
         doorKey: string,
     ): Promise<KeypadGroupDefinitionDoc[]> {
-        return this.groupDefinitions.find({ doorKey }).toArray();
+        return this.groupDefinitions
+            .find({ roomKey: this.roomKey, doorKey })
+            .toArray();
     }
 
     async getGroupsByKey(
         groupKey: string,
     ): Promise<KeypadGroupDefinitionDoc[]> {
-        return this.groupDefinitions.find({ groupKey }).toArray();
+        return this.groupDefinitions
+            .find({ roomKey: this.roomKey, groupKey })
+            .toArray();
     }
 
     /**
@@ -200,8 +219,11 @@ export class KeypadDefinitionService extends EventEmitter {
     async createGroup(group: KeypadGroupDefinitionDoc): Promise<void> {
         await this.groupDefinitions.insertOne({
             ...group,
+            roomKey: this.roomKey,
             groupKey: group.groupKey ?? `${group.doorKey}:${group.groupName}`,
-            _id: group._id || `${group.doorKey}:${group.groupName}`,
+            _id:
+                group._id ||
+                `${this.roomKey}:${group.doorKey}:${group.groupName}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
@@ -216,7 +238,7 @@ export class KeypadDefinitionService extends EventEmitter {
         updates: Partial<KeypadGroupDefinitionDoc>,
     ): Promise<void> {
         await this.groupDefinitions.updateOne(
-            { doorKey, groupName },
+            { roomKey: this.roomKey, doorKey, groupName },
             {
                 $set: {
                     ...updates,
@@ -230,7 +252,11 @@ export class KeypadDefinitionService extends EventEmitter {
      * Delete a group definition
      */
     async deleteGroup(doorKey: string, groupName: string): Promise<void> {
-        await this.groupDefinitions.deleteOne({ doorKey, groupName });
+        await this.groupDefinitions.deleteOne({
+            roomKey: this.roomKey,
+            doorKey,
+            groupName,
+        });
     }
 
     /**
@@ -239,6 +265,7 @@ export class KeypadDefinitionService extends EventEmitter {
      */
     async verifyCode(doorKey: string, code: string): Promise<string | null> {
         const group = await this.groupDefinitions.findOne({
+            roomKey: this.roomKey,
             doorKey,
             $or: [{ code }, { codes: code }],
         });
@@ -258,6 +285,7 @@ export class KeypadDefinitionService extends EventEmitter {
         doorKey: string,
     ): Promise<KeypadGroupDefinitionDoc | null> {
         return this.groupDefinitions.findOne({
+            roomKey: this.roomKey,
             doorKey,
             groupName: "guest",
         });

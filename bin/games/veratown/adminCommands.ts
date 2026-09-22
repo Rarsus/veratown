@@ -18,11 +18,13 @@ import {
     API_Message,
     CommandParser,
     BC_Server_ChatRoomMessage,
+    RoomDefinition,
 } from "bc-bot";
 import { compressToBase64, decompressFromBase64 } from "lz-string";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
 import { VeratownMapStore } from "./mapStore";
+import { VeratownRoomStore } from "./roomStore";
 import { MAP as DEFAULT_MAP_BUNDLE } from "./veratownConfig";
 import {
     VeratownLocationStore,
@@ -55,6 +57,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         commandParser: CommandParser,
         private features: VeratownFeatureSystem[],
         private mapStore?: VeratownMapStore,
+        private roomStore?: VeratownRoomStore,
         private locationStore?: VeratownLocationStore,
         private regionManager?: RegionManager,
         // Delegates to Veratown's private freeCharacter() (strips bind
@@ -67,6 +70,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         private conn2?: API_Connector,
         private reloadLocations?: () => Promise<void>,
         private getStatus?: () => string,
+        private roomKey: string = "main",
     ) {
         super(
             conn,
@@ -81,6 +85,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         this.registerCommand("strip", this.onCommandStrip);
         this.registerCommand("feature", this.onCommandFeature);
         this.registerCommand("map", this.onCommandMap);
+        this.registerCommand("room", this.onCommandRoom);
         this.registerCommand("maintenance", this.onCommandMaintenance);
         this.registerCommand("adminhelp", this.onCommandAdminHelp);
         this.registerCommand("location", this.onCommandLocation);
@@ -97,6 +102,37 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
             guardHandler("admin:map-import", this.onRawMessage),
         );
     }
+
+    private onCommandRoom = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ): Promise<void> => {
+        if (!this.ensureAdmin(sender, msg)) return;
+        if (args[0] !== "save") {
+            this.conn.reply(msg, "Usage: !room save");
+            return;
+        }
+        if (!this.roomStore || !this.conn.chatRoom) {
+            this.conn.reply(msg, "Room persistence is not available.");
+            return;
+        }
+        const room = this.conn.chatRoom as unknown as RoomDefinition;
+        const mapData = this.conn.chatRoom.map.mapData;
+        await this.roomStore.save(
+            this.roomKey,
+            room,
+            mapData,
+            sender.MemberNumber,
+        );
+        if (mapData && this.mapStore) {
+            await this.mapStore.save(mapData, sender.MemberNumber);
+        }
+        this.conn.reply(
+            msg,
+            `Room configuration and map saved for ${this.roomKey}.`,
+        );
+    };
 
     protected isEnabled(): boolean {
         return true;
@@ -507,6 +543,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
             "    - reset: Restore built-in default map",
             "    - export: Export current layout (save the output)",
             "    - import <data>: Import previously exported layout (case-sensitive)",
+            "",
+            "!room save",
+            "  Save this room's configuration and current map under its room key.",
             "",
             "!location <add|get|update|delete|list|enable|disable>",
             "  Manage database locations:",

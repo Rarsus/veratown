@@ -12,9 +12,11 @@ import {
 } from "./games/veratown/veratownConfig";
 import { createLogger } from "./logging";
 import { asAppError, ValidationError } from "./errors";
+import { VeratownRoomStore } from "./games/veratown/roomStore";
 
 export interface BotConnections extends VeratownConnections {
     secondary?: API_Connector;
+    roomKeys?: Record<string, string>;
 }
 
 export interface DatabaseConnection {
@@ -366,7 +368,12 @@ export function superviseBotConnections(
     config: ConfigFile,
 ): void {
     for (const [role, connection] of Object.entries(connections)) {
-        if (connection) superviseBotConnection(role, connection, config);
+        if (
+            connection &&
+            typeof (connection as API_Connector).isConnected === "function"
+        ) {
+            superviseBotConnection(role, connection as API_Connector, config);
+        }
     }
 }
 
@@ -376,11 +383,18 @@ export function getBotRecoveryStatuses(
 ): BotRecoveryStatus[] {
     if (!connections) return [];
     return Object.entries(connections).flatMap(([role, connection]) => {
-        if (!connection) return [];
+        if (
+            !connection ||
+            typeof (connection as API_Connector).isConnected !== "function"
+        )
+            return [];
+        const botConnection = connection as API_Connector;
         return [
-            recoveryStatuses.get(connection) ?? {
+            recoveryStatuses.get(botConnection) ?? {
                 role,
-                state: connection.isConnected() ? "connected" : "disconnected",
+                state: botConnection.isConnected()
+                    ? "connected"
+                    : "disconnected",
                 recoveryAttempts: 0,
                 recoveryEpoch: 0,
             },
@@ -447,10 +461,10 @@ async function connectBotAccount(
     config: ConfigFile,
     user: string,
     password: string,
-    joinRoom: boolean,
+    room?: import("bc-bot").RoomDefinition,
 ): Promise<API_Connector> {
     const connection = new API_Connector(serverUrl, user, password, config.env);
-    if (joinRoom) await connection.joinOrCreateRoom(config.room);
+    if (room) await connection.joinOrCreateRoom(room);
 
     // Wait for connection to stabilize before returning
     // This prevents connection flapping when multiple bots join in quick succession
@@ -639,6 +653,8 @@ export function getBotAccountRoles(
         addAccount("shower", config.user2);
         if (config.user3 && config.password3)
             addAccount("casino", config.user3);
+        if (config.user4 && config.password4)
+            addAccount("secondRoom", config.user4);
     }
 
     return roles;
@@ -674,14 +690,20 @@ export async function createBotConnections(
 ): Promise<BotConnections> {
     const logger = createLogger("BotConnections");
     validateBotAccountConfiguration(config);
-
+    const roomStore = database ? new VeratownRoomStore(database.db) : undefined;
+    const roomProfile = (bot: "main" | "user2" | "user3" | "user4") =>
+        config.rooms?.find((profile) => profile.bot === bot);
+    const mainProfile = roomProfile("main");
+    const mainRoom = roomStore
+        ? (await roomStore.load("main", mainProfile?.room ?? config.room))?.room
+        : (mainProfile?.room ?? config.room);
     logger.info("Creating main bot connection");
     const main = await connectBotAccount(
         serverUrl,
         config,
         config.user,
         config.password,
-        true,
+        mainRoom,
     );
     logger.info("Main connection established", {
         bot: main.Player.Name,
@@ -708,7 +730,7 @@ export async function createBotConnections(
             config,
             config.user2,
             config.password2,
-            false,
+            undefined,
         );
         logger.info("Secondary connection established", {
             bot: connections.secondary.Player.Name,
@@ -727,7 +749,7 @@ export async function createBotConnections(
             config,
             config.user2,
             config.password2,
-            true,
+            mainRoom,
         );
         logger.info("Shower connection established", {
             bot: connections.shower.Player.Name,
@@ -752,7 +774,7 @@ export async function createBotConnections(
                 config,
                 config.user3,
                 config.password3,
-                true,
+                mainRoom,
             );
             logger.info("Casino connection established", {
                 bot: connections.casino.Player.Name,
@@ -768,13 +790,49 @@ export async function createBotConnections(
         logger.info("No user3/password3 configured - casino feature disabled");
     }
 
+    const secondProfile = config.rooms?.find(
+        (profile) => profile.bot === "user4" && profile.key !== "main",
+    );
+    const roomKeys: Record<string, string> = { main: "main" };
+    if (secondProfile && config.user4 && config.password4) {
+        if (!database) {
+            logger.warn("MongoDB not configured - second room disabled");
+        } else {
+            const secondRoom =
+                (await roomStore?.load(secondProfile.key, secondProfile.room))
+                    ?.room ?? secondProfile.room;
+            if (!secondRoom) {
+                throw new Error(
+                    `Room profile ${secondProfile.key} requires a room definition on first use`,
+                );
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            connections.secondRoom = await connectBotAccount(
+                serverUrl,
+                config,
+                config.user4,
+                config.password4,
+                secondRoom,
+            );
+            roomKeys.secondRoom = secondProfile.key;
+            logger.info("Second room connection established", {
+                roomKey: secondProfile.key,
+                room: connections.secondRoom.chatRoom?.Name,
+                bot: connections.secondRoom.Player.Name,
+                memberId: connections.secondRoom.Player.MemberNumber,
+            });
+        }
+    }
+
     logger.info("All bot roles active", {
         main: connections.main.Player.Name,
         shower: connections.shower?.Player.Name ?? "main (fallback)",
         casino: connections.casino?.Player.Name ?? "disabled",
         secondary: connections.secondary?.Player.Name,
+        secondRoom: connections.secondRoom?.Player.Name ?? "disabled",
     });
 
+    connections.roomKeys = roomKeys;
     superviseBotConnections(connections, config);
     return connections;
 }
@@ -792,6 +850,7 @@ export async function closeBotConnections(
         connections.shower,
         connections.casino,
         connections.secondary,
+        connections.secondRoom,
     ] as any);
     for (const connection of uniqueConnections) {
         if (connection) {

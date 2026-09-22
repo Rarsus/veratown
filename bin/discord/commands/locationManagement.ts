@@ -25,6 +25,21 @@ import { createLogger } from "../../logging";
 
 const logger = createLogger("Discord:LocationManagement");
 
+function resolveRoomKey(
+    context: CommandContext,
+    roomKey?: string,
+): string | null {
+    return roomKey?.trim() || context.roomKey?.trim() || null;
+}
+
+function missingRoomScope(): CommandResult {
+    return {
+        success: false,
+        message:
+            "❌ A room scope is required. Provide `roomKey` for this Discord command.",
+    };
+}
+
 /**
  * Valid location types
  */
@@ -64,9 +79,12 @@ export async function handleLocationListCommand(
     interaction: CommandInteraction,
     context: CommandContext,
     filterType?: string,
+    roomKey?: string,
 ): Promise<CommandResult> {
     try {
-        const store = new VeratownLocationStore(context.db);
+        const resolvedRoomKey = resolveRoomKey(context, roomKey);
+        if (!resolvedRoomKey) return missingRoomScope();
+        const store = new VeratownLocationStore(context.db, resolvedRoomKey);
         const locations = await store.getAllLocations();
 
         // Filter by type if provided
@@ -159,9 +177,12 @@ export async function handleLocationGetCommand(
     interaction: CommandInteraction,
     context: CommandContext,
     locationKey: string,
+    roomKey?: string,
 ): Promise<CommandResult> {
     try {
-        const store = new VeratownLocationStore(context.db);
+        const resolvedRoomKey = resolveRoomKey(context, roomKey);
+        if (!resolvedRoomKey) return missingRoomScope();
+        const store = new VeratownLocationStore(context.db, resolvedRoomKey);
         const location = await store.getLocation(locationKey);
 
         if (!location) {
@@ -278,6 +299,7 @@ export async function handleLocationCreateCommand(
         x?: number;
         y?: number;
     },
+    roomKey?: string,
 ): Promise<CommandResult> {
     try {
         // Check admin permission
@@ -299,7 +321,9 @@ export async function handleLocationCreateCommand(
             };
         }
 
-        const store = new VeratownLocationStore(context.db);
+        const resolvedRoomKey = resolveRoomKey(context, roomKey);
+        if (!resolvedRoomKey) return missingRoomScope();
+        const store = new VeratownLocationStore(context.db, resolvedRoomKey);
 
         // Check if location already exists
         const existing = await store.getLocation(locationData.key);

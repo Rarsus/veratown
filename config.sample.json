@@ -27,5 +27,23 @@
         "Game": "",
         "Language": "EN",
         "Admin": []
-    }
+    },
+    "rooms": [
+        {
+            "key": "main",
+            "bot": "main"
+        },
+        {
+            "key": "second",
+            "bot": "user4",
+            "room": {
+                "Name": "Your second room name",
+                "Description": "Your second room",
+                "Private": true,
+                "Locked": false,
+                "Limit": 10,
+                "Language": "EN"
+            }
+        }
+    ]
 }
