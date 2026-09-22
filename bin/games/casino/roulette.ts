@@ -627,8 +627,9 @@ export class RouletteGame implements Game {
             }
         }
 
-        if (!this.currentRoundId) {
+        if (!this.currentRoundId || this.currentPhase === "settled") {
             this.currentRoundId = `roulette_${Date.now()}_${sender.MemberNumber}`;
+            this.currentPhase = "betting";
         }
         this.placeBet(bet);
 

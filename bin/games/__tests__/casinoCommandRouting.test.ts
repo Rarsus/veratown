@@ -125,6 +125,7 @@ test("Casino registers documented root commands for both active game modes", asy
             >;
             for (const command of [
                 "cancel",
+                "bet",
                 "chips",
                 "give",
                 "help",

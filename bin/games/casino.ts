@@ -1412,8 +1412,9 @@ ${forfeitsString()}
                 "Chat",
                 `After this round the game will switch to ${game}.`,
             );
-            this.game.unregisterCommands(this.commandRouter!);
-            await this.game.endGame();
+            const previousGame = this.game;
+            await previousGame.endGame();
+            previousGame.unregisterCommands(this.commandRouter!);
             this.game =
                 game === "roulette"
                     ? new RouletteGame(this.conn, this)
