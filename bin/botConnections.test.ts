@@ -7,6 +7,7 @@ import {
     recordBotPositionPersistence,
     stopSupervisingBotConnections,
     superviseBotConnections,
+    normalizeRoomDefinition,
     validateBotAccountConfiguration,
 } from "./botConnections";
 import { ValidationError } from "./errors";
@@ -28,6 +29,37 @@ function config(overrides: Partial<ConfigFile>): ConfigFile {
         ...overrides,
     };
 }
+
+test("database room settings are normalized to the BC create contract", () => {
+    const room = normalizeRoomDefinition({
+        Name: "veratown park",
+        Description: "Veratown Park",
+        Background: "PartyBasement",
+        Private: true,
+        Locked: false,
+        Space: "X",
+        Limit: 20,
+        Language: "EN",
+        Admin: [250927],
+    } as ConfigFile["room"]);
+
+    assert.deepEqual(
+        {
+            Access: room.Access,
+            Visibility: room.Visibility,
+            Game: room.Game,
+            Ban: room.Ban,
+            BlockCategory: room.BlockCategory,
+        },
+        {
+            Access: ["All"],
+            Visibility: ["All"],
+            Game: "",
+            Ban: [],
+            BlockCategory: [],
+        },
+    );
+});
 
 test("Veratown selects main, shower, and casino roles", () => {
     assert.deepEqual(

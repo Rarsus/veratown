@@ -482,8 +482,14 @@ export async function stopBotConnections(): Promise<void> {
  * Used by Discord bot and other modules to access game state
  * @returns The active Veratown game or undefined if not initialized
  */
-export function getActiveVeratownGame(): Veratown | undefined {
-    return activeVeratownGame;
+export function getActiveVeratownGame(
+    roomKey: string = "main",
+): Veratown | undefined {
+    const normalizedRoomKey = normalizeVeratownRoomKey(roomKey);
+    return (
+        activeVeratownRooms.get(normalizedRoomKey) ??
+        (normalizedRoomKey === "main" ? activeVeratownGame : undefined)
+    );
 }
 
 /**
@@ -784,19 +790,28 @@ async function initializeVeratownRooms(
         });
     }
 
-    if (secondaryPromise) {
-        void secondaryPromise.then((secondaryGame) => {
-            if (secondaryGame && secondaryRoomKey) {
-                activeVeratownRooms.set(secondaryRoomKey, secondaryGame);
-                logger.info("Secondary Veratown room runtime active", {
-                    roomKey: secondaryRoomKey,
-                });
-            }
-        });
-    }
-
-    const mainGame = await mainPromise;
+    const [mainResult, secondaryResult] = await Promise.allSettled([
+        mainPromise,
+        secondaryPromise ?? Promise.resolve(undefined),
+    ]);
+    if (mainResult.status === "rejected") throw mainResult.reason;
+    const mainGame = mainResult.value;
     activeVeratownRooms.set("main", mainGame);
+
+    if (secondaryResult.status === "fulfilled") {
+        if (secondaryResult.value && secondaryRoomKey) {
+            activeVeratownRooms.set(secondaryRoomKey, secondaryResult.value);
+            logger.info("Secondary Veratown room runtime active", {
+                roomKey: secondaryRoomKey,
+            });
+        }
+    } else {
+        logger.error(
+            "Secondary Veratown room runtime failed",
+            secondaryResult.reason,
+            { roomKey: secondaryRoomKey },
+        );
+    }
 
     return mainGame;
 }

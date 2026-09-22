@@ -320,6 +320,14 @@ async function registerSlashCommands(
             name: "feature-list",
             description:
                 "List all Veratown features and their status (admin only)",
+            options: [
+                {
+                    name: "room_key",
+                    description: "Room scope (defaults to main)",
+                    type: 3,
+                    required: false,
+                },
+            ],
         },
         {
             name: "feature-enable",
@@ -330,6 +338,12 @@ async function registerSlashCommands(
                     description: "Feature name (e.g., cage, kennel, shower)",
                     type: 3, // STRING
                     required: true,
+                },
+                {
+                    name: "room_key",
+                    description: "Room scope (defaults to main)",
+                    type: 3,
+                    required: false,
                 },
             ],
         },
@@ -342,6 +356,12 @@ async function registerSlashCommands(
                     description: "Feature name (e.g., cage, kennel, shower)",
                     type: 3, // STRING
                     required: true,
+                },
+                {
+                    name: "room_key",
+                    description: "Room scope (defaults to main)",
+                    type: 3,
+                    required: false,
                 },
             ],
         },
@@ -523,6 +543,8 @@ export async function handleCommandInteraction(
             userId,
             guildId: guildId || "",
             isAdmin,
+            roomKey:
+                (interaction as any).options?.getString("room_key") || "main",
         };
 
         // Route to command handler

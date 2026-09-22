@@ -1522,26 +1522,52 @@ export class Veratown {
         position: { X: number; Y: number },
         role: string,
     ): Promise<boolean> {
-        connection.moveOnMap(position.X, position.Y);
-        const observation = await verifyBotMapPosition(
+        let lastObservation = await verifyBotMapPosition(
             connection,
             position,
             this.conn.chatRoom?.Name,
-            Veratown.MAP_POSITION_POLL_ATTEMPTS,
+            1,
         );
-        if (observation.state === "verified") {
-            logger.info("Bot map position ready", {
-                role,
-                ...observation,
-            });
-            return true;
+        for (let attempt = 1; attempt <= 10; attempt++) {
+            if (lastObservation.state === "verified") {
+                logger.info("Bot map position ready", {
+                    role,
+                    attempt,
+                    ...lastObservation,
+                });
+                return true;
+            }
+
+            try {
+                await connection.moveOnMapAndWait(
+                    position.X,
+                    position.Y,
+                    2_000,
+                );
+            } catch (error) {
+                logger.warn("Bot map movement attempt did not acknowledge", {
+                    role,
+                    attempt,
+                    position,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+
+            lastObservation = await verifyBotMapPosition(
+                connection,
+                position,
+                this.conn.chatRoom?.Name,
+                Veratown.MAP_POSITION_POLL_ATTEMPTS,
+            );
         }
+
         logger.error(
             "Bot map position not verified during startup",
             undefined,
             {
                 role,
-                ...observation,
+                ...lastObservation,
             },
         );
         return false;

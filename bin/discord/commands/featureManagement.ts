@@ -22,6 +22,7 @@ import type { CommandResult, CommandContext } from "../types";
 import type { Veratown } from "../../games/veratown";
 import type { VeratownFeatureSystem } from "../../games/veratown/featureSystem";
 import { getActiveVeratownGame } from "../../main";
+import { normalizeVeratownRoomKey } from "../../games/veratown/roomStore";
 import { createLogger } from "../../logging";
 
 const logger = createLogger("Discord:FeatureManagement");
@@ -29,8 +30,10 @@ const logger = createLogger("Discord:FeatureManagement");
 /**
  * Get Veratown instance
  */
-function getVeratown(): Veratown | null {
-    const veratown = getActiveVeratownGame();
+function getVeratown(context: CommandContext): Veratown | null {
+    const veratown = getActiveVeratownGame(
+        normalizeVeratownRoomKey(context.roomKey || "main"),
+    );
     return veratown ?? null;
 }
 
@@ -47,7 +50,7 @@ export async function handleFeatureListCommand(
     context: CommandContext,
 ): Promise<CommandResult> {
     try {
-        const veratown = getVeratown();
+        const veratown = getVeratown(context);
         if (!veratown) {
             return {
                 success: false,
@@ -137,7 +140,7 @@ export async function handleFeatureEnableCommand(
             };
         }
 
-        const veratown = getVeratown();
+        const veratown = getVeratown(context);
         if (!veratown) {
             return {
                 success: false,
@@ -232,7 +235,7 @@ export async function handleFeatureDisableCommand(
             };
         }
 
-        const veratown = getVeratown();
+        const veratown = getVeratown(context);
         if (!veratown) {
             return {
                 success: false,

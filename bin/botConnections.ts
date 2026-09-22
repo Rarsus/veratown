@@ -28,6 +28,20 @@ export interface DatabaseConnection {
     close(): Promise<void>;
 }
 
+export function normalizeRoomDefinition(room: RoomDefinition): RoomDefinition {
+    return {
+        ...room,
+        Admin: room.Admin ?? [],
+        Ban: room.Ban ?? [],
+        Access: room.Access ?? ["All"],
+        Visibility: room.Visibility ?? ["All"],
+        BlockCategory: room.BlockCategory ?? [],
+        Game: room.Game ?? "",
+        Language: room.Language ?? "EN",
+        Space: room.Space ?? "X",
+    };
+}
+
 export type BotRecoveryState =
     "connected" | "disconnected" | "recovering" | "failed";
 
@@ -488,7 +502,7 @@ async function loadRoomDefinition(
     logger: ReturnType<typeof createLogger>,
 ): Promise<RoomDefinition> {
     const stored = await roomStore.load(roomKey, fallbackRoom);
-    if (!stored) return fallbackRoom;
+    if (!stored) return normalizeRoomDefinition(fallbackRoom);
 
     const mapStore = new VeratownMapStore(database.db, roomKey);
     const storedMap = await mapStore.load();
@@ -504,7 +518,9 @@ async function loadRoomDefinition(
         logger.info("Removed embedded room map after migration", { roomKey });
     }
     const mapData = storedMap ?? legacyMap;
-    return mapData ? { ...roomSettings, MapData: mapData } : roomSettings;
+    return normalizeRoomDefinition(
+        mapData ? { ...roomSettings, MapData: mapData } : roomSettings,
+    );
 }
 
 /**
@@ -736,7 +752,7 @@ export async function createBotConnections(
               database!,
               logger,
           )
-        : (mainProfile?.room ?? config.room);
+        : normalizeRoomDefinition(mainProfile?.room ?? config.room);
     logger.info("Creating main bot connection");
     const main = await connectBotAccount(
         serverUrl,
