@@ -73,7 +73,7 @@ export class VeratownLocationStore extends EventEmitter {
 
     constructor(
         private db: Db,
-        private readonly roomKey: string = "main",
+        public readonly roomKey: string = "main",
     ) {
         super();
         this.locations =

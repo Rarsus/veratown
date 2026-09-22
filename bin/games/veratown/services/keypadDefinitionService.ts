@@ -52,6 +52,8 @@ export class KeypadDefinitionService extends EventEmitter {
      * Initialize indexes for keypad collections
      */
     async init(): Promise<void> {
+        await this.normalizeLegacyRoomKeys();
+
         // Door definition indexes
         await this.doorDefinitions.createIndex(
             { roomKey: 1, doorKey: 1 },
@@ -66,6 +68,37 @@ export class KeypadDefinitionService extends EventEmitter {
         );
         await this.groupDefinitions.createIndex({ roomKey: 1, doorKey: 1 });
         await this.groupDefinitions.createIndex({ groupType: 1 });
+    }
+
+    /**
+     * Older keypad records predate room scoping. They belong to the main
+     * Veratown room; never adopt them into a secondary room implicitly.
+     */
+    private async normalizeLegacyRoomKeys(): Promise<void> {
+        if (this.roomKey !== "main") return;
+
+        const normalizeCollection = async (collection: Collection<any>) => {
+            const legacyDocuments = await collection.find({}).toArray();
+            await Promise.all(
+                legacyDocuments
+                    .filter(
+                        (document) =>
+                            document.roomKey === undefined ||
+                            document.roomKey === null,
+                    )
+                    .map((document) =>
+                        collection.updateOne(
+                            { _id: document._id },
+                            { $set: { roomKey: this.roomKey } },
+                        ),
+                    ),
+            );
+        };
+
+        await Promise.all([
+            normalizeCollection(this.doorDefinitions),
+            normalizeCollection(this.groupDefinitions),
+        ]);
     }
 
     // ===== DOOR OPERATIONS =====

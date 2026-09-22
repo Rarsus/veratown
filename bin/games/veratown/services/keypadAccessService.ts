@@ -52,6 +52,7 @@ export class KeypadAccessService {
         private readonly roomWhitelistResolver: (
             memberNumber: number,
         ) => Promise<boolean> = async () => false,
+        private readonly roomKey = "main",
     ) {
         this.memberships = this.db.collection("keypadGroupMemberships");
     }
@@ -60,7 +61,9 @@ export class KeypadAccessService {
      * Initialize membership collection indexes
      */
     async init(): Promise<void> {
+        await this.normalizeLegacyRoomKeys();
         await this.memberships.createIndex({ doorKey: 1 });
+        await this.memberships.createIndex({ roomKey: 1, doorKey: 1 });
         await this.memberships.createIndex({
             doorKey: 1,
             groupName: 1,
@@ -71,7 +74,32 @@ export class KeypadAccessService {
             memberNumber: 1,
         });
         await this.memberships.createIndex({ groupKey: 1, memberNumber: 1 });
+        await this.memberships.createIndex({
+            roomKey: 1,
+            groupKey: 1,
+            memberNumber: 1,
+        });
         await this.memberships.createIndex({ expiresAt: 1 });
+    }
+
+    private async normalizeLegacyRoomKeys(): Promise<void> {
+        if (this.roomKey !== "main") return;
+
+        const legacyMemberships = await this.memberships.find({}).toArray();
+        await Promise.all(
+            legacyMemberships
+                .filter(
+                    (membership) =>
+                        membership.roomKey === undefined ||
+                        membership.roomKey === null,
+                )
+                .map((membership) =>
+                    this.memberships.updateOne(
+                        { _id: membership._id },
+                        { $set: { roomKey: this.roomKey } },
+                    ),
+                ),
+        );
     }
 
     // ===== CHARACTER ACCESS MANAGEMENT =====
@@ -111,9 +139,10 @@ export class KeypadAccessService {
         // Authoritative group membership. The profile write above remains a
         // compatibility projection until legacy access data is retired.
         await this.memberships.updateOne(
-            { groupKey, memberNumber },
+            { roomKey: this.roomKey, groupKey, memberNumber },
             {
                 $set: {
+                    roomKey: this.roomKey,
                     doorKey,
                     groupName,
                     groupKey,
@@ -158,16 +187,22 @@ export class KeypadAccessService {
             : undefined;
         if (groupName) {
             await this.memberships.deleteMany({
+                roomKey: this.roomKey,
                 memberNumber,
                 doorKey,
                 groupName,
             });
             await this.memberships.deleteMany({
+                roomKey: this.roomKey,
                 memberNumber,
                 groupKey: group?.groupKey ?? `${doorKey}:${groupName}`,
             });
         } else {
-            await this.memberships.deleteMany({ doorKey, memberNumber });
+            await this.memberships.deleteMany({
+                roomKey: this.roomKey,
+                doorKey,
+                memberNumber,
+            });
         }
     }
 
@@ -183,9 +218,10 @@ export class KeypadAccessService {
         const definition = definitions[0];
         if (!definition) throw new Error(`Group not found: ${groupKey}`);
         await this.memberships.updateOne(
-            { groupKey, memberNumber },
+            { roomKey: this.roomKey, groupKey, memberNumber },
             {
                 $set: {
+                    roomKey: this.roomKey,
                     doorKey: definition.doorKey,
                     groupName: definition.groupName,
                     groupKey,
@@ -207,19 +243,27 @@ export class KeypadAccessService {
         groupKey: string,
         memberNumber: number,
     ): Promise<void> {
-        await this.memberships.deleteMany({ groupKey, memberNumber });
+        await this.memberships.deleteMany({
+            roomKey: this.roomKey,
+            groupKey,
+            memberNumber,
+        });
     }
 
     async getMembersInGroupKey(
         groupKey: string,
     ): Promise<KeypadGroupMembershipDoc[]> {
-        return this.memberships.find({ groupKey }).toArray();
+        return this.memberships
+            .find({ roomKey: this.roomKey, groupKey })
+            .toArray();
     }
 
     async getAuthoritativeMembershipsForMember(
         memberNumber: number,
     ): Promise<KeypadGroupMembershipDoc[]> {
-        return this.memberships.find({ memberNumber }).toArray();
+        return this.memberships
+            .find({ roomKey: this.roomKey, memberNumber })
+            .toArray();
     }
 
     /**
@@ -298,7 +342,7 @@ export class KeypadAccessService {
         const groups = await this.definitionService.getGroupsForDoor(doorKey);
         const now = Date.now();
         const memberships = await this.memberships
-            .find({ memberNumber })
+            .find({ roomKey: this.roomKey, memberNumber })
             .toArray();
         const sharedGroupKeys = new Set(
             groups
@@ -381,7 +425,9 @@ export class KeypadAccessService {
             groupName,
         );
         const membership = (
-            await this.memberships.find({ memberNumber }).toArray()
+            await this.memberships
+                .find({ roomKey: this.roomKey, memberNumber })
+                .toArray()
         ).find(
             (candidate) =>
                 candidate.memberNumber === memberNumber &&
@@ -412,7 +458,9 @@ export class KeypadAccessService {
     async getMembersWithAccessToDoor(
         doorKey: string,
     ): Promise<KeypadGroupMembershipDoc[]> {
-        return this.memberships.find({ doorKey }).toArray();
+        return this.memberships
+            .find({ roomKey: this.roomKey, doorKey })
+            .toArray();
     }
 
     /**
@@ -422,7 +470,9 @@ export class KeypadAccessService {
         doorKey: string,
         groupName: string,
     ): Promise<KeypadGroupMembershipDoc[]> {
-        return this.memberships.find({ doorKey, groupName }).toArray();
+        return this.memberships
+            .find({ roomKey: this.roomKey, doorKey, groupName })
+            .toArray();
     }
 
     /**

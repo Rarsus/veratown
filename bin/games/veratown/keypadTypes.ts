@@ -100,6 +100,7 @@ export interface KeypadGroupDefinitionDoc {
  */
 export interface KeypadGroupMembershipDoc {
     _id: string;
+    roomKey?: string;
 
     // Identity
     doorKey: string;

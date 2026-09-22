@@ -149,6 +149,7 @@ function createCharacter(
 
 function createConnector(
     callbacks: Array<(character: any) => void | Promise<void>>,
+    regionCallbacks: Array<(character: any) => void | Promise<void>> = [],
 ) {
     return {
         SendMessage: () => {},
@@ -157,7 +158,8 @@ function createConnector(
                 addTileTrigger: (_position: unknown, callback: any) =>
                     callbacks.push(callback),
                 removeTileTrigger: () => {},
-                addEnterRegionTrigger: () => {},
+                addEnterRegionTrigger: (_region: unknown, callback: any) =>
+                    regionCallbacks.push(callback),
                 removeEnterRegionTrigger: () => {},
             },
         },
@@ -183,6 +185,7 @@ function createBunnySystem(
     random: () => number = Math.random,
     syncDelay = 100,
     recordArtifact: (artifact: any) => Promise<void> = async () => {},
+    allowStaticFallbacks = true,
 ) {
     const repository = {
         recordArtifact,
@@ -196,11 +199,62 @@ function createBunnySystem(
         random,
         syncDelay,
     );
-    const system = new BunnyParkSystem(connection as any, punishmentService);
+    const system = new BunnyParkSystem(
+        connection as any,
+        punishmentService,
+        allowStaticFallbacks,
+    );
     (system as any).applyPunishment = (character: any, config: any) =>
         punishmentService.punish(character, config);
     return system;
 }
+
+test("secondary Bunny Park does not use a static park region", async () => {
+    const tileCallbacks: Array<(character: any) => void | Promise<void>> = [];
+    const regionCallbacks: Array<(character: any) => void | Promise<void>> = [];
+    const connector = createConnector(tileCallbacks, regionCallbacks);
+    const system = createBunnySystem(
+        connector as any,
+        async () => {},
+        Math.random,
+        100,
+        async () => {},
+        false,
+    );
+
+    await system.reloadLocations([]);
+
+    assert.equal(regionCallbacks.length, 0);
+    assert.equal(tileCallbacks.length, 0);
+});
+
+test("Bunny Park accepts documented regions and zero coordinates", async () => {
+    const tileCallbacks: Array<(character: any) => void | Promise<void>> = [];
+    const regionCallbacks: Array<(character: any) => void | Promise<void>> = [];
+    const connector = createConnector(tileCallbacks, regionCallbacks);
+    const system = createBunnySystem(connector as any);
+
+    await system.reloadLocations([
+        {
+            key: "park_region",
+            name: "Park Region",
+            type: "park_region",
+            region: {
+                TopLeft: { X: 0, Y: 0 },
+                BottomRight: { X: 4, Y: 5 },
+            },
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+
+    assert.equal(regionCallbacks.length, 1);
+    assert.deepEqual((system as any).parkRegion, {
+        TopLeft: { X: 0, Y: 0 },
+        BottomRight: { X: 4, Y: 5 },
+    });
+});
 
 function deterministicRandom(index: number): () => number {
     return () => (index + 0.01) / BUNNY_RESTRAINT_CONFIGS.length;

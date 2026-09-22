@@ -1456,7 +1456,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             RELEASE_PUNISHMENT_ROOM_KEY,
         );
 
-        if (!location || location.x === undefined || location.y === undefined) {
+        if (
+            !location ||
+            !location.enabled ||
+            typeof location.x !== "number" ||
+            typeof location.y !== "number"
+        ) {
             throw new Error("Punishment room location not found");
         }
 
@@ -1516,7 +1521,12 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             const punishmentRoom = await this.locationStore.getLocation(
                 RELEASE_PUNISHMENT_ROOM_KEY,
             );
-            if (!punishmentRoom) {
+            if (
+                !punishmentRoom ||
+                !punishmentRoom.enabled ||
+                typeof punishmentRoom.x !== "number" ||
+                typeof punishmentRoom.y !== "number"
+            ) {
                 this.whisper(
                     character,
                     "Release location not configured. Contact admins.",

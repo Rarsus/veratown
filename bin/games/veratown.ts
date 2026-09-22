@@ -321,7 +321,9 @@ export class Veratown {
         if (db) {
             const effectiveDareConfig: DareConfig | undefined =
                 dareConfig ??
-                (DARE_LOCATION ? { region: DARE_LOCATION } : undefined);
+                (this.roomKey === "main" && DARE_LOCATION
+                    ? { region: DARE_LOCATION }
+                    : undefined);
             this.locationStore = new VeratownLocationStore(db, this.roomKey);
             this.roomStore = new VeratownRoomStore(db);
             this.dare = this.initFeature(() => {
@@ -403,6 +405,7 @@ export class Veratown {
                           this.conn.chatRoom?.Whitelist.includes(
                               memberNumber,
                           ) ?? false,
+                      this.roomKey,
                   );
             if (!this.container.has(DIServiceKeys.KEYPAD_ACCESS_SERVICE)) {
                 this.container.register(
@@ -1142,7 +1145,9 @@ export class Veratown {
                           Y: bottomRightY,
                       },
                   }
-                : KIDNAPPERS_LOCATION;
+                : undefined;
+
+        if (!region) return false;
 
         return (
             character.MapPos.X >= region.TopLeft.X &&

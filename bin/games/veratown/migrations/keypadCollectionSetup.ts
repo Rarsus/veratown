@@ -48,6 +48,7 @@ export class KeypadCollectionSetup {
                         bsonType: "object",
                         required: [
                             "_id",
+                            "roomKey",
                             "doorKey",
                             "doorX",
                             "doorY",
@@ -164,7 +165,10 @@ export class KeypadCollectionSetup {
 
             // Create indexes
             const collection = db.collection(collectionName);
-            await collection.createIndex({ doorKey: 1 }, { unique: true });
+            await collection.createIndex(
+                { roomKey: 1, doorKey: 1 },
+                { unique: true },
+            );
             await collection.createIndex({ enabled: 1 });
             await collection.createIndex(
                 { doorX: 1, doorY: 1 },
@@ -176,6 +180,10 @@ export class KeypadCollectionSetup {
                 error instanceof Error &&
                 error.message.includes("already exists")
             ) {
+                await this.upgradeRoomScopedSchema(db, collectionName, {
+                    legacyUniqueIndex: "doorKey_1",
+                    uniqueIndex: { roomKey: 1, doorKey: 1 },
+                });
                 return;
             }
             throw error;
@@ -197,6 +205,7 @@ export class KeypadCollectionSetup {
                         bsonType: "object",
                         required: [
                             "_id",
+                            "roomKey",
                             "doorKey",
                             "groupName",
                             "code",
@@ -273,7 +282,7 @@ export class KeypadCollectionSetup {
             // Create indexes
             const collection = db.collection(collectionName);
             await collection.createIndex(
-                { doorKey: 1, groupName: 1 },
+                { roomKey: 1, doorKey: 1, groupName: 1 },
                 { unique: true },
             );
             await collection.createIndex({ doorKey: 1 });
@@ -286,6 +295,14 @@ export class KeypadCollectionSetup {
             ) {
                 await this.allowMultipleGroupCodes(db, collectionName);
                 await this.upgradeGroupAuthoritySchema(db, collectionName);
+                await this.upgradeRoomScopedSchema(db, collectionName, {
+                    legacyUniqueIndex: "doorKey_1_groupName_1",
+                    uniqueIndex: {
+                        roomKey: 1,
+                        doorKey: 1,
+                        groupName: 1,
+                    },
+                });
                 return;
             }
             throw error;
@@ -347,6 +364,10 @@ export class KeypadCollectionSetup {
                                 bsonType: "string",
                                 description: "Composite id",
                             },
+                            roomKey: {
+                                bsonType: "string",
+                                description: "Chat room identifier",
+                            },
                             doorKey: {
                                 bsonType: "string",
                                 description: "Door identifier",
@@ -398,6 +419,12 @@ export class KeypadCollectionSetup {
             await collection.createIndex({ groupKey: 1 });
             await collection.createIndex({ memberNumber: 1 });
             await collection.createIndex({ groupKey: 1, memberNumber: 1 });
+            await collection.createIndex({ roomKey: 1, doorKey: 1 });
+            await collection.createIndex({
+                roomKey: 1,
+                groupKey: 1,
+                memberNumber: 1,
+            });
             await collection.createIndex({ expiresAt: 1 });
             // TTL index for auto-cleanup of expired memberships
             await collection.createIndex(
@@ -446,6 +473,48 @@ export class KeypadCollectionSetup {
         });
     }
 
+    private static async upgradeRoomScopedSchema(
+        db: Db,
+        collectionName: string,
+        indexes: {
+            legacyUniqueIndex: string;
+            uniqueIndex: Record<string, 1>;
+        },
+    ): Promise<void> {
+        const info = await db
+            .listCollections({ name: collectionName }, { nameOnly: false })
+            .next();
+        const schema = info?.options?.validator?.$jsonSchema ?? {
+            bsonType: "object",
+        };
+        await db.command({
+            collMod: collectionName,
+            validator: {
+                $jsonSchema: {
+                    ...schema,
+                    required: Array.from(
+                        new Set([...(schema.required ?? []), "roomKey"]),
+                    ),
+                    properties: {
+                        ...(schema.properties ?? {}),
+                        roomKey: {
+                            bsonType: "string",
+                            description: "Chat room identifier",
+                        },
+                    },
+                },
+            },
+        });
+
+        const collection = db.collection(collectionName);
+        try {
+            await collection.dropIndex(indexes.legacyUniqueIndex);
+        } catch {
+            /* Existing deployments may already have dropped the legacy index. */
+        }
+        await collection.createIndex(indexes.uniqueIndex, { unique: true });
+    }
+
     private static async upgradeMembershipSchema(
         db: Db,
         collectionName: string,
@@ -460,8 +529,15 @@ export class KeypadCollectionSetup {
                 validator: {
                     $jsonSchema: {
                         ...schema,
+                        required: Array.from(
+                            new Set([...(schema.required ?? []), "roomKey"]),
+                        ),
                         properties: {
                             ...schema.properties,
+                            roomKey: {
+                                bsonType: "string",
+                                description: "Chat room identifier",
+                            },
                             groupKey: {
                                 bsonType: ["string", "null"],
                                 description:

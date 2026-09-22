@@ -8,7 +8,7 @@ import type { BunnyPunishmentService } from "./bunnyPunishmentService";
 
 export class BunnyParkSystem extends AbstractTileFeatureSystem {
     private bunnyPositions: Array<{ X: number; Y: number }> = [];
-    private parkRegion: MapRegion = PARK;
+    private parkRegion?: MapRegion;
     private readonly bunnyTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -52,22 +52,15 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 (location) =>
                     location.type === "park_region" && location.enabled,
             );
-            this.parkRegion =
-                park && park.data?.bottomRightX && park.data?.bottomRightY
-                    ? {
-                          TopLeft: { X: park.x!, Y: park.y! },
-                          BottomRight: {
-                              X: park.data.bottomRightX as number,
-                              Y: park.data.bottomRightY as number,
-                          },
-                      }
-                    : PARK;
+            this.parkRegion = this.getParkRegion(park);
             if (locations.length === 0 && this.allowStaticFallbacks)
                 this.bunnyPositions = [...BUNNY_POSITIONS];
-            this.conn.chatRoom!.map.addEnterRegionTrigger(
-                this.parkRegion,
-                this.parkTrigger,
-            );
+            if (this.parkRegion) {
+                this.conn.chatRoom!.map.addEnterRegionTrigger(
+                    this.parkRegion,
+                    this.parkTrigger,
+                );
+            }
             for (const position of this.bunnyPositions) {
                 this.conn.chatRoom!.map.addTileTrigger(
                     position,
@@ -94,6 +87,30 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 error,
             );
         }
+    }
+
+    private getParkRegion(
+        location: VeratownLocationDoc | undefined,
+    ): MapRegion | undefined {
+        if (location?.region) return location.region;
+
+        const topLeftX = location?.x;
+        const topLeftY = location?.y;
+        const bottomRightX = location?.data?.bottomRightX;
+        const bottomRightY = location?.data?.bottomRightY;
+        if (
+            typeof topLeftX === "number" &&
+            typeof topLeftY === "number" &&
+            typeof bottomRightX === "number" &&
+            typeof bottomRightY === "number"
+        ) {
+            return {
+                TopLeft: { X: topLeftX, Y: topLeftY },
+                BottomRight: { X: bottomRightX, Y: bottomRightY },
+            };
+        }
+
+        return this.allowStaticFallbacks ? PARK : undefined;
     }
 
     private onCharacterEnterPark = async (character: API_Character) => {

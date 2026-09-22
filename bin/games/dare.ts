@@ -434,18 +434,27 @@ Game Overview
             (location) =>
                 location.type === "dare_region" &&
                 location.enabled &&
-                typeof location.x === "number" &&
-                typeof location.y === "number" &&
-                typeof location.data?.bottomRightX === "number" &&
-                typeof location.data?.bottomRightY === "number",
+                ((location.region !== undefined &&
+                    typeof location.region.TopLeft?.X === "number" &&
+                    typeof location.region.TopLeft?.Y === "number" &&
+                    typeof location.region.BottomRight?.X === "number" &&
+                    typeof location.region.BottomRight?.Y === "number") ||
+                    (typeof location.x === "number" &&
+                        typeof location.y === "number" &&
+                        typeof location.data?.bottomRightX === "number" &&
+                        typeof location.data?.bottomRightY === "number")),
         );
         if (region) {
             this.dareRegion = {
-                TopLeft: { X: region.x!, Y: region.y! },
-                BottomRight: {
-                    X: region.data!.bottomRightX as number,
-                    Y: region.data!.bottomRightY as number,
-                },
+                TopLeft: region.region
+                    ? { ...region.region.TopLeft }
+                    : { X: region.x!, Y: region.y! },
+                BottomRight: region.region
+                    ? { ...region.region.BottomRight }
+                    : {
+                          X: region.data!.bottomRightX as number,
+                          Y: region.data!.bottomRightY as number,
+                      },
             };
             this.region = this.dareRegion;
         }

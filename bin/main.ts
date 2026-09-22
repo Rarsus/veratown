@@ -570,6 +570,8 @@ async function initializeVeratownGame(
         container.get<GameStateMutationService>(
             DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
         ),
+        undefined,
+        roomKey,
     );
     await keypadAccessService.init().catch((err) => {
         logger.warn(

@@ -320,7 +320,10 @@ export class KeypadDataMigrator {
                 await KeypadBackwardCompatibility.findLegacyKeypadLocations(
                     locations,
                 );
-            const definitionService = new KeypadDefinitionService(this.db);
+            const definitionService = new KeypadDefinitionService(
+                this.db,
+                this.locationStore.roomKey,
+            );
             await definitionService.init();
 
             for (const location of legacyLocations) {
@@ -386,7 +389,10 @@ export class KeypadDataMigrator {
                 await KeypadBackwardCompatibility.findLegacyKeypadLocations(
                     locations,
                 );
-            const definitionService = new KeypadDefinitionService(this.db);
+            const definitionService = new KeypadDefinitionService(
+                this.db,
+                this.locationStore.roomKey,
+            );
             await definitionService.init();
 
             for (const location of legacyLocations) {
