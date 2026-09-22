@@ -209,10 +209,7 @@ function superviseBotConnection(
                     if (position) {
                         let movementError: unknown;
                         try {
-                            await connection.moveOnMapAndWait(
-                                position.X,
-                                position.Y,
-                            );
+                            connection.teleportOnMap(position.X, position.Y);
                         } catch (error) {
                             movementError = error;
                         }

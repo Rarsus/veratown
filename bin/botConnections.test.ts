@@ -412,7 +412,7 @@ function createRecoveryConnection(
                 listener();
             }
         },
-        moveOnMapAndWait: async (X: number, Y: number) => {
+        teleportOnMap: (X: number, Y: number) => {
             moves.push({ X, Y });
             if (Array.isArray(error)) {
                 const nextError = error.shift();

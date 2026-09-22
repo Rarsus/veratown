@@ -1539,13 +1539,10 @@ export class Veratown {
             }
 
             try {
-                await connection.moveOnMapAndWait(
-                    position.X,
-                    position.Y,
-                    2_000,
-                );
+                connection.teleportOnMap(position.X, position.Y);
+                await new Promise((resolve) => setTimeout(resolve, 250));
             } catch (error) {
-                logger.warn("Bot map movement attempt did not acknowledge", {
+                logger.warn("Bot map teleport attempt failed", {
                     role,
                     attempt,
                     position,
