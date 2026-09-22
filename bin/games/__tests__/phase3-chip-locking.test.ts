@@ -75,7 +75,7 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
             await store.lockChips(memberNumber, 300, "bondage");
 
             const updated = await store.getProfile(memberNumber);
-            assert.strictEqual(updated.casino.chips, 700);
+            assert.strictEqual(updated.casino.chips, 1000);
             assert.strictEqual(updated.casino.lockedChips, 300);
             assert.strictEqual(updated.casino.chipLockReason, "bondage");
         });
@@ -91,7 +91,7 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
             await store.lockChips(memberNumber, 1000, "bondage");
 
             const updated = await store.getProfile(memberNumber);
-            assert.strictEqual(updated.casino.chips, 0); // All locked
+            assert.strictEqual(updated.casino.chips, 500); // Total remains owned
             assert.strictEqual(updated.casino.lockedChips, 500); // Only 500 available
         });
 
@@ -142,7 +142,7 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
             await store.unlockChips(memberNumber, 200);
 
             const updated = await store.getProfile(memberNumber);
-            assert.strictEqual(updated.casino.chips, 700); // 500 + 200
+            assert.strictEqual(updated.casino.chips, 1000); // Total remains owned
             assert.strictEqual(updated.casino.lockedChips, 300); // 500 - 200
         });
 
@@ -249,6 +249,22 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
             assert.strictEqual(profile1.casino.lockedChips, 300);
             assert.strictEqual(profile2.casino.lockedChips, 0);
             assert.strictEqual(profile2.casino.chips, 500);
+        });
+    });
+
+    describe("3.1f: Awards while chips are locked", () => {
+        it("should keep winnings available for betting", async () => {
+            const memberNumber = 70;
+            await store.getProfile(memberNumber, "LockedWinner");
+            await store.updateChips(memberNumber, 1000, "test_grant");
+            await store.lockChips(memberNumber, 800, "bondage");
+
+            await store.updateChips(memberNumber, 250, "roulette_win");
+
+            const updated = await store.getCasinoView(memberNumber);
+            assert.strictEqual(updated.chips, 1250);
+            assert.strictEqual(updated.lockedChips, 800);
+            assert.strictEqual(updated.chips - updated.lockedChips, 450);
         });
     });
 });

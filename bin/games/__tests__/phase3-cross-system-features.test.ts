@@ -107,14 +107,18 @@ describe("Phase 3: Cross-System Features", () => {
             // Action: Check available chips
             const view = await unifiedStore.getCasinoView(memberNumber);
 
-            // Verify: Only 400 chips are available (1000 - 600 locked)
-            // Note: After locking, chips field contains only available chips
+            // Verify: Total ownership remains 1000; only 400 are available.
             assert.equal(
                 view.chips,
-                400,
-                "Available chips should be 400 (1000 - 600 locked)",
+                1000,
+                "Total chips should remain 1000 after locking",
             );
             assert.equal(view.lockedChips, 600, "Locked chips should be 600");
+            assert.equal(
+                view.chips - (view.lockedChips ?? 0),
+                400,
+                "Available chips should be 400",
+            );
         });
 
         it("should unlock chips when bondage is removed", async () => {

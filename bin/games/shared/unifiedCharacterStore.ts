@@ -508,7 +508,13 @@ export class UnifiedCharacterStore {
                 { _id: to },
                 { session },
             );
-            if (!sender || !recipient || sender.casino.chips < amount) {
+            if (!sender || !recipient) {
+                throw new Error("insufficient chips or missing profile");
+            }
+            const senderLockedChips = sender.casino.lockedChips ?? 0;
+            const senderAvailableChips =
+                sender.casino.chips - senderLockedChips;
+            if (senderAvailableChips < amount) {
                 throw new Error("insufficient chips or missing profile");
             }
             await this.profiles.updateOne(
@@ -1012,7 +1018,9 @@ export class UnifiedCharacterStore {
 
         const profile = await this.getProfile(memberNumber);
         const previousChips = profile.casino.chips;
-        const newChips = Math.max(0, previousChips + delta);
+        const lockedChips = profile.casino.lockedChips ?? 0;
+        const minimumChips = delta < 0 ? lockedChips : 0;
+        const newChips = Math.max(minimumChips, previousChips + delta);
         const actualDelta = newChips - previousChips;
 
         if (actualDelta === 0) {
@@ -1168,7 +1176,7 @@ export class UnifiedCharacterStore {
 
     /**
      * Lock chips due to bondage, parole, or cage restriction.
-     * Moves chips from available to locked state.
+     * Keeps total ownership unchanged and increases the restricted subset.
      * Emits chips_locked event.
      *
      * @param memberNumber Target character
@@ -1188,23 +1196,25 @@ export class UnifiedCharacterStore {
         const profile = await this.getProfile(memberNumber);
         const now = Date.now();
 
-        // Don't lock more chips than available
-        const actualLockAmount = Math.min(amountToLock, profile.casino.chips);
+        const currentLockedChips = profile.casino.lockedChips ?? 0;
+        const availableChips = Math.max(
+            0,
+            profile.casino.chips - currentLockedChips,
+        );
+
+        // Don't lock more chips than are currently available.
+        const actualLockAmount = Math.min(amountToLock, availableChips);
 
         if (actualLockAmount <= 0) {
             return; // Nothing to lock
         }
 
-        // Move chips from available to locked
-        const newAvailableChips = profile.casino.chips - actualLockAmount;
-        const newLockedChips =
-            (profile.casino.lockedChips ?? 0) + actualLockAmount;
+        const newLockedChips = currentLockedChips + actualLockAmount;
 
         await this.profiles.updateOne(
             { _id: memberNumber },
             {
                 $set: {
-                    "casino.chips": newAvailableChips,
                     "casino.lockedChips": newLockedChips,
                     "casino.chipLockReason": reason,
                     "casino.chipLockUntil": lockUntil,
@@ -1227,7 +1237,8 @@ export class UnifiedCharacterStore {
             target: memberNumber,
             data: {
                 amountLocked: actualLockAmount,
-                remainingChips: newAvailableChips,
+                totalChips: profile.casino.chips,
+                availableChips: profile.casino.chips - newLockedChips,
                 totalLockedChips: newLockedChips,
                 reason,
                 lockUntil,
@@ -1270,15 +1281,12 @@ export class UnifiedCharacterStore {
             return; // Nothing to unlock
         }
 
-        // Move chips from locked back to available
-        const newAvailableChips = profile.casino.chips + actualUnlockAmount;
         const newLockedChips = currentLockedChips - actualUnlockAmount;
 
         await this.profiles.updateOne(
             { _id: memberNumber },
             {
                 $set: {
-                    "casino.chips": newAvailableChips,
                     "casino.lockedChips": newLockedChips,
                     ...(newLockedChips === 0 && {
                         "casino.chipLockReason": undefined,
@@ -1303,7 +1311,8 @@ export class UnifiedCharacterStore {
             target: memberNumber,
             data: {
                 amountUnlocked: actualUnlockAmount,
-                availableChips: newAvailableChips,
+                totalChips: profile.casino.chips,
+                availableChips: profile.casino.chips - newLockedChips,
                 remainingLockedChips: newLockedChips,
             },
             processed: false,

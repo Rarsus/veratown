@@ -238,7 +238,7 @@ describe("Phase 5: Full Migration to UnifiedCharacterStore", () => {
             await store.lockChips(4002, 250, "bondage", undefined);
 
             const view = await store.getCasinoView(4002);
-            assert.equal(view.chips, 250);
+            assert.equal(view.chips, 500);
             assert.equal(view.lockedChips, 250);
 
             // Unlock chips

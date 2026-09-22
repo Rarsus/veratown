@@ -408,6 +408,10 @@ export class Casino implements GamePlugin {
         }
     }
 
+    public async initializeAppearance(): Promise<void> {
+        await this.game.initializeAppearance();
+    }
+
     private async ensureCocktailCatalog(): Promise<void> {
         if (!this.cocktailCatalogReady) {
             this.cocktailCatalogReady = this.cocktailCatalog.init();
@@ -553,7 +557,6 @@ export class Casino implements GamePlugin {
             character.MemberNumber,
             character.toString(),
         );
-        await this.onCharacterEnterCasinoRegion(character);
     };
 
     private readonly casinoRegionEnterTrigger = guardHandler(
@@ -845,10 +848,12 @@ ${forfeitsString()}
             this.conn.reply(msg, `${target} has ${player.credits} chips.`);
         } else {
             const player = await this.getStore().getPlayer(sender.MemberNumber);
-            this.conn.reply(
-                msg,
-                `${sender}, you have ${player.credits} chips.`,
-            );
+            const response = `${sender}, you have ${player.credits} chips.`;
+            if (msg.Type === "Chat") {
+                this.conn.SendMessage("Chat", response);
+            } else {
+                this.conn.reply(msg, response);
+            }
         }
     };
 
@@ -1420,6 +1425,7 @@ ${forfeitsString()}
                     ? new RouletteGame(this.conn, this)
                     : new BlackjackGame(this.conn, this);
             this.game.registerCommands(this.commandRouter!);
+            await this.game.initializeAppearance();
             this.conn.reply(msg, `Switched to ${game}.`);
             this.conn.SendMessage(
                 "Chat",

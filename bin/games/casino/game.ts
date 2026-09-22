@@ -20,6 +20,8 @@ export interface Game {
      */
     unregisterCommands(router: GamePluginCommandRouter): void;
 
+    initializeAppearance(): Promise<void>;
+
     parseBetCommand(
         senderCharacter: API_Character,
         msg: BC_Server_ChatRoomMessage,

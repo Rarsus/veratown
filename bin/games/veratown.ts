@@ -1343,6 +1343,7 @@ export class Veratown {
                     GAME_MISTRESS_POSITION,
                 );
             }
+            await this.casino?.initializeAppearance();
         }
         await this.liveCharacterStateSync?.reconcile();
         this.updateContainmentReadiness();

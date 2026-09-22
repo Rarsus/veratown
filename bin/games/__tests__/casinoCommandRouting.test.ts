@@ -309,13 +309,13 @@ test("Casino only sends daily-chip status from casino-region entry", async () =>
             connection.replies.filter((message: string) =>
                 message.includes("Welcome back, Player"),
             ).length,
-            1,
+            0,
         );
         assert.equal(
             connection.replies.filter((message: string) =>
                 message.includes("Gambling is allowed"),
             ).length,
-            1,
+            0,
         );
 
         enterTriggers[0](character, { X: 0, Y: 0 });
@@ -357,7 +357,7 @@ test("Casino only sends daily-chip status from casino-region entry", async () =>
             casino.onCharacterEnterCasinoRegion(character),
             casino.onCharacterEnterCasinoRegion(character),
         ]);
-        assert.equal(claimCalls, 5);
+        assert.equal(claimCalls, 4);
         assert.equal(
             connection.replies.filter((message: string) =>
                 message.includes("free chips for today"),

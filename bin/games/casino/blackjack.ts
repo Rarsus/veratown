@@ -272,60 +272,61 @@ export class BlackjackGame implements Game {
     ) {
         this.casino = casino;
         this.messageSender = new MessageSender(conn);
+    }
 
-        setTimeout(() => {
-            this.getPole();
-            const sign = this.casino.getSign();
+    public async initializeAppearance(): Promise<void> {
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-            sign.setProperty("OverridePriority", { Text: 63 });
-            sign.setProperty("Text", "Place bets!");
-            sign.setProperty("Text2", " ");
-            this.casino.setTextColor("#ffffff");
+        this.getPole();
+        const sign = this.casino.getSign();
 
-            this.casino.setBio().catch((e) => {
-                this.logger?.error("Failed to set bio.", e);
-            });
+        sign.setProperty("OverridePriority", { Text: 63 });
+        sign.setProperty("Text", "Place bets!");
+        sign.setProperty("Text2", " ");
+        this.casino.setTextColor("#ffffff");
 
-            this.conn.Player.setScriptPermissions(true, false);
+        this.conn.Player.setScriptPermissions(true, false);
 
-            const scriptItem = this.conn.Player.Appearance.AddItem(
-                AssetGet("ItemScript", "Script"),
-            );
-            scriptItem.setProperty("Hide", [
-                "Height",
-                "BodyUpper",
-                "ArmsLeft",
-                "ArmsRight",
-                "HandsLeft",
-                "HandsRight",
-                "BodyLower",
-                "HairFront",
-                "HairBack",
-                "Eyebrows",
-                "Eyes",
-                "Eyes2",
-                "Mouth",
-                "Nipples",
-                "Pussy",
-                "Pronouns",
-                "Head",
-                "Blush",
-                "Fluids",
-                "Emoticon",
-                "ItemNeck",
-                "ItemHead",
-                "Cloth",
-                "Bra",
-                "Socks",
-                "Shoes",
-                "ClothAccessory",
-                "Necklace",
-                "ClothLower",
-                "Panties",
-                "Suit",
-                "Gloves",
-            ]);
-        }, 500);
+        const scriptItem = this.conn.Player.Appearance.AddItem(
+            AssetGet("ItemScript", "Script"),
+        );
+        scriptItem.setProperty("Hide", [
+            "Height",
+            "BodyUpper",
+            "ArmsLeft",
+            "ArmsRight",
+            "HandsLeft",
+            "HandsRight",
+            "BodyLower",
+            "HairFront",
+            "HairBack",
+            "Eyebrows",
+            "Eyes",
+            "Eyes2",
+            "Mouth",
+            "Nipples",
+            "Pussy",
+            "Pronouns",
+            "Head",
+            "Blush",
+            "Fluids",
+            "Emoticon",
+            "ItemNeck",
+            "ItemHead",
+            "Cloth",
+            "Bra",
+            "Socks",
+            "Shoes",
+            "ClothAccessory",
+            "Necklace",
+            "ClothLower",
+            "Panties",
+            "Suit",
+            "Gloves",
+        ]);
+        this.conn.Player.Appearance.MakeAppearanceBundle();
+        this.conn.Player.sendAppearanceUpdate();
+        await this.casino.setBio();
     }
 
     getPole(): API_AppearanceItem | null {

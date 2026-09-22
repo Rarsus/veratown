@@ -232,71 +232,62 @@ export class RouletteGame implements Game {
         casino: Casino,
     ) {
         this.casino = casino;
+    }
 
-        // hack because otherwise an account update goes through after this item update and clears the text out
-        setTimeout(() => {
-            const wheel = this.getWheel();
-            wheel.setProperty("Texts", [
-                " ",
-                " ",
-                " ",
-                " ",
-                " ",
-                " ",
-                " ",
-                " ",
-            ]);
+    public async initializeAppearance(): Promise<void> {
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-            const sign = this.casino.getSign();
-            sign.setProperty("OverridePriority", { Text: 63 });
-            sign.setProperty("Text", "Place bets!");
-            sign.setProperty("Text2", " ");
-            this.casino.setTextColor("#ffffff");
+        const wheel = this.getWheel();
+        wheel.setProperty("Texts", [" ", " ", " ", " ", " ", " ", " ", " "]);
 
-            this.casino.setBio().catch((e) => {
-                this.logger?.error("Failed to set bio.", e);
-            });
+        const sign = this.casino.getSign();
+        sign.setProperty("OverridePriority", { Text: 63 });
+        sign.setProperty("Text", "Place bets!");
+        sign.setProperty("Text2", " ");
+        this.casino.setTextColor("#ffffff");
 
-            this.conn.Player.setScriptPermissions(true, false);
+        this.conn.Player.setScriptPermissions(true, false);
 
-            const scriptItem = this.conn.Player.Appearance.AddItem(
-                AssetGet("ItemScript", "Script"),
-            );
-            scriptItem.setProperty("Hide", [
-                "Height",
-                "BodyUpper",
-                "ArmsLeft",
-                "ArmsRight",
-                "HandsLeft",
-                "HandsRight",
-                "BodyLower",
-                "HairFront",
-                "HairBack",
-                "Eyebrows",
-                "Eyes",
-                "Eyes2",
-                "Mouth",
-                "Nipples",
-                "Pussy",
-                "Pronouns",
-                "Head",
-                "Blush",
-                "Fluids",
-                "Emoticon",
-                "ItemNeck",
-                "ItemHead",
-                "Cloth",
-                "Bra",
-                "Socks",
-                "Shoes",
-                "ClothAccessory",
-                "Necklace",
-                "ClothLower",
-                "Panties",
-                "Suit",
-                "Gloves",
-            ]);
-        }, 500);
+        const scriptItem = this.conn.Player.Appearance.AddItem(
+            AssetGet("ItemScript", "Script"),
+        );
+        scriptItem.setProperty("Hide", [
+            "Height",
+            "BodyUpper",
+            "ArmsLeft",
+            "ArmsRight",
+            "HandsLeft",
+            "HandsRight",
+            "BodyLower",
+            "HairFront",
+            "HairBack",
+            "Eyebrows",
+            "Eyes",
+            "Eyes2",
+            "Mouth",
+            "Nipples",
+            "Pussy",
+            "Pronouns",
+            "Head",
+            "Blush",
+            "Fluids",
+            "Emoticon",
+            "ItemNeck",
+            "ItemHead",
+            "Cloth",
+            "Bra",
+            "Socks",
+            "Shoes",
+            "ClothAccessory",
+            "Necklace",
+            "ClothLower",
+            "Panties",
+            "Suit",
+            "Gloves",
+        ]);
+        this.conn.Player.Appearance.MakeAppearanceBundle();
+        this.conn.Player.sendAppearanceUpdate();
+        await this.casino.setBio();
     }
 
     public parseBetCommand(
