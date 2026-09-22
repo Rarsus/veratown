@@ -249,7 +249,25 @@ export class VeratownLocationStore extends EventEmitter {
         if (this.changeStream) return;
         await this.init();
 
-        this.changeStream = this.locations.watch();
+        const roomKeyPrefix = `${this.roomKey}:`;
+        const roomKeyPattern = new RegExp(
+            `^${roomKeyPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+        );
+        const roomMatch: Record<string, unknown>[] = [
+            { "fullDocument.roomKey": this.roomKey },
+            { "documentKey._id": roomKeyPattern },
+        ];
+        if (this.roomKey === "main") {
+            roomMatch.push({ "fullDocument.roomKey": { $exists: false } });
+        }
+
+        this.changeStream = this.locations.watch([
+            {
+                $match: {
+                    $or: roomMatch,
+                },
+            },
+        ]);
         this.changeStream.on(
             "change",
             (change: ChangeStreamDocument<VeratownLocationDoc>) => {

@@ -9,7 +9,7 @@ variables override values from `/bot/cfg/config.json`.
 BOT_USER4=second_room_bot_username
 BOT_PASSWORD4=second_room_bot_password
 BOT_ROOM2_KEY=veratown-park
-BOT_ROOM2_NAME=veratown park
+BOT_ROOM2_NAME=Veratown Park
 BOT_ROOM2_DESCRIPTION=Veratown Park
 BOT_ROOM2_BACKGROUND=PartyBasement
 BOT_ROOM2_PRIVATE=true

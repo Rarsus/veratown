@@ -137,6 +137,7 @@ export interface VeratownConnections {
 }
 
 export class Veratown {
+    private static readonly MAP_POSITION_WAIT_TIMEOUT_MS = 10000;
     public static description = [
         "=== WELCOME TO VERATOWN ===",
         "",
@@ -1462,33 +1463,39 @@ export class Veratown {
             );
         }
 
-        if (this.conn2) {
-            const showerPositioned = await this.moveBotToPosition(
-                this.conn2,
-                SHOWER_BOT2_HOME_POSITION,
-                "shower",
-            );
-            if (showerPositioned) {
-                await this.syncVerifiedBotPosition(
-                    this.conn2,
-                    SHOWER_BOT2_HOME_POSITION,
-                );
-            }
-        }
-        if (this.conn3) {
-            const casinoPositioned = await this.moveBotToPosition(
-                this.conn3,
-                GAME_MISTRESS_POSITION,
-                "casino",
-            );
-            if (casinoPositioned) {
-                await this.syncVerifiedBotPosition(
-                    this.conn3,
-                    GAME_MISTRESS_POSITION,
-                );
-            }
-            await this.casino?.initializeAppearance();
-        }
+        await Promise.all([
+            this.conn2
+                ? (async () => {
+                      const showerPositioned = await this.moveBotToPosition(
+                          this.conn2!,
+                          SHOWER_BOT2_HOME_POSITION,
+                          "shower",
+                      );
+                      if (showerPositioned) {
+                          await this.syncVerifiedBotPosition(
+                              this.conn2!,
+                              SHOWER_BOT2_HOME_POSITION,
+                          );
+                      }
+                  })()
+                : undefined,
+            this.conn3
+                ? (async () => {
+                      const casinoPositioned = await this.moveBotToPosition(
+                          this.conn3!,
+                          GAME_MISTRESS_POSITION,
+                          "casino",
+                      );
+                      if (casinoPositioned) {
+                          await this.syncVerifiedBotPosition(
+                              this.conn3!,
+                              GAME_MISTRESS_POSITION,
+                          );
+                      }
+                      await this.casino?.initializeAppearance();
+                  })()
+                : undefined,
+        ]);
         await this.liveCharacterStateSync?.reconcile();
         this.updateContainmentReadiness();
     };
@@ -1513,7 +1520,16 @@ export class Veratown {
     ): Promise<boolean> {
         let movementError: unknown;
         try {
-            await connection.moveOnMapAndWait(position.X, position.Y);
+            await Promise.race([
+                connection.moveOnMapAndWait(position.X, position.Y),
+                wait(Veratown.MAP_POSITION_WAIT_TIMEOUT_MS).then(() => {
+                    const timeout = new Error(
+                        `Timed out waiting for ${role} bot map movement`,
+                    );
+                    timeout.name = "MapPositionTimeout";
+                    throw timeout;
+                }),
+            ]);
         } catch (error) {
             movementError = error;
         }
@@ -1585,8 +1601,10 @@ export class Veratown {
         const mainReady = atPosition(this.conn, RECEPTIONIST_POSITION);
         const showerReady =
             !this.conn2 || atPosition(this.conn2, SHOWER_BOT2_HOME_POSITION);
+        const casinoConfiguredForRoom = this.roomKey === "main";
         const casinoReady =
-            !!this.conn3 && atPosition(this.conn3, GAME_MISTRESS_POSITION);
+            !casinoConfiguredForRoom ||
+            (!!this.conn3 && atPosition(this.conn3, GAME_MISTRESS_POSITION));
         const kennelTriggersReady = this.kennelSystem?.isReady() ?? false;
         const cageTriggersReady = this.cageSystem?.isReady() ?? false;
         const persistenceReady = this.container.has(
@@ -1646,12 +1664,16 @@ export class Veratown {
         const casinoDependency = dependency(
             "casino bot position",
             casinoReady,
-            this.conn3
-                ? casinoReady
-                    ? "verified"
-                    : "casino bot room, map, recovery, or position is unavailable"
-                : "casino bot is not configured",
-            "reconnect the casino bot and restore the game mistress position",
+            !casinoConfiguredForRoom
+                ? "casino is managed by the main room runtime"
+                : this.conn3
+                  ? casinoReady
+                      ? "verified"
+                      : "casino bot room, map, recovery, or position is unavailable"
+                  : "casino bot is not configured",
+            !casinoConfiguredForRoom
+                ? "no recovery action required"
+                : "reconnect the casino bot and restore the game mistress position",
         );
         const readiness = {
             cage: evaluateContainmentReadiness("cage", [

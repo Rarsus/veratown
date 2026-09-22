@@ -133,7 +133,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             // Load cat and dog locations
             this.tiles = [];
             for (const location of locations) {
-                this.logger?.info(
+                this.logger?.debug(
                     `[CatDogSystem] Checking location: ${location.key} type=${location.type} enabled=${location.enabled}`,
                 );
                 if (
@@ -142,7 +142,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                 ) {
                     const config = this.parseConfig(location);
                     if (config) {
-                        this.logger?.info(
+                        this.logger?.debug(
                             `[CatDogSystem] Adding ${location.type} at (${location.x}, ${location.y})`,
                         );
                         this.tiles.push({

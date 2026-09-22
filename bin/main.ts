@@ -199,8 +199,10 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     // Railway-friendly alternative to BOT_ROOMS JSON. These scalar variables
     // are assembled into the same room profile consumed by botConnections.
     if (process.env.BOT_ROOM2_KEY !== undefined) {
+        const secondRoomName =
+            process.env.BOT_ROOM2_NAME ?? process.env.BOT_ROOM_2_NAME;
         const secondRoom: Record<string, unknown> = {
-            Name: process.env.BOT_ROOM2_NAME ?? "veratown park",
+            Name: secondRoomName ?? "veratown park",
             Description: process.env.BOT_ROOM2_DESCRIPTION ?? "Veratown Park",
             Background: process.env.BOT_ROOM2_BACKGROUND ?? "PartyBasement",
             Private: parseBoolean(process.env.BOT_ROOM2_PRIVATE, true),
