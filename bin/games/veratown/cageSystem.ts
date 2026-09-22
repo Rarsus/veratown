@@ -243,6 +243,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             character: API_Character,
         ) => Promise<void>,
         private readonly timer: CageTimer = systemTimer,
+        private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -358,7 +359,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             }
 
             // If no database locations loaded, fall back to hardcoded CAGES
-            if (locations.length === 0) {
+            if (locations.length === 0 && this.allowStaticFallbacks) {
                 for (const cage of CAGES) {
                     const posKey = this.getTileKey(cage.pos.X, cage.pos.Y);
                     const entryPosKey = this.getTileKey(

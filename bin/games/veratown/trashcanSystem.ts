@@ -48,7 +48,10 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     private readonly messageSender: MessageSender;
     private readonly COOLDOWN_MS = 7000; // 7 second cooldown between searches
 
-    public constructor(private conn: API_Connector) {
+    public constructor(
+        private conn: API_Connector,
+        private readonly allowStaticFallbacks = true,
+    ) {
         this.messageSender = new MessageSender(conn);
     }
 
@@ -63,7 +66,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
             this.trashcanPositions = locations
                 .filter((loc) => loc.type === "trashcan" && loc.enabled)
                 .map((trashcan) => ({ X: trashcan.x!, Y: trashcan.y! }));
-            if (locations.length === 0) {
+            if (locations.length === 0 && this.allowStaticFallbacks) {
                 this.trashcanPositions = [...TRASHCAN_SEARCH_LOCATIONS];
             }
 

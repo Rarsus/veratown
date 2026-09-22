@@ -50,6 +50,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
         private readonly stateSync?: (
             character: API_Character,
         ) => Promise<void>,
+        private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "shower", "Showers");
         this.showerTrigger = this.guardTileHandler(this.onCharacterEnterShower);
@@ -102,7 +103,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                 ? { X: showerBotHome.x!, Y: showerBotHome.y! }
                 : SHOWER_BOT2_HOME_POSITION;
 
-            if (locations.length === 0) {
+            if (locations.length === 0 && this.allowStaticFallbacks) {
                 this.showerPositions = [...SHOWER_POSITIONS];
             }
 

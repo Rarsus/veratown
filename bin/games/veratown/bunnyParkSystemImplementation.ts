@@ -19,6 +19,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly punishmentService: BunnyPunishmentService,
+        private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "bunnyPark", "Bunny park");
         this.bunnyTrigger = this.guardTileHandler(this.onCharacterStepOnBunny);
@@ -61,7 +62,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                           },
                       }
                     : PARK;
-            if (locations.length === 0)
+            if (locations.length === 0 && this.allowStaticFallbacks)
                 this.bunnyPositions = [...BUNNY_POSITIONS];
             this.conn.chatRoom!.map.addEnterRegionTrigger(
                 this.parkRegion,

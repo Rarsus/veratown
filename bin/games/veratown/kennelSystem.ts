@@ -77,6 +77,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             character: API_Character,
         ) => Promise<void>,
         private readonly delay: (milliseconds: number) => Promise<void> = wait,
+        private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
@@ -165,7 +166,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 .filter((loc) => loc.type === "kennel" && loc.enabled)
                 .map((kennel) => ({ X: kennel.x!, Y: kennel.y! }));
 
-            if (locations.length === 0) {
+            if (locations.length === 0 && this.allowStaticFallbacks) {
                 this.kennelPositions = [...KENNEL_POSITIONS];
             }
 

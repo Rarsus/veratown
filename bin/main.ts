@@ -653,6 +653,12 @@ async function initializeVeratownGame(
         roomKey,
     );
     await game.init();
+    logger.info("Veratown room runtime initialized", {
+        roomKey,
+        bot: connections.main.Player.Name,
+        room: connections.main.chatRoom?.Name,
+        status: game.getStatus(),
+    });
 
     // Phase 5: Activate event subscriptions after systems are ready
     await subscribers.initialize();

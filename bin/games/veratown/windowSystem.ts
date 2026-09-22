@@ -34,7 +34,10 @@ export class WindowSystem extends AbstractTileFeatureSystem {
     >;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("WindowSystem");
-    public constructor(conn: API_Connector) {
+    public constructor(
+        conn: API_Connector,
+        private readonly allowStaticFallbacks = true,
+    ) {
         super(conn, "window", "Windows");
         this.windowTrigger = this.guardTileHandler(
             this.onCharacterPeepThroughWindow,
@@ -60,7 +63,7 @@ export class WindowSystem extends AbstractTileFeatureSystem {
                 .filter((loc) => loc.type === "window" && loc.enabled)
                 .map((window) => ({ X: window.x!, Y: window.y! }));
 
-            if (locations.length === 0) {
+            if (locations.length === 0 && this.allowStaticFallbacks) {
                 this.windowPositions = [...WINDOW_LOCATIONS];
             }
 

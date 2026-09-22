@@ -49,6 +49,7 @@ export class BedSystem extends AbstractTileFeatureSystem {
         private readonly stateSync?: (
             character: API_Character,
         ) => Promise<void>,
+        private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "bed", "Beds");
         this.bedTrigger = this.guardTileHandler(this.onCharacterEnterBed);
@@ -87,7 +88,7 @@ export class BedSystem extends AbstractTileFeatureSystem {
                 Y: bed.y!,
             }));
 
-            if (this.bedPositions.length === 0) {
+            if (this.bedPositions.length === 0 && this.allowStaticFallbacks) {
                 this.logger.info(
                     "No bed locations in database, using config defaults",
                 );

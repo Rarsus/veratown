@@ -509,6 +509,8 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
+                    undefined,
+                    this.roomKey === "main",
                 ),
         );
         this.kennelSystem = this.initFeature(
@@ -526,6 +528,8 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
+                    undefined,
+                    this.roomKey === "main",
                 ),
         );
         this.showerSystem = this.initFeature(
@@ -537,6 +541,7 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
+                    this.roomKey === "main",
                 ),
         );
         this.bedSystem = this.initFeature(
@@ -547,6 +552,7 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
+                    this.roomKey === "main",
                 ),
         );
         this.bunnyParkSystem = this.initFeature(() => {
@@ -574,11 +580,17 @@ export class Veratown {
                         )
                         .then(() => undefined) ?? Promise.resolve(),
             );
-            return new BunnyParkSystem(this.conn, punishmentService);
+            return new BunnyParkSystem(
+                this.conn,
+                punishmentService,
+                this.roomKey === "main",
+            );
         });
-        this.windowSystem = this.initFeature(() => new WindowSystem(this.conn));
+        this.windowSystem = this.initFeature(
+            () => new WindowSystem(this.conn, this.roomKey === "main"),
+        );
         this.trashcanSystem = this.initFeature(
-            () => new TrashcanSystem(this.conn),
+            () => new TrashcanSystem(this.conn, this.roomKey === "main"),
         );
         const keypadDefinitionService =
             this.container.get<KeypadDefinitionService>(
