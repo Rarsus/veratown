@@ -464,7 +464,16 @@ async function connectBotAccount(
     room?: import("bc-bot").RoomDefinition,
 ): Promise<API_Connector> {
     const connection = new API_Connector(serverUrl, user, password, config.env);
-    if (room) await connection.joinOrCreateRoom(room);
+    if (room) {
+        await connection.joinOrCreateRoom(room);
+        if (connection.Player.IsRoomAdmin()) {
+            connection.ChatRoomUpdate(
+                room as unknown as Parameters<
+                    API_Connector["ChatRoomUpdate"]
+                >[0],
+            );
+        }
+    }
 
     // Wait for connection to stabilize before returning
     // This prevents connection flapping when multiple bots join in quick succession

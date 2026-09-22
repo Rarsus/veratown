@@ -888,11 +888,13 @@ export class Veratown {
             try {
                 this.locationSnapshot = this.locationStore
                     ? await this.locationStore.reloadLocations(
-                          VERATOWN_LOCATIONS_FALLBACK,
+                          this.roomKey === "main"
+                              ? VERATOWN_LOCATIONS_FALLBACK
+                              : undefined,
                       )
                     : [];
 
-                if (this.locationStore) {
+                if (this.locationStore && this.roomKey === "main") {
                     const monitorLocationsChanged =
                         await this.ensureLocationMonitorDefaults();
                     if (monitorLocationsChanged) {
@@ -909,14 +911,18 @@ export class Veratown {
 
                 if (this.locationStore) {
                     await this.regionManager.loadRegions(this.locationStore);
-                    for (const [key, region] of FEATURE_REGIONS_STATIC) {
-                        this.regionManager.addStaticRegion(region);
+                    if (this.roomKey === "main") {
+                        for (const [, region] of FEATURE_REGIONS_STATIC) {
+                            this.regionManager.addStaticRegion(region);
+                        }
                     }
 
-                    for (const warning of this.regionManager.validateRegions(
-                        FEATURE_REGIONS_STATIC,
-                    )) {
-                        logger.warn(warning);
+                    if (this.roomKey === "main") {
+                        for (const warning of this.regionManager.validateRegions(
+                            FEATURE_REGIONS_STATIC,
+                        )) {
+                            logger.warn(warning);
+                        }
                     }
                 }
 
@@ -940,7 +946,7 @@ export class Veratown {
     }
 
     private async ensureLocationMonitorDefaults(): Promise<boolean> {
-        if (!this.locationStore) return false;
+        if (!this.locationStore || this.roomKey !== "main") return false;
 
         let changed = false;
         const cageMonitor =

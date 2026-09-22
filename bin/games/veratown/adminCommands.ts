@@ -117,7 +117,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
             this.conn.reply(msg, "Room persistence is not available.");
             return;
         }
-        const room = this.conn.chatRoom as unknown as RoomDefinition;
+        const room = this.conn.chatRoom.ToInfo() as RoomDefinition;
         const mapData = this.conn.chatRoom.map.mapData;
         await this.roomStore.save(
             this.roomKey,
@@ -274,7 +274,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
                     await this.mapStore.save(mapData, sender.MemberNumber);
                     this.conn.reply(
                         msg,
-                        "Current room layout saved as the new default.",
+                        `Current layout saved for room ${this.roomKey}.`,
                     );
                 } else {
                     this.conn.reply(
