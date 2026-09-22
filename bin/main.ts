@@ -436,29 +436,11 @@ export async function restartBotConnections(): Promise<void> {
                 logger.info(
                     "Reinitializing Veratown with fresh configuration and map",
                 );
-                activeVeratownGame = await initializeVeratownGame(
+                activeVeratownGame = await initializeVeratownRooms(
                     newConnections,
                     activeDatabase,
                     cachedConfig,
-                    "main",
                 );
-                activeVeratownRooms.clear();
-                activeVeratownRooms.set("main", activeVeratownGame);
-                if (
-                    newConnections.secondRoom &&
-                    newConnections.roomKeys?.secondRoom
-                ) {
-                    const secondaryGame = await initializeVeratownGame(
-                        { main: newConnections.secondRoom },
-                        activeDatabase,
-                        cachedConfig,
-                        newConnections.roomKeys.secondRoom,
-                    );
-                    activeVeratownRooms.set(
-                        newConnections.roomKeys.secondRoom,
-                        secondaryGame,
-                    );
-                }
                 logger.info(
                     "Veratown game reinitialized with room configuration and map loaded",
                 );
@@ -652,6 +634,11 @@ async function initializeVeratownGame(
         container,
         roomKey,
     );
+    logger.info("Starting Veratown game initialization", {
+        roomKey,
+        bot: connections.main.Player.Name,
+        room: connections.main.chatRoom?.Name,
+    });
     await game.init();
     logger.info("Veratown room runtime initialized", {
         roomKey,
@@ -705,6 +692,57 @@ const activeVeratownRooms = new Map<string, Veratown>();
 let shutdownPromise: Promise<void> | undefined;
 let cachedServerUrl: string | undefined;
 let cachedConfig: ConfigFile | undefined;
+
+async function initializeVeratownRooms(
+    connections: BotConnections,
+    database: DatabaseConnection | undefined,
+    config: ConfigFile,
+): Promise<Veratown> {
+    const logger = createLogger("VeratownInit");
+    const mainPromise = (async () => {
+        logger.info("Starting Veratown room runtime", { roomKey: "main" });
+        return initializeVeratownGame(connections, database, config, "main");
+    })();
+
+    const secondaryRoomKey = connections.roomKeys?.secondRoom;
+    const secondaryPromise =
+        connections.secondRoom && secondaryRoomKey
+            ? initializeVeratownGame(
+                  { main: connections.secondRoom },
+                  database,
+                  config,
+                  secondaryRoomKey,
+              ).catch((error) => {
+                  logger.error(
+                      "Secondary Veratown room runtime failed",
+                      error,
+                      {
+                          roomKey: secondaryRoomKey,
+                          bot: connections.secondRoom?.Player.Name,
+                      },
+                  );
+                  return undefined;
+              })
+            : undefined;
+
+    if (secondaryPromise) {
+        logger.info("Starting Veratown room runtime", {
+            roomKey: secondaryRoomKey,
+            bot: connections.secondRoom?.Player.Name,
+        });
+    }
+
+    const mainGame = await mainPromise;
+    activeVeratownRooms.clear();
+    activeVeratownRooms.set("main", mainGame);
+
+    const secondaryGame = await secondaryPromise;
+    if (secondaryGame && secondaryRoomKey) {
+        activeVeratownRooms.set(secondaryRoomKey, secondaryGame);
+    }
+
+    return mainGame;
+}
 
 async function shutdown(): Promise<void> {
     if (shutdownPromise) return shutdownPromise;
@@ -781,27 +819,12 @@ async function startConfiguredGame({
 
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
-            // Use centralized initialization that handles both startup and restart
-            activeVeratownGame = await initializeVeratownGame(
+            // Use centralized initialization that handles both startup and restart.
+            activeVeratownGame = await initializeVeratownRooms(
                 connections,
                 database,
                 config,
-                "main",
             );
-            activeVeratownRooms.clear();
-            activeVeratownRooms.set("main", activeVeratownGame);
-            if (connections.secondRoom && connections.roomKeys?.secondRoom) {
-                const secondaryGame = await initializeVeratownGame(
-                    { main: connections.secondRoom },
-                    database,
-                    config,
-                    connections.roomKeys.secondRoom,
-                );
-                activeVeratownRooms.set(
-                    connections.roomKeys.secondRoom,
-                    secondaryGame,
-                );
-            }
 
             logger.info(
                 "Phase 5 adapter cleanup complete - 100% unified architecture",
