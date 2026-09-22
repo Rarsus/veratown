@@ -97,6 +97,27 @@ function parseJsonArray(
     }
 }
 
+function parseCsv(value: string | undefined): string[] | undefined {
+    if (value === undefined) return undefined;
+    return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function parseCsvNumbers(
+    value: string | undefined,
+    fieldName: string,
+): number[] | undefined {
+    const values = parseCsv(value);
+    if (values === undefined) return undefined;
+    const numbers = values.map((item) => Number(item));
+    if (numbers.some((item) => !Number.isInteger(item) || item < 0)) {
+        throw configurationIssue(fieldName, "must be comma-separated integers");
+    }
+    return numbers;
+}
+
 /**
  * Load configuration from file and environment variables.
  * Environment variables take precedence over file settings.
@@ -147,8 +168,39 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         config.user4 = process.env.BOT_USER4;
     if (process.env.BOT_PASSWORD4 !== undefined)
         config.password4 = process.env.BOT_PASSWORD4;
-    const roomProfiles = parseJsonArray(process.env.BOT_ROOMS, "BOT_ROOMS");
-    if (roomProfiles) config.rooms = roomProfiles;
+    // Railway-friendly alternative to BOT_ROOMS JSON. These scalar variables
+    // are assembled into the same room profile consumed by botConnections.
+    if (process.env.BOT_ROOM2_KEY !== undefined) {
+        const secondRoom: Record<string, unknown> = {
+            Name: process.env.BOT_ROOM2_NAME ?? "veratown park",
+            Description: process.env.BOT_ROOM2_DESCRIPTION ?? "Veratown Park",
+            Background: process.env.BOT_ROOM2_BACKGROUND ?? "PartyBasement",
+            Private: parseBoolean(process.env.BOT_ROOM2_PRIVATE, true),
+            Locked: parseBoolean(process.env.BOT_ROOM2_LOCKED, false),
+            Space: process.env.BOT_ROOM2_SPACE ?? "X",
+            Limit: Number.parseInt(process.env.BOT_ROOM2_LIMIT ?? "20", 10),
+            Language: process.env.BOT_ROOM2_LANGUAGE ?? "EN",
+            MapData: {
+                Type: process.env.BOT_ROOM2_MAP_TYPE ?? "Always",
+            },
+        };
+        if (!Number.isInteger(secondRoom.Limit)) {
+            throw configurationIssue("BOT_ROOM2_LIMIT", "must be an integer");
+        }
+        const admins = parseCsvNumbers(
+            process.env.BOT_ROOM2_ADMIN,
+            "BOT_ROOM2_ADMIN",
+        );
+        if (admins) secondRoom.Admin = admins;
+
+        config.rooms = [
+            { key: "main", bot: "main" },
+            { key: process.env.BOT_ROOM2_KEY, bot: "user4", room: secondRoom },
+        ];
+    } else {
+        const roomProfiles = parseJsonArray(process.env.BOT_ROOMS, "BOT_ROOMS");
+        if (roomProfiles) config.rooms = roomProfiles;
+    }
 
     // ============================================================================
     // ENVIRONMENT AND GAME SETTINGS
@@ -526,7 +578,7 @@ async function initializeVeratownGame(
     logger.info("CrossSystemSubscribers initialized");
 
     // Phase 2A.4: Initialize Keypad Access Control System
-    const keypadDefService = new KeypadDefinitionService(db);
+    const keypadDefService = new KeypadDefinitionService(db, roomKey);
     await keypadDefService.init().catch((err) => {
         logger.warn(
             `KeypadDefinitionService.init warning: ${err instanceof Error ? err.message : String(err)}`,
