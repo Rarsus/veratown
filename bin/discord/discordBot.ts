@@ -356,7 +356,7 @@ async function registerSlashCommands(
                     required: false,
                 },
                 {
-                    name: "roomKey",
+                    name: "room_key",
                     description: "Room scope",
                     type: 3,
                     required: false,
@@ -375,7 +375,7 @@ async function registerSlashCommands(
                     required: true,
                 },
                 {
-                    name: "roomKey",
+                    name: "room_key",
                     description: "Room scope",
                     type: 3,
                     required: false,
@@ -418,7 +418,7 @@ async function registerSlashCommands(
                     required: false,
                 },
                 {
-                    name: "roomKey",
+                    name: "room_key",
                     description: "Room scope",
                     type: 3,
                     required: false,
@@ -605,7 +605,7 @@ export async function handleCommandInteraction(
                     context,
                     (interaction as any).options?.getString("type") ||
                         undefined,
-                    (interaction as any).options?.getString("roomKey") ||
+                    (interaction as any).options?.getString("room_key") ||
                         undefined,
                 );
                 break;
@@ -615,7 +615,7 @@ export async function handleCommandInteraction(
                     interaction,
                     context,
                     (interaction as any).options?.getString("key") || "",
-                    (interaction as any).options?.getString("roomKey") ||
+                    (interaction as any).options?.getString("room_key") ||
                         undefined,
                 );
                 break;
@@ -641,7 +641,7 @@ export async function handleCommandInteraction(
                             (interaction as any).options?.getInteger("y") ||
                             undefined,
                     },
-                    (interaction as any).options?.getString("roomKey") ||
+                    (interaction as any).options?.getString("room_key") ||
                         undefined,
                 );
                 break;

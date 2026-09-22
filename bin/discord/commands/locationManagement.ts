@@ -36,7 +36,7 @@ function missingRoomScope(): CommandResult {
     return {
         success: false,
         message:
-            "❌ A room scope is required. Provide `roomKey` for this Discord command.",
+            "❌ A room scope is required. Provide `room_key` for this Discord command.",
     };
 }
 

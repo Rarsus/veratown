@@ -262,9 +262,11 @@ export class Veratown {
         this.roomKey = roomKey;
         this.container = container || new DIContainer();
 
-        this.commandParser = new CommandParser(this.conn, undefined, [
-            GAME_LOCATION,
-        ]);
+        this.commandParser = new CommandParser(
+            this.conn,
+            undefined,
+            roomKey === "main" ? [GAME_LOCATION] : undefined,
+        );
         this.regionManager = new RegionManager();
 
         if (db) {
