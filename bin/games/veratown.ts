@@ -1251,6 +1251,9 @@ export class Veratown {
             if (diagnostic) {
                 recordBotPositionPersistence(connection, diagnostic);
             }
+            if (role === "casino") {
+                await this.casino?.initializeAppearance();
+            }
             await this.reloadLocations();
         } catch (error) {
             logger.error(

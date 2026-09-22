@@ -51,7 +51,7 @@ export const DARE_LOCATION: MapRegion = {
 
 export const KIDNAPPERS_LOCATION: MapRegion = {
     TopLeft: { X: 0, Y: 21 },
-    BottomRight: { X: 4, Y: 24 },
+    BottomRight: { X: 4, Y: 25 },
 };
 
 // --- Feature Regions (Multi-Tile Areas) ---
