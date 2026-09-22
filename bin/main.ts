@@ -442,15 +442,21 @@ export async function restartBotConnections(): Promise<void> {
                     cachedConfig,
                     "main",
                 );
+                activeVeratownRooms.clear();
+                activeVeratownRooms.set("main", activeVeratownGame);
                 if (
                     newConnections.secondRoom &&
                     newConnections.roomKeys?.secondRoom
                 ) {
-                    await initializeVeratownGame(
+                    const secondaryGame = await initializeVeratownGame(
                         { main: newConnections.secondRoom },
                         activeDatabase,
                         cachedConfig,
                         newConnections.roomKeys.secondRoom,
+                    );
+                    activeVeratownRooms.set(
+                        newConnections.roomKeys.secondRoom,
+                        secondaryGame,
                     );
                 }
                 logger.info(
@@ -689,6 +695,7 @@ let activeConnections: BotConnections | undefined;
 let activeDatabase: DatabaseConnection | undefined;
 let activeDiscordClient: any | undefined;
 let activeVeratownGame: Veratown | undefined;
+const activeVeratownRooms = new Map<string, Veratown>();
 let shutdownPromise: Promise<void> | undefined;
 let cachedServerUrl: string | undefined;
 let cachedConfig: ConfigFile | undefined;
@@ -775,12 +782,18 @@ async function startConfiguredGame({
                 config,
                 "main",
             );
+            activeVeratownRooms.clear();
+            activeVeratownRooms.set("main", activeVeratownGame);
             if (connections.secondRoom && connections.roomKeys?.secondRoom) {
-                await initializeVeratownGame(
+                const secondaryGame = await initializeVeratownGame(
                     { main: connections.secondRoom },
                     database,
                     config,
                     connections.roomKeys.secondRoom,
+                );
+                activeVeratownRooms.set(
+                    connections.roomKeys.secondRoom,
+                    secondaryGame,
                 );
             }
 
