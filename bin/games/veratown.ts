@@ -54,7 +54,10 @@ import {
     getLifecycleObjectId,
 } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
-import { VeratownRoomStore } from "./veratown/roomStore";
+import {
+    normalizeVeratownRoomKey,
+    VeratownRoomStore,
+} from "./veratown/roomStore";
 import {
     VeratownLocationStore,
     VeratownLocationDoc,
@@ -137,7 +140,7 @@ export interface VeratownConnections {
 }
 
 export class Veratown {
-    private static readonly MAP_POSITION_WAIT_TIMEOUT_MS = 10000;
+    private static readonly MAP_POSITION_POLL_ATTEMPTS = 20;
     public static description = [
         "=== WELCOME TO VERATOWN ===",
         "",
@@ -260,7 +263,7 @@ export class Veratown {
         this.conn = connections.main;
         this.conn2 = connections.shower;
         this.conn3 = connections.casino;
-        this.roomKey = roomKey;
+        this.roomKey = normalizeVeratownRoomKey(roomKey);
         this.container = container || new DIContainer();
 
         this.commandParser = new CommandParser(
@@ -1519,70 +1522,28 @@ export class Veratown {
         position: { X: number; Y: number },
         role: string,
     ): Promise<boolean> {
-        let movementError: unknown;
-        try {
-            await Promise.race([
-                connection.moveOnMapAndWait(position.X, position.Y),
-                wait(Veratown.MAP_POSITION_WAIT_TIMEOUT_MS).then(() => {
-                    const timeout = new Error(
-                        `Timed out waiting for ${role} bot map movement`,
-                    );
-                    timeout.name = "MapPositionTimeout";
-                    throw timeout;
-                }),
-            ]);
-        } catch (error) {
-            movementError = error;
-        }
-        const movementTimedOut =
-            movementError instanceof Error &&
-            movementError.name === "MapPositionTimeout";
+        connection.moveOnMap(position.X, position.Y);
         const observation = await verifyBotMapPosition(
             connection,
             position,
             this.conn.chatRoom?.Name,
-            movementTimedOut ? 3 : 1,
+            Veratown.MAP_POSITION_POLL_ATTEMPTS,
         );
-        if (observation.state === "verified" && movementTimedOut) {
-            observation.state = "verified-after-timeout";
-        }
-        if (
-            observation.state === "verified" ||
-            observation.state === "verified-after-timeout"
-        ) {
+        if (observation.state === "verified") {
             logger.info("Bot map position ready", {
                 role,
-                movementTimedOut,
-                movementError:
-                    movementError instanceof Error
-                        ? movementError.name
-                        : undefined,
                 ...observation,
             });
             return true;
         }
-        if (
-            observation.state !== "room-not-ready" &&
-            observation.state !== "map-not-ready"
-        ) {
-            logger.warn(
-                "Bot map position command dispatched; observation pending",
-                {
-                    role,
-                    movementTimedOut,
-                    movementError:
-                        movementError instanceof Error
-                            ? movementError.name
-                            : undefined,
-                    ...observation,
-                },
-            );
-            return true;
-        }
-        logger.error("Bot map position unavailable", movementError, {
-            role,
-            ...observation,
-        });
+        logger.error(
+            "Bot map position not verified during startup",
+            undefined,
+            {
+                role,
+                ...observation,
+            },
+        );
         return false;
     }
 

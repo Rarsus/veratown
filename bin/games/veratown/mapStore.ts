@@ -13,6 +13,7 @@
  */
 
 import { Collection, Db } from "mongodb";
+import { normalizeVeratownRoomKey } from "./roomStore";
 
 // Singleton document holding Veratown's current map layout, so a "map
 // admin" can edit the room's map in-game (via BC's own map editor) and then
@@ -56,11 +57,13 @@ function validateMapData(mapData: ServerChatRoomMapData): void {
 export class VeratownMapStore {
     private collection: Collection<VeratownMapDoc>;
     private backupCollection: Collection<VeratownMapBackupDoc>;
+    private readonly roomKey: string;
 
     public constructor(
         private db: Db,
-        private readonly roomKey: string = "main",
+        roomKey: string = "main",
     ) {
+        this.roomKey = normalizeVeratownRoomKey(roomKey);
         this.collection = this.db.collection<VeratownMapDoc>("veratownMap");
         this.backupCollection =
             this.db.collection<VeratownMapBackupDoc>("veratownMapBackups");

@@ -1,6 +1,11 @@
 import { Collection, Db } from "mongodb";
 import { RoomDefinition } from "bc-bot";
 
+export function normalizeVeratownRoomKey(roomKey: string): string {
+    const normalized = roomKey.replace(/[^a-zA-Z0-9]/g, "");
+    return normalized || "main";
+}
+
 export interface VeratownRoomDoc {
     _id: string;
     room: RoomDefinition;
@@ -23,6 +28,7 @@ export class VeratownRoomStore {
         roomKey: string,
         fallbackRoom?: RoomDefinition,
     ): Promise<VeratownRoomDoc | undefined> {
+        roomKey = normalizeVeratownRoomKey(roomKey);
         await this.init();
         const stored = await this.rooms.findOne({ _id: roomKey });
         if (stored) return stored;
@@ -43,6 +49,7 @@ export class VeratownRoomStore {
         room: RoomDefinition,
         updatedBy?: number,
     ): Promise<void> {
+        roomKey = normalizeVeratownRoomKey(roomKey);
         await this.init();
         const { MapData: _legacyMapData, ...roomSettings } = room;
         await this.rooms.updateOne(

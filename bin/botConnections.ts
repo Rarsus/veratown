@@ -12,7 +12,10 @@ import {
 } from "./games/veratown/veratownConfig";
 import { createLogger } from "./logging";
 import { asAppError, ValidationError } from "./errors";
-import { VeratownRoomStore } from "./games/veratown/roomStore";
+import {
+    normalizeVeratownRoomKey,
+    VeratownRoomStore,
+} from "./games/veratown/roomStore";
 import { VeratownMapStore } from "./games/veratown/mapStore";
 
 export interface BotConnections extends VeratownConnections {
@@ -122,7 +125,12 @@ export async function verifyBotMapPosition(
 
         const backoffMs =
             attempt + 1 < maxAttempts
-                ? POSITION_VERIFICATION_BACKOFF_MS[attempt + 1]
+                ? POSITION_VERIFICATION_BACKOFF_MS[
+                      Math.min(
+                          attempt + 1,
+                          POSITION_VERIFICATION_BACKOFF_MS.length - 1,
+                      )
+                  ]
                 : undefined;
         if (backoffMs !== undefined) {
             await new Promise((resolve) => setTimeout(resolve, backoffMs));
@@ -831,19 +839,20 @@ export async function createBotConnections(
     );
     const roomKeys: Record<string, string> = { main: "main" };
     if (secondProfile && config.user4 && config.password4) {
+        const secondRoomKey = normalizeVeratownRoomKey(secondProfile.key);
         if (!database) {
             logger.warn("MongoDB not configured - second room disabled");
         } else {
             const secondRoom = await loadRoomDefinition(
                 roomStore!,
-                secondProfile.key,
+                secondRoomKey,
                 secondProfile.room ?? config.room,
                 database,
                 logger,
             );
             if (!secondRoom) {
                 throw new Error(
-                    `Room profile ${secondProfile.key} requires a room definition on first use`,
+                    `Room profile ${secondRoomKey} requires a room definition on first use`,
                 );
             }
             await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -854,9 +863,9 @@ export async function createBotConnections(
                 config.password4,
                 secondRoom,
             );
-            roomKeys.secondRoom = secondProfile.key;
+            roomKeys.secondRoom = secondRoomKey;
             logger.info("Second room connection established", {
-                roomKey: secondProfile.key,
+                roomKey: secondRoomKey,
                 room: connections.secondRoom.chatRoom?.Name,
                 bot: connections.secondRoom.Player.Name,
                 memberId: connections.secondRoom.Player.MemberNumber,
