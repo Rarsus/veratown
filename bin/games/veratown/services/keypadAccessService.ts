@@ -21,6 +21,7 @@ import {
     GameStateMutationService,
     GameStateMutationServiceImpl,
 } from "../../shared/gameStateMutationService";
+import { normalizeVeratownRoomKey } from "../roomStore";
 
 /**
  * KeypadAccessService (Layer 2)
@@ -52,10 +53,13 @@ export class KeypadAccessService {
         private readonly roomWhitelistResolver: (
             memberNumber: number,
         ) => Promise<boolean> = async () => false,
-        private readonly roomKey = "main",
+        roomKey = "main",
     ) {
+        this.roomKey = normalizeVeratownRoomKey(roomKey);
         this.memberships = this.db.collection("keypadGroupMemberships");
     }
+
+    private readonly roomKey: string;
 
     /**
      * Initialize membership collection indexes

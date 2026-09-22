@@ -14,6 +14,7 @@
 
 import { Collection, Db, ChangeStream, ChangeStreamDocument } from "mongodb";
 import { EventEmitter } from "events";
+import { normalizeVeratownRoomKey } from "./roomStore";
 
 import { createLogger } from "../../logging";
 
@@ -73,12 +74,15 @@ export class VeratownLocationStore extends EventEmitter {
 
     constructor(
         private db: Db,
-        public readonly roomKey: string = "main",
+        roomKey: string = "main",
     ) {
         super();
+        this.roomKey = normalizeVeratownRoomKey(roomKey);
         this.locations =
             this.db.collection<VeratownLocationDoc>("veratownLocations");
     }
+
+    public readonly roomKey: string;
 
     public async init(): Promise<void> {
         if (this.inited) return;

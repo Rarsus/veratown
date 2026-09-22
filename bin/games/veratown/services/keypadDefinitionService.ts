@@ -18,6 +18,7 @@ import {
     KeypadDoorDefinitionDoc,
     KeypadGroupDefinitionDoc,
 } from "../keypadTypes";
+import { normalizeVeratownRoomKey } from "../roomStore";
 
 /**
  * KeypadDefinitionService (Layer 3)
@@ -41,12 +42,15 @@ export class KeypadDefinitionService extends EventEmitter {
 
     constructor(
         private db: Db,
-        private readonly roomKey = "main",
+        roomKey = "main",
     ) {
         super();
+        this.roomKey = normalizeVeratownRoomKey(roomKey);
         this.doorDefinitions = this.db.collection("keypadDoorDefinitions");
         this.groupDefinitions = this.db.collection("keypadGroupDefinitions");
     }
+
+    private readonly roomKey: string;
 
     /**
      * Initialize indexes for keypad collections

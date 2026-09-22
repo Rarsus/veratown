@@ -19,6 +19,7 @@ import type { API_Connector } from "bc-bot";
 import { ConfigFile, configurationIssue, validateConfig } from "./config";
 import { Db } from "mongodb";
 import { Veratown } from "./games/veratown";
+import { normalizeVeratownRoomKey } from "./games/veratown/roomStore";
 import { MaidsPartyNightSinglePlayerAdventure } from "./hub/logic/maidsPartyNightSinglePlayerAdventure";
 import { existsSync } from "fs";
 import {
@@ -500,6 +501,7 @@ async function initializeVeratownGame(
     roomKey: string = "main",
 ): Promise<Veratown> {
     const logger = createLogger("VeratownInit");
+    roomKey = normalizeVeratownRoomKey(roomKey);
 
     if (!database) {
         throw new Error(

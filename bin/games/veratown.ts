@@ -269,7 +269,7 @@ export class Veratown {
         this.commandParser = new CommandParser(
             this.conn,
             undefined,
-            roomKey === "main" ? [GAME_LOCATION] : undefined,
+            this.roomKey === "main" ? [GAME_LOCATION] : undefined,
         );
         this.conn.on("Message", (ev) => {
             const content =
@@ -1556,7 +1556,15 @@ export class Veratown {
                 !!connection &&
                 isBotRecoveryReady(connection) &&
                 connection.chatRoom?.Name === this.conn.chatRoom?.Name &&
-                !!connection.chatRoom?.map
+                !!connection.chatRoom?.map &&
+                (() => {
+                    const observed = connection.chatRoom?.findMember(
+                        connection.Player.MemberNumber,
+                    )?.MapPos;
+                    return (
+                        observed?.X === position.X && observed?.Y === position.Y
+                    );
+                })()
             );
         };
 

@@ -213,14 +213,10 @@ function superviseBotConnection(
                             // room snapshot can lag or report a stale default
                             // position during reconnect; retain that mismatch
                             // as diagnostics without blocking recovery.
-                            if (
-                                observation.state !== "verified-after-timeout"
-                            ) {
+                            if (observation.state === "position-mismatch") {
                                 observation.state = movementTimedOut
                                     ? "verified-after-timeout"
-                                    : observation.state === "verified"
-                                      ? "verified"
-                                      : "command-dispatched";
+                                    : "command-dispatched";
                             }
                         }
                         status.position = observation;
