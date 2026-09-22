@@ -52,13 +52,15 @@ test("database room settings are normalized to the BC create contract", () => {
             BlockCategory: room.BlockCategory,
         },
         {
-            Access: ["All"],
-            Visibility: ["All"],
+            Access: ["Admin", "Whitelist"],
+            Visibility: ["Admin", "Whitelist"],
             Game: "",
             Ban: [],
             BlockCategory: [],
         },
     );
+    assert.equal("Private" in room, false);
+    assert.equal("Locked" in room, false);
 });
 
 test("Veratown selects main, shower, and casino roles", () => {

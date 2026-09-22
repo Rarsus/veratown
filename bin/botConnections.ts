@@ -29,16 +29,27 @@ export interface DatabaseConnection {
 }
 
 export function normalizeRoomDefinition(room: RoomDefinition): RoomDefinition {
+    const access =
+        room.Access ??
+        (room.Locked
+            ? ["Admin"]
+            : room.Private
+              ? ["Admin", "Whitelist"]
+              : ["All"]);
+    const visibility =
+        room.Visibility ?? (room.Private ? ["Admin", "Whitelist"] : ["All"]);
+    const { Private: _private, Locked: _locked, ...modernRoom } = room;
+
     return {
-        ...room,
-        Admin: room.Admin ?? [],
-        Ban: room.Ban ?? [],
-        Access: room.Access ?? ["All"],
-        Visibility: room.Visibility ?? ["All"],
-        BlockCategory: room.BlockCategory ?? [],
-        Game: room.Game ?? "",
-        Language: room.Language ?? "EN",
-        Space: room.Space ?? "X",
+        ...modernRoom,
+        Admin: modernRoom.Admin ?? [],
+        Ban: modernRoom.Ban ?? [],
+        Access: access,
+        Visibility: visibility,
+        BlockCategory: modernRoom.BlockCategory ?? [],
+        Game: modernRoom.Game ?? "",
+        Language: modernRoom.Language ?? "EN",
+        Space: modernRoom.Space ?? "X",
     };
 }
 
