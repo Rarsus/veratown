@@ -1,4 +1,4 @@
-import { API_Connector } from "bc-bot";
+import { API_Connector, RoomDefinition } from "bc-bot";
 import { Db, MongoClient } from "mongodb";
 import { ConfigFile } from "./config";
 import {
@@ -13,6 +13,7 @@ import {
 import { createLogger } from "./logging";
 import { asAppError, ValidationError } from "./errors";
 import { VeratownRoomStore } from "./games/veratown/roomStore";
+import { VeratownMapStore } from "./games/veratown/mapStore";
 
 export interface BotConnections extends VeratownConnections {
     secondary?: API_Connector;
@@ -466,13 +467,6 @@ async function connectBotAccount(
     const connection = new API_Connector(serverUrl, user, password, config.env);
     if (room) {
         await connection.joinOrCreateRoom(room);
-        if (connection.Player.IsRoomAdmin()) {
-            connection.ChatRoomUpdate(
-                room as unknown as Parameters<
-                    API_Connector["ChatRoomUpdate"]
-                >[0],
-            );
-        }
     }
 
     // Wait for connection to stabilize before returning
@@ -480,6 +474,33 @@ async function connectBotAccount(
     await waitForConnectionStability(connection);
 
     return connection;
+}
+
+async function loadRoomDefinition(
+    roomStore: VeratownRoomStore,
+    roomKey: string,
+    fallbackRoom: RoomDefinition,
+    database: DatabaseConnection,
+    logger: ReturnType<typeof createLogger>,
+): Promise<RoomDefinition> {
+    const stored = await roomStore.load(roomKey, fallbackRoom);
+    if (!stored) return fallbackRoom;
+
+    const mapStore = new VeratownMapStore(database.db, roomKey);
+    const storedMap = await mapStore.load();
+    const legacyMap = stored.room.MapData;
+    if (!storedMap && legacyMap) {
+        await mapStore.save(legacyMap, stored.updatedBy);
+        logger.warn("Migrated embedded room map to veratownMap", { roomKey });
+    }
+
+    const { MapData: _legacyMapData, ...roomSettings } = stored.room;
+    if (legacyMap) {
+        await roomStore.save(roomKey, stored.room, stored.updatedBy);
+        logger.info("Removed embedded room map after migration", { roomKey });
+    }
+    const mapData = storedMap ?? legacyMap;
+    return mapData ? { ...roomSettings, MapData: mapData } : roomSettings;
 }
 
 /**
@@ -704,7 +725,13 @@ export async function createBotConnections(
         config.rooms?.find((profile) => profile.bot === bot);
     const mainProfile = roomProfile("main");
     const mainRoom = roomStore
-        ? (await roomStore.load("main", mainProfile?.room ?? config.room))?.room
+        ? await loadRoomDefinition(
+              roomStore,
+              "main",
+              mainProfile?.room ?? config.room,
+              database!,
+              logger,
+          )
         : (mainProfile?.room ?? config.room);
     logger.info("Creating main bot connection");
     const main = await connectBotAccount(
@@ -807,9 +834,13 @@ export async function createBotConnections(
         if (!database) {
             logger.warn("MongoDB not configured - second room disabled");
         } else {
-            const secondRoom =
-                (await roomStore?.load(secondProfile.key, secondProfile.room))
-                    ?.room ?? secondProfile.room;
+            const secondRoom = await loadRoomDefinition(
+                roomStore!,
+                secondProfile.key,
+                secondProfile.room ?? config.room,
+                database,
+                logger,
+            );
             if (!secondRoom) {
                 throw new Error(
                     `Room profile ${secondProfile.key} requires a room definition on first use`,

@@ -119,12 +119,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         }
         const room = this.conn.chatRoom.ToInfo() as RoomDefinition;
         const mapData = this.conn.chatRoom.map.mapData;
-        await this.roomStore.save(
-            this.roomKey,
-            room,
-            mapData,
-            sender.MemberNumber,
-        );
+        await this.roomStore.save(this.roomKey, room, sender.MemberNumber);
         if (mapData && this.mapStore) {
             await this.mapStore.save(mapData, sender.MemberNumber);
         }

@@ -4,7 +4,6 @@ import { RoomDefinition } from "bc-bot";
 export interface VeratownRoomDoc {
     _id: string;
     room: RoomDefinition;
-    mapData?: ServerChatRoomMapData;
     updatedAt: number;
     updatedBy?: number;
 }
@@ -42,19 +41,19 @@ export class VeratownRoomStore {
     public async save(
         roomKey: string,
         room: RoomDefinition,
-        mapData?: ServerChatRoomMapData,
         updatedBy?: number,
     ): Promise<void> {
         await this.init();
+        const { MapData: _legacyMapData, ...roomSettings } = room;
         await this.rooms.updateOne(
             { _id: roomKey },
             {
                 $set: {
-                    room,
-                    ...(mapData ? { mapData } : {}),
+                    room: roomSettings,
                     updatedAt: Date.now(),
                     updatedBy,
                 },
+                $unset: { mapData: "" },
             },
             { upsert: true },
         );
