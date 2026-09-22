@@ -372,7 +372,10 @@ export class API_Chatroom extends EventEmitter<ChatRoomEvents> {
         }
     }
 
-    public mapPositionUpdate(memberNumber: number, mapData: ChatRoomMapData) {
+    public mapPositionUpdate(
+        memberNumber: number,
+        mapData: Partial<ChatRoomMapData>,
+    ) {
         const charData = this.data.Character.find(
             (x) => x.MemberNumber === memberNumber,
         );
