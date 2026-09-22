@@ -905,9 +905,16 @@ export class Veratown {
                     }
                 }
 
-                await this.keypadLocationIntegration?.syncLegacyLocations(
-                    this.locationSnapshot,
-                );
+                try {
+                    await this.keypadLocationIntegration?.syncLegacyLocations(
+                        this.locationSnapshot,
+                    );
+                } catch (error) {
+                    logger.error(
+                        `Failed to synchronize keypad locations for ${this.roomKey}`,
+                        error,
+                    );
+                }
 
                 if (this.locationStore) {
                     await this.regionManager.loadRegions(this.locationStore);
@@ -926,13 +933,24 @@ export class Veratown {
                     }
                 }
 
-                await Promise.all(
+                const reloadResults = await Promise.allSettled(
                     this.features
                         .filter((feature) => feature.reloadLocations)
                         .map((feature) =>
                             feature.reloadLocations!(this.locationSnapshot),
                         ),
                 );
+                reloadResults.forEach((result, index) => {
+                    if (result.status === "rejected") {
+                        const feature = this.features.filter(
+                            (candidate) => candidate.reloadLocations,
+                        )[index];
+                        logger.error(
+                            `Failed to reload locations for ${feature?.key ?? "unknown"} in ${this.roomKey}`,
+                            result.reason,
+                        );
+                    }
+                });
                 logger.info(`Loaded ${this.locationSnapshot.length} locations`);
             } catch (e) {
                 logger.error("Failed to reload locations", e);
