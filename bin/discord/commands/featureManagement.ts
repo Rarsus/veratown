@@ -176,6 +176,25 @@ export async function handleFeatureEnableCommand(
             };
         }
 
+        const activation = veratown.canEnableFeature(feature.key);
+        if (!activation.allowed) {
+            logger.warn("Feature enable rejected by readiness gate", {
+                feature: feature.key,
+                roomKey: context.roomKey,
+                reason: activation.reason,
+                admin: context.userId,
+            });
+            return {
+                success: false,
+                message: `❌ Feature \`${feature.key}\` cannot be enabled: ${activation.reason ?? "a required dependency is unavailable"}.`,
+                data: {
+                    featureKey: feature.key,
+                    enabled: false,
+                    reason: activation.reason,
+                },
+            };
+        }
+
         // Enable the feature
         feature.enabled = true;
 

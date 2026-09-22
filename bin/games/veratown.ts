@@ -861,9 +861,16 @@ export class Veratown {
             const registration = system.registerTriggers();
             if (registration instanceof Promise) {
                 this.pendingFeatureRegistrations.push(
-                    registration.then(() => {
-                        this.features.push(system!);
-                    }),
+                    registration
+                        .then(() => {
+                            this.features.push(system!);
+                        })
+                        .catch((error) => {
+                            logger.error(
+                                `Failed to register feature "${system!.label}"; it will be unavailable.`,
+                                error,
+                            );
+                        }),
                 );
             } else {
                 this.features.push(system);
@@ -1293,6 +1300,13 @@ export class Veratown {
         return { allowed: true };
     }
 
+    public canEnableFeature(featureKey: string): {
+        allowed: boolean;
+        reason?: string;
+    } {
+        return this.getFeatureActivationStatus(featureKey);
+    }
+
     private onChatRoomCreated = async () => {
         this.detachContainmentFeatures();
         await this.setupRoom();
@@ -1525,7 +1539,7 @@ export class Veratown {
         let lastObservation = await verifyBotMapPosition(
             connection,
             position,
-            this.conn.chatRoom?.Name,
+            connection.chatRoom?.Name,
             1,
         );
         for (let attempt = 1; attempt <= 10; attempt++) {
@@ -1539,11 +1553,22 @@ export class Veratown {
             }
 
             try {
+                logger.info("Teleporting bot during startup", {
+                    role,
+                    bot: connection.Player.Name,
+                    memberId: connection.Player.MemberNumber,
+                    room: connection.chatRoom?.Name,
+                    position,
+                    attempt,
+                });
                 connection.teleportOnMap(position.X, position.Y);
                 await new Promise((resolve) => setTimeout(resolve, 250));
             } catch (error) {
                 logger.warn("Bot map teleport attempt failed", {
                     role,
+                    bot: connection.Player.Name,
+                    memberId: connection.Player.MemberNumber,
+                    room: connection.chatRoom?.Name,
                     attempt,
                     position,
                     error:
@@ -1554,7 +1579,7 @@ export class Veratown {
             lastObservation = await verifyBotMapPosition(
                 connection,
                 position,
-                this.conn.chatRoom?.Name,
+                connection.chatRoom?.Name,
                 Veratown.MAP_POSITION_POLL_ATTEMPTS,
             );
         }
@@ -1564,6 +1589,9 @@ export class Veratown {
             undefined,
             {
                 role,
+                bot: connection.Player.Name,
+                memberId: connection.Player.MemberNumber,
+                room: connection.chatRoom?.Name,
                 ...lastObservation,
             },
         );

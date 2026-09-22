@@ -908,12 +908,17 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     /** Teleport this bot using Bondage Club's map teleport protocol. */
     public teleportOnMap(x: number, y: number): void {
-        this.SendMessage("Hidden", "ChatRoomMapViewTeleport", undefined, [
-            {
-                Tag: "MapViewTeleport",
-                Position: { X: x, Y: y },
-            },
-        ]);
+        this.SendMessage(
+            "Hidden",
+            "ChatRoomMapViewTeleport",
+            this.Player.MemberNumber,
+            [
+                {
+                    Tag: "MapViewTeleport",
+                    Position: { X: x, Y: y },
+                },
+            ],
+        );
     }
 
     public async moveOnMapAndWait(
