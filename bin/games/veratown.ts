@@ -291,6 +291,31 @@ export class Veratown {
                 });
             }
         });
+        this.conn.on("RawChatRoomMessage", (msg) => {
+            if (!msg.Sender) return;
+            const sender = this.conn.chatRoom?.getCharacter(msg.Sender);
+            const content =
+                msg.Content.startsWith("(") && msg.Content.endsWith(")")
+                    ? msg.Content.slice(1, -1)
+                    : msg.Content;
+            const isCommand =
+                (msg.Type === "Whisper" || msg.Type === "Chat") &&
+                content.startsWith("!") &&
+                content.length > 1;
+            const isHiddenCommand =
+                msg.Type === "Hidden" && content.startsWith("ChatRoomBot ");
+            if (isCommand || isHiddenCommand) {
+                logger.info("Veratown raw command message received", {
+                    roomKey: this.roomKey,
+                    bot: this.conn.Player.Name,
+                    room: this.conn.chatRoom?.Name,
+                    sender: msg.Sender,
+                    senderInRoster: Boolean(sender),
+                    messageType: msg.Type,
+                    command: content.slice(0, 120),
+                });
+            }
+        });
         this.regionManager = new RegionManager();
 
         if (db) {

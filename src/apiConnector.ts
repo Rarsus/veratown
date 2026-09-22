@@ -109,6 +109,7 @@ interface ConnectorEvents {
     MapPosition: [memberNumber: number, position: ChatRoomMapPos];
     PoseChange: [character: API_Character];
     Message: [message: API_Message];
+    RawChatRoomMessage: [message: ServerChatRoomMessage];
     Beep: [beep: ServerAccountBeepResponse];
     RoomJoin: [];
     RoomCreate: [];
@@ -610,6 +611,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     };
 
     private onChatRoomMessage = (msg: ServerChatRoomMessage) => {
+        this.emit("RawChatRoomMessage", msg);
         if (!msg.Sender) return;
         const char = this._chatRoom?.getCharacter(msg.Sender);
         if (!char) return;
