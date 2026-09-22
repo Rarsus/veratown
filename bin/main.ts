@@ -109,11 +109,39 @@ function parseCsvNumbers(
     value: string | undefined,
     fieldName: string,
 ): number[] | undefined {
-    const values = parseCsv(value);
-    if (values === undefined) return undefined;
-    const numbers = values.map((item) => Number(item));
+    if (value === undefined) return undefined;
+
+    let trimmed = value.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        try {
+            const unquoted = JSON.parse(trimmed);
+            if (typeof unquoted === "string") trimmed = unquoted.trim();
+        } catch {
+            // Fall through to the normal validation below.
+        }
+    }
+    let numbers: number[];
+    if (trimmed.startsWith("[")) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (!Array.isArray(parsed)) throw new Error("not an array");
+            numbers = parsed.map((item) => Number(item));
+        } catch {
+            throw configurationIssue(
+                fieldName,
+                "must be comma-separated integers or a JSON integer array",
+            );
+        }
+    } else {
+        const values = parseCsv(trimmed);
+        numbers = (values ?? []).map((item) => Number(item));
+    }
+
     if (numbers.some((item) => !Number.isInteger(item) || item < 0)) {
-        throw configurationIssue(fieldName, "must be comma-separated integers");
+        throw configurationIssue(
+            fieldName,
+            "must be comma-separated integers or a JSON integer array",
+        );
     }
     return numbers;
 }

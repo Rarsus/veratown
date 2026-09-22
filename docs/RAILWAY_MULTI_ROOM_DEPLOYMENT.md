@@ -24,7 +24,8 @@ BOT_ROOM2_MAP_TYPE=Always
 These scalar variables are the Railway-friendly alternative to `BOT_ROOMS`;
 the application assembles them into the room profile internally. The key is
 the persistent MongoDB scope and the name is the visible Bondage Club room
-name. `BOT_ROOM2_ADMIN` is comma-separated, not JSON.
+name. `BOT_ROOM2_ADMIN` accepts either comma-separated values or a JSON array,
+for example `250927,254890` or `[250927,254890]`.
 
 The existing variables remain unchanged:
 
