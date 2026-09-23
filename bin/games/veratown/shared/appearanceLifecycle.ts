@@ -5,6 +5,7 @@ export type AppearanceMutationSource =
     | "release"
     | "dare"
     | "casino"
+    | "shower"
     | "veratown"
     | "unknown_external_mutation";
 
@@ -14,6 +15,24 @@ export interface AppearanceMutationContext {
     source: AppearanceMutationSource;
     reason: string;
     cleanupAllowed?: boolean;
+}
+
+const activeAppearanceScopes = new WeakMap<object, number>();
+
+export function beginAppearanceScope(character: object): () => void {
+    activeAppearanceScopes.set(
+        character,
+        (activeAppearanceScopes.get(character) ?? 0) + 1,
+    );
+    return () => {
+        const remaining = (activeAppearanceScopes.get(character) ?? 1) - 1;
+        if (remaining > 0) activeAppearanceScopes.set(character, remaining);
+        else activeAppearanceScopes.delete(character);
+    };
+}
+
+export function hasActiveAppearanceScope(character: object): boolean {
+    return (activeAppearanceScopes.get(character) ?? 0) > 0;
 }
 
 export interface AppearanceDiff {

@@ -29,6 +29,7 @@ import { NarratorBot } from "./veratownNarrationUtils";
 import type { ReleaseSystem } from "./veratownReleaseSystem";
 import { createIdempotentMonitor } from "./shared";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
+import { beginAppearanceScope } from "./shared/appearanceLifecycle";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -78,6 +79,10 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             mutation,
             delayMs,
             this.stateSync,
+            {
+                source: "shower",
+                reason: "shower_appearance_change",
+            },
         );
     }
 
@@ -131,124 +136,131 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
         if (!this.enabled) return;
 
         // Use IdempotentMonitor to prevent concurrent showers for same character
-        await this.monitor.run(character, async () => {
-            // CRITICAL: Check for parole violations BEFORE allowing shower
-            // If character is on parole with clothing, enforce violation immediately
-            if (this.releaseSystem) {
-                try {
-                    await this.releaseSystem.checkAndEnforceParoleViolation(
-                        character,
-                    );
-                    // If we reach here without exception, no violation detected
-                } catch (e) {
-                    this.logger.error("Error checking parole for shower", {
-                        memberNumber: character.MemberNumber,
-                        error: e,
-                    });
-                    // If parole check fails, abort shower to be safe
+        const endAppearanceScope = beginAppearanceScope(character);
+        try {
+            await this.monitor.run(character, async () => {
+                // CRITICAL: Check for parole violations BEFORE allowing shower
+                // If character is on parole with clothing, enforce violation immediately
+                if (this.releaseSystem) {
+                    try {
+                        await this.releaseSystem.checkAndEnforceParoleViolation(
+                            character,
+                        );
+                        // If we reach here without exception, no violation detected
+                    } catch (e) {
+                        this.logger.error("Error checking parole for shower", {
+                            memberNumber: character.MemberNumber,
+                            error: e,
+                        });
+                        // If parole check fails, abort shower to be safe
+                        this.messageSender.whisperToCharacter(
+                            character,
+                            "(Unable to enter shower due to system error. Please contact staff.)",
+                        );
+                        return;
+                    }
+                }
+
+                const isInShower = () =>
+                    isCharacterAtAnyPosition(character, this.showerPositions);
+
+                // The bot can't stand on the shower tile itself (the showering
+                // character is already occupying it), and staying away from its
+                // usual post for the whole sequence isn't practical either. Instead,
+                // briefly hop over to a tile next to the shower just long enough to
+                // send each narrated line, then immediately hop back.
+                const broadcastPos = showerBroadcastPos(character.MapPos);
+
+                // Use NarratorBot to manage narration with optional dual-bot support:
+                // prefer a dedicated second bot (conn2) for narration, parked at
+                // showerBotHomePos between lines, so the main bot never has
+                // to leave its post. Falls back to blipping the main bot if no
+                // second bot is configured.
+                const narrator = new NarratorBot(
+                    this.conn,
+                    this.conn2,
+                    this.conn2 ? this.showerBotHomePos : undefined,
+                );
+
+                const abortShower = async () => {
+                    await this.syncMutation(character, () => undefined, 0);
                     this.messageSender.whisperToCharacter(
                         character,
-                        "(Unable to enter shower due to system error. Please contact staff.)",
+                        "(You left the shower before finishing! Your clothes will not be returned to you.",
                     );
-                    return;
-                }
-            }
+                };
 
-            const isInShower = () =>
-                isCharacterAtAnyPosition(character, this.showerPositions);
+                const savedOutfit = character.Appearance.MakeAppearanceBundle();
+                const savedClothingItems = savedOutfit.filter(isClothing);
 
-            // The bot can't stand on the shower tile itself (the showering
-            // character is already occupying it), and staying away from its
-            // usual post for the whole sequence isn't practical either. Instead,
-            // briefly hop over to a tile next to the shower just long enough to
-            // send each narrated line, then immediately hop back.
-            const broadcastPos = showerBroadcastPos(character.MapPos);
-
-            // Use NarratorBot to manage narration with optional dual-bot support:
-            // prefer a dedicated second bot (conn2) for narration, parked at
-            // showerBotHomePos between lines, so the main bot never has
-            // to leave its post. Falls back to blipping the main bot if no
-            // second bot is configured.
-            const narrator = new NarratorBot(
-                this.conn,
-                this.conn2,
-                this.conn2 ? this.showerBotHomePos : undefined,
-            );
-
-            const abortShower = async () => {
-                await this.syncMutation(character, () => undefined, 0);
                 this.messageSender.whisperToCharacter(
                     character,
-                    "(You left the shower before finishing! Your clothes will not be returned to you.",
+                    "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
                 );
-            };
 
-            const savedOutfit = character.Appearance.MakeAppearanceBundle();
-            const savedClothingItems = savedOutfit.filter(isClothing);
+                narrator.sayAt(
+                    broadcastPos,
+                    "Emote",
+                    `*${character} is taking a shower*`,
+                );
 
-            this.messageSender.whisperToCharacter(
-                character,
-                "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
-            );
+                const clothingItems =
+                    character.Appearance.getAppearanceData().filter(isClothing);
+                for (const item of clothingItems) {
+                    if (!isInShower()) return await abortShower();
+                    await this.syncMutation(character, () => {
+                        character.Appearance.RemoveItem(item.Group);
+                    });
+                    await wait(SHOWER_STEP_DELAY_MS);
+                }
 
-            narrator.sayAt(
-                broadcastPos,
-                "Emote",
-                `*${character} is taking a shower*`,
-            );
-
-            const clothingItems =
-                character.Appearance.getAppearanceData().filter(isClothing);
-            for (const item of clothingItems) {
                 if (!isInShower()) return await abortShower();
-                await this.syncMutation(character, () => {
-                    character.Appearance.RemoveItem(item.Group);
-                });
+                narrator.sayAt(
+                    broadcastPos,
+                    "Emote",
+                    `*${character} turns on the shower*`,
+                );
+
                 await wait(SHOWER_STEP_DELAY_MS);
-            }
-
-            if (!isInShower()) return await abortShower();
-            narrator.sayAt(
-                broadcastPos,
-                "Emote",
-                `*${character} turns on the shower*`,
-            );
-
-            await wait(SHOWER_STEP_DELAY_MS);
-            if (!isInShower()) return await abortShower();
-
-            const song =
-                SHOWER_SONGS[Math.floor(Math.random() * SHOWER_SONGS.length)];
-            narrator.sayAt(
-                broadcastPos,
-                "Emote",
-                `*${character} sings: ${song}*`,
-            );
-
-            await wait(SHOWER_SING_DELAY_MS);
-            if (!isInShower()) return await abortShower();
-
-            narrator.sayAt(
-                broadcastPos,
-                "Emote",
-                `*${character} dries off with a towel*`,
-            );
-
-            await wait(SHOWER_STEP_DELAY_MS);
-            if (!isInShower()) return await abortShower();
-
-            for (const item of savedClothingItems) {
                 if (!isInShower()) return await abortShower();
-                await this.syncMutation(character, () => {
-                    character.Appearance.AddItem(item);
-                });
-                await wait(SHOWER_STEP_DELAY_MS);
-            }
 
-            this.messageSender.whisperToCharacter(
-                character,
-                "(You finish your shower and get dressed again, feeling refreshed.",
-            );
-        });
+                const song =
+                    SHOWER_SONGS[
+                        Math.floor(Math.random() * SHOWER_SONGS.length)
+                    ];
+                narrator.sayAt(
+                    broadcastPos,
+                    "Emote",
+                    `*${character} sings: ${song}*`,
+                );
+
+                await wait(SHOWER_SING_DELAY_MS);
+                if (!isInShower()) return await abortShower();
+
+                narrator.sayAt(
+                    broadcastPos,
+                    "Emote",
+                    `*${character} dries off with a towel*`,
+                );
+
+                await wait(SHOWER_STEP_DELAY_MS);
+                if (!isInShower()) return await abortShower();
+
+                for (const item of savedClothingItems) {
+                    if (!isInShower()) return await abortShower();
+                    await this.syncMutation(character, () => {
+                        character.Appearance.AddItem(item);
+                    });
+                    await wait(SHOWER_STEP_DELAY_MS);
+                }
+
+                this.messageSender.whisperToCharacter(
+                    character,
+                    "(You finish your shower and get dressed again, feeling refreshed.",
+                );
+            });
+        } finally {
+            endAppearanceScope();
+        }
     };
 }

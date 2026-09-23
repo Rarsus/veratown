@@ -26,7 +26,10 @@ import {
     takeAppearanceMutationContext,
     registerAppearanceStateSynchronizer,
 } from "./shared/appearanceSync";
-import { AppearanceMutationContext } from "./shared/appearanceLifecycle";
+import {
+    AppearanceMutationContext,
+    hasActiveAppearanceScope,
+} from "./shared/appearanceLifecycle";
 
 const logger = createLogger("LiveCharacterStateSync");
 const RECONCILIATION_INTERVAL_MS = 60_000;
@@ -113,6 +116,9 @@ export class LiveCharacterStateSync {
         forcePositionPersistence = false,
         mutationContext?: AppearanceMutationContext,
     ): Promise<boolean> {
+        if (!mutationContext && hasActiveAppearanceScope(character)) {
+            return false;
+        }
         registerAppearanceStateSynchronizer(
             character,
             async (current, context) => {

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { syncAppearanceMutation } from "../shared/appearanceSync";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
-import { diffAppearance } from "../shared/appearanceLifecycle";
+import {
+    beginAppearanceScope,
+    diffAppearance,
+} from "../shared/appearanceLifecycle";
 
 function createCharacter(
     memberNumber: number,
@@ -236,6 +239,31 @@ test("LiveCharacterStateSync serializes overlapping observations by arrival orde
         { X: 1, Y: 1 },
         { X: 2, Y: 2 },
     ]);
+});
+
+test("LiveCharacterStateSync ignores ambient snapshots during an active appearance scope", async () => {
+    const character = createCharacter(5, { X: 1, Y: 1 }, []);
+    let persisted = 0;
+    const store: any = {
+        getVeratownView: async () => ({ currentRestraints: [] }),
+        syncVeratownState: async () => {
+            persisted++;
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(
+        { chatRoom: { characters: [character] }, on: () => {} } as any,
+        store,
+        60_000,
+    );
+    const endScope = beginAppearanceScope(character);
+
+    assert.equal(await sync.syncCharacter(character as any), false);
+    assert.equal(persisted, 0);
+
+    endScope();
+    assert.equal(await sync.syncCharacter(character as any), true);
+    assert.equal(persisted, 1);
 });
 
 test("LiveCharacterStateSync reconciles every owned bot when room characters omit them", async () => {
