@@ -228,7 +228,82 @@ describe("Phase 3: Chip Locking Feature Tests", () => {
         });
     });
 
-    describe("3.1e: Multiple Profiles Isolation", () => {
+    describe("3.1e: Paid Unlock and Protection", () => {
+        it("should unlock all chips and charge half the total balance", async () => {
+            const memberNumber = 40;
+            await store.getProfile(memberNumber, "PaidUnlockTest");
+            await store.updateChips(memberNumber, 1000, "test_grant");
+            await store.lockChips(memberNumber, 300, "bondage");
+
+            const result = await store.purchaseChipUnlock(memberNumber);
+            const updated = await store.getProfile(memberNumber);
+
+            assert.deepEqual(result, { success: true, cost: 500, chips: 500 });
+            assert.strictEqual(updated.casino.chips, 500);
+            assert.strictEqual(updated.casino.lockedChips, 0);
+            assert.ok(!updated.casino.chipLockReason);
+            assert.ok(!updated.casino.chipLockUntil);
+        });
+
+        it("should not charge when no chips are locked", async () => {
+            const memberNumber = 41;
+            await store.getProfile(memberNumber, "PaidUnlockEmptyTest");
+            await store.updateChips(memberNumber, 1000, "test_grant");
+
+            const result = await store.purchaseChipUnlock(memberNumber);
+
+            assert.deepEqual(result, { success: false, cost: 0, chips: 1000 });
+        });
+
+        it("should charge protection from available chips and extend expiry", async () => {
+            const memberNumber = 42;
+            await store.getProfile(memberNumber, "ProtectionTest");
+            await store.updateChips(memberNumber, 1000, "test_grant");
+            await store.lockChips(memberNumber, 300, "bondage");
+
+            const first = await store.purchaseChipLockProtection(
+                memberNumber,
+                2,
+            );
+            const second = await store.purchaseChipLockProtection(
+                memberNumber,
+                1,
+            );
+            const updated = await store.getProfile(memberNumber);
+
+            assert.equal(first.success, true);
+            assert.equal(first.cost, 40);
+            assert.equal(second.success, true);
+            assert.equal(second.cost, 20);
+            assert.ok(second.protectionUntil! > first.protectionUntil!);
+            assert.strictEqual(updated.casino.chips, 940);
+            assert.strictEqual(updated.casino.lockedChips, 300);
+            assert.strictEqual(
+                updated.casino.chipLockProtectionUntil,
+                second.protectionUntil,
+            );
+        });
+
+        it("should reject protection when available chips are insufficient", async () => {
+            const memberNumber = 43;
+            await store.getProfile(memberNumber, "ProtectionInsufficientTest");
+            await store.updateChips(memberNumber, 100, "test_grant");
+            await store.lockChips(memberNumber, 90, "bondage");
+
+            const result = await store.purchaseChipLockProtection(
+                memberNumber,
+                1,
+            );
+
+            assert.deepEqual(result, {
+                success: false,
+                cost: 20,
+                availableChips: 10,
+            });
+        });
+    });
+
+    describe("3.1f: Multiple Profiles Isolation", () => {
         it("should isolate chip locking between different players", async () => {
             const player1 = 60;
             const player2 = 61;

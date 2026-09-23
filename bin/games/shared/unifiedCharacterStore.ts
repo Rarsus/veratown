@@ -670,6 +670,7 @@ export class UnifiedCharacterStore {
             lockedChips: profile.casino.lockedChips,
             chipLockReason: profile.casino.chipLockReason,
             chipLockUntil: profile.casino.chipLockUntil,
+            chipLockProtectionUntil: profile.casino.chipLockProtectionUntil,
             recentWinnings: profile.casino.recentWinnings,
             version: profile.casino.version,
             updatedAt: profile.casino.updatedAt,
@@ -1322,6 +1323,138 @@ export class UnifiedCharacterStore {
         await this.eventBus.publish(event);
     }
 
+    /**
+     * Unlock all chips by paying half of the current total balance.
+     * The payment may use locked chips because the purchase removes the lock.
+     */
+    public async purchaseChipUnlock(
+        memberNumber: number,
+    ): Promise<{ success: boolean; cost: number; chips?: number }> {
+        this.assertMemberNumber(memberNumber);
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const currentLockedChips = profile.casino.lockedChips ?? 0;
+        if (currentLockedChips <= 0) {
+            return { success: false, cost: 0, chips: profile.casino.chips };
+        }
+
+        const cost = Math.ceil(profile.casino.chips / 2);
+        const remainingChips = profile.casino.chips - cost;
+        const now = asTimestamp(Date.now());
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "casino.chips": remainingChips,
+                    "casino.lockedChips": 0,
+                    "casino.chipLockReason": undefined,
+                    "casino.chipLockUntil": undefined,
+                    "casino.updatedAt": now,
+                    "casino.version": asVersion(profile.casino.version + 1),
+                    lastAccessedAt: now,
+                    lastAccessedBy: "casino",
+                    updatedAt: now,
+                    version: asVersion(profile.version + 1),
+                },
+            },
+        );
+
+        const event: GameEvent = {
+            timestamp: now,
+            type: "chips_unlocked",
+            source: "casino",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                amountUnlocked: currentLockedChips,
+                totalChips: remainingChips,
+                cost,
+                reason: "paid_unlock",
+            },
+            processed: false,
+        };
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+
+        return { success: true, cost, chips: remainingChips };
+    }
+
+    /** Purchase protection against future bondage chip locks. */
+    public async purchaseChipLockProtection(
+        memberNumber: number,
+        days: number,
+    ): Promise<{
+        success: boolean;
+        cost: number;
+        protectionUntil?: number;
+        availableChips?: number;
+    }> {
+        this.assertMemberNumber(memberNumber);
+        await this.init();
+
+        if (!Number.isInteger(days) || days <= 0) {
+            return { success: false, cost: 0 };
+        }
+
+        const profile = await this.getProfile(memberNumber);
+        const lockedChips = profile.casino.lockedChips ?? 0;
+        const availableChips = Math.max(0, profile.casino.chips - lockedChips);
+        const cost = days * 20;
+        if (availableChips < cost) {
+            return { success: false, cost, availableChips };
+        }
+
+        const now = asTimestamp(Date.now());
+        const currentProtection = profile.casino.chipLockProtectionUntil ?? 0;
+        const protectionUntil =
+            Math.max(now, currentProtection) + days * 24 * 60 * 60 * 1000;
+        const remainingChips = profile.casino.chips - cost;
+
+        await this.profiles.updateOne(
+            { _id: memberNumber },
+            {
+                $set: {
+                    "casino.chips": remainingChips,
+                    "casino.chipLockProtectionUntil": protectionUntil,
+                    "casino.updatedAt": now,
+                    "casino.version": asVersion(profile.casino.version + 1),
+                    lastAccessedAt: now,
+                    lastAccessedBy: "casino",
+                    updatedAt: now,
+                    version: asVersion(profile.version + 1),
+                },
+            },
+        );
+
+        const event: GameEvent = {
+            timestamp: now,
+            type: "chips_lost",
+            source: "casino",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                previousChips: profile.casino.chips,
+                newChips: remainingChips,
+                delta: -cost,
+                reason: "chip_lock_protection",
+                days,
+                protectionUntil,
+            },
+            processed: false,
+        };
+        await this.recordEvent(event);
+        await this.eventBus.publish(event);
+
+        return {
+            success: true,
+            cost,
+            protectionUntil,
+            availableChips: remainingChips - lockedChips,
+        };
+    }
+
     // ===== DARE SYSTEM INTERFACE
 
     /**
@@ -1496,11 +1629,13 @@ export class UnifiedCharacterStore {
             };
         }
 
-        // Validation 2: Check for sufficient chips
-        if (profile.casino.chips < escapeCost) {
+        // Validation 2: Locked chips cannot be spent to escape.
+        const lockedChips = profile.casino.lockedChips ?? 0;
+        const availableChips = Math.max(0, profile.casino.chips - lockedChips);
+        if (availableChips < escapeCost) {
             return {
                 success: false,
-                message: `Insufficient chips. You need ${escapeCost} chips but have ${profile.casino.chips}.`,
+                message: `Insufficient chips. You need ${escapeCost} available chips but have ${availableChips} available.`,
                 bondageRemoved: 0,
             };
         }

@@ -39,6 +39,8 @@ export interface CasinoState {
     lastGamePlayedAt?: number; // Use asTimestamp()
     /** When chips unlock (MongoDB type: timestamp) */
     chipLockUntil?: number; // Use asTimestamp()
+    /** When chip-lock protection expires (MongoDB type: timestamp) */
+    chipLockProtectionUntil?: number; // Use asTimestamp()
     /** Why chips are locked (bondage|parole|cage) (MongoDB type: string) */
     chipLockReason?: string;
     /** Casino state version (MongoDB type: version) */

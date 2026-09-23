@@ -149,6 +149,45 @@ test("CrossSystemSubscribers isolates subscriber failures", async () => {
     );
 });
 
+test("CrossSystemSubscribers skips protected and chastity bondage chip changes", async () => {
+    const eventBus = new EventBus();
+    const calls: string[] = [];
+    const store = {
+        getEventBus: () => eventBus,
+        getProfile: async () => ({
+            casino: {
+                chips: 100,
+                recentWinnings: 0,
+                chipLockProtectionUntil: Date.now() + 60_000,
+            },
+        }),
+    };
+    const mutation = {
+        lockChips: async () => calls.push("lock"),
+        unlockChips: async () => calls.push("unlock"),
+        recordAuditEntry: async () => undefined,
+    };
+    const subscribers = new CrossSystemSubscribers(
+        store as any,
+        undefined,
+        undefined,
+        undefined,
+        mutation as any,
+    );
+    await subscribers.initialize();
+
+    await eventBus.publish(createEvent("bondage_applied"));
+    await eventBus.publish(createEvent("bondage_removed"));
+    await eventBus.publish(
+        createEvent("bondage_applied", { forfeitKey: "chastity" }),
+    );
+    await eventBus.publish(
+        createEvent("bondage_removed", { forfeitKey: "chastity" }),
+    );
+
+    assert.deepEqual(calls, ["unlock"]);
+});
+
 test("CrossSystemSubscribers routes location transitions once per delivery key", async () => {
     const eventBus = new EventBus();
     const locations: string[] = [];

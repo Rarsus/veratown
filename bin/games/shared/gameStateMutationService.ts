@@ -135,6 +135,18 @@ export interface GameStateMutationService {
         lockUntil?: number,
     ): Promise<void>;
     unlockChips(memberNumber: number, amount?: number): Promise<void>;
+    purchaseChipUnlock(
+        memberNumber: number,
+    ): Promise<{ success: boolean; cost: number; chips?: number }>;
+    purchaseChipLockProtection(
+        memberNumber: number,
+        days: number,
+    ): Promise<{
+        success: boolean;
+        cost: number;
+        protectionUntil?: number;
+        availableChips?: number;
+    }>;
     applyBondage(
         memberNumber: number,
         items: BC_AppearanceItem[],
@@ -237,6 +249,8 @@ type MutationStore = Pick<
     | "updateCasinoStats"
     | "lockChips"
     | "unlockChips"
+    | "purchaseChipUnlock"
+    | "purchaseChipLockProtection"
     | "applyBondage"
     | "removeBondage"
     | "getProfile"
@@ -849,6 +863,55 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
             await this.unifiedStore.unlockChips(memberNumber, amount);
             await this.audit(memberNumber, "unlockChips", { amount });
         }, "unlockChips");
+    }
+
+    public async purchaseChipUnlock(
+        memberNumber: number,
+    ): Promise<{ success: boolean; cost: number; chips?: number }> {
+        this.validateMember(memberNumber);
+        const result = await this.withRetry(
+            () => this.unifiedStore.purchaseChipUnlock(memberNumber),
+            "purchaseChipUnlock",
+        );
+        if (result.success) {
+            await this.audit(memberNumber, "purchaseChipUnlock", {
+                cost: result.cost,
+            });
+        }
+        return result;
+    }
+
+    public async purchaseChipLockProtection(
+        memberNumber: number,
+        days: number,
+    ): Promise<{
+        success: boolean;
+        cost: number;
+        protectionUntil?: number;
+        availableChips?: number;
+    }> {
+        this.validateMember(memberNumber);
+        if (!Number.isInteger(days) || days <= 0) {
+            throw new ValidationError("days must be a positive integer", {
+                field: "days",
+            });
+        }
+        const result = await this.withRetry(
+            () =>
+                this.unifiedStore.purchaseChipLockProtection(
+                    memberNumber,
+                    days,
+                ),
+            "purchaseChipLockProtection",
+        );
+        if (result.success) {
+            await this.audit(memberNumber, "purchaseChipLockProtection", {
+                days,
+                cost: result.cost,
+                protectionUntil: result.protectionUntil,
+            });
+        }
+        return result;
     }
 
     public async applyBondage(

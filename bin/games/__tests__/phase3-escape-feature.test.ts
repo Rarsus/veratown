@@ -92,6 +92,32 @@ describe("Phase 3.2: Escape Bondage Feature Tests", () => {
     });
 
     describe("3.2c: Escape Success - Single Bondage Item", () => {
+        it("should not spend locked chips", async () => {
+            const memberNumber = 109;
+            await store.getProfile(memberNumber, "LockedEscapePlayer");
+
+            await store.updateDareStats(memberNumber, {
+                activeBondage: [
+                    {
+                        forfeitKey: "handcuffs",
+                        appliedAt: Date.now(),
+                        lockedUntil: Date.now() + 60000,
+                    },
+                ],
+            });
+            await store.updateChips(memberNumber, 1000, "test_grant");
+            await store.lockChips(memberNumber, 800, "bondage");
+
+            const result = await store.spendChipsToEscape(memberNumber, 300);
+
+            assert.strictEqual(result.success, false);
+            assert.ok(result.message.includes("available chips"));
+            const updated = await store.getProfile(memberNumber);
+            assert.strictEqual(updated.casino.chips, 1000);
+            assert.strictEqual(updated.casino.lockedChips, 800);
+            assert.strictEqual(updated.dare.activeBondage.length, 1);
+        });
+
         it("should successfully escape single bondage item", async () => {
             const memberNumber = 102;
             await store.getProfile(memberNumber, "SingleBondagePlayer");

@@ -143,6 +143,10 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
             type: "timestamp",
             description: "When chips unlock",
         },
+        "casino.chipLockProtectionUntil": {
+            type: "timestamp",
+            description: "When protection against chip locks expires",
+        },
         "casino.chipLockReason": {
             type: "string",
             description: "Why chips are locked (bondage|parole|cage)",

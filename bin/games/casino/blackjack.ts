@@ -35,6 +35,8 @@ const BLACKJACKCOMMANDS = `Blackjack commands:
 /bot split - Split your hand into two hands if you have two cards of the same value.
 /bot cancel - Cancel your bet. Only available before any cards are dealt.
 /bot chips - Show your current chip balance.
+/bot unlock - Unlock your chips for half your total balance.
+/bot protect <days> - Buy chip-lock protection for 20 chips per real day.
 /bot give <name or member number> <amount> - Give chips to another player.
 /bot help - Show this help
 /bot commands - Show all available commands.

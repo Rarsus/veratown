@@ -114,9 +114,20 @@ export class CrossSystemSubscribers {
         // Bondage applied → Lock casino chips
         this.eventBus.subscribe("bondage_applied", async (event: GameEvent) => {
             try {
+                const forfeitKey = event.data.forfeitKey;
+                if (forfeitKey === "chastity") {
+                    return;
+                }
+
                 const profile = await this.unifiedStore.getProfile(
                     event.target,
                 );
+
+                if (
+                    (profile.casino.chipLockProtectionUntil ?? 0) > Date.now()
+                ) {
+                    return;
+                }
 
                 // Lock recent winnings or a default amount
                 // Use recentWinnings if tracked, otherwise lock 50% of current chips
@@ -145,6 +156,10 @@ export class CrossSystemSubscribers {
         // Bondage removed → Unlock casino chips
         this.eventBus.subscribe("bondage_removed", async (event: GameEvent) => {
             try {
+                if (event.data.forfeitKey === "chastity") {
+                    return;
+                }
+
                 // Unlock all chips
                 await this.mutationService!.unlockChips(event.target, 0);
             } catch (error) {

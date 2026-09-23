@@ -246,14 +246,32 @@ export class ForfeitService {
         // Apply lock if configured
         if (forfeit.lockTimeMs) {
             const lockTimeMs = forfeit.lockTimeMs;
-            added.lock("TimerPasswordPadlock", adminMemberNumber, {
+            const lockProperty = {
                 Password: generatePassword(),
                 Hint: "Better luck next time!",
                 RemoveItem: true,
                 RemoveTimer: Date.now() + lockTimeMs,
                 ShowTimer: true,
                 LockSet: true,
+            };
+            added.lock("TimerPasswordPadlock", adminMemberNumber, {
+                ...lockProperty,
             });
+
+            // Keep the persisted appearance self-describing even when the
+            // runtime lock helper only updates the live item state.
+            const persistedItem = added as typeof added & {
+                Property?: Record<string, any>;
+            };
+            persistedItem.Property = {
+                ...(persistedItem.Property ?? {}),
+                Lock: {
+                    ...(persistedItem.Property as any)?.Lock,
+                    AssetName: "TimerPasswordPadlock",
+                    MemberNumber: adminMemberNumber,
+                    ...lockProperty,
+                },
+            };
         }
     }
 

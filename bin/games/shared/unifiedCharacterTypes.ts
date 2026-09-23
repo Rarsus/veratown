@@ -47,6 +47,7 @@ export interface CasinoState {
     lockedChips: number; // Chips that cannot be spent while bonded
     chipLockReason?: "bondage" | "parole" | "cage"; // Why chips are locked
     chipLockUntil?: number; // When lock expires (timestamp), undefined = until bondage removed
+    chipLockProtectionUntil?: number; // Protection expiry; prevents new chip locks
     recentWinnings: number; // Track recent wins that get locked
     version: number;
     updatedAt: number;
@@ -448,6 +449,7 @@ export interface CasinoView {
     lockedChips: number;
     chipLockReason?: "bondage" | "parole" | "cage";
     chipLockUntil?: number;
+    chipLockProtectionUntil?: number;
     recentWinnings: number;
     version: number;
     updatedAt: number;

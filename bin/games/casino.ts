@@ -479,6 +479,8 @@ export class Casino implements GamePlugin {
             forfeits: this.onCommandForfeits,
             commands: this.onCommandCommands,
             chips: this.onCommandChips,
+            unlock: this.onCommandUnlock,
+            protect: this.onCommandProtect,
             addfriend: this.onCommandAddFriend,
             remove: this.onCommandRemove,
             buy: this.onCommandBuy,
@@ -860,6 +862,58 @@ ${forfeitsString()}
                 this.conn.reply(msg, response);
             }
         }
+    };
+
+    private onCommandUnlock = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        _args: string[],
+    ) => {
+        if (!this.enabled || !this.conn) return;
+
+        const result = await this.mutationService.purchaseChipUnlock(
+            sender.MemberNumber,
+        );
+        if (!result.success) {
+            this.conn.reply(msg, "You don't have any locked chips.");
+            return;
+        }
+
+        this.conn.reply(
+            msg,
+            `Your chips are unlocked. You paid ${result.cost} chips and have ${result.chips} chips remaining.`,
+        );
+    };
+
+    private onCommandProtect = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.enabled || !this.conn) return;
+
+        const days = Number.parseInt(args[0] ?? "", 10);
+        if (!Number.isInteger(days) || days <= 0) {
+            this.conn.reply(msg, "Usage: /bot protect <number of real days>");
+            return;
+        }
+
+        const result = await this.mutationService.purchaseChipLockProtection(
+            sender.MemberNumber,
+            days,
+        );
+        if (!result.success) {
+            this.conn.reply(
+                msg,
+                `You need ${result.cost} available chips to buy ${days} day(s) of protection.`,
+            );
+            return;
+        }
+
+        this.conn.reply(
+            msg,
+            `Chip-lock protection purchased for ${days} real day(s) for ${result.cost} chips.`,
+        );
     };
 
     public async setBio(): Promise<void> {

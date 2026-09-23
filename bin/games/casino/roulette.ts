@@ -46,6 +46,8 @@ Available commands:
 /bot bet <number> <amount> - Bet on a single number. Odds: 35:1.
 /bot cancel - Cancel your bet.
 /bot chips - Show your current chip balance.
+/bot unlock - Unlock your chips for half your total balance.
+/bot protect <days> - Buy chip-lock protection for 20 chips per real day.
 /bot give <name or member number> <amount> - Give chips to another player.
 /bot help - Show this help
 /bot commands - Show available commands.
@@ -949,6 +951,10 @@ export class RouletteGame implements Game {
 
     public getWheel(): API_AppearanceItem {
         const wheel = this.conn.Player.Appearance.InventoryGet("ItemDevices");
+        if (wheel) {
+            return wheel;
+        }
+
         this.conn.Player.Appearance.applyBundle(ROULETTE_WHEEL);
         return this.conn.Player.Appearance.InventoryGet("ItemDevices")!;
     }
