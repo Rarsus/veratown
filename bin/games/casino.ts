@@ -918,7 +918,6 @@ ${forfeitsString()}
 
     public async setBio(): Promise<void> {
         const topPlayers = await this.getStore().getTopPlayers(50);
-        const unredeemed = await this.getStore().getUnredeemedPurchases();
 
         this.conn.setBotDescription(
             this.bioManager.buildBio(

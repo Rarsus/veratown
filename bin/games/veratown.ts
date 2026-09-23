@@ -1495,27 +1495,62 @@ export class Veratown {
     };
 
     private setupCharacter = async () => {
-        await this.moveBotToPosition(this.conn, RECEPTIONIST_POSITION, "main");
+        const phase = async <T>(name: string, action: () => Promise<T>) => {
+            const startedAt = Date.now();
+            logger.info("Character setup phase started", {
+                roomKey: this.roomKey,
+                phase: name,
+            });
+            try {
+                const result = await action();
+                logger.info("Character setup phase completed", {
+                    roomKey: this.roomKey,
+                    phase: name,
+                    durationMs: Date.now() - startedAt,
+                });
+                return result;
+            } catch (error) {
+                logger.error("Character setup phase failed", {
+                    roomKey: this.roomKey,
+                    phase: name,
+                    durationMs: Date.now() - startedAt,
+                    error: String(error),
+                });
+                throw error;
+            }
+        };
+
+        await phase("main-position", () =>
+            this.moveBotToPosition(this.conn, RECEPTIONIST_POSITION, "main"),
+        );
         this.conn.Player.SetActivePose(["Kneel"]);
 
         if (this.conn2) {
-            await this.moveBotToPosition(
-                this.conn2,
-                SHOWER_BOT2_HOME_POSITION,
-                "shower",
+            await phase("shower-position", () =>
+                this.moveBotToPosition(
+                    this.conn2!,
+                    SHOWER_BOT2_HOME_POSITION,
+                    "shower",
+                ),
             );
         }
 
         if (this.conn3) {
-            await this.moveBotToPosition(
-                this.conn3,
-                GAME_MISTRESS_POSITION,
-                "casino",
+            await phase("casino-position", () =>
+                this.moveBotToPosition(
+                    this.conn3!,
+                    GAME_MISTRESS_POSITION,
+                    "casino",
+                ),
             );
-            await this.casino?.initializeAppearance();
+            await phase("casino-appearance", async () => {
+                await this.casino?.initializeAppearance();
+            });
         }
 
-        await this.liveCharacterStateSync?.reconcile();
+        await phase("live-state-reconcile", async () => {
+            await this.liveCharacterStateSync?.reconcile();
+        });
         this.updateContainmentReadiness();
     };
 
