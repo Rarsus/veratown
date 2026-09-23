@@ -897,13 +897,22 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     }
 
     public moveOnMap(x: number, y: number): void {
+        const position = { X: x, Y: y };
         this.wrappedSock.emit("ChatRoomCharacterMapDataUpdate", {
-            Pos: {
-                X: x,
-                Y: y,
-            },
+            Pos: position,
             PrivateState: {},
         });
+
+        // BC clients do not reliably receive their own map update. Keep the
+        // local roster in sync so map triggers and readiness checks observe
+        // the same movement immediately.
+        if (this._chatRoom) {
+            this._chatRoom.mapPositionUpdate(this.Player.MemberNumber, {
+                Pos: position,
+                PrivateState: {},
+            });
+            this.emit("MapPosition", this.Player.MemberNumber, position);
+        }
     }
 
     /** Teleport this bot using Bondage Club's map teleport protocol. */
