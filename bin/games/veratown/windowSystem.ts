@@ -63,7 +63,10 @@ export class WindowSystem extends AbstractTileFeatureSystem {
                 .filter((loc) => loc.type === "window" && loc.enabled)
                 .map((window) => ({ X: window.x!, Y: window.y! }));
 
-            if (locations.length === 0 && this.allowStaticFallbacks) {
+            if (
+                !locations.some((location) => location.type === "window") &&
+                this.allowStaticFallbacks
+            ) {
                 this.windowPositions = [...WINDOW_LOCATIONS];
             }
 

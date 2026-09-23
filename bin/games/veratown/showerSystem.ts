@@ -92,8 +92,11 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     this.showerTrigger,
                 );
             }
-            this.showerPositions = locations
-                .filter((loc) => loc.type === "shower" && loc.enabled)
+            const showerLocations = locations.filter(
+                (loc) => loc.type === "shower",
+            );
+            this.showerPositions = showerLocations
+                .filter((loc) => loc.enabled)
                 .map((shower) => ({ X: shower.x!, Y: shower.y! }));
 
             const showerBotHome = locations.find(
@@ -103,7 +106,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                 ? { X: showerBotHome.x!, Y: showerBotHome.y! }
                 : SHOWER_BOT2_HOME_POSITION;
 
-            if (locations.length === 0 && this.allowStaticFallbacks) {
+            if (showerLocations.length === 0 && this.allowStaticFallbacks) {
                 this.showerPositions = [...SHOWER_POSITIONS];
             }
 

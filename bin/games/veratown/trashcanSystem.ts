@@ -66,7 +66,10 @@ export class TrashcanSystem implements VeratownFeatureSystem {
             this.trashcanPositions = locations
                 .filter((loc) => loc.type === "trashcan" && loc.enabled)
                 .map((trashcan) => ({ X: trashcan.x!, Y: trashcan.y! }));
-            if (locations.length === 0 && this.allowStaticFallbacks) {
+            if (
+                !locations.some((location) => location.type === "trashcan") &&
+                this.allowStaticFallbacks
+            ) {
                 this.trashcanPositions = [...TRASHCAN_SEARCH_LOCATIONS];
             }
 

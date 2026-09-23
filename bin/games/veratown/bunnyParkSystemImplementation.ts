@@ -53,7 +53,10 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     location.type === "park_region" && location.enabled,
             );
             this.parkRegion = this.getParkRegion(park);
-            if (locations.length === 0 && this.allowStaticFallbacks)
+            if (
+                !locations.some((location) => location.type === "bunny") &&
+                this.allowStaticFallbacks
+            )
                 this.bunnyPositions = [...BUNNY_POSITIONS];
             if (this.parkRegion) {
                 this.conn.chatRoom!.map.addEnterRegionTrigger(

@@ -166,7 +166,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 .filter((loc) => loc.type === "kennel" && loc.enabled)
                 .map((kennel) => ({ X: kennel.x!, Y: kennel.y! }));
 
-            if (locations.length === 0 && this.allowStaticFallbacks) {
+            if (
+                !locations.some((location) => location.type === "kennel") &&
+                this.allowStaticFallbacks
+            ) {
                 this.kennelPositions = [...KENNEL_POSITIONS];
             }
 
