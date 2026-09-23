@@ -20,6 +20,7 @@ import {
     BC_Server_ChatRoomMessage,
     RoomDefinition,
 } from "bc-bot";
+import { isBind } from "../../../src/assetHelpers";
 import { compressToBase64, decompressFromBase64 } from "lz-string";
 import { wait } from "../../hub/utils";
 import { guardHandler, VeratownFeatureSystem } from "./featureSystem";
@@ -41,7 +42,7 @@ import {
     listLocationTypesHelp,
 } from "./locationTemplates";
 
-// Owns every admin-only Veratown command: "strip", "feature
+// Owns every admin-only Veratown command: "strip", "unrestrain", "feature
 // enable/disable", "map update/reset/import/export", and "maintenance".
 // Registered through the same guardHandler() safety wrapper used by the
 // room feature systems (bin/games/veratown/featureSystem.ts), so a bug in
@@ -63,7 +64,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         // Delegates to Veratown's private freeCharacter() (strips bind
         // items and frees from any cage), so the maintenance shutdown frees
         // people the same way "/bot freeandleave" does.
-        private freeCharacter?: (character: API_Character) => void,
+        private freeCharacter?: (character: API_Character) => Promise<void>,
         // The optional second bot connection (eg. for shower narration) -
         // used only to exclude it from the maintenance shutdown's
         // free/kick pass, since it's a bot, not a room member.
@@ -87,6 +88,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
 
     public registerCommands(): void {
         this.registerCommand("strip", this.onCommandStrip);
+        this.registerCommand("unrestrain", this.onCommandUnrestrain);
         this.registerCommand("feature", this.onCommandFeature);
         this.registerCommand("map", this.onCommandMap);
         this.registerCommand("room", this.onCommandRoom);
@@ -197,6 +199,60 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
         );
 
         this.conn.reply(msg, `${target} has been stripped of their clothing.`);
+    };
+
+    private onCommandUnrestrain = async (
+        sender: API_Character,
+        msg: BC_Server_ChatRoomMessage,
+        args: string[],
+    ) => {
+        if (!this.ensureAdmin(sender, msg)) return;
+
+        if (args.length === 0) {
+            this.conn.reply(msg, "Usage: unrestrain <name or member number>");
+            return;
+        }
+
+        const target = this.conn.chatRoom!.findCharacter(args[0]);
+        if (!target) {
+            this.conn.reply(msg, "I can't find that person.");
+            return;
+        }
+
+        if (!this.freeCharacter) {
+            this.conn.reply(msg, "Restraint removal is not available.");
+            return;
+        }
+
+        await this.freeCharacter(target);
+        await syncAppearanceMutation(
+            target,
+            () => {
+                const groups = new Set(
+                    target.Appearance.getAppearanceData()
+                        .filter(isBind)
+                        .map((item) => item.Group),
+                );
+                for (const group of groups) {
+                    target.Appearance.RemoveItem(group);
+                }
+                this.logger.info(
+                    "Character fully unrestrained via admin command",
+                    {
+                        memberNumber: target.MemberNumber,
+                        unrestrainedBy: sender.MemberNumber,
+                    },
+                );
+            },
+            100,
+            undefined,
+            {
+                source: "veratown",
+                reason: "admin_unrestrain",
+            },
+        );
+
+        this.conn.reply(msg, `${target} has been fully unrestrained.`);
     };
 
     private onCommandFeature = async (
@@ -497,7 +553,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
             );
 
             for (const character of targets) {
-                this.freeCharacter?.(character);
+                await this.freeCharacter?.(character);
             }
 
             // Give freed items/messages a moment to land before kicking,
@@ -533,6 +589,9 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
             "",
             "!strip <name or member number>",
             "  Strips all clothing from the specified character.",
+            "",
+            "!unrestrain <name or member number>",
+            "  Removes all restraints and frees the specified character.",
             "",
             "!feature <list|enable|disable> [name]",
             "  Manage room features. Use '!feature list' to see available features.",
