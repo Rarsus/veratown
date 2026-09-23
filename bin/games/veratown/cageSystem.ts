@@ -32,6 +32,7 @@ import {
     preflightAppearanceMutation,
     syncAppearanceMutation,
 } from "./shared/appearanceSync";
+import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
 import type { CageSession } from "../shared/unifiedCharacterTypes";
 
 export interface CageTimer {
@@ -656,33 +657,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         });
                         crate.setProperty("Mode", "Deny");
 
-                        const lockProperty = {
-                            AssetName: "TimerPasswordPadlock",
-                            MemberNumber: character.MemberNumber,
-                            Password: CRATE_LOCK_PASSWORD,
-                            RemoveItem: true,
-                            RemoveTimer: lockExpiry,
-                            ShowTimer: true,
-                            LockSet: true,
-                        };
-                        crate.lock(
-                            "TimerPasswordPadlock",
-                            character.MemberNumber,
-                            {
-                                Password: CRATE_LOCK_PASSWORD,
-                                RemoveItem: true,
-                                RemoveTimer: lockExpiry,
-                                ShowTimer: true,
-                                LockSet: true,
-                            },
-                        );
-                        const persistedCrate = crate as typeof crate & {
-                            Property?: Record<string, any>;
-                        };
-                        persistedCrate.Property = {
-                            ...(persistedCrate.Property ?? {}),
-                            Lock: lockProperty,
-                        };
+                        applyTimerPasswordLock(crate, {
+                            memberNumber: character.MemberNumber,
+                            password: CRATE_LOCK_PASSWORD,
+                            removeTimer: lockExpiry,
+                        });
                     },
                     50,
                     this.stateSync,
@@ -1024,33 +1003,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
                             h: 4,
                         });
                         crate.setProperty("Mode", "Deny");
-                        const lockProperty = {
-                            AssetName: "TimerPasswordPadlock",
-                            MemberNumber: character.MemberNumber,
-                            Password: CRATE_LOCK_PASSWORD,
-                            RemoveItem: true,
-                            RemoveTimer: authoritativeExpiry,
-                            ShowTimer: true,
-                            LockSet: true,
-                        };
-                        crate.lock(
-                            "TimerPasswordPadlock",
-                            character.MemberNumber,
-                            {
-                                Password: CRATE_LOCK_PASSWORD,
-                                RemoveItem: true,
-                                RemoveTimer: authoritativeExpiry,
-                                ShowTimer: true,
-                                LockSet: true,
-                            },
-                        );
-                        const persistedCrate = crate as typeof crate & {
-                            Property?: Record<string, any>;
-                        };
-                        persistedCrate.Property = {
-                            ...(persistedCrate.Property ?? {}),
-                            Lock: lockProperty,
-                        };
+                        applyTimerPasswordLock(crate, {
+                            memberNumber: character.MemberNumber,
+                            password: CRATE_LOCK_PASSWORD,
+                            removeTimer: authoritativeExpiry,
+                        });
                     },
                     50,
                     this.stateSync,

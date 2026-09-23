@@ -19,10 +19,10 @@ import type {
     CommandParser,
 } from "bc-bot";
 import { CommandSystemMessageFeatureSystem } from "../shared/commandSystemMessageFeatureSystem";
-import { generatePassword } from "../../utils";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import type { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
+import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
 import type { KennelSystem } from "./kennelSystem";
 import {
     KENNEL_DOOR_CLOSE_DELAY_MS,
@@ -200,30 +200,10 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
                     }
 
                     const lockExpiry = Date.now() + durationMs;
-                    const lockProperty = {
-                        AssetName: "TimerPasswordPadlock",
-                        MemberNumber: sender.MemberNumber,
-                        Password: generatePassword(),
-                        RemoveItem: true,
-                        RemoveTimer: lockExpiry,
-                        ShowTimer: true,
-                        LockSet: true,
-                    };
-                    (kennel as any).lock(
-                        "TimerPasswordPadlock",
-                        sender.MemberNumber,
-                        {
-                            Password: lockProperty.Password,
-                            RemoveItem: lockProperty.RemoveItem,
-                            RemoveTimer: lockProperty.RemoveTimer,
-                            ShowTimer: lockProperty.ShowTimer,
-                            LockSet: lockProperty.LockSet,
-                        },
-                    );
-                    (kennel as any).Property = {
-                        ...((kennel as any).Property ?? {}),
-                        Lock: lockProperty,
-                    };
+                    applyTimerPasswordLock(kennel as any, {
+                        memberNumber: sender.MemberNumber,
+                        removeTimer: lockExpiry,
+                    });
                 },
                 50,
                 undefined,

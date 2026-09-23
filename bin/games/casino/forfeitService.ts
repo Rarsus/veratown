@@ -19,7 +19,7 @@ import {
     API_AppearanceItem,
 } from "bc-bot";
 import { FORFEITS } from "./forfeits";
-import { generatePassword } from "../../utils";
+import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
 
 import { createLogger } from "../../logging";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
@@ -246,32 +246,11 @@ export class ForfeitService {
         // Apply lock if configured
         if (forfeit.lockTimeMs) {
             const lockTimeMs = forfeit.lockTimeMs;
-            const lockProperty = {
-                Password: generatePassword(),
-                Hint: "Better luck next time!",
-                RemoveItem: true,
-                RemoveTimer: Date.now() + lockTimeMs,
-                ShowTimer: true,
-                LockSet: true,
-            };
-            added.lock("TimerPasswordPadlock", adminMemberNumber, {
-                ...lockProperty,
+            applyTimerPasswordLock(added, {
+                memberNumber: adminMemberNumber,
+                removeTimer: Date.now() + lockTimeMs,
+                hint: "Better luck next time!",
             });
-
-            // Keep the persisted appearance self-describing even when the
-            // runtime lock helper only updates the live item state.
-            const persistedItem = added as typeof added & {
-                Property?: Record<string, any>;
-            };
-            persistedItem.Property = {
-                ...(persistedItem.Property ?? {}),
-                Lock: {
-                    ...(persistedItem.Property as any)?.Lock,
-                    AssetName: "TimerPasswordPadlock",
-                    MemberNumber: adminMemberNumber,
-                    ...lockProperty,
-                },
-            };
         }
     }
 

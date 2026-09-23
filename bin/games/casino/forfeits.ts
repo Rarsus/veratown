@@ -13,53 +13,12 @@
  */
 
 import { API_Character, AssetGet, BC_AppearanceItem } from "bc-bot";
-import { generatePassword } from "../../utils";
 import { wait } from "../../hub/utils";
 import { PET_EARS } from "../veratown";
 import { createLogger } from "../../logging";
+import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
 
 const logger = createLogger("forfeits");
-
-function applyTimerPasswordLock(
-    item: BC_AppearanceItem,
-    lockMemberNumber: number,
-    removeTimer: number,
-    hint: string,
-    showTimer = true,
-): void {
-    const lockProperty = {
-        AssetName: "TimerPasswordPadlock",
-        MemberNumber: lockMemberNumber,
-        Password: generatePassword(),
-        Hint: hint,
-        RemoveItem: true,
-        RemoveTimer: removeTimer,
-        ShowTimer: showTimer,
-        LockSet: true,
-    };
-    const runtimeItem = item as any;
-    runtimeItem.lock("TimerPasswordPadlock", lockMemberNumber, {
-        Password: lockProperty.Password,
-        Hint: lockProperty.Hint,
-        RemoveItem: lockProperty.RemoveItem,
-        RemoveTimer: lockProperty.RemoveTimer,
-        ShowTimer: lockProperty.ShowTimer,
-        LockSet: lockProperty.LockSet,
-    });
-    const persistedItem = item as typeof item & {
-        Property?: Record<string, any>;
-    };
-    const currentLock = persistedItem.Property?.Lock;
-    persistedItem.Property = {
-        ...(persistedItem.Property ?? {}),
-        Lock: {
-            ...(currentLock && typeof currentLock === "object"
-                ? currentLock
-                : {}),
-            ...lockProperty,
-        },
-    };
-}
 
 interface Forfeit {
     name: string;
@@ -189,12 +148,11 @@ export const FORFEITS: Record<string, Forfeit> = {
             );
             cage.setProperty("TypeRecord", { d: 1, p: 1 });
             cage.SetDifficulty(20);
-            applyTimerPasswordLock(
-                cage,
-                lockMemberNumber,
-                Date.now() + (FORFEITS.cage.lockTimeMs ?? 0),
-                "Better luck next time!",
-            );
+            applyTimerPasswordLock(cage, {
+                memberNumber: lockMemberNumber,
+                removeTimer: Date.now() + (FORFEITS.cage.lockTimeMs ?? 0),
+                hint: "Better luck next time!",
+            });
         },
     },
     pet: {
@@ -344,12 +302,11 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
                   ? (hairColor[0] as HexColor)
                   : (hairColor as HexColor);
         chastityCage.SetColor(["Default", targetColor, targetColor, "#FFBC00"]);
-        applyTimerPasswordLock(
-            chastityCage,
-            lockMemberNumber,
-            Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
-            "Better luck next time!",
-        );
+        applyTimerPasswordLock(chastityCage, {
+            memberNumber: lockMemberNumber,
+            removeTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
+            hint: "Better luck next time!",
+        });
     } else {
         const chastityBelt = character.Appearance.AddItem(
             AssetGet("ItemPelvis", "ModularChastityBelt"),
@@ -374,12 +331,11 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
             s: 0,
             v: 0,
         });
-        applyTimerPasswordLock(
-            chastityBelt,
-            lockMemberNumber,
-            Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
-            "Better luck next time!",
-        );
+        applyTimerPasswordLock(chastityBelt, {
+            memberNumber: lockMemberNumber,
+            removeTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
+            hint: "Better luck next time!",
+        });
     }
 }
 
@@ -497,12 +453,11 @@ export async function applyForfeitForDare(
         await wait(50);
 
         if (!existing.getData().Property?.LockedBy) {
-            applyTimerPasswordLock(
-                existing as unknown as BC_AppearanceItem,
-                lockMemberNumber,
-                newExpiry,
-                "Dare in progress!",
-            );
+            applyTimerPasswordLock(existing as unknown as BC_AppearanceItem, {
+                memberNumber: lockMemberNumber,
+                removeTimer: newExpiry,
+                hint: "Dare in progress!",
+            });
 
             // Refresh appearance after locking
             character.Appearance.MakeAppearanceBundle();
@@ -594,12 +549,11 @@ export async function applyForfeitForDare(
     const lockTime = durationMsOverride ?? forfeit.lockTimeMs;
     if (lockTime) {
         logger.info(`[Casino] Locking forfeit ${forfeitKey} for ${lockTime}ms`);
-        applyTimerPasswordLock(
-            added,
-            lockMemberNumber,
-            Date.now() + lockTime,
-            "Dare in progress!",
-        );
+        applyTimerPasswordLock(added, {
+            memberNumber: lockMemberNumber,
+            removeTimer: Date.now() + lockTime,
+            hint: "Dare in progress!",
+        });
 
         // Refresh appearance after locking
         character.Appearance.MakeAppearanceBundle();
@@ -664,12 +618,12 @@ function makePet(
     });
     petSuitItem.SetColor(characterHairColor);
     petSuitItem.Extended?.SetType("Classic");
-    applyTimerPasswordLock(
-        petSuitItem,
-        lockMemberNumber,
-        Date.now() + (hours > 0 ? hours * 60 * 60 * 1000 : 20 * 60 * 1000),
-        "Better luck next time!",
-    );
+    applyTimerPasswordLock(petSuitItem, {
+        memberNumber: lockMemberNumber,
+        removeTimer:
+            Date.now() + (hours > 0 ? hours * 60 * 60 * 1000 : 20 * 60 * 1000),
+        hint: "Better luck next time!",
+    });
 
     if (!character.Appearance.InventoryGet("HairAccessory2")) {
         const ears = character.Appearance.AddItem(PET_EARS);

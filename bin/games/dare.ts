@@ -22,8 +22,8 @@ import {
     isBind,
 } from "bc-bot";
 import { wait } from "../hub/utils";
-import { generatePassword } from "../utils";
 import { GameTimer } from "./casino/gameTimer";
+import { applyTimerPasswordLock } from "./shared/timerPasswordLock";
 import { CommandValidator } from "./shared/commandValidator";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import {
@@ -1316,33 +1316,11 @@ Game Overview
                 Name: "Dare: Repeat Evader",
                 Description: `${character} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
             });
-            const lockProperty = {
-                AssetName: "TimerPasswordPadlock",
-                MemberNumber: this.conn.Player.MemberNumber,
-                Password: generatePassword(),
-                RemoveItem: true,
-                RemoveTimer: Date.now() + PILLORY_REPEAT_LOCK_MS,
-                ShowTimer: false,
-                LockSet: true,
-            };
-            pillory.lock(
-                "TimerPasswordPadlock",
-                this.conn.Player.MemberNumber,
-                {
-                    Password: lockProperty.Password,
-                    RemoveItem: lockProperty.RemoveItem,
-                    RemoveTimer: lockProperty.RemoveTimer,
-                    ShowTimer: lockProperty.ShowTimer,
-                    LockSet: lockProperty.LockSet,
-                },
-            );
-            const persistedPillory = pillory as typeof pillory & {
-                Property?: Record<string, any>;
-            };
-            persistedPillory.Property = {
-                ...(persistedPillory.Property ?? {}),
-                Lock: lockProperty,
-            };
+            applyTimerPasswordLock(pillory, {
+                memberNumber: this.conn.Player.MemberNumber,
+                removeTimer: Date.now() + PILLORY_REPEAT_LOCK_MS,
+                showTimer: false,
+            });
             this.pilloriedUntilNextDraw.delete(memberNumber);
 
             void syncAppearanceMutation(
