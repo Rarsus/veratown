@@ -189,6 +189,7 @@ function superviseBotConnection(
         status.lastFailure = undefined;
 
         try {
+            await waitForConnectionStability(connection);
             let lastError: unknown;
             for (let retry = 0; retry < RECOVERY_BACKOFF_MS.length; retry++) {
                 if (stopped || currentEpoch !== epoch) return;
@@ -207,63 +208,14 @@ function superviseBotConnection(
                 });
                 try {
                     if (position) {
-                        let movementError: unknown;
-                        try {
-                            connection.teleportOnMap(position.X, position.Y);
-                        } catch (error) {
-                            movementError = error;
-                        }
-                        const movementTimedOut =
-                            movementError instanceof Error &&
-                            movementError.name === "MapPositionTimeout";
-                        const observation = await verifyBotMapPosition(
-                            connection,
-                            position,
-                            config.room?.Name,
-                            movementTimedOut
-                                ? POSITION_VERIFICATION_BACKOFF_MS.length
-                                : 1,
-                        );
-                        if (
-                            observation.state === "verified" &&
-                            movementTimedOut
-                        ) {
-                            observation.state = "verified-after-timeout";
-                        }
-                        if (!movementError || movementTimedOut) {
-                            // The reposition command is authoritative. The
-                            // room snapshot can lag or report a stale default
-                            // position during reconnect; retain that mismatch
-                            // as diagnostics without blocking recovery.
-                            if (observation.state === "position-mismatch") {
-                                observation.state = movementTimedOut
-                                    ? "verified-after-timeout"
-                                    : "command-dispatched";
-                            }
-                        }
-                        status.position = observation;
-                        logger.info("Bot map position verification", {
+                        connection.moveOnMap(position.X, position.Y);
+                        logger.info("Bot map position command dispatched", {
                             role,
                             epoch: currentEpoch,
                             attempt,
-                            movementTimedOut,
-                            movementError:
-                                movementError instanceof Error
-                                    ? movementError.name
-                                    : undefined,
-                            ...observation,
+                            expectedPosition: position,
+                            roomName: connection.chatRoom?.Name,
                         });
-                        if (movementError && !movementTimedOut) {
-                            throw movementError;
-                        }
-                        if (
-                            observation.state === "room-not-ready" ||
-                            observation.state === "map-not-ready"
-                        ) {
-                            throw new Error(
-                                `Bot room/map is not ready for reposition (${observation.state})`,
-                            );
-                        }
                     }
                     if (stopped || currentEpoch !== epoch) return;
 
@@ -845,10 +797,6 @@ export async function createBotConnections(
                 memberId: connections.casino.Player.MemberNumber,
             });
             ensureBotIsRoomAdmin(main, connections.casino);
-            connections.casino.moveOnMap(
-                GAME_MISTRESS_POSITION.X,
-                GAME_MISTRESS_POSITION.Y,
-            );
         }
     } else {
         logger.info("No user3/password3 configured - casino feature disabled");

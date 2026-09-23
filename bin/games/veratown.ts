@@ -92,7 +92,7 @@ import {
     getBotRecoveryEpoch,
     isBotRecoveryReady,
     recordBotPositionPersistence,
-    verifyBotMapPosition,
+    waitForConnectionStability,
 } from "../botConnections";
 import {
     RECEPTIONIST_POSITION,
@@ -1467,135 +1467,45 @@ export class Veratown {
     };
 
     private setupCharacter = async () => {
-        await Promise.all([
-            (async () => {
-                const mainPositioned = await this.moveBotToPosition(
-                    this.conn,
-                    RECEPTIONIST_POSITION,
-                    "main",
-                );
-                this.conn.Player.SetActivePose(["Kneel"]);
-                if (mainPositioned) {
-                    await this.syncVerifiedBotPosition(
-                        this.conn,
-                        RECEPTIONIST_POSITION,
-                    );
-                }
-            })(),
-            this.conn2
-                ? (async () => {
-                      const showerPositioned = await this.moveBotToPosition(
-                          this.conn2!,
-                          SHOWER_BOT2_HOME_POSITION,
-                          "shower",
-                      );
-                      if (showerPositioned) {
-                          await this.syncVerifiedBotPosition(
-                              this.conn2!,
-                              SHOWER_BOT2_HOME_POSITION,
-                          );
-                      }
-                  })()
-                : undefined,
-            this.conn3
-                ? (async () => {
-                      const casinoPositioned = await this.moveBotToPosition(
-                          this.conn3!,
-                          GAME_MISTRESS_POSITION,
-                          "casino",
-                      );
-                      if (casinoPositioned) {
-                          await this.syncVerifiedBotPosition(
-                              this.conn3!,
-                              GAME_MISTRESS_POSITION,
-                          );
-                      }
-                      await this.casino?.initializeAppearance();
-                  })()
-                : undefined,
-        ]);
+        await this.moveBotToPosition(this.conn, RECEPTIONIST_POSITION, "main");
+        this.conn.Player.SetActivePose(["Kneel"]);
+
+        if (this.conn2) {
+            await this.moveBotToPosition(
+                this.conn2,
+                SHOWER_BOT2_HOME_POSITION,
+                "shower",
+            );
+        }
+
+        if (this.conn3) {
+            await this.moveBotToPosition(
+                this.conn3,
+                GAME_MISTRESS_POSITION,
+                "casino",
+            );
+            await this.casino?.initializeAppearance();
+        }
+
         await this.liveCharacterStateSync?.reconcile();
         this.updateContainmentReadiness();
     };
-
-    private async syncVerifiedBotPosition(
-        connection: API_Connector,
-        requestedPosition: { X: number; Y: number },
-    ): Promise<void> {
-        const diagnostic = await this.liveCharacterStateSync?.syncSelfPosition(
-            connection,
-            requestedPosition,
-        );
-        if (diagnostic) {
-            recordBotPositionPersistence(connection, diagnostic);
-        }
-    }
 
     private async moveBotToPosition(
         connection: API_Connector,
         position: { X: number; Y: number },
         role: string,
     ): Promise<boolean> {
-        let lastObservation = await verifyBotMapPosition(
-            connection,
+        await waitForConnectionStability(connection);
+        logger.info("Moving bot during startup", {
+            role,
+            bot: connection.Player.Name,
+            memberId: connection.Player.MemberNumber,
+            room: connection.chatRoom?.Name,
             position,
-            connection.chatRoom?.Name,
-            1,
-        );
-        for (let attempt = 1; attempt <= 10; attempt++) {
-            if (lastObservation.state === "verified") {
-                logger.info("Bot map position ready", {
-                    role,
-                    attempt,
-                    ...lastObservation,
-                });
-                return true;
-            }
-
-            try {
-                logger.info("Teleporting bot during startup", {
-                    role,
-                    bot: connection.Player.Name,
-                    memberId: connection.Player.MemberNumber,
-                    room: connection.chatRoom?.Name,
-                    position,
-                    attempt,
-                });
-                connection.teleportOnMap(position.X, position.Y);
-                await new Promise((resolve) => setTimeout(resolve, 250));
-            } catch (error) {
-                logger.warn("Bot map teleport attempt failed", {
-                    role,
-                    bot: connection.Player.Name,
-                    memberId: connection.Player.MemberNumber,
-                    room: connection.chatRoom?.Name,
-                    attempt,
-                    position,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                });
-            }
-
-            lastObservation = await verifyBotMapPosition(
-                connection,
-                position,
-                connection.chatRoom?.Name,
-                Veratown.MAP_POSITION_POLL_ATTEMPTS,
-            );
-        }
-
-        logger.error(
-            "Bot map position not verified during startup",
-            undefined,
-            {
-                role,
-                bot: connection.Player.Name,
-                memberId: connection.Player.MemberNumber,
-                room: connection.chatRoom?.Name,
-                ...lastObservation,
-            },
-        );
-        return false;
+        });
+        connection.moveOnMap(position.X, position.Y);
+        return true;
     }
 
     private updateContainmentReadiness(): void {

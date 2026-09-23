@@ -908,17 +908,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     /** Teleport this bot using Bondage Club's map teleport protocol. */
     public teleportOnMap(x: number, y: number): void {
-        // Bondage Club updates the targeted player's local position before sending
-        // the hidden message, because the targeted client may not receive its own
-        // server echo.
-        const position = { X: x, Y: y };
-        if (this._chatRoom) {
-            this._chatRoom.mapPositionUpdate(this.Player.MemberNumber, {
-                Pos: position,
-            });
-            this.emit("MapPosition", this.Player.MemberNumber, position);
-        }
-
         this.SendMessage(
             "Hidden",
             "ChatRoomMapViewTeleport",
@@ -926,7 +915,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
             [
                 {
                     Tag: "MapViewTeleport",
-                    Position: position,
+                    Position: { X: x, Y: y },
                 },
             ],
         );
