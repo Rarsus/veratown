@@ -268,6 +268,9 @@ export class ForfeitService {
             items,
             adminMemberNumber,
             `casino_forfeit:${forfeitKey}`,
+            forfeit.lockTimeMs === undefined
+                ? undefined
+                : Date.now() + forfeit.lockTimeMs,
         );
         await this.mutationService.recordEvent({
             timestamp: Date.now(),

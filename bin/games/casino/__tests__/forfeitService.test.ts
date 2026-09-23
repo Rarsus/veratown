@@ -362,20 +362,28 @@ test("ForfeitService: applyForfeit applies item locking", () => {
             SetColor: () => {},
             SetDifficulty: () => {},
             SetCraft: () => {},
-            lock: () => {
+            lock: (...args: any[]) => {
+                const [_type, _memberNumber, properties] = args;
                 lockCalled = true;
+                addedItem.Property = {
+                    ...addedItem.Property,
+                    LockedBy: _type,
+                    LockMemberNumber: _memberNumber,
+                    Effect: ["Lock"],
+                    ...properties,
+                };
             },
             Name: "Boots",
         });
 
     service.applyForfeit(mockChar as any, "boots", 1111);
     assert.ok(lockCalled);
-    assert.equal(addedItem.Property.Lock.AssetName, "TimerPasswordPadlock");
-    assert.equal(addedItem.Property.Lock.MemberNumber, 1111);
-    assert.equal(addedItem.Property.Lock.ShowTimer, true);
-    assert.equal(addedItem.Property.Lock.LockSet, true);
-    assert.ok(addedItem.Property.Lock.Password);
-    assert.ok(addedItem.Property.Lock.RemoveTimer > Date.now());
+    assert.equal(addedItem.Property.LockedBy, "TimerPasswordPadlock");
+    assert.equal(addedItem.Property.LockMemberNumber, 1111);
+    assert.equal(addedItem.Property.ShowTimer, true);
+    assert.equal(addedItem.Property.LockSet, true);
+    assert.ok(addedItem.Property.Password);
+    assert.ok(addedItem.Property.RemoveTimer > Date.now());
 });
 
 test("ForfeitService: persists applied forfeits through the mutation service", async () => {

@@ -152,6 +152,7 @@ export interface GameStateMutationService {
         items: BC_AppearanceItem[],
         appliedBy?: number,
         reason?: string,
+        lockedUntil?: number,
     ): Promise<void>;
     removeBondage(memberNumber: number, reason?: string): Promise<void>;
     enterCage(
@@ -919,6 +920,7 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         items: BC_AppearanceItem[],
         appliedBy?: number,
         reason = "gameplay",
+        lockedUntil?: number,
     ): Promise<void> {
         this.validateMember(memberNumber);
         if (!Array.isArray(items) || items.length === 0) {
@@ -929,10 +931,13 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
         await this.withRetry(async () => {
             for (const item of items) {
                 const key = `${item.Group}:${item.Name}`;
+                const itemLockedUntil = (item.Property as any)?.RemoveTimer;
                 await this.unifiedStore.applyBondage(
                     memberNumber,
                     key,
-                    0,
+                    typeof itemLockedUntil === "number"
+                        ? itemLockedUntil
+                        : (lockedUntil ?? 0),
                     appliedBy,
                 );
             }

@@ -12,9 +12,14 @@ export function applyTimerPasswordLock(
     item: any,
     options: TimerPasswordLockOptions,
 ): void {
+    if (
+        !Number.isFinite(options.removeTimer) ||
+        options.removeTimer <= Date.now()
+    ) {
+        throw new Error("TimerPasswordPadlock requires a future removeTimer");
+    }
+
     const lockProperty = {
-        AssetName: "TimerPasswordPadlock",
-        MemberNumber: options.memberNumber,
         Password: options.password ?? generatePassword(),
         ...(options.hint === undefined ? {} : { Hint: options.hint }),
         RemoveItem: true,
@@ -24,16 +29,11 @@ export function applyTimerPasswordLock(
     };
     const runtimeItem = item as any;
 
-    runtimeItem.lock("TimerPasswordPadlock", options.memberNumber, {});
-    for (const [property, value] of Object.entries(lockProperty)) {
-        if (property === "AssetName" || property === "MemberNumber") continue;
-        if (typeof runtimeItem.setProperty === "function") {
-            runtimeItem.setProperty(property, value);
-        } else {
-            runtimeItem.Property ??= {};
-            runtimeItem.Property[property] = value;
-        }
-    }
+    runtimeItem.lock(
+        "TimerPasswordPadlock",
+        options.memberNumber,
+        lockProperty,
+    );
 
     const persistedItem =
         typeof runtimeItem.getData === "function"
@@ -42,6 +42,8 @@ export function applyTimerPasswordLock(
     persistedItem.Property ??= {};
     persistedItem.Property.Lock = {
         ...(persistedItem.Property.Lock ?? {}),
+        AssetName: "TimerPasswordPadlock",
+        MemberNumber: options.memberNumber,
         ...lockProperty,
     };
 }
