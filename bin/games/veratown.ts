@@ -517,7 +517,7 @@ export class Veratown {
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
-                    true,
+                    this.roomKey === "main",
                 ),
         );
         this.kennelSystem = this.initFeature(
@@ -536,7 +536,7 @@ export class Veratown {
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
-                    true,
+                    this.roomKey === "main",
                 ),
         );
         this.showerSystem = this.initFeature(
@@ -548,7 +548,7 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
-                    true,
+                    this.roomKey === "main",
                 ),
         );
         this.bedSystem = this.initFeature(
@@ -559,7 +559,7 @@ export class Veratown {
                         this.liveCharacterStateSync
                             ?.syncCharacter(character)
                             .then(() => undefined) ?? Promise.resolve(),
-                    true,
+                    this.roomKey === "main",
                 ),
         );
         this.bunnyParkSystem = this.initFeature(() => {
@@ -587,13 +587,17 @@ export class Veratown {
                         )
                         .then(() => undefined) ?? Promise.resolve(),
             );
-            return new BunnyParkSystem(this.conn, punishmentService, true);
+            return new BunnyParkSystem(
+                this.conn,
+                punishmentService,
+                this.roomKey === "main",
+            );
         });
         this.windowSystem = this.initFeature(
-            () => new WindowSystem(this.conn, true),
+            () => new WindowSystem(this.conn, this.roomKey === "main"),
         );
         this.trashcanSystem = this.initFeature(
-            () => new TrashcanSystem(this.conn, true),
+            () => new TrashcanSystem(this.conn, this.roomKey === "main"),
         );
         const keypadDefinitionService =
             this.container.get<KeypadDefinitionService>(
@@ -930,7 +934,9 @@ export class Veratown {
             try {
                 this.locationSnapshot = this.locationStore
                     ? await this.locationStore.reloadLocations(
-                          VERATOWN_LOCATIONS_FALLBACK,
+                          this.roomKey === "main"
+                              ? VERATOWN_LOCATIONS_FALLBACK
+                              : undefined,
                       )
                     : [];
 
