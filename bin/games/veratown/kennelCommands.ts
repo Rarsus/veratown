@@ -19,6 +19,7 @@ import type {
     CommandParser,
 } from "bc-bot";
 import { CommandSystemMessageFeatureSystem } from "../shared/commandSystemMessageFeatureSystem";
+import { generatePassword } from "../../utils";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import type { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
@@ -198,15 +199,31 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
                         );
                     }
 
-                    // Set timerpasswordlock property on the kennel
-                    // Format: seconds until unlock (from now)
-                    const durationSeconds = Math.ceil(durationMs / 1000);
-                    const setRuntimeProperty =
-                        kennel.setProperty as unknown as (
-                            property: string,
-                            value: number,
-                        ) => void;
-                    setRuntimeProperty("timerPasswordLock", durationSeconds);
+                    const lockExpiry = Date.now() + durationMs;
+                    const lockProperty = {
+                        AssetName: "TimerPasswordPadlock",
+                        MemberNumber: sender.MemberNumber,
+                        Password: generatePassword(),
+                        RemoveItem: true,
+                        RemoveTimer: lockExpiry,
+                        ShowTimer: true,
+                        LockSet: true,
+                    };
+                    (kennel as any).lock(
+                        "TimerPasswordPadlock",
+                        sender.MemberNumber,
+                        {
+                            Password: lockProperty.Password,
+                            RemoveItem: lockProperty.RemoveItem,
+                            RemoveTimer: lockProperty.RemoveTimer,
+                            ShowTimer: lockProperty.ShowTimer,
+                            LockSet: lockProperty.LockSet,
+                        },
+                    );
+                    (kennel as any).Property = {
+                        ...((kennel as any).Property ?? {}),
+                        Lock: lockProperty,
+                    };
                 },
                 50,
                 undefined,

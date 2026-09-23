@@ -20,6 +20,47 @@ import { createLogger } from "../../logging";
 
 const logger = createLogger("forfeits");
 
+function applyTimerPasswordLock(
+    item: BC_AppearanceItem,
+    lockMemberNumber: number,
+    removeTimer: number,
+    hint: string,
+    showTimer = true,
+): void {
+    const lockProperty = {
+        AssetName: "TimerPasswordPadlock",
+        MemberNumber: lockMemberNumber,
+        Password: generatePassword(),
+        Hint: hint,
+        RemoveItem: true,
+        RemoveTimer: removeTimer,
+        ShowTimer: showTimer,
+        LockSet: true,
+    };
+    const runtimeItem = item as any;
+    runtimeItem.lock("TimerPasswordPadlock", lockMemberNumber, {
+        Password: lockProperty.Password,
+        Hint: lockProperty.Hint,
+        RemoveItem: lockProperty.RemoveItem,
+        RemoveTimer: lockProperty.RemoveTimer,
+        ShowTimer: lockProperty.ShowTimer,
+        LockSet: lockProperty.LockSet,
+    });
+    const persistedItem = item as typeof item & {
+        Property?: Record<string, any>;
+    };
+    const currentLock = persistedItem.Property?.Lock;
+    persistedItem.Property = {
+        ...(persistedItem.Property ?? {}),
+        Lock: {
+            ...(currentLock && typeof currentLock === "object"
+                ? currentLock
+                : {}),
+            ...lockProperty,
+        },
+    };
+}
+
 interface Forfeit {
     name: string;
     value: number;
@@ -148,14 +189,12 @@ export const FORFEITS: Record<string, Forfeit> = {
             );
             cage.setProperty("TypeRecord", { d: 1, p: 1 });
             cage.SetDifficulty(20);
-            cage.lock("TimerPasswordPadlock", lockMemberNumber, {
-                Password: generatePassword(),
-                Hint: "Better luck next time!",
-                RemoveItem: true,
-                RemoveTimer: Date.now() + (FORFEITS.cage.lockTimeMs ?? 0),
-                ShowTimer: true,
-                LockSet: true,
-            });
+            applyTimerPasswordLock(
+                cage,
+                lockMemberNumber,
+                Date.now() + (FORFEITS.cage.lockTimeMs ?? 0),
+                "Better luck next time!",
+            );
         },
     },
     pet: {
@@ -305,14 +344,12 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
                   ? (hairColor[0] as HexColor)
                   : (hairColor as HexColor);
         chastityCage.SetColor(["Default", targetColor, targetColor, "#FFBC00"]);
-        chastityCage.lock("TimerPasswordPadlock", lockMemberNumber, {
-            Password: generatePassword(),
-            Hint: "Better luck next time!",
-            RemoveItem: true,
-            RemoveTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
-            ShowTimer: true,
-            LockSet: true,
-        });
+        applyTimerPasswordLock(
+            chastityCage,
+            lockMemberNumber,
+            Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
+            "Better luck next time!",
+        );
     } else {
         const chastityBelt = character.Appearance.AddItem(
             AssetGet("ItemPelvis", "ModularChastityBelt"),
@@ -337,14 +374,12 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
             s: 0,
             v: 0,
         });
-        chastityBelt.lock("TimerPasswordPadlock", lockMemberNumber, {
-            Password: generatePassword(),
-            Hint: "Better luck next time!",
-            RemoveItem: true,
-            RemoveTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
-            ShowTimer: true,
-            LockSet: true,
-        });
+        applyTimerPasswordLock(
+            chastityBelt,
+            lockMemberNumber,
+            Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
+            "Better luck next time!",
+        );
     }
 }
 
@@ -462,11 +497,12 @@ export async function applyForfeitForDare(
         await wait(50);
 
         if (!existing.getData().Property?.LockedBy) {
-            existing.lock("TimerPasswordPadlock", lockMemberNumber, {
-                Password: generatePassword(),
-                Hint: "Dare in progress!",
-                LockSet: true,
-            });
+            applyTimerPasswordLock(
+                existing as unknown as BC_AppearanceItem,
+                lockMemberNumber,
+                newExpiry,
+                "Dare in progress!",
+            );
 
             // Refresh appearance after locking
             character.Appearance.MakeAppearanceBundle();
@@ -558,14 +594,12 @@ export async function applyForfeitForDare(
     const lockTime = durationMsOverride ?? forfeit.lockTimeMs;
     if (lockTime) {
         logger.info(`[Casino] Locking forfeit ${forfeitKey} for ${lockTime}ms`);
-        added.lock("TimerPasswordPadlock", lockMemberNumber, {
-            Password: generatePassword(),
-            Hint: "Dare in progress!",
-            RemoveItem: true,
-            RemoveTimer: Date.now() + lockTime,
-            ShowTimer: true,
-            LockSet: true,
-        });
+        applyTimerPasswordLock(
+            added,
+            lockMemberNumber,
+            Date.now() + lockTime,
+            "Dare in progress!",
+        );
 
         // Refresh appearance after locking
         character.Appearance.MakeAppearanceBundle();
@@ -630,15 +664,12 @@ function makePet(
     });
     petSuitItem.SetColor(characterHairColor);
     petSuitItem.Extended?.SetType("Classic");
-    petSuitItem.lock("TimerPasswordPadlock", lockMemberNumber, {
-        Password: generatePassword(),
-        Hint: "Better luck next time!",
-        RemoveItem: true,
-        RemoveTimer:
-            Date.now() + (hours > 0 ? hours * 60 * 60 * 1000 : 20 * 60 * 1000),
-        ShowTimer: true,
-        LockSet: true,
-    });
+    applyTimerPasswordLock(
+        petSuitItem,
+        lockMemberNumber,
+        Date.now() + (hours > 0 ? hours * 60 * 60 * 1000 : 20 * 60 * 1000),
+        "Better luck next time!",
+    );
 
     if (!character.Appearance.InventoryGet("HairAccessory2")) {
         const ears = character.Appearance.AddItem(PET_EARS);
