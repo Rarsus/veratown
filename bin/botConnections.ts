@@ -17,6 +17,7 @@ import {
     VeratownRoomStore,
 } from "./games/veratown/roomStore";
 import { VeratownMapStore } from "./games/veratown/mapStore";
+import { StartupProgress } from "./startupProgress";
 
 export interface BotConnections extends VeratownConnections {
     secondary?: API_Connector;
@@ -441,17 +442,28 @@ async function connectBotAccount(
     user: string,
     password: string,
     room?: import("bc-bot").RoomDefinition,
+    startup?: StartupProgress,
+    role = "bot",
 ): Promise<API_Connector> {
-    const connection = new API_Connector(serverUrl, user, password, config.env);
-    if (room) {
-        await connection.joinOrCreateRoom(room);
-    }
+    const connect = async () => {
+        const connection = new API_Connector(
+            serverUrl,
+            user,
+            password,
+            config.env,
+        );
+        if (room) {
+            await connection.joinOrCreateRoom(room);
+        }
 
-    // Wait for connection to stabilize before returning
-    // This prevents connection flapping when multiple bots join in quick succession
-    await waitForConnectionStability(connection);
-
-    return connection;
+        // Wait for connection to stabilize before returning
+        // This prevents connection flapping when multiple bots join in quick succession
+        await waitForConnectionStability(connection);
+        return connection;
+    };
+    return startup
+        ? startup.phase(`bot.${role}`, connect, { warnAfterMs: 17_000 })
+        : connect();
 }
 
 async function loadRoomDefinition(
@@ -697,6 +709,7 @@ export async function createBotConnections(
     serverUrl: string,
     config: ConfigFile,
     database?: DatabaseConnection,
+    startup?: StartupProgress,
 ): Promise<BotConnections> {
     const logger = createLogger("BotConnections");
     validateBotAccountConfiguration(config);
@@ -720,6 +733,8 @@ export async function createBotConnections(
         config.user,
         config.password,
         mainRoom,
+        startup,
+        "main",
     );
     logger.info("Main connection established", {
         bot: main.Player.Name,
@@ -747,6 +762,8 @@ export async function createBotConnections(
             config.user2,
             config.password2,
             undefined,
+            startup,
+            "secondary",
         );
         logger.info("Secondary connection established", {
             bot: connections.secondary.Player.Name,
@@ -766,6 +783,8 @@ export async function createBotConnections(
             config.user2,
             config.password2,
             mainRoom,
+            startup,
+            "shower",
         );
         logger.info("Shower connection established", {
             bot: connections.shower.Player.Name,
@@ -791,6 +810,8 @@ export async function createBotConnections(
                 config.user3,
                 config.password3,
                 mainRoom,
+                startup,
+                "casino",
             );
             logger.info("Casino connection established", {
                 bot: connections.casino.Player.Name,
@@ -830,6 +851,8 @@ export async function createBotConnections(
                 config.user4,
                 config.password4,
                 secondRoom,
+                startup,
+                "secondRoom",
             );
             roomKeys.secondRoom = secondRoomKey;
             logger.info("Second room connection established", {

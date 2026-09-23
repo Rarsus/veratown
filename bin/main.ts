@@ -53,6 +53,7 @@ import { asAppError } from "./errors";
 import { KidnappersGamePersistence } from "./games/kidnappers/kidnappersGamePersistence";
 import { KidnappersGameLifecycleService } from "./games/kidnappers/kidnappersGameLifecycleService";
 import { createKidnappersAuditSubscriber } from "./games/kidnappers/kidnappersGameMessaging";
+import { StartupProgress } from "./startupProgress";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -434,6 +435,7 @@ export async function restartBotConnections(): Promise<void> {
                     newConnections,
                     activeDatabase,
                     cachedConfig,
+                    new StartupProgress(),
                 );
                 logger.info(
                     "Veratown game reinitialized with room configuration and map loaded",
@@ -721,6 +723,7 @@ interface BootstrapContext {
     config: ConfigFile;
     connections: BotConnections;
     database?: DatabaseConnection;
+    startup: StartupProgress;
 }
 
 let activeConnections: BotConnections | undefined;
@@ -737,6 +740,7 @@ async function initializeVeratownRooms(
     connections: BotConnections,
     database: DatabaseConnection | undefined,
     config: ConfigFile,
+    startup: StartupProgress = new StartupProgress(),
 ): Promise<Veratown> {
     const logger = createLogger("VeratownInit");
     if (!database) {
@@ -744,43 +748,58 @@ async function initializeVeratownRooms(
             "Database connection required for Veratown initialization",
         );
     }
-    const sharedServices = await initializeSharedVeratownServices(
-        database.db,
-        config,
+    const sharedServices = await startup.phase(
+        "game.veratown.shared-services",
+        () => initializeSharedVeratownServices(database.db, config),
+        { warnAfterMs: 10_000 },
     );
     activeSharedVeratownServices = sharedServices;
     activeVeratownRooms.clear();
-    const mainPromise = (async () => {
-        logger.info("Starting Veratown room runtime", { roomKey: "main" });
-        return initializeVeratownGame(
-            connections,
-            database,
-            config,
-            sharedServices,
-            "main",
-        );
-    })();
+    const mainPromise = startup.phase(
+        "game.veratown.room.main",
+        async () => {
+            logger.info("Starting Veratown room runtime", { roomKey: "main" });
+            return initializeVeratownGame(
+                connections,
+                database,
+                config,
+                sharedServices,
+                "main",
+            );
+        },
+        { warnAfterMs: 10_000, context: { roomKey: "main" } },
+    );
 
     const secondaryRoomKey = connections.roomKeys?.secondRoom;
     const secondaryPromise =
         connections.secondRoom && secondaryRoomKey
-            ? initializeVeratownGame(
-                  { main: connections.secondRoom },
-                  database,
-                  config,
-                  sharedServices,
-                  secondaryRoomKey,
-              ).catch((error) => {
-                  logger.error(
-                      "Secondary Veratown room runtime failed",
-                      error,
+            ? startup
+                  .phase(
+                      `game.veratown.room.${secondaryRoomKey}`,
+                      () =>
+                          initializeVeratownGame(
+                              { main: connections.secondRoom! },
+                              database,
+                              config,
+                              sharedServices,
+                              secondaryRoomKey,
+                          ),
                       {
-                          roomKey: secondaryRoomKey,
-                          bot: connections.secondRoom?.Player.Name,
+                          warnAfterMs: 10_000,
+                          context: { roomKey: secondaryRoomKey },
                       },
-                  );
-                  return undefined;
-              })
+                  )
+                  .catch((error) => {
+                      logger.error(
+                          "Secondary Veratown room runtime failed",
+                          error,
+                          {
+                              roomKey: secondaryRoomKey,
+                              bot: connections.secondRoom?.Player.Name,
+                          },
+                      );
+                      return undefined;
+                  })
             : undefined;
 
     if (secondaryPromise) {
@@ -873,6 +892,7 @@ async function startConfiguredGame({
     config,
     connections,
     database,
+    startup,
 }: BootstrapContext): Promise<void> {
     const logger = LoggerRegistry.getAppLogger();
     const main = connections.main;
@@ -892,10 +912,10 @@ async function startConfiguredGame({
             main.accountUpdate({ Nickname: "Veratown Bot" });
 
             // Use centralized initialization that handles both startup and restart.
-            activeVeratownGame = await initializeVeratownRooms(
-                connections,
-                database,
-                config,
+            activeVeratownGame = await startup.phase(
+                "game.veratown",
+                () => initializeVeratownRooms(connections, database, config),
+                { warnAfterMs: 10_000 },
             );
 
             logger.info(
@@ -959,6 +979,7 @@ export async function startBot(): Promise<RopeyBot> {
     // Initialize logging as first operation
     initializeLoggingFromEnv();
     const logger = LoggerRegistry.getAppLogger();
+    const startup = new StartupProgress();
 
     logger.info("Bot startup initiated");
 
@@ -992,7 +1013,14 @@ export async function startBot(): Promise<RopeyBot> {
     });
 
     const cfgFile = process.argv[2] ?? "./config.json";
-    const config = await loadConfig(cfgFile);
+    const config = await startup.phase(
+        "configuration",
+        () => loadConfig(cfgFile),
+        {
+            warnAfterMs: 2_000,
+            context: { configFile: cfgFile },
+        },
+    );
 
     // Cache config and serverUrl for potential restarts via Discord commands
     cachedConfig = config;
@@ -1005,10 +1033,18 @@ export async function startBot(): Promise<RopeyBot> {
         process.exit(1);
     }
 
-    const database = await connectDatabase(config);
+    const database = await startup.phase(
+        "database",
+        () => connectDatabase(config),
+        { warnAfterMs: 5_000 },
+    );
     const db = database?.db;
     activeDatabase = database;
-    const connections = await createBotConnections(serverUrl, config, database);
+    const connections = await startup.phase(
+        "bot-connections",
+        () => createBotConnections(serverUrl, config, database, startup),
+        { warnAfterMs: 20_000 },
+    );
     activeConnections = connections;
 
     logger.info(
@@ -1038,10 +1074,11 @@ export async function startBot(): Promise<RopeyBot> {
                 discord_enabled: config.discord_enabled !== false,
             };
 
-            activeDiscordClient = await initializeDiscordBot(
-                discordConfig,
-                db,
-                activeConnections,
+            activeDiscordClient = await startup.phase(
+                "discord",
+                () =>
+                    initializeDiscordBot(discordConfig, db, activeConnections),
+                { warnAfterMs: 10_000 },
             );
             if (activeDiscordClient) {
                 logger.info("Discord bot initialized successfully");
@@ -1064,7 +1101,11 @@ export async function startBot(): Promise<RopeyBot> {
         });
     }
 
-    await startConfiguredGame({ config, connections, database });
+    await startup.phase(
+        "game",
+        () => startConfiguredGame({ config, connections, database, startup }),
+        { warnAfterMs: 10_000 },
+    );
 
     return {
         connector: connections.main,

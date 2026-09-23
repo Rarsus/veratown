@@ -88,6 +88,7 @@ import {
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
 import { createLogger } from "../logging";
+import { StartupProgress } from "../startupProgress";
 import {
     getBotRecoveryEpoch,
     isBotRecoveryReady,
@@ -886,14 +887,37 @@ export class Veratown {
     }
 
     public async init(): Promise<void> {
-        await Promise.all(this.pendingFeatureRegistrations);
+        const startup = new StartupProgress("VeratownStartup");
+        const roomContext = { roomKey: this.roomKey };
+
+        await startup.phase(
+            "feature-registration",
+            async () => {
+                await Promise.all(this.pendingFeatureRegistrations);
+            },
+            { warnAfterMs: 2_000, context: roomContext },
+        );
 
         this.setContainmentFeaturesEnabled(false);
-        await this.setupRoom();
-        await this.setupCharacter();
+        await startup.phase("room-setup", () => this.setupRoom(), {
+            warnAfterMs: 5_000,
+            context: roomContext,
+        });
+        await startup.phase("character-setup", () => this.setupCharacter(), {
+            warnAfterMs: 5_000,
+            context: roomContext,
+        });
         this.attachContainmentFeatures();
-        await this.reloadLocations();
+        await startup.phase("location-reload", () => this.reloadLocations(), {
+            warnAfterMs: 5_000,
+            context: roomContext,
+        });
         this.updateContainmentReadiness();
+        logger.info("Veratown startup states ready", {
+            ...roomContext,
+            featureCount: this.features.length,
+            containmentReady: this.isContainmentReady(),
+        });
 
         // Change watching is a recovery mechanism, not a room readiness gate.
         if (this.locationStore) {
@@ -904,8 +928,12 @@ export class Veratown {
                 );
                 await this.reloadLocations();
             });
-            void this.locationStore
-                .watchLocations()
+            void startup
+                .phase(
+                    "location-watcher",
+                    () => this.locationStore!.watchLocations(),
+                    { warnAfterMs: 2_000, context: roomContext },
+                )
                 .then(() => {
                     logger.info("Location change watcher active", {
                         roomKey: this.roomKey,
