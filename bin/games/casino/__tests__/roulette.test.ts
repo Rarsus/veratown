@@ -17,6 +17,31 @@ import * as assert from "node:assert/strict";
 import { RouletteGame } from "../roulette";
 import { CommandValidator } from "../../shared/commandValidator";
 
+test("Roulette: preserves a preconfigured wheel instead of applying the default", () => {
+    const configuredWheel = {
+        Group: "ItemDevices",
+        Name: "ConfiguredWheel",
+        Property: { TargetAngle: 123 },
+    };
+    let applyBundleCalls = 0;
+    const game = new RouletteGame(
+        {
+            Player: {
+                Appearance: {
+                    InventoryGet: () => configuredWheel,
+                    applyBundle: () => {
+                        applyBundleCalls++;
+                    },
+                },
+            },
+        } as any,
+        {} as any,
+    );
+
+    assert.strictEqual(game.getWheel(), configuredWheel);
+    assert.strictEqual(applyBundleCalls, 0);
+});
+
 test("Roulette: CommandValidator integration - argument count validation", async () => {
     const validator = new CommandValidator();
 
