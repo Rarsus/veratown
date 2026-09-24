@@ -99,6 +99,49 @@ export function hasBunnyPiece(
     });
 }
 
+export function hasBunnyRestraint(
+    appearance: readonly BunnyAppearanceItem[],
+    piece: BunnyRestraintPiece,
+): boolean {
+    const item = appearance.find(
+        (candidate) =>
+            candidate.Group === piece.group && candidate.Name === piece.asset,
+    );
+    if (!item) return false;
+
+    if (
+        piece.lockType &&
+        (item.Property as { LockedBy?: string } | undefined)?.LockedBy !==
+            piece.lockType
+    ) {
+        return false;
+    }
+
+    if (piece.extendedType) {
+        const property = item.Property as
+            { Type?: string; TypeRecord?: { typed?: number } } | undefined;
+        const typed = property?.TypeRecord?.typed;
+        const asset = AssetGet(piece.group, piece.asset);
+        const extended = getExtendedAssetDef(asset);
+        const option =
+            extended?.Archetype === "typed"
+                ? extended.Options?.findIndex(
+                      (candidate) => candidate.Name === piece.extendedType,
+                  )
+                : undefined;
+        if (
+            option !== undefined &&
+            option >= 0 &&
+            typed !== option &&
+            property?.Type !== piece.extendedType
+        ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 export function verifyBunnySign(
     appearance: readonly BunnyAppearanceItem[],
 ): BunnySignVerification {

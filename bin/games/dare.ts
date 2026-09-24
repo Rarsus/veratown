@@ -1349,7 +1349,11 @@ Game Overview
                 Name: "Dare: Pillory",
                 Description: `${character} chickened out of a dare and has been locked into the pillory until their next draw!`,
             });
-            pillory.lock("ExclusivePadlock", this.conn.Player.MemberNumber, {});
+            applyConsentPadlock(pillory, {
+                memberNumber: this.conn.Player.MemberNumber,
+                lockType: "ExclusivePadlock",
+                hint: "Dare pass: release on the next draw.",
+            });
             this.pilloriedUntilNextDraw.add(memberNumber);
             this.conn.SendMessage(
                 "Emote",

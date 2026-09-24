@@ -579,7 +579,11 @@ export function lockInForfeitKennel(
             `${character} couldn't face their bondage dare and was scooped up and sealed into a heavy kennel instead. ` +
             "There's no timer on this one - someone will have to let them out!",
     });
-    kennel.lock("ExclusivePadlock", lockMemberNumber, {});
+    applyConsentPadlock(kennel, {
+        memberNumber: lockMemberNumber,
+        lockType: "ExclusivePadlock",
+        hint: "Forfeit kennel: bot release only.",
+    });
 }
 
 function makePet(

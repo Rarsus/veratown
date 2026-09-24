@@ -18,6 +18,7 @@ import {
     BUNNY_SIGN_TEXT,
     BUNNY_SIGN_TEXT2,
     bunnyPieceKey,
+    hasBunnyRestraint,
     planBunnyPunishment,
     verifyBunnySign,
 } from "./bunnyPunishmentEngine";
@@ -88,7 +89,8 @@ export function validateBunnyRestraintConfig(
             if (!extended || extended.Archetype !== "typed") {
                 errors.push(`asset is not a typed extended item: ${key}`);
             } else if (
-                !extended.Options?.some(
+                extended.Options &&
+                !extended.Options.some(
                     (option) => option.Name === piece.extendedType,
                 )
             ) {
@@ -196,9 +198,7 @@ export class BunnyPunishmentService {
         );
         const currentPlan = planBunnyPunishment(currentAppearance, {
             ...config,
-            pieces: config.pieces.map(
-                ({ lockType: _lockType, ...piece }) => piece,
-            ),
+            pieces: config.pieces,
         });
         const currentSign = verifyBunnySign(currentAppearance);
         if (
@@ -259,6 +259,7 @@ export class BunnyPunishmentService {
                                     this.conn.Player?.MemberNumber ??
                                     character.MemberNumber,
                                 consentTrigger: "safeword",
+                                lockType: piece.lockType,
                             });
                             configuredPieces.push(bunnyPieceKey(piece));
                         } catch (error) {
@@ -314,9 +315,15 @@ export class BunnyPunishmentService {
         const appliedAppearance = character.Appearance.MakeAppearanceBundle();
         const appliedPieces = attemptedPieces.filter((piece) => {
             const [group, asset] = piece.split("/");
-            return appliedAppearance.some(
-                (item) => item.Group === group && item.Name === asset,
+            const configuredPiece = config.pieces.find(
+                (candidate) =>
+                    candidate.group === group && candidate.asset === asset,
             );
+            return configuredPiece
+                ? hasBunnyRestraint(appliedAppearance, configuredPiece)
+                : appliedAppearance.some(
+                      (item) => item.Group === group && item.Name === asset,
+                  );
         });
         const failedPieces = attemptedPieces.filter(
             (piece) => !appliedPieces.includes(piece),
