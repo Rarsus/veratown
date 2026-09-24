@@ -33,6 +33,7 @@ const appearanceMutationContexts = new WeakMap<
     API_Character,
     AppearanceMutationContext
 >();
+const appearanceMutationQueues = new WeakMap<API_Character, Promise<void>>();
 const deferredAppearanceMutationContexts = new WeakMap<
     API_Character,
     AppearanceMutationContext
@@ -183,6 +184,51 @@ export async function syncAppearanceMutation(
         sendFullAppearanceUpdate?: boolean;
     },
 ): Promise<boolean> {
+    const previous =
+        appearanceMutationQueues.get(character) ?? Promise.resolve();
+    const operation = previous
+        .catch(() => undefined)
+        .then(() =>
+            executeAppearanceMutation(
+                character,
+                mutation,
+                delayMs,
+                onSynchronized,
+                options,
+            ),
+        );
+    appearanceMutationQueues.set(
+        character,
+        operation.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return operation;
+}
+
+async function executeAppearanceMutation(
+    character: API_Character,
+    mutation: () => void | Promise<void>,
+    delayMs: number,
+    onSynchronized?: (
+        character: API_Character,
+        context?: AppearanceMutationContext,
+    ) => Promise<void>,
+    options?: {
+        throwOnSyncFailure?: boolean;
+        context?: Partial<AppearanceMutationContext>;
+        source?: AppearanceMutationSource;
+        reason?: string;
+        operationId?: string;
+        cleanupAllowed?: boolean;
+        deferStateSync?: boolean;
+        exclusiveContextHandoff?: boolean;
+        skipAuthorizationPreflight?: boolean;
+        requireFullWardrobeAccess?: boolean;
+        sendFullAppearanceUpdate?: boolean;
+    },
+): Promise<boolean> {
     if (!options?.skipAuthorizationPreflight) {
         await preflightAppearanceMutation(character, options);
     }
@@ -200,7 +246,7 @@ export async function syncAppearanceMutation(
         // overwrite a preceding incremental update while a multi-step
         // operation is still in flight.
         if (options?.sendFullAppearanceUpdate) {
-            character.Appearance.MakeAppearanceBundle();
+            character.Appearance.flushUpdates();
             character.sendAppearanceUpdate();
         }
 

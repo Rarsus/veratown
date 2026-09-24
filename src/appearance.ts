@@ -199,7 +199,12 @@ export class AppearanceType {
         if (removed) {
             removed.setRemoved();
             removed.queueUpdate();
+            removed.flushUpdate();
         }
+    }
+
+    public flushUpdates(): void {
+        for (const item of this._items) item.flushUpdate();
     }
 
     public InventoryGet(

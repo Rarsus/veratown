@@ -372,6 +372,13 @@ export class API_AppearanceItem {
         this.updateTask = setImmediate(this.doUpdate);
     }
 
+    public flushUpdate(): void {
+        if (!this.updateTask) return;
+
+        clearImmediate(this.updateTask);
+        this.doUpdate();
+    }
+
     private doUpdate = (): void => {
         this.updateTask = undefined;
         this.character.sendItemUpdate(this.data);
