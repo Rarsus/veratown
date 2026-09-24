@@ -715,14 +715,29 @@ export class UnifiedCharacterStore {
                     { $set: { dare } },
                 );
                 profile = { ...profile, dare };
-            } else if (!Array.isArray(profile.dare.suspendedGames)) {
-                await this.profiles.updateOne(
-                    { _id: memberNumber },
-                    { $set: { "dare.suspendedGames": [] } },
-                );
+            } else {
+                const darePatch: Record<string, unknown> = {};
+                if (!Array.isArray(profile.dare.activeBondage)) {
+                    darePatch.activeBondage = [];
+                }
+                if (!Array.isArray(profile.dare.suspendedGames)) {
+                    darePatch.suspendedGames = [];
+                }
+                if (Object.keys(darePatch).length > 0) {
+                    await this.profiles.updateOne(
+                        { _id: memberNumber },
+                        {
+                            $set: Object.fromEntries(
+                                Object.entries(darePatch).map(
+                                    ([key, value]) => [`dare.${key}`, value],
+                                ),
+                            ),
+                        },
+                    );
+                }
                 profile = {
                     ...profile,
-                    dare: { ...profile.dare, suspendedGames: [] },
+                    dare: { ...profile.dare, ...darePatch },
                 };
             }
             if (!profile.progression) {
@@ -1587,7 +1602,7 @@ export class UnifiedCharacterStore {
             memberNumber: profile._id,
             name: profile.name,
             gameIds: profile.dare.gameIds,
-            activeBondage: profile.dare.activeBondage,
+            activeBondage: profile.dare.activeBondage ?? [],
             dressingBlockedUntil: profile.dare.dressingBlockedUntil,
             totalGamesPlayed: profile.dare.totalGamesPlayed,
             // Phase 3: Game suspension
