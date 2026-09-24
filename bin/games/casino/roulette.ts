@@ -240,10 +240,9 @@ export class RouletteGame implements Game {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         const wheel = this.getWheel();
-        wheel.setProperty("Texts", [" ", " ", " ", " ", " ", " ", " ", " "]);
 
         const sign = this.casino.getSign();
-        sign.setProperty("OverridePriority", { Text: 63 });
+        sign.setProperty("OverridePriority", { Text: 63, Text2: 63 });
         sign.setProperty("Text", "Place bets!");
         sign.setProperty("Text2", " ");
         this.casino.setTextColor("#ffffff");
@@ -951,12 +950,17 @@ export class RouletteGame implements Game {
 
     public getWheel(): API_AppearanceItem {
         const wheel = this.conn.Player.Appearance.InventoryGet("ItemDevices");
-        if (wheel) {
+        if (wheel?.Name === "LuckyWheel") {
             return wheel;
         }
 
         this.conn.Player.Appearance.applyBundle(ROULETTE_WHEEL);
-        return this.conn.Player.Appearance.InventoryGet("ItemDevices")!;
+        const rouletteWheel =
+            this.conn.Player.Appearance.InventoryGet("ItemDevices");
+        if (!rouletteWheel || rouletteWheel.Name !== "LuckyWheel") {
+            throw new Error("Failed to equip the LuckyWheel item.");
+        }
+        return rouletteWheel;
     }
 
     public isBettingOpen(): boolean {

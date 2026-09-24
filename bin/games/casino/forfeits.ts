@@ -444,25 +444,17 @@ export async function applyForfeitForDare(
         const currentExpiry =
             existing.getData().Property?.RemoveTimer ?? Date.now();
         const newExpiry = Math.max(currentExpiry, Date.now()) + extendMs;
-        existing.setProperty("RemoveTimer", newExpiry);
-        existing.setProperty("ShowTimer", true);
-        existing.setProperty("RemoveItem", true);
+        const existingProperty = existing.getData().Property ?? {};
+        applyTimerPasswordLock(existing as unknown as BC_AppearanceItem, {
+            memberNumber: existingProperty.LockMemberNumber ?? lockMemberNumber,
+            removeTimer: newExpiry,
+            hint: existingProperty.Hint ?? "Dare in progress!",
+            password: existingProperty.Password,
+        });
 
         // Refresh appearance after modifying item properties
         character.Appearance.MakeAppearanceBundle();
         await wait(50);
-
-        if (!existing.getData().Property?.LockedBy) {
-            applyTimerPasswordLock(existing as unknown as BC_AppearanceItem, {
-                memberNumber: lockMemberNumber,
-                removeTimer: newExpiry,
-                hint: "Dare in progress!",
-            });
-
-            // Refresh appearance after locking
-            character.Appearance.MakeAppearanceBundle();
-            await wait(50);
-        }
 
         logger.info(
             `[Casino] Extended forfeit ${forfeitKey} for ${extendMs}ms`,

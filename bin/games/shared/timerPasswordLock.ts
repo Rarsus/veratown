@@ -35,15 +35,8 @@ export function applyTimerPasswordLock(
         lockProperty,
     );
 
-    const persistedItem =
-        typeof runtimeItem.getData === "function"
-            ? runtimeItem.getData()
-            : runtimeItem;
-    persistedItem.Property ??= {};
-    persistedItem.Property.Lock = {
-        ...(persistedItem.Property.Lock ?? {}),
-        AssetName: "TimerPasswordPadlock",
-        MemberNumber: options.memberNumber,
-        ...lockProperty,
-    };
+    const persistedItem = runtimeItem.getData?.() ?? runtimeItem;
+    if (persistedItem.Property && typeof persistedItem.Property === "object") {
+        delete persistedItem.Property.Lock;
+    }
 }

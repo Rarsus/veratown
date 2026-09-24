@@ -184,19 +184,20 @@ export class ForfeitService {
         const device = this.deviceFactory.createLockedDevice({
             assetGroup: item.Group,
             assetName: item.Name,
-            lockDifficulty: 20,
-            lockType: "TimerPasswordPadlock",
             craftName: `Pixie Casino ${forfeit.name}`,
             craftDescription:
                 "This item is property of Pixie Casino. Better luck next time!",
             owner: adminMemberNumber,
         });
-        const lock = (device.Property as any)?.Lock;
+        const deviceProperty = { ...(device.Property ?? {}) } as Record<
+            string,
+            unknown
+        >;
         device.Property = {
-            ...device.Property,
+            ...deviceProperty,
             ...item.Property,
-            Lock: lock,
         } as typeof device.Property;
+        delete (device.Property as Record<string, unknown>).Lock;
         const added = character.Appearance.AddItem(device);
 
         // Handle color application
