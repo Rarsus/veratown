@@ -33,6 +33,7 @@ import {
     syncAppearanceMutation,
 } from "./shared/appearanceSync";
 import { applyConsentPadlock } from "../shared/consentPadlock";
+import { readLegacyRemoveTimer } from "../shared/managedLockLifecycle";
 import type { CageSession } from "../shared/unifiedCharacterTypes";
 
 export interface CageTimer {
@@ -1019,8 +1020,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     private getLiveCageExpiry(character: API_Character): number | undefined {
         if (!this.isWearingCage(character)) return undefined;
-        return character.Appearance.getItemData("ItemDevices")?.Property
-            ?.RemoveTimer;
+        return readLegacyRemoveTimer(
+            character.Appearance.getItemData("ItemDevices"),
+        ).removeTimer;
     }
 
     private isWearingCage(character: API_Character): boolean {

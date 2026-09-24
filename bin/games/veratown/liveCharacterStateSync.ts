@@ -30,6 +30,7 @@ import {
     AppearanceMutationContext,
     hasActiveAppearanceScope,
 } from "./shared/appearanceLifecycle";
+import { readLegacyRemoveTimer } from "../shared/managedLockLifecycle";
 
 const logger = createLogger("LiveCharacterStateSync");
 const RECONCILIATION_INTERVAL_MS = 60_000;
@@ -306,8 +307,7 @@ export class LiveCharacterStateSync {
         return appearance
             .filter((item) => item.Group.startsWith("Item"))
             .map((item) => {
-                const removeTimer = (item.Property as { RemoveTimer?: unknown })
-                    ?.RemoveTimer;
+                const removeTimer = readLegacyRemoveTimer(item).removeTimer;
                 const previous = previousRestraints.find(
                     (restraint) =>
                         restraint.group === item.Group &&

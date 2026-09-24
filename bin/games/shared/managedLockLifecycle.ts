@@ -1,0 +1,91 @@
+import type { ConsentPadlockType, ConsentTrigger } from "./consentPadlock";
+
+export type ManagedLockFeature =
+    "cage" | "kennel" | "bunny" | "casino" | "dare";
+
+export type ManagedLockStatus =
+    | "active"
+    | "expired"
+    | "safeword-released"
+    | "manual/admin-release"
+    | "unexpected-removal"
+    | "reconciled"
+    | "migration-failed"
+    | "reconciliation-failed";
+
+export interface ManagedLockRecord {
+    memberNumber: number;
+    feature: ManagedLockFeature;
+    itemGroup: string;
+    itemName: string;
+    enteredAt: number;
+    expiresAt?: number;
+    lockType: ConsentPadlockType;
+    consentTrigger: ConsentTrigger;
+    status: ManagedLockStatus;
+    operationId: string;
+    actorMemberNumber?: number;
+    createdAt: number;
+    updatedAt: number;
+    closedAt?: number;
+    version: number;
+}
+
+export interface LegacyTimerObservation {
+    removeTimer?: number;
+    isLegacyTimer: boolean;
+    migrationExpiry?: number;
+}
+
+export interface RemovalClassificationInput {
+    itemPresent: boolean;
+    knownRelease?: "expired" | "manual/admin-release";
+    playerInitiated?: boolean;
+}
+
+export function readLegacyRemoveTimer(item: unknown): LegacyTimerObservation {
+    if (!item || typeof item !== "object") {
+        return { isLegacyTimer: false };
+    }
+    const property = (item as { Property?: unknown }).Property;
+    if (!property || typeof property !== "object") {
+        return { isLegacyTimer: false };
+    }
+    const removeTimer = (property as { RemoveTimer?: unknown }).RemoveTimer;
+    if (typeof removeTimer !== "number" || !Number.isFinite(removeTimer)) {
+        return { isLegacyTimer: false };
+    }
+    return {
+        removeTimer,
+        isLegacyTimer: true,
+        migrationExpiry: removeTimer,
+    };
+}
+
+export function classifyManagedLockRemoval(
+    input: RemovalClassificationInput,
+): ManagedLockStatus | undefined {
+    if (input.itemPresent) return "active";
+    if (input.knownRelease) return input.knownRelease;
+    if (input.playerInitiated) return "safeword-released";
+    return "unexpected-removal";
+}
+
+export function createManagedLockOperationId(
+    feature: ManagedLockFeature,
+    memberNumber: number,
+    itemGroup: string,
+    itemName: string,
+    applicationKey: string,
+): string {
+    return [
+        "managed-lock",
+        feature,
+        memberNumber,
+        itemGroup,
+        itemName,
+        applicationKey,
+    ]
+        .map((part) => String(part).replaceAll(":", "%3A"))
+        .join(":");
+}

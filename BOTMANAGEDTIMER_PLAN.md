@@ -45,8 +45,12 @@ Implemented and verified in the current worktree:
 - The consent helper has focused contract coverage, including runtime
   rejection of unsupported lock types; Bunny artifact closure now uses
   optimistic version checks to reject stale release workers.
+- Shared managed-lock lifecycle helpers now provide typed statuses, stable
+  operation IDs, legacy `RemoveTimer` observation, and removal classification;
+  Cage and live synchronization use the shared legacy reader.
 - `pnpm types`, `git diff --check`, and focused Cage, Kennel, Bunny, Casino, and
-  Dare suites plus shared consent tests pass independently (84 tests total).
+  Dare suites plus shared consent and lifecycle tests pass independently (83
+  tests total).
 
 Still outstanding before calling the migration complete:
 
@@ -443,7 +447,8 @@ Release must be safe to run more than once.
 - [ ] Add generic mutation-service methods for managed-lock create, reconcile,
       release, and legacy migration.
 - [ ] Add shared appearance verification and release result types.
-- [ ] Add feature ownership and legacy detection helpers.
+- [x] Add shared legacy timer observation and removal-classification helpers;
+      feature-specific ownership migration remains outstanding.
 
 ### Milestone 2: Cage migration
 
