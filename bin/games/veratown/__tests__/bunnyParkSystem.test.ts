@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { BunnyParkSystem } from "../bunnyParkSystem";
 import {
     BunnyPunishmentService,
+    calculateBunnyOffenceDuration,
     validateBunnyRestraintConfig,
 } from "../bunnyPunishmentService";
 import { BUNNY_POSITIONS, BUNNY_RESTRAINT_CONFIGS } from "../veratownConfig";
@@ -266,6 +267,16 @@ test("every bunny restraint configuration validates every asset and group", () =
     }
 });
 
+test("bunny offence duration doubles and caps at four hours", () => {
+    assert.deepEqual(
+        [1, 2, 3, 4, 5, 6, 7, 8].map(calculateBunnyOffenceDuration),
+        [5, 10, 20, 40, 80, 160, 240, 240].map((minutes, index) => ({
+            offenceNumber: index + 1,
+            durationMs: minutes * 60 * 1000,
+        })),
+    );
+});
+
 test("bunny punishment applies the universal yoke, spreader, and neck sign", async () => {
     for (const [index, config] of BUNNY_RESTRAINT_CONFIGS.entries()) {
         const created = createCharacter(index + 1);
@@ -316,7 +327,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
                 (item: any) =>
                     item.Group === "ItemArms" && item.Name === "HeavyYoke",
             );
-        assert.equal(yoke?.Property?.LockedBy, "ExclusivePadlock");
+        assert.equal(yoke?.Property?.LockedBy, "SafewordPadlock");
         const spreader = created
             .appearance()
             .find(
@@ -324,7 +335,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
                     item.Group === "ItemFeet" &&
                     item.Name === "HeavySpreaderMetal",
             );
-        assert.equal(spreader?.Property?.LockedBy, "ExclusivePadlock");
+        assert.equal(spreader?.Property?.LockedBy, "SafewordPadlock");
         const sign = created
             .appearance()
             .find(
@@ -444,7 +455,7 @@ test("bunny punishment restores a sign omitted after the yoke was retained", asy
 });
 
 test("bunny punishment fails when the required sign is lost", async () => {
-    const created = createCharacter(17, { dropSignOnBundleCall: 4 });
+    const created = createCharacter(17, { dropSignOnBundleCall: 3 });
     const persisted: any[] = [];
     const system = createBunnySystem(
         createMessageConnection(created.character) as any,

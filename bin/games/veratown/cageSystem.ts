@@ -23,7 +23,7 @@ import { wait } from "../../hub/utils";
 import { durationString, remainingTimeString } from "../../utils";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { getLifecycleObjectId, guardHandler } from "./featureSystem";
-import { CAGES, CRATE_LOCK_PASSWORD } from "./veratownConfig";
+import { CAGES, CAGE_INFORMATION_SCREEN } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
@@ -32,7 +32,7 @@ import {
     preflightAppearanceMutation,
     syncAppearanceMutation,
 } from "./shared/appearanceSync";
-import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
+import { applyConsentPadlock } from "../shared/consentPadlock";
 import type { CageSession } from "../shared/unifiedCharacterTypes";
 
 export interface CageTimer {
@@ -112,35 +112,6 @@ export function classifyContainmentRecovery(input: {
     }
 
     if (hasPersistedSession && persistedExpiryValue !== undefined) {
-        if (hasLiveCrate && liveExpiry !== undefined) {
-            if (persistedExpiryValue !== liveExpiry) {
-                return {
-                    classification: "conflicting-state",
-                    persistenceState: "active-session",
-                    liveAppearanceState: "futuristic-crate-with-expiry",
-                    candidateExpiries: {
-                        persisted: persistedExpiryValue,
-                        live: liveExpiry,
-                    },
-                    selectedExpiry: Math.max(persistedExpiryValue, liveExpiry),
-                    selectedAction:
-                        "retain the crate and use the later candidate expiry",
-                    operatorAction:
-                        "Reconcile the persisted session and live crate expiry",
-                };
-            }
-            return {
-                classification: "contained-persisted-expiry",
-                persistenceState: "active-session",
-                liveAppearanceState: "futuristic-crate-with-expiry",
-                candidateExpiries: {
-                    persisted: persistedExpiryValue,
-                    live: liveExpiry,
-                },
-                selectedExpiry: persistedExpiryValue,
-                selectedAction: "restore or retain the crate and arm release",
-            };
-        }
         return {
             classification: "contained-persisted-expiry",
             persistenceState: "active-session",
@@ -230,10 +201,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
     >();
     private readonly cageTrigger: ReturnType<typeof guardHandler>;
     private readonly cageEntryTrigger: ReturnType<typeof guardHandler>;
+    private readonly cageInformationTrigger: ReturnType<typeof guardHandler>;
     private boundRoom?: API_Chatroom;
     private boundMap?: API_Map;
     private boundCageTrigger?: (...args: any[]) => void;
     private boundCageEntryTrigger?: (...args: any[]) => void;
+    private boundCageInformationTrigger?: (...args: any[]) => void;
     private lastSuccessfulBindAt?: number;
     private lastSuccessfulReconciliationAt?: number;
 
@@ -250,6 +223,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
         this.cageEntryTrigger = this.guardTileHandler(
             this.onCharacterEnterCageEntry,
+        );
+        this.cageInformationTrigger = guardHandler(
+            this.key,
+            this.onCharacterViewCageInformation as any,
         );
     }
 
@@ -268,6 +245,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         const map = room.map;
         this.boundRoom = room;
         this.boundMap = map;
+        this.registerInformationTrigger(map);
         this.lastSuccessfulBindAt = Date.now();
     }
 
@@ -307,6 +285,23 @@ export class CageSystem extends AbstractTileFeatureSystem {
         }
         this.boundCageTrigger = undefined;
         this.boundCageEntryTrigger = undefined;
+        if (this.boundCageInformationTrigger) {
+            map.removeEnterRegionTrigger(this.boundCageInformationTrigger);
+        }
+        this.boundCageInformationTrigger = undefined;
+    }
+
+    private registerInformationTrigger(map: API_Map): void {
+        if (this.boundCageInformationTrigger) return;
+        const informationTrigger = guardHandler(
+            this.key,
+            (character: API_Character) => {
+                if (this.boundMap !== map) return;
+                this.cageInformationTrigger(character);
+            },
+        );
+        this.boundCageInformationTrigger = informationTrigger;
+        map.addEnterRegionTrigger(CAGE_INFORMATION_SCREEN, informationTrigger);
     }
 
     /**
@@ -329,6 +324,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 return;
             }
             this.unregisterMapTriggers(map);
+            this.registerInformationTrigger(map);
             this.cagesByPos.clear();
             this.cageEntriesByPos.clear();
 
@@ -491,7 +487,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             tileTriggerCount:
                 (this.boundCageTrigger ? this.cagesByPos.size : 0) +
                 (this.boundCageEntryTrigger ? this.cageEntriesByPos.size : 0),
-            regionTriggerCount: 0,
+            regionTriggerCount: this.boundCageInformationTrigger ? 1 : 0,
             listenerBinding: {
                 roomBound: !!this.boundRoom,
                 mapBound: !!this.boundMap,
@@ -516,6 +512,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 },
                 50,
                 this.stateSync,
+                { sendFullAppearanceUpdate: true },
             );
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name ===
@@ -552,22 +549,21 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
         this.messageSender.whisperToCharacter(
             character,
-            `(NOTICE: You are approaching the entrance to ${cageName}. ` +
+            `NOTICE: You are approaching the entrance to ${cageName}. ` +
                 `Veratown Facility Containment Protocol 7-Alpha requires that all visitors be informed of ` +
                 `the following before proceeding beyond this point: ` +
                 `\n1: The floor beyond this threshold is fitted with motion-dampening sensors linked directly ` +
                 `to the facility's Futuristic Crate containment units; standing still for any length of time ` +
                 `while inside the cage area will be interpreted as consent to containment. ` +
                 `\n2:  Once containment is initiated, a Futuristic Crate will be fitted and secured with a ` +
-                `TimerPasswordPadlock; the lock will not release before its timer elapses regardless of ` +
-                `struggling, safewords directed at facility staff, or appeals to management. ` +
+                `SafewordPadlock; the bot will release the crate when the persisted containment period ` +
+                `ends, and the player retains an emergency self-release path. ` +
                 `\n3: The crate's internal systems, including restraints, vibration module, and comfort padding, are ` +
                 `regularly inspected and are not expected to cause harm, but prolonged stillness, ` +
                 `overheating, or discomfort should be reported to reception immediately upon release. ` +
                 `\n4: Estimated containment duration for ${cageName} is ${durationDescription}; this ` +
                 `estimate is provided for planning purposes only and is not a guarantee. ` +
-                `\n5: Facility staff are not obligated to release occupants early, and the crate's lock ` +
-                `password is known only to Veratown management. ` +
+                `\n5: Facility staff are not obligated to release occupants early. ` +
                 `By proceeding past this point and remaining stationary, you acknowledge that you have read, ` +
                 `understood, and voluntarily accept these terms. Proceed with caution, or step back now if ` +
                 `you do not consent.`,
@@ -657,10 +653,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         });
                         crate.setProperty("Mode", "Deny");
 
-                        applyTimerPasswordLock(crate, {
+                        applyConsentPadlock(crate, {
                             memberNumber: character.MemberNumber,
-                            password: CRATE_LOCK_PASSWORD,
-                            removeTimer: lockExpiry,
                         });
                     },
                     50,
@@ -708,49 +702,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
         cageName: string,
     ): Promise<void> {
         const memberNumber = character.MemberNumber;
-        let lastObservedLiveExpiry: number | undefined;
         while (this.cagedCharacters.has(memberNumber)) {
             const cage = this.cagedCharacters.get(memberNumber)!;
-            const liveExpiry = this.getCageLockExpiry(character);
-            if (
-                liveExpiry !== undefined &&
-                liveExpiry > cage.authoritativeExpiry
-            ) {
-                cage.authoritativeExpiry = liveExpiry;
-                this.logger.info("Cage expiry extended", {
-                    memberNumber,
-                    cageName,
-                    authoritativeExpiryMs: cage.authoritativeExpiry,
-                    observedAtMs: this.timer.now(),
-                });
-            } else if (
-                liveExpiry !== undefined &&
-                liveExpiry < cage.authoritativeExpiry &&
-                liveExpiry !== lastObservedLiveExpiry
-            ) {
-                this.logger.warn("Ignoring shortened or stale cage timer", {
-                    memberNumber,
-                    cageName,
-                    authoritativeExpiryMs: cage.authoritativeExpiry,
-                    liveExpiryMs: liveExpiry,
-                    observedAtMs: this.timer.now(),
-                });
-            } else if (
-                liveExpiry === undefined &&
-                lastObservedLiveExpiry !== undefined
-            ) {
-                this.logger.warn(
-                    "Cage timer is missing; retaining persisted expiry",
-                    {
-                        memberNumber,
-                        cageName,
-                        authoritativeExpiryMs: cage.authoritativeExpiry,
-                        observedAtMs: this.timer.now(),
-                    },
-                );
-            }
-            lastObservedLiveExpiry = liveExpiry;
-
             const now = this.timer.now();
             if (now < cage.authoritativeExpiry) {
                 await this.timer.wait(
@@ -776,6 +729,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     },
                     50,
                     this.stateSync,
+                    { sendFullAppearanceUpdate: true },
                 );
             }
             if (
@@ -1003,10 +957,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                             h: 4,
                         });
                         crate.setProperty("Mode", "Deny");
-                        applyTimerPasswordLock(crate, {
+                        applyConsentPadlock(crate, {
                             memberNumber: character.MemberNumber,
-                            password: CRATE_LOCK_PASSWORD,
-                            removeTimer: authoritativeExpiry,
                         });
                     },
                     50,
@@ -1065,19 +1017,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
         };
     }
 
-    /**
-     * Reads the actual RemoveTimer from the character's currently worn
-     * ItemDevices item (the Futuristic Crate), so that any extensions or
-     * reductions applied to the lock after it was first set are reflected.
-     * Returns undefined if the character is no longer wearing a locked crate.
-     */
-    private getCageLockExpiry(character: API_Character): number | undefined {
-        const expiry = this.getLiveCageExpiry(character);
-        return typeof expiry === "number" && Number.isFinite(expiry)
-            ? expiry
-            : undefined;
-    }
-
     private getLiveCageExpiry(character: API_Character): number | undefined {
         if (!this.isWearingCage(character)) return undefined;
         return character.Appearance.getItemData("ItemDevices")?.Property
@@ -1090,6 +1029,23 @@ export class CageSystem extends AbstractTileFeatureSystem {
             "FuturisticCrate"
         );
     }
+
+    private onCharacterViewCageInformation = async (
+        character: API_Character,
+    ) => {
+        if (this.cagedCharacters.size === 0) {
+            character.Tell("Whisper", "All cages are currently empty.");
+            return;
+        }
+
+        const info = Array.from(this.cagedCharacters.values())
+            .map(
+                (cage) =>
+                    `${cage.cageName}: ${cage.character} - ${remainingTimeString(cage.authoritativeExpiry)} remaining`,
+            )
+            .join("\n");
+        character.Tell("Whisper", `Cage occupancy:\n${info}`);
+    };
 
     public getOccupancyDisplay(): string {
         if (this.cagedCharacters.size === 0) {

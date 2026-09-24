@@ -22,6 +22,10 @@ import {
     verifyBunnySign,
 } from "./bunnyPunishmentEngine";
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
+import {
+    applyConsentPadlock,
+    resolveConsentPadlockType,
+} from "../shared/consentPadlock";
 import type {
     BunnyPunishmentAuditDetails,
     BunnyPunishmentRepository,
@@ -45,6 +49,23 @@ export interface BunnyPunishmentResult {
     failureReason?: string;
     operationId?: string;
     skipped?: boolean;
+}
+
+export const BUNNY_INITIAL_DURATION_MS = 5 * 60 * 1000;
+export const BUNNY_MAX_DURATION_MS = 4 * 60 * 60 * 1000;
+
+export function calculateBunnyOffenceDuration(offenceNumber: number): {
+    offenceNumber: number;
+    durationMs: number;
+} {
+    const normalizedOffence = Math.max(1, Math.floor(offenceNumber));
+    return {
+        offenceNumber: normalizedOffence,
+        durationMs: Math.min(
+            BUNNY_INITIAL_DURATION_MS * 2 ** (normalizedOffence - 1),
+            BUNNY_MAX_DURATION_MS,
+        ),
+    };
 }
 
 export function validateBunnyRestraintConfig(
@@ -87,6 +108,10 @@ type BunnyStateSync = (
 
 export class BunnyPunishmentService {
     private punishmentSequence = 0;
+    private readonly releaseTimers = new Map<
+        number,
+        ReturnType<typeof setTimeout>
+    >();
     private readonly logger = createLogger("BunnyPunishmentService");
 
     public constructor(
@@ -101,11 +126,23 @@ export class BunnyPunishmentService {
         character: API_Character,
         configuration?: BunnyRestraintConfig,
     ): Promise<BunnyPunishmentResult> {
+        await this.recover(character);
         const config = configuration ?? this.pickConfiguration();
         if (!config) {
             throw new Error("No bunny punishment configuration is available");
         }
         return this.applyPunishment(character, config);
+    }
+
+    public async recover(character: API_Character): Promise<void> {
+        const state = await this.repository.getState?.(character.MemberNumber);
+        const artifact = state?.artifact;
+        if (!artifact || artifact.status !== "active") return;
+        if (artifact.expiresAt > Date.now()) {
+            this.scheduleRelease(character, artifact);
+            return;
+        }
+        await this.release(character, artifact, "expired");
     }
 
     private pickConfiguration(): BunnyRestraintConfig | undefined {
@@ -154,12 +191,21 @@ export class BunnyPunishmentService {
         }
 
         const currentAppearance = character.Appearance.MakeAppearanceBundle();
-        const currentPlan = planBunnyPunishment(currentAppearance, config);
+        const persistedState = await this.repository.getState?.(
+            character.MemberNumber,
+        );
+        const currentPlan = planBunnyPunishment(currentAppearance, {
+            ...config,
+            pieces: config.pieces.map(
+                ({ lockType: _lockType, ...piece }) => piece,
+            ),
+        });
         const currentSign = verifyBunnySign(currentAppearance);
         if (
             currentPlan.exactPieces.length ===
                 currentPlan.requestedPieces.length &&
-            currentSign.visible
+            currentSign.visible &&
+            persistedState?.artifact?.status !== "active"
         ) {
             return {
                 success: true,
@@ -208,14 +254,12 @@ export class BunnyPunishmentService {
                                 Name: piece.asset,
                                 Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
                             });
-                            if (piece.lockType) {
-                                item.lock(
-                                    piece.lockType,
+                            applyConsentPadlock(item, {
+                                memberNumber:
                                     this.conn.Player?.MemberNumber ??
-                                        character.MemberNumber,
-                                    {},
-                                );
-                            }
+                                    character.MemberNumber,
+                                consentTrigger: "safeword",
+                            });
                             configuredPieces.push(bunnyPieceKey(piece));
                         } catch (error) {
                             mutationErrors.push(
@@ -256,6 +300,7 @@ export class BunnyPunishmentService {
                     operationId,
                     exclusiveContextHandoff: true,
                     requireFullWardrobeAccess: false,
+                    sendFullAppearanceUpdate: true,
                 },
             );
         } catch (error) {
@@ -304,6 +349,9 @@ export class BunnyPunishmentService {
             return result;
         }
 
+        const duration = calculateBunnyOffenceDuration(
+            (persistedState?.punishmentCount ?? 0) + 1,
+        );
         const artifact: BunnyPunishmentArtifact = {
             memberNumber: character.MemberNumber,
             operationId,
@@ -314,6 +362,16 @@ export class BunnyPunishmentService {
                 text2: BUNNY_SIGN_TEXT2,
             },
             appliedAt: Date.now(),
+            restraintPieces: appliedPieces,
+            offenceNumber: duration.offenceNumber,
+            durationMs: duration.durationMs,
+            expiresAt: Date.now() + duration.durationMs,
+            lockType: resolveConsentPadlockType({
+                consentTrigger: "safeword",
+            }),
+            consentTrigger: "safeword",
+            artifactVersion:
+                (persistedState?.artifact?.artifactVersion ?? 0) + 1,
             cleanupPolicy: "explicit_cleanup_only",
             status: "active",
         };
@@ -325,7 +383,88 @@ export class BunnyPunishmentService {
             artifact,
             context,
         );
+        this.scheduleRelease(character, artifact);
         return result;
+    }
+
+    private scheduleRelease(
+        character: API_Character,
+        artifact: BunnyPunishmentArtifact,
+    ): void {
+        const previousTimer = this.releaseTimers.get(character.MemberNumber);
+        if (previousTimer) clearTimeout(previousTimer);
+        const delay = Math.max(0, artifact.expiresAt - Date.now());
+        const timer = setTimeout(() => {
+            void this.recover(character).catch((error) =>
+                this.logger.error("Bunny punishment release failed", error, {
+                    memberNumber: character.MemberNumber,
+                    operationId: artifact.operationId,
+                }),
+            );
+        }, delay);
+        timer.unref?.();
+        this.releaseTimers.set(character.MemberNumber, timer);
+    }
+
+    private async release(
+        character: API_Character,
+        artifact: BunnyPunishmentArtifact,
+        status: "expired" | "safeword-released" | "unexpected-removal",
+    ): Promise<void> {
+        const current = await this.repository.getState?.(
+            character.MemberNumber,
+        );
+        if (
+            current?.artifact &&
+            (current.artifact.operationId !== artifact.operationId ||
+                current.artifact.artifactVersion !== artifact.artifactVersion)
+        ) {
+            return;
+        }
+        const operationId = `bunny-release-${artifact.operationId}`;
+        let verified = false;
+        await syncAppearanceMutation(
+            character,
+            () => {
+                for (const piece of artifact.restraintPieces) {
+                    const [group] = piece.split("/");
+                    character.Appearance.RemoveItem(group as any);
+                }
+                character.Appearance.RemoveItem(BUNNY_SIGN.group);
+            },
+            this.syncDelayMs,
+            async (currentCharacter, context) =>
+                this.stateSync?.(currentCharacter, context),
+            {
+                throwOnSyncFailure: false,
+                source: "bunny",
+                reason: "bunny_punishment_released",
+                operationId,
+                cleanupAllowed: true,
+                exclusiveContextHandoff: true,
+                requireFullWardrobeAccess: false,
+                sendFullAppearanceUpdate: true,
+            },
+        );
+        const appearance = character.Appearance.MakeAppearanceBundle();
+        verified =
+            artifact.restraintPieces.every((piece) => {
+                const [group, asset] = piece.split("/");
+                return !appearance.some(
+                    (item) => item.Group === group && item.Name === asset,
+                );
+            }) && !verifyBunnySign(appearance).present;
+        if (!verified) return;
+        const closedArtifact = {
+            ...artifact,
+            status,
+            cleanedAt: Date.now(),
+            cleanupReason: status,
+        };
+        if (this.repository.updateArtifact) {
+            await this.repository.updateArtifact(closedArtifact);
+        }
+        this.releaseTimers.delete(character.MemberNumber);
     }
 
     private async recordSuccessfulPunishment(
@@ -349,7 +488,10 @@ export class BunnyPunishmentService {
             appliedPieces,
         };
         try {
-            await this.repository.recordArtifact(artifact);
+            await this.repository.recordArtifact(
+                artifact,
+                artifact.artifactVersion > 1 ? artifact.artifactVersion - 1 : 0,
+            );
         } catch (error) {
             this.logger.error(
                 "Bunny punishment artifact persistence failed",

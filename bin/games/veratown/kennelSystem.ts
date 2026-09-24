@@ -329,6 +329,37 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 character.MemberNumber,
             );
 
+        if (
+            activeSession?.expiresAt !== undefined &&
+            activeSession.expiresAt <= Date.now()
+        ) {
+            if (wearingKennel) {
+                await syncAppearanceMutation(
+                    character,
+                    () => character.Appearance.RemoveItem("ItemDevices" as any),
+                    50,
+                    this.stateSync,
+                    { throwOnSyncFailure: true },
+                );
+            }
+            if (
+                character.Appearance.getItemData("ItemDevices")?.Name !==
+                "Kennel"
+            ) {
+                this.markEscaped(memberNumber);
+                await this.mutationService?.exitKennel(memberNumber);
+                this.kennelStateCache.delete(memberNumber);
+            }
+            return;
+        }
+
+        if (activeSession?.expiresAt !== undefined && !wearingKennel) {
+            this.markEscaped(memberNumber);
+            await this.mutationService?.exitKennel(memberNumber);
+            this.kennelStateCache.delete(memberNumber);
+            return;
+        }
+
         // A live session is closed only after both containment signals are
         // gone. This prevents a movement update from racing a device update.
         if (!inKennel && !wearingKennel) {

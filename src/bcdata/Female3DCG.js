@@ -578,7 +578,7 @@ export const AssetPoseMapping = /** @type {const} */ ({
 	},
 });
 
-/** @type {string[]} */
+/** @type {readonly AssetFullName[]} */
 const AssetMalePantiesList = [
 	"PantiesBoxerShorts",
 	"PantiesBriefs",
@@ -587,7 +587,7 @@ const AssetMalePantiesList = [
 	"PantiesMaleCatsuitPanties",
 ];
 
-/** @type {string[]} */
+/** @type {readonly AssetFullName[]} */
 const AssetMaleChasityCagesList = [
 	"ItemVulvaPlasticChastityCage2",
 	"ItemVulvaPlasticChastityCage1",
@@ -5185,6 +5185,7 @@ export var AssetFemale3DCG = [
 				Left: 0,
 				Priority: 26,
 				Gender: "F",
+				Prerequisite: ["HasBreasts"],
 				PoseMapping: {
 					Hogtied: "Hogtied",
 					AllFours: PoseType.HIDE,
@@ -11070,8 +11071,10 @@ export var AssetFemale3DCG = [
 				InventoryID: 235,
 				Value: 60,
 				StyleOverride: ["EchoV2"],
+				Left: {
+					KneelingSpread: 195,
+				},
 				PoseMapping: {
-					KneelingSpread: "KneelingSpread",
 					Hogtied: PoseType.HIDE,
 					AllFours: PoseType.HIDE,
 				},
@@ -11117,8 +11120,10 @@ export var AssetFemale3DCG = [
 				InventoryID: 236,
 				Value: 60,
 				StyleOverride: ["EchoV2"],
+				Left: {
+					KneelingSpread: 195,
+				},
 				PoseMapping: {
-					KneelingSpread: "KneelingSpread",
 					Hogtied: PoseType.HIDE,
 					AllFours: PoseType.HIDE,
 				},
@@ -35117,35 +35122,33 @@ export var AssetFemale3DCG = [
 				AllowTighten: true,
 				BuyGroup: "SturdyLeatherBelts",
 				SetPose: ["LegsClosed"],
+				StyleOverride: ["EchoV2"],
 				Extended: true,
 				AllowActivePose: ["Kneel"],
 				DefaultColor: ["#11161B", "#403E40", "#11161B", "#403E40"],
 				Layer: [
 					{
 						Name: "LowerBelt",
-						StyleOverride: ["EchoV2"],
 						ColorGroup: "Belts",
 					},
 					{
 						Name: "LowerMetal",
-						StyleOverride: ["EchoV2"],
 						ColorGroup: "Metal",
 					},
 					{
 						Name: "UpperBelt",
-						StyleOverride: ["EchoV2"],
 						ColorGroup: "Belts",
 						AllowTypes: { typed: 1 },
 					},
 					{
 						Name: "UpperMetal",
-						StyleOverride: ["EchoV2"],
 						ColorGroup: "Metal",
 						AllowTypes: { typed: 1 },
 					},
 					{
 						Name: "Lock",
 						ParentGroup: "",
+						StyleOverride: [],
 						AllowColorize: false,
 						LockLayer: true,
 						CreateLayerTypes: ["typed"],
@@ -35255,8 +35258,13 @@ export var AssetFemale3DCG = [
 					{
 						Name: "Chain",
 						ParentGroup: "",
+						PoseMapping: {
+							...AssetPoseMapping.ItemLegs,
+							Kneel: PoseType.HIDE,
+							KneelingSpread: "KneelingSpread",
+							LegsClosed: PoseType.HIDE,
+						},
 						AllowTypes: { typed: 2 },
-						StyleOverride: ["EchoV2"],
 					},
 					{ Name: "Display", ParentGroup: "" },
 					{ Name: "Cuffs", StyleOverride: ["EchoV2"] },
@@ -35287,7 +35295,17 @@ export var AssetFemale3DCG = [
 				Effect: [E.CuffedLegs],
 				Extended: true,
 				Layer: [
-					{ Name: "Chain", ParentGroup: "", AllowTypes: { typed: 2 } },
+					{
+						Name: "Chain",
+						ParentGroup: "",
+						PoseMapping: {
+							...AssetPoseMapping.ItemLegs,
+							Kneel: PoseType.HIDE,
+							KneelingSpread: "KneelingSpread",
+							LegsClosed: PoseType.HIDE,
+						},
+						AllowTypes: { typed: 2 },
+					},
 					{ Name: "Cuffs" },
 					{ Name: "Gems" },
 				],
@@ -35509,6 +35527,7 @@ export var AssetFemale3DCG = [
 				Time: 30,
 				RemoveTime: 20,
 				AllowLock: true,
+				DrawLocks: false,
 				DefaultColor: "#222222",
 				HideItem: [
 					"ItemFeetOrnateAnkleCuffs",
@@ -35543,6 +35562,7 @@ export var AssetFemale3DCG = [
 				Time: 30,
 				RemoveTime: 20,
 				AllowLock: true,
+				DrawLocks: false,
 				DefaultColor: "#222222",
 				HideItem: [
 					"ItemFeetOrnateAnkleCuffs",
@@ -35606,6 +35626,7 @@ export var AssetFemale3DCG = [
 				Time: 20,
 				RemoveTime: 15,
 				AllowLock: true,
+				DrawLocks: false,
 				BuyGroup: "Chains",
 				Audio: "ChainLong",
 				SetPose: ["LegsClosed"],
@@ -35683,12 +35704,8 @@ export var AssetFemale3DCG = [
 					E.MapSwim,
 				],
 				PoseMapping: {
-					BackBoxTie: "BackBoxTie",
-					BackCuffs: "BackCuffs",
-					BackElbowTouch: "BackElbowTouch",
-					OverTheHead: "OverTheHead",
-					TapedHands: "TapedHands",
-					Yoked: "Yoked",
+					...AssetPoseMapping.ItemLegs,
+					Kneel: PoseType.HIDE,
 				},
 				Block: [
 					"ItemFeet",
@@ -43886,8 +43903,6 @@ export var AssetFemale3DCG = [
 				AllowLock: true,
 				AllowTighten: true,
 				DefaultColor: "#70C0C0",
-				Hide: ["HandAccessoryLeft", "HandAccessoryRight"],
-				HideItemExclude: ["CorsetCorset1", "CorsetLatexCorset1"],
 				HideItem: [
 					"ItemButtAnalBeads2",
 					"ItemVulvaVibratingDildo",
@@ -45751,8 +45766,7 @@ export var AssetFemale3DCG = [
 				BuyGroup: "LatexSleevelessLeotard",
 				Extended: true,
 				SelfUnlock: false,
-				Hide: ["Cloth", "ItemNipplesPiercings", "ItemVulvaPiercings", "Corset"],
-				HideItemExclude: ["CorsetCorset1", "CorsetLatexCorset1"],
+				Hide: ["ItemNipplesPiercings", "ItemVulvaPiercings"],
 				HideItem: [
 					"ItemButtAnalBeads2",
 					"ItemVulvaVibratingDildo",
@@ -45795,8 +45809,7 @@ export var AssetFemale3DCG = [
 				BuyGroup: "LatexSleevelessLeotard",
 				Extended: true,
 				SelfUnlock: false,
-				Hide: ["Cloth", "ItemNipplesPiercings", "ItemVulvaPiercings", "Corset"],
-				HideItemExclude: ["CorsetCorset1", "CorsetLatexCorset1"],
+				Hide: ["ItemNipplesPiercings", "ItemVulvaPiercings"],
 				HideItem: [
 					"ItemButtAnalBeads2",
 					"ItemVulvaVibratingDildo",
@@ -45838,14 +45851,7 @@ export var AssetFemale3DCG = [
 				DefaultColor: "#580505",
 				Extended: true,
 				SelfUnlock: false,
-				Hide: [
-					"Cloth",
-					"Bra",
-					"ItemNipplesPiercings",
-					"ItemVulvaPiercings",
-					"Corset",
-				],
-				HideItemExclude: ["CorsetCorset1", "CorsetLatexCorset1"],
+				Hide: ["ItemNipplesPiercings", "ItemVulvaPiercings"],
 				HideItem: [
 					"ItemButtAnalBeads2",
 					"ItemVulvaVibratingDildo",
@@ -50088,6 +50094,7 @@ export var AssetFemale3DCG = [
 				Difficulty: -10,
 				Time: 5,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				PoseMapping: {
 					...AssetPoseMapping.ItemHandheld,
 					BackCuffs: "BackCuffs",
@@ -50105,6 +50112,7 @@ export var AssetFemale3DCG = [
 				Time: 8,
 				IsRestraint: false,
 				AllowActivity: ["Inject"],
+				Attribute: ["HandheldItem"],
 				PoseMapping: {
 					...AssetPoseMapping.ItemHandheld,
 					Yoked: "Yoked",
@@ -50120,6 +50128,7 @@ export var AssetFemale3DCG = [
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
+				Attribute: ["HandheldItem"],
 				BuyGroup: "Crop",
 			},
 			{
@@ -50132,6 +50141,7 @@ export var AssetFemale3DCG = [
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["Flogger"],
+				Attribute: ["HandheldItem"],
 			},
 			{
 				Name: "Cane",
@@ -50143,6 +50153,7 @@ export var AssetFemale3DCG = [
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
+				Attribute: ["HandheldItem"],
 				BuyGroup: "Cane",
 				ActivityExpression: {
 					SpankItem: [
@@ -50159,6 +50170,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 30,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
@@ -50170,6 +50182,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 35,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
@@ -50188,6 +50201,7 @@ export var AssetFemale3DCG = [
 				Value: 50,
 				DefaultColor: "#93291F",
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
@@ -50272,6 +50286,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 25,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
@@ -50290,6 +50305,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 50,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["WhipCrack"],
@@ -50308,6 +50324,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 45,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["ShockItem"],
 				ActivityAudio: ["Shocks"],
@@ -50319,6 +50336,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: -1,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				Bonus: "KidnapBruteForce",
@@ -50330,6 +50348,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: -1,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 			},
@@ -50340,6 +50359,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: -1,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityExpression: {
@@ -50353,6 +50373,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: -1,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				Bonus: "KidnapDomination",
@@ -50370,6 +50391,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 2,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["TickleItem"],
 				ActivityExpression: {
 					TickleItem: [
@@ -50387,6 +50409,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 4,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["TickleItem"],
 			},
 			{
@@ -50396,6 +50419,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: -1,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["TickleItem"],
 				Bonus: "KidnapSneakiness",
 			},
@@ -50406,6 +50430,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 3,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				ActivityExpression: {
 					RubItem: [
@@ -50426,7 +50451,7 @@ export var AssetFemale3DCG = [
 				Left: 170,
 				Random: false,
 				DefaultColor: ["#8D8D8D"],
-				Attribute: ["Diaper", "DiaperSmall"],
+				Attribute: ["Diaper", "DiaperSmall", "HandheldItem"],
 				Layer: [
 					{
 						Name: "Base",
@@ -50447,6 +50472,7 @@ export var AssetFemale3DCG = [
 				Top: 290,
 				Left: 135,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				DefaultColor: ["#937C96", "#B55CC1"],
 				Layer: [
 					{
@@ -50481,6 +50507,7 @@ export var AssetFemale3DCG = [
 				Top: 325,
 				Left: 150,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				DefaultColor: ["#73949A", "#9CA5A7", "#011418"],
 				Layer: [
 					{
@@ -50512,6 +50539,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["RollItem"],
 				ActivityExpression: {
@@ -50530,6 +50558,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 40,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["MasturbateItem", "RubItem"],
 				ActivityAudio: ["Wand"],
 				ActivityExpression: {
@@ -50548,6 +50577,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 20,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["MasturbateItem", "RubItem"],
 				ActivityAudio: ["Wand"],
 			},
@@ -50558,6 +50588,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["PourItem"],
 				ActivityExpression: {
@@ -50577,6 +50608,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 30,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["MasturbateItem", "RubItem", "PenetrateItem"],
 			},
 			{
@@ -50586,6 +50618,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 5,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["TickleItem", "SpankItem"],
 			},
 			{
@@ -50595,6 +50628,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 45,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["MasturbateItem", "RubItem"],
 				ActivityAudio: ["Wand"],
 				ActivityExpression: {
@@ -50613,6 +50647,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["Belt"],
@@ -50631,6 +50666,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 5,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "BrushItem", "RubItem", "Scratch"],
 				ActivityAudio: ["BrushSpank", "BrushHair"],
@@ -50649,6 +50685,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 20,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["MasturbateItem", "RubItem", "PenetrateItem"],
 			},
 			{
@@ -50658,6 +50695,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 20,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["TickleItem", "MasturbateItem"],
 			},
 			{
@@ -50667,6 +50705,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["TickleItem"],
 				ExpressionTrigger: [
 					{ Group: "Blush", Name: "Medium", Timer: 10 },
@@ -50682,6 +50721,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 50,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["ShockItem"],
 				ActivityAudio: ["Shocks"],
@@ -50693,6 +50733,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 			},
 			{
@@ -50702,6 +50743,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 3,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 			},
@@ -50712,6 +50754,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 5,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityExpression: {
@@ -50728,6 +50771,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 50,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				BuyGroup: "VibratorRemote",
 			},
@@ -50738,6 +50782,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 50,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				BuyGroup: "ShockCollar",
 				Effect: [E.TriggerShock],
@@ -50749,6 +50794,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["SpankItem", "RubItem"],
 			},
 			{
@@ -50759,6 +50805,7 @@ export var AssetFemale3DCG = [
 				Value: 60,
 				Audio: "RopeShort",
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Rope"],
 				DefaultColor: "#956B1C",
 				AllowActivity: ["RubItem"],
@@ -50772,6 +50819,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 60,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Rope"],
 				DefaultColor: "#956B1C",
 				AllowActivity: ["RubItem"],
@@ -50784,6 +50832,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 40,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Gagged"],
 				AllowActivity: ["RubItem"],
 			},
@@ -50794,6 +50843,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 40,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Lingerie"],
 				AllowActivity: ["RubItem"],
 			},
@@ -50804,6 +50854,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: -1,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem"],
 			},
@@ -50814,6 +50865,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Lingerie"],
 				AllowActivity: ["RubItem"],
 			},
@@ -50824,6 +50876,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 50,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Tape"],
 				AllowActivity: ["RubItem"],
 			},
@@ -50834,6 +50887,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 5,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem"],
 			},
@@ -50844,6 +50898,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 15,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Fetish: ["Sadism"],
 				AllowActivity: ["SpankItem"],
 			},
@@ -50854,6 +50909,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 100,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				PoseMapping: {
 					...AssetPoseMapping.ItemHandheld,
@@ -50868,6 +50924,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 140,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				PoseMapping: {
 					...AssetPoseMapping.ItemHandheld,
@@ -50882,6 +50939,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 15,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 			},
 			{
@@ -50893,6 +50951,7 @@ export var AssetFemale3DCG = [
 				Value: 100,
 				BuyGroup: "PlasticWrap",
 				Random: false,
+				Attribute: ["HandheldItem"],
 			},
 			{
 				Name: "GlassEmpty",
@@ -50901,6 +50960,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 10,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				BuyGroup: "DrinkingGlass",
 			},
@@ -50911,6 +50971,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 20,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem", "SipItem"],
 				BuyGroup: "DrinkingGlass",
 				ActivityExpression: {
@@ -50928,6 +50989,7 @@ export var AssetFemale3DCG = [
 				ParentGroup: "",
 				Value: 40,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 			},
 			{
@@ -50938,6 +51000,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				IsRestraint: false,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem", "SipItem"],
 				DefaultColor: ["#9A9694", "#3E170B"],
 				Layer: [
@@ -50957,6 +51020,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				IsRestraint: false,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["EatItem", "ThrowItem"],
 				Layer: [
 					{ Name: "Bag", AllowColorize: false },
@@ -50971,6 +51035,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				Value: 15,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Left: 128,
 				Top: 300,
 				Extended: true,
@@ -50983,6 +51048,7 @@ export var AssetFemale3DCG = [
 				Value: 25,
 				Left: 0,
 				Top: -250,
+				Attribute: ["HandheldItem"],
 				DefaultColor: ["#F0F3F5", "#567890", "#BF5249", "#8E6565", "Default"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				Layer: [
@@ -51010,6 +51076,7 @@ export var AssetFemale3DCG = [
 				},
 				Top: -30,
 				DynamicGroupName: "ItemMisc",
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ParentGroup: "",
 				DefaultColor: ["#848484", "#C26969"],
@@ -51032,6 +51099,7 @@ export var AssetFemale3DCG = [
 				Time: 5,
 				Top: -30,
 				DefaultColor: ["#B65D1F", "#979797"],
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				BuyGroup: "FoxPlush",
 				PoseMapping: {
@@ -51066,6 +51134,7 @@ export var AssetFemale3DCG = [
 				Time: 5,
 				Top: -30,
 				BuyGroup: "Karl",
+				Attribute: ["HandheldItem"],
 				DefaultColor: ["#8F6154"],
 				PoseMapping: {
 					BaseUpper: PoseType.DEFAULT,
@@ -51095,6 +51164,7 @@ export var AssetFemale3DCG = [
 				Time: 5,
 				Top: -30,
 				BuyGroup: "PetPotato",
+				Attribute: ["HandheldItem"],
 				DefaultColor: ["#AA8554"],
 				PoseMapping: {
 					BaseUpper: PoseType.DEFAULT,
@@ -51122,6 +51192,7 @@ export var AssetFemale3DCG = [
 				Value: 100,
 				DefaultColor: ["#333", "#133769", "#900000"],
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["RubItem"],
 				Extended: true,
 				PoseMapping: {
@@ -51166,6 +51237,7 @@ export var AssetFemale3DCG = [
 				Value: 14,
 				BuyGroup: "GlueTube",
 				Random: false,
+				Attribute: ["HandheldItem"],
 				PoseMapping: {
 					BaseUpper: PoseType.DEFAULT,
 					BackBoxTie: PoseType.HIDE,
@@ -51185,6 +51257,7 @@ export var AssetFemale3DCG = [
 				Priority: 53,
 				Value: -1,
 				BuyGroup: "AnimeGirl",
+				Attribute: ["HandheldItem"],
 				DefaultColor: [
 					"#B7B056",
 					"#808080",
@@ -51249,6 +51322,7 @@ export var AssetFemale3DCG = [
 				Value: -1,
 				BuyGroup: "BrickWall",
 				Random: false,
+				Attribute: ["HandheldItem"],
 				DefaultColor: "#B67240",
 			},
 			{
@@ -51259,6 +51333,7 @@ export var AssetFemale3DCG = [
 				Value: -1,
 				BuyGroup: "BrickWall",
 				Random: false,
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				DefaultColor: "Default",
 			},
@@ -51271,6 +51346,7 @@ export var AssetFemale3DCG = [
 				Top: 233,
 				Priority: 46,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				Audio: "FanOpen",
 				AllowActivity: ["RubItem"],
 				DefaultColor: [
@@ -51313,6 +51389,7 @@ export var AssetFemale3DCG = [
 				Top: 233,
 				Priority: 46,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				Audio: "FanOpen",
 				AllowActivity: ["RubItem"],
 				DefaultColor: [
@@ -51353,6 +51430,7 @@ export var AssetFemale3DCG = [
 				Left: 125,
 				Top: 220,
 				ParentGroup: "",
+				Attribute: ["HandheldItem"],
 				IsRestraint: false,
 				AllowColorize: false,
 				Extended: true,
@@ -51749,6 +51827,7 @@ export var AssetFemale3DCG = [
 				Priority: 46,
 				IsRestraint: false,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Audio: "Bag",
 				AllowActivity: ["RubItem"],
 				PoseMapping: {
@@ -51888,6 +51967,7 @@ export var AssetFemale3DCG = [
 				InventoryID: 1300,
 				Random: false,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				Extended: true,
 				BuyGroup: "MiniDolls",
 				AllowActivity: ["SqueezeItem"],
@@ -51930,6 +52010,7 @@ export var AssetFemale3DCG = [
 				MaxOpacity: 100,
 				MinOpacity: 0,
 				EditOpacity: true,
+				Attribute: ["HandheldItem"],
 				DefaultColor: ["#09440A", "#FFFFFF", "#6C0E11", "#FFFFFF"],
 				PoseMapping: { ...AssetPoseMapping.ItemHands },
 				AllowActivity: ["RubItem"],
@@ -51981,8 +52062,7 @@ export var AssetFemale3DCG = [
 				Priority: 34,
 				Difficulty: -10,
 				Time: 1,
-				//Top: 250,
-				//Left: 100,
+				Attribute: ["HandheldItem"],
 				IsRestraint: false,
 				DefaultColor: [
 					"#141414",
@@ -52039,6 +52119,7 @@ export var AssetFemale3DCG = [
 				InventoryID: 1331,
 				Value: 3,
 				Random: false,
+				Attribute: ["HandheldItem"],
 				Top: {
 					[PoseType.DEFAULT]: 350,
 					BackCuffs: 342,
@@ -52083,6 +52164,7 @@ export var AssetFemale3DCG = [
 				Difficulty: -10,
 				Priority: 35,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				DynamicGroupName: "ItemHandheld",
 				ParentGroup: {},
 				DefaultColor: [
@@ -52128,6 +52210,7 @@ export var AssetFemale3DCG = [
 				Top: { "": 300, Yoked: 130 },
 				Difficulty: -10,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				ParentGroup: {},
 				PoseMapping: { ...AssetPoseMapping.ItemHandheld, Yoked: "Yoked" },
 				Layer: [
@@ -52148,6 +52231,7 @@ export var AssetFemale3DCG = [
 				Priority: 26,
 				Left: 190,
 				Top: 270,
+				Attribute: ["HandheldItem"],
 				ParentGroup: {},
 				DefaultColor: ["Default", "Default", "Default", "#000000"],
 				Layer: [
@@ -52170,6 +52254,7 @@ export var AssetFemale3DCG = [
 				Priority: 26,
 				Top: 0,
 				Left: 0,
+				Attribute: ["HandheldItem"],
 				ParentGroup: {},
 				DefaultColor: ["#969696", "#A30000"],
 				AllowActivity: ["RubItem", "SpankItem"],
@@ -52190,6 +52275,7 @@ export var AssetFemale3DCG = [
 				Top: 300,
 				Difficulty: -10,
 				IsRestraint: false,
+				Attribute: ["HandheldItem"],
 				ParentGroup: {},
 				InheritPoseMappingFields: true,
 				AllowActivity: ["PenetrateItem", "EatItem"],
@@ -52222,6 +52308,7 @@ export var AssetFemale3DCG = [
 					"#2B1D11",
 					"#848484",
 				],
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["SpankItem", "RubItem"],
 				ActivityAudio: ["SmackCrop"],
 				Layer: [
@@ -52286,6 +52373,7 @@ export var AssetFemale3DCG = [
 				Top: 0,
 				Left: 0,
 				Difficulty: -10,
+				Attribute: ["HandheldItem"],
 				ParentGroup: {},
 				PoseMapping: {
 					Yoked: PoseType.HIDE,
@@ -52314,6 +52402,207 @@ export var AssetFemale3DCG = [
 					OriginalName: "油纸伞",
 					License: "CC BY-SA-NC 4.0",
 				},
+			},
+			{
+				Name: "Book",
+				InventoryID: 1405,
+				Random: false,
+				Value: 10,
+				Priority: 26,
+				Top: 320,
+				Left: 172,
+				ParentGroup: {},
+				DefaultColor: ["Default", "#FFFFFF"],
+				AllowActivity: ["SpankItem", "RubItem"],
+				ActivityAudio: ["BrushSpank"],
+				Layer: [{ Name: "Cover" }, { Name: "Paper", Priority: 25 }],
+				Attribution: {
+					Author: "Echo (SugarChain)",
+					OriginalName: "书",
+					License: "CC BY-SA-NC 4.0",
+				},
+			},
+			{
+				Name: "ToyHammer",
+				ParentGroup: "",
+				EditOpacity: true,
+				MinOpacity: 0,
+				MaxOpacity: 1,
+				Difficulty: 0,
+				DefaultColor: [
+					"#A46A00",
+					"#FF0000",
+					"#FFFFFF",
+					"#FFFFFF",
+					"#FFC515",
+					"#FFFF00",
+					"#FF0000",
+				],
+				AllowActivity: ["SpankItem"],
+				ActivityAudio: ["SqueakyToy"],
+				Extended: true,
+				Layer: [
+					{
+						Name: "Handle",
+						Left: {
+							[PoseType.DEFAULT]: 200,
+							BackCuffs: 318,
+							Yoked: 69,
+							OverTheHead: 147,
+							AllFours: 151,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 305,
+							BackCuffs: 279,
+							Yoked: 93,
+							OverTheHead: 5,
+							AllFours: 216,
+						},
+						EditOpacity: true,
+						Opacity: 1,
+						MinOpacity: 0,
+						MaxOpacity: 1,
+					},
+					{
+						Name: "Hammer",
+						Left: {
+							[PoseType.DEFAULT]: 200,
+							BackCuffs: 318,
+							Yoked: 69,
+							OverTheHead: 147,
+							AllFours: 151,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 305,
+							BackCuffs: 279,
+							Yoked: 93,
+							OverTheHead: 5,
+							AllFours: 216,
+						},
+						Priority: 53,
+						EditOpacity: true,
+						Opacity: 1,
+						MinOpacity: 0,
+						MaxOpacity: 1,
+					},
+					{
+						Name: "HandleReflection",
+						Left: {
+							[PoseType.DEFAULT]: 200,
+							BackCuffs: 318,
+							Yoked: 69,
+							OverTheHead: 147,
+							AllFours: 151,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 305,
+							BackCuffs: 279,
+							Yoked: 93,
+							OverTheHead: 5,
+							AllFours: 216,
+						},
+						ColorGroup: "Reflection",
+						EditOpacity: true,
+						Opacity: 0.8,
+						MinOpacity: 0.0,
+						MaxOpacity: 1.0,
+					},
+					{
+						Name: "HammerReflection",
+						Left: {
+							[PoseType.DEFAULT]: 200,
+							BackCuffs: 318,
+							Yoked: 69,
+							OverTheHead: 147,
+							AllFours: 151,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 305,
+							BackCuffs: 279,
+							Yoked: 93,
+							OverTheHead: 5,
+							AllFours: 216,
+						},
+						Priority: 53,
+						ColorGroup: "Reflection",
+						EditOpacity: true,
+						Opacity: 0.75,
+						MinOpacity: 0.0,
+						MaxOpacity: 1.0,
+					},
+					{
+						Name: "BubbleEdge",
+						Left: {
+							[PoseType.DEFAULT]: 290,
+							BackCuffs: 405,
+							Yoked: 81,
+							OverTheHead: 209,
+							AllFours: 210,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 373,
+							BackCuffs: 339,
+							Yoked: 87,
+							OverTheHead: 65,
+							AllFours: 278,
+						},
+						AllowTypes: { typed: 1 },
+						Priority: 53,
+						ColorGroup: "Bubble",
+						EditOpacity: true,
+						Opacity: 1,
+						MinOpacity: 0,
+						MaxOpacity: 1,
+					},
+					{
+						Name: "InnerBubble",
+						Left: {
+							[PoseType.DEFAULT]: 290,
+							BackCuffs: 405,
+							Yoked: 81,
+							OverTheHead: 209,
+							AllFours: 210,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 373,
+							BackCuffs: 339,
+							Yoked: 87,
+							OverTheHead: 65,
+							AllFours: 278,
+						},
+						AllowTypes: { typed: 1 },
+						Priority: 53,
+						ColorGroup: "Bubble",
+						EditOpacity: true,
+						Opacity: 1,
+						MinOpacity: 0,
+						MaxOpacity: 1,
+					},
+					{
+						Name: "Bonk!",
+						Left: {
+							[PoseType.DEFAULT]: 290,
+							BackCuffs: 405,
+							Yoked: 81,
+							OverTheHead: 209,
+							AllFours: 210,
+						},
+						Top: {
+							[PoseType.DEFAULT]: 373,
+							BackCuffs: 339,
+							Yoked: 87,
+							OverTheHead: 65,
+							AllFours: 278,
+						},
+						AllowTypes: { typed: 1 },
+						Priority: 53,
+						ColorGroup: "Bubble",
+						EditOpacity: true,
+						Opacity: 1,
+						MinOpacity: 0,
+						MaxOpacity: 1,
+					},
+				],
 			},
 		],
 		Color: [
@@ -68784,6 +69073,7 @@ export var AssetFemale3DCG = [
 				Top: -30,
 				DefaultColor: ["#848484", "#C26969"],
 				AllowActivity: ["SpankItem"],
+				Attribute: ["HandheldItem"],
 				BuyGroup: "BunPlush",
 				PoseMapping: {
 					BaseUpper: PoseType.DEFAULT,
@@ -68855,6 +69145,7 @@ export var AssetFemale3DCG = [
 				Time: 5,
 				Top: -30,
 				DefaultColor: ["#B65D1F", "#979797"],
+				Attribute: ["HandheldItem"],
 				AllowActivity: ["SpankItem"],
 				BuyGroup: "FoxPlush",
 				PoseMapping: {
@@ -69895,7 +70186,6 @@ export var AssetFemale3DCG = [
 				Time: 10,
 				IsRestraint: false,
 				Prerequisite: ["AccessVulva", "NotChaste"],
-				Hide: ["Shoes", "ItemBoots", "ItemLegs", "ItemVulva"],
 				SetPose: ["KneelingSpread"],
 				Effect: [E.FillVulva, E.Freeze, E.Mounted],
 				Block: ["ItemPelvis", "ItemButt", "ItemVulva"],

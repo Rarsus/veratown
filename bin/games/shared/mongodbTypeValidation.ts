@@ -62,6 +62,8 @@ export const SCHEMA_TYPE_SPECS = {
         "veratown.lastPositionAt",
         "veratown.lastAppearanceAt",
         "veratown.bunnyPunishmentArtifact.appliedAt",
+        "veratown.bunnyPunishmentArtifact.expiresAt",
+        "veratown.bunnyPunishmentArtifact.cleanedAt",
         "veratown.bunnyPunishmentArtifact.degradedAt",
         "veratown.bunnyPunishmentArtifact.cleanedAt",
         "crossSystem.updatedAt",
@@ -80,6 +82,9 @@ export const SCHEMA_TYPE_SPECS = {
 
     // Integer counters: Should be stored as int32
     INT_FIELDS: [
+        "veratown.bunnyPunishmentArtifact.offenceNumber",
+        "veratown.bunnyPunishmentArtifact.durationMs",
+        "veratown.bunnyPunishmentArtifact.artifactVersion",
         "casino.chips",
         "casino.score",
         "casino.winStreak",

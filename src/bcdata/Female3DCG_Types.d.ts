@@ -1,6 +1,17 @@
 /** A type representing layer names (yes this is just a `string` alias). */
 type LayerName = string;
 
+// Do not remove, but do deprecate in order to discourage future usage
+/**
+ * A group + asset name.
+ *
+ * @deprecated Usage of {@link AssetFullPath} instead is strongly recommended for any and all future work.
+ */
+type AssetFullName = `${AssetGroupName}${AssetName}`;
+
+/** A group + asset name separated by a dash */
+type AssetFullPath = `${AssetGroupName}/${AssetName}`;
+
 /** A special key for {@link ItemProperties["DrawingTop"]}/{@link ItemProperties["DrawingLeft"]} that overrides the _relative_ position of each and every layer individually */
 type AssetOverride = "ASSET_OVERRIDE";
 
@@ -269,7 +280,7 @@ interface AssetGroupDefinitionBase extends AssetCommonPropertiesGroupAsset, Asse
 	/** The internal identifier for the group */
 	Group: AssetGroupName;
 	/** The list of assets defined by the group */
-	Asset: (AssetDefinition | string)[];
+	Asset: (AssetDefinition | AssetName)[];
 
 	/** Inherited from {@link AssetCommonPropertiesGroupAssetLayer} but mandatory here */
 	Priority: number;
@@ -383,7 +394,7 @@ interface AssetGroupDefinitionBase extends AssetCommonPropertiesGroupAsset, Asse
 	 *
 	 * Used for things like auto-removing collar accessories if the collar is removed.
 	 */
-	RemoveItemOnRemove?: { Group: AssetGroupItemName, Name: string, TypeRecord?: TypeRecord }[];
+	RemoveItemOnRemove?: { Group: AssetGroupItemName, Name: AssetName, TypeRecord?: TypeRecord }[];
 
 	/**
 	 * Whether the group has a blinking variant
@@ -429,7 +440,7 @@ declare namespace AssetGroupDefinition {
 	/** An {@link AssetGroupDefinition} subtype for groups of the `Item` category. */
 	interface Item extends AssetGroupDefinitionBase {
 		Group: AssetGroupItemName;
-		Asset: (AssetDefinition.Item | string)[];
+		Asset: (AssetDefinition.Item | AssetName)[];
 		Category: "Item";
 		Clothing?: false;
 		Underwear?: false;
@@ -444,7 +455,7 @@ declare namespace AssetGroupDefinition {
 	/** An {@link AssetGroupDefinition} subtype for groups of the `Appearance` category. */
 	interface Appearance extends AssetGroupDefinitionBase {
 		Group: AssetGroupBodyName;
-		Asset: (AssetDefinition.Appearance | string)[];
+		Asset: (AssetDefinition.Appearance | AssetName)[];
 		Category?: "Appearance";
 		IsRestraint?: false;
 		Zone?: never;
@@ -453,7 +464,7 @@ declare namespace AssetGroupDefinition {
 	/** An {@link AssetGroupDefinition} subtype for groups of the `Script` category. */
 	interface Script extends AssetGroupDefinitionBase {
 		Group: AssetGroupScriptName;
-		Asset: (AssetDefinition.Script | string)[];
+		Asset: (AssetDefinition.Script | AssetName)[];
 		Category: "Script";
 	}
 }
@@ -486,7 +497,7 @@ interface AssetCommonPropertiesAssetLayer {
 interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetCommonPropertiesAssetLayer, AssetCommonPropertiesGroupAssetLayer {
 
 	/** The asset's internal name. */
-	Name: string,
+	Name: AssetName,
 
 	/** The asset's InventoryID to be synced with the server and other players */
 	InventoryID?: number,
@@ -499,7 +510,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 		/** The name of the group */
 		GroupName: AssetGroupName,
 		/** The name of the asset */
-		AssetName: string,
+		AssetName: AssetName,
 		/** Whether to automatically assign a {@link AssetDefinition.BuyGroup} to the config and, if required, to set it for all `CopyConfig`-referenced super configs */
 		BuyGroup?: boolean,
 	};
@@ -510,7 +521,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	 * Used for the random appearance generator, to ensure combined assets match.
 	 * Eyes, as well as the student tops and bottoms make use of it.
 	 */
-	ParentItem?: string;
+	ParentItem?: AssetName;
 
 	/**
 	 * Whether the asset is enabled or not.
@@ -526,7 +537,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	Visible?: boolean;
 
 	/** A list of screens where current asset won't be shown. */
-	NotVisibleOnScreen?: string[];
+	NotVisibleOnScreen?: RoomName[];
 
 	/** Specify body type overrides that live in the asset override folder */
 	StyleOverride?: BodyStyle[];
@@ -535,8 +546,8 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	// Only on BodyStyles
 	DrawOffset?: {
 		Group?: AssetGroupName;
-		Asset?: string;
-		Layer?: string[]
+		Asset?: AssetName;
+		Layer?: LayerName[]
 		X?: number;
 		Y?: number;
 	}[];
@@ -578,10 +589,10 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	Expose?: AssetGroupItemName[];
 
 	/** A list of asset names that get hidden when the asset is worn. */
-	HideItem?: string[];
+	HideItem?: AssetFullName[];
 
 	/** A list of asset names that get shown when the asset is worn. Only useful when combined with Hide */
-	HideItemExclude?: string[];
+	HideItemExclude?: AssetFullName[];
 
 	/**
 	 * A list of body group that becomes required when this asset is worn.
@@ -672,12 +683,12 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	ExpressionTrigger?: ExpressionTrigger[];
 
 	/** A list of assets to also remove when the asset is taken off. */
-	RemoveItemOnRemove?: { Name: string, Group: AssetGroupItemName, TypeRecord?: TypeRecord }[];
+	RemoveItemOnRemove?: { Name: AssetName, Group: AssetGroupItemName, TypeRecord?: TypeRecord }[];
 
 	AllowEffect?: EffectName[];
 	AllowBlock?: AssetGroupItemName[];
 	AllowHide?: AssetGroupItemName[];
-	AllowHideItem?: string[];
+	AllowHideItem?: AssetFullName[];
 	/** A list of {@link TypeRecord} keys for which a single layer expects multiple type-specific .png files. */
 	CreateLayerTypes?: string[];
 	/**
@@ -702,7 +713,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	DynamicDescription?: (C: Character) => string;
 	DynamicPreviewImage?: (C: Character) => string;
 	DynamicAllowInventoryAdd?: (C: Character) => boolean;
-	DynamicName?: (C: Character) => string;
+	DynamicName?: (C: Character) => AssetName;
 
 	/** The real group name used when building the file paths for the asset's layers */
 	DynamicGroupName?: AssetGroupName;
@@ -721,7 +732,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 	AllowColorizeAll?: never;
 
 	/** A list of online spaces (eg. Asylum) where the asset is automatically available */
-	AvailableLocations?: string[];
+	AvailableLocations?: (RoomName | ServerChatRoomSpace)[];
 
 	OverrideHeight?: AssetOverrideHeight;
 
@@ -739,6 +750,7 @@ interface AssetDefinitionBase extends AssetCommonPropertiesGroupAsset, AssetComm
 
 	MirrorExpression?: AssetGroupName;
 
+	/** See {@link BackgroundsList} */
 	CustomBlindBackground?: string;
 
 	/** The list of layers for the asset. */
@@ -869,7 +881,7 @@ interface AssetLayerDefinition extends AssetCommonPropertiesGroupAssetLayer, Ass
 	 */
 	Visibility?: "Player" | "AllExceptPlayerDialog" | "Others" | "OthersExceptDialog" | "Owner" | "Lovers" | "Mistresses";
 
-	HideAs?: { Group: AssetGroupName, Asset?: string };
+	HideAs?: { Group: AssetGroupName, Asset?: AssetName };
 
 	/** Whether the layer uses an image. Defaults to true. */
 	HasImage?: boolean;
@@ -913,7 +925,7 @@ interface AssetLayerDefinition extends AssetCommonPropertiesGroupAssetLayer, Ass
 	 *
 	 * Serves as the pose mapping equivalent of {@link AssetLayerDefinition.CopyLayerColor}.
 	 */
-	CopyLayerPoseMapping?: string;
+	CopyLayerPoseMapping?: LayerName;
 
 	/**
 	 * A list of {@link TypeRecord} keys for which a single layer expects multiple type-specific .png files.
@@ -955,7 +967,7 @@ type ExtendedItemMainConfig = Partial<Record<AssetGroupName, ExtendedItemGroupCo
  * An object containing extended item definitions for a group.
  * Maps asset names within the group to their extended item configuration
  */
-type ExtendedItemGroupConfig = Record<string, AssetArchetypeConfig>;
+type ExtendedItemGroupConfig = Partial<Record<AssetName, AssetArchetypeConfig>>;
 
 /** Get the archetype config type */
 type AssetArchetypeGetConfig<T extends keyof ExtendedArchetypes> = ExtendedArchetypes[T][0];
@@ -996,7 +1008,7 @@ interface ExtendedItemConfig<OptionType extends ExtendedItemOption> {
 	/** A boolean indicating whether or not images should be drawn for the option and/or module selection screen. */
 	DrawImages?: boolean;
 	/** The group name and asset name of a configuration to copy - useful if multiple items share the same config */
-	CopyConfig?: { GroupName?: AssetGroupName, AssetName: string };
+	CopyConfig?: { GroupName?: AssetGroupName, AssetName: AssetName };
 	/** An interface with element-specific drawing data for a given screen. */
 	DrawData?: ExtendedItemConfigDrawData<object>;
 	/**
@@ -1468,7 +1480,7 @@ interface TestingStruct<T> {
 	/** The asset's group */
 	readonly Group: AssetGroupName;
 	/** The asset's name */
-	readonly Name: string;
+	readonly Name: AssetName;
 	/** A representation of the asset's missing or invalid data */
 	readonly Invalid: T;
 }

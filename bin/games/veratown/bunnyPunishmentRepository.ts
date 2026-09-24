@@ -11,7 +11,15 @@ export interface BunnyPunishmentAuditDetails {
 }
 
 export interface BunnyPunishmentRepository {
-    recordArtifact(artifact: BunnyPunishmentArtifact): Promise<void>;
+    getState?(memberNumber: number): Promise<{
+        punishmentCount: number;
+        artifact?: BunnyPunishmentArtifact;
+    }>;
+    recordArtifact(
+        artifact: BunnyPunishmentArtifact,
+        expectedArtifactVersion?: number,
+    ): Promise<void>;
+    updateArtifact?(artifact: BunnyPunishmentArtifact): Promise<void>;
     incrementCount(memberNumber: number): Promise<void>;
     recordAudit(
         memberNumber: number,
@@ -23,7 +31,9 @@ export class UnifiedBunnyPunishmentRepository implements BunnyPunishmentReposito
     public constructor(
         private readonly store: Pick<
             UnifiedCharacterStore,
-            "recordBunnyPunishmentArtifact" | "incrementBunnyPunishmentCount"
+            | "recordBunnyPunishmentArtifact"
+            | "incrementBunnyPunishmentCount"
+            | "getVeratownView"
         >,
         private readonly mutationService?: Pick<
             GameStateMutationService,
@@ -33,8 +43,29 @@ export class UnifiedBunnyPunishmentRepository implements BunnyPunishmentReposito
 
     public async recordArtifact(
         artifact: BunnyPunishmentArtifact,
+        expectedArtifactVersion?: number,
+    ): Promise<void> {
+        await this.store.recordBunnyPunishmentArtifact(
+            artifact,
+            expectedArtifactVersion,
+        );
+    }
+
+    public async updateArtifact(
+        artifact: BunnyPunishmentArtifact,
     ): Promise<void> {
         await this.store.recordBunnyPunishmentArtifact(artifact);
+    }
+
+    public async getState(memberNumber: number): Promise<{
+        punishmentCount: number;
+        artifact?: BunnyPunishmentArtifact;
+    }> {
+        const view = await this.store.getVeratownView(memberNumber);
+        return {
+            punishmentCount: view.bunnyPunishmentCount ?? 0,
+            artifact: view.bunnyPunishmentArtifact,
+        };
     }
 
     public async incrementCount(memberNumber: number): Promise<void> {

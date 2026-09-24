@@ -71,12 +71,13 @@ function createCharacter(
                         crate.Property[key] = value;
                     },
                     lock: (
-                        _lock: string,
+                        lock: string,
                         _memberNumber: number,
                         properties: Record<string, unknown>,
                     ) => {
                         crate.Property = {
                             ...crate.Property,
+                            LockedBy: lock,
                             ...properties,
                         };
                     },
@@ -191,14 +192,14 @@ function startRelease(
     return (system as any).releaseWhenExpired(character.character, "Cage 1");
 }
 
-test("CageSystem retains the configured five-minute expiry until crate removal", async () => {
+test("CageSystem releases at the persisted expiry without a live timer", async () => {
     const timer = new FakeTimer();
     const mutations = createMutationService();
     const character = createCharacter();
     const expiry = 300_000;
     character.setCrate({
         Name: "FuturisticCrate",
-        Property: { RemoveTimer: expiry },
+        Property: { LockedBy: "SafewordPadlock" },
     });
     const pending = startRelease(timer, mutations, character, expiry);
 
@@ -219,46 +220,19 @@ test("CageSystem retains the configured five-minute expiry until crate removal",
     );
 });
 
-for (const [description, liveExpiry] of [
-    ["a missing timer", undefined],
-    ["a stale timer", 1],
-    ["a shortened timer", 240_000],
-] as const) {
-    test(`CageSystem does not release early with ${description}`, async () => {
-        const timer = new FakeTimer();
-        const mutations = createMutationService();
-        const character = createCharacter();
-        const expiry = 300_000;
-        character.setCrate({
-            Name: "FuturisticCrate",
-            Property:
-                liveExpiry === undefined ? {} : { RemoveTimer: liveExpiry },
-        });
-        const pending = startRelease(timer, mutations, character, expiry);
-
-        await timer.advance(expiry - 1);
-        assert.deepEqual(mutations.exits, []);
-        await timer.advance(51);
-        await pending;
-        assert.deepEqual(mutations.exits, [251024]);
-    });
-}
-
-test("CageSystem honors an extended live timer without duplicate release", async () => {
+test("CageSystem ignores a stale live timer when persisted expiry is authoritative", async () => {
     const timer = new FakeTimer();
     const mutations = createMutationService();
     const character = createCharacter();
     const initialExpiry = 300_000;
-    const extendedExpiry = initialExpiry + 60_000;
     character.setCrate({
         Name: "FuturisticCrate",
-        Property: { RemoveTimer: extendedExpiry },
+        Property: { RemoveTimer: initialExpiry + 60_000 },
     });
     const pending = startRelease(timer, mutations, character, initialExpiry);
 
-    await timer.advance(initialExpiry + 50);
+    await timer.advance(initialExpiry - 1);
     assert.deepEqual(mutations.exits, []);
-    await timer.advance(extendedExpiry - timer.now());
     await timer.advance(50);
     await pending;
 
@@ -277,7 +251,7 @@ test("CageSystem leaves release pending when crate removal fails", async () => {
     const expiry = 300_000;
     character.setCrate({
         Name: "FuturisticCrate",
-        Property: { RemoveTimer: expiry },
+        Property: { LockedBy: "SafewordPadlock" },
     });
     character.character.Appearance.RemoveItem = () => {};
     void startRelease(timer, mutations, character, expiry);
@@ -353,7 +327,12 @@ test("CageSystem restores a missing crate from persisted containment state", asy
     assert.equal(
         character.character.Appearance.getItemData("ItemDevices")?.Property
             ?.RemoveTimer,
-        300_000,
+        undefined,
+    );
+    assert.equal(
+        character.character.Appearance.getItemData("ItemDevices")?.Property
+            ?.LockedBy,
+        "SafewordPadlock",
     );
 });
 
@@ -384,12 +363,12 @@ test("classifies recovery from persistence and live appearance state", () => {
         }).classification,
         "contained-missing-expiry",
     );
-    const conflict = classifyContainmentRecovery({
+    const persisted = classifyContainmentRecovery({
         activeSession: { expiresAt: 300_000 },
         liveCrateExpiry: 400_000,
     });
-    assert.equal(conflict.classification, "conflicting-state");
-    assert.equal(conflict.selectedExpiry, 400_000);
+    assert.equal(persisted.classification, "contained-persisted-expiry");
+    assert.equal(persisted.selectedExpiry, 300_000);
 });
 
 test("CageSystem ignores an ordinary character during recovery", async () => {
@@ -514,7 +493,8 @@ test("CageSystem allows a targeted item when full wardrobe access is disabled", 
         created.character.Appearance.getItemData("ItemDevices")?.Name,
         "FuturisticCrate",
     );
-    void pending;
+    await timer.advance(1_800_050);
+    await pending;
 });
 
 test("CageSystem logs and proceeds when item permission is denied", async () => {
@@ -540,5 +520,6 @@ test("CageSystem logs and proceeds when item permission is denied", async () => 
         created.character.Appearance.getItemData("ItemDevices")?.Name,
         "FuturisticCrate",
     );
-    void pending;
+    await timer.advance(1_800_050);
+    await pending;
 });

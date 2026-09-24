@@ -107,6 +107,8 @@ export interface KennelSession {
     releasedAt?: number;
     totalTime: number;
     detailedBy?: number;
+    expiresAt?: number;
+    lockType?: "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
 }
 
 export interface CurrentRestraint {
@@ -194,8 +196,22 @@ export interface BunnyPunishmentArtifact {
         text2: string;
     };
     appliedAt: number;
+    restraintPieces: string[];
+    offenceNumber: number;
+    durationMs: number;
+    expiresAt: number;
+    lockType: "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
+    consentTrigger: "safeword" | "explicit-consent" | "admin" | "unknown";
+    artifactVersion: number;
     cleanupPolicy: "explicit_cleanup_only";
-    status: "active" | "degraded" | "cleaned";
+    status:
+        | "active"
+        | "expired"
+        | "safeword-released"
+        | "unexpected-removal"
+        | "migration-failed"
+        | "degraded"
+        | "cleaned";
     degradedAt?: number;
     cleanedAt?: number;
     cleanupReason?: string;
@@ -493,6 +509,7 @@ export interface VeratownView {
     totalTimeInKennels: number;
     releaseParoleState?: ReleaseParoleState;
     bunnyPunishmentArtifact?: BunnyPunishmentArtifact;
+    bunnyPunishmentCount: number;
     roles: string[];
     auditLog: AuditLogEntry[];
 }

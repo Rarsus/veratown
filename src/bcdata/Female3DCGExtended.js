@@ -24388,6 +24388,22 @@ var AssetFemale3DCGExtended = {
 				{ Name: "Cartoon" },
 			],
 		}, // Oilpaperumbrella
+		ToyHammer: {
+			Archetype: ExtendedArchetype.TYPED,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Options: [
+				{
+					Name: "NoBonk!",
+				}, // 0
+				{
+					Name: "BONK!",
+				}, // 1
+			],
+		}, // ToyHammer
 	}, // ItemHandheld
 	EyeShadow: {
 		Running: {

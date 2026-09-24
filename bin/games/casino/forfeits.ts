@@ -16,7 +16,7 @@ import { API_Character, AssetGet, BC_AppearanceItem } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { PET_EARS } from "../veratown";
 import { createLogger } from "../../logging";
-import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
+import { applyConsentPadlock } from "../shared/consentPadlock";
 
 const logger = createLogger("forfeits");
 
@@ -34,14 +34,14 @@ export const FORFEITS: Record<string, Forfeit> = {
     boots: {
         name: "Boots",
         value: 5,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemBoots", "BalletHeels")],
     },
     legbinder: {
         name: "Leg binder",
         value: 7,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         colourLayers: [0],
         items: () => [AssetGet("ItemLegs", "ShinyLegBinder")],
@@ -49,14 +49,14 @@ export const FORFEITS: Record<string, Forfeit> = {
     frogtie: {
         name: "Frogtie straps",
         value: 8,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemLegs", "FrogtieStraps")],
     },
     gag: {
         name: "Gag",
         value: 7,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         colourLayers: [0],
         items: () => {
@@ -68,14 +68,14 @@ export const FORFEITS: Record<string, Forfeit> = {
     blindfold: {
         name: "Blindfold",
         value: 7,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemHead", "LatexBlindfold")],
     },
     mittens: {
         name: "Mittens",
         value: 9,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         colourLayers: [0],
         items: () => {
@@ -87,7 +87,7 @@ export const FORFEITS: Record<string, Forfeit> = {
     paws: {
         name: "Paws",
         value: 9,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         colourLayers: [0],
         items: () => {
@@ -100,35 +100,35 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Armbinder",
         colourLayers: [0],
         value: 10,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemArms", "ShinyArmbinder")],
     },
     yoke: {
         name: "Yoke",
         value: 10,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemArms", "Yoke")],
     },
     straitjacket: {
         name: "Straitjacket",
         value: 14,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemArms", "StraitJacket")],
     },
     hood: {
         name: "Hood",
         value: 12,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemHood", "LeatherHoodSealed")],
     },
     spreader: {
         name: "Spreader bar",
         value: 8,
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         items: () => [AssetGet("ItemFeet", "SpreaderMetal")],
     },
@@ -140,7 +140,7 @@ export const FORFEITS: Record<string, Forfeit> = {
             cage.Property = { TypeRecord: { d: 1, p: 1 } };
             return [cage];
         },
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         applyItems: (character: API_Character, lockMemberNumber: number) => {
             const cage = character.Appearance.AddItem(
@@ -148,9 +148,8 @@ export const FORFEITS: Record<string, Forfeit> = {
             );
             cage.setProperty("TypeRecord", { d: 1, p: 1 });
             cage.SetDifficulty(20);
-            applyTimerPasswordLock(cage, {
+            applyConsentPadlock(cage, {
                 memberNumber: lockMemberNumber,
-                removeTimer: Date.now() + (FORFEITS.cage.lockTimeMs ?? 0),
                 hint: "Better luck next time!",
             });
         },
@@ -159,7 +158,7 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Pet",
         value: 12,
         items: () => [AssetGet("ItemArms", "ShinyPetSuit")],
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         applyItems: makePet.bind(null, 0),
     },
@@ -167,7 +166,7 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Pet: 1 hour",
         value: 15,
         items: () => [AssetGet("ItemArms", "ShinyPetSuit")],
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 1 * 60 * 60 * 1000,
         applyItems: makePet.bind(null, 1),
     },
@@ -175,7 +174,7 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Pet: 2 hours",
         value: 20,
         items: () => [AssetGet("ItemArms", "ShinyPetSuit")],
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 2 * 60 * 60 * 1000,
         applyItems: makePet.bind(null, 2),
     },
@@ -183,7 +182,7 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Pet: 3 hours",
         value: 25,
         items: () => [AssetGet("ItemArms", "ShinyPetSuit")],
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 3 * 60 * 60 * 1000,
         applyItems: makePet.bind(null, 3),
     },
@@ -191,7 +190,7 @@ export const FORFEITS: Record<string, Forfeit> = {
         name: "Pet: 4 hours",
         value: 30,
         items: () => [AssetGet("ItemArms", "ShinyPetSuit")],
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 4 * 60 * 60 * 1000,
         applyItems: makePet.bind(null, 4),
     },
@@ -212,7 +211,7 @@ export const FORFEITS: Record<string, Forfeit> = {
                 return [AssetGet("ItemPelvis", "ModularChastityBelt")];
             }
         },
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
         applyItems: makeChaste.bind(null),
     } /*
@@ -221,7 +220,7 @@ export const FORFEITS: Record<string, Forfeit> = {
         colourLayers: [2],
         value: 6,
         items: () => [AssetGet("ItemHead", "HypnoticVisor")],
-        lock: AssetGet("ItemMisc", "TimerPasswordPadlock"),
+        lock: AssetGet("ItemMisc", "SafewordPadlock"),
         lockTimeMs: 20 * 60 * 1000,
     }*/,
 };
@@ -302,9 +301,8 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
                   ? (hairColor[0] as HexColor)
                   : (hairColor as HexColor);
         chastityCage.SetColor(["Default", targetColor, targetColor, "#FFBC00"]);
-        applyTimerPasswordLock(chastityCage, {
+        applyConsentPadlock(chastityCage, {
             memberNumber: lockMemberNumber,
-            removeTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
             hint: "Better luck next time!",
         });
     } else {
@@ -331,9 +329,8 @@ function makeChaste(character: API_Character, lockMemberNumber: number): void {
             s: 0,
             v: 0,
         });
-        applyTimerPasswordLock(chastityBelt, {
+        applyConsentPadlock(chastityBelt, {
             memberNumber: lockMemberNumber,
-            removeTimer: Date.now() + (FORFEITS.chastity.lockTimeMs ?? 0),
             hint: "Better luck next time!",
         });
     }
@@ -441,13 +438,9 @@ export async function applyForfeitForDare(
         );
         const extendMs =
             durationMsOverride ?? forfeit.lockTimeMs ?? 20 * 60 * 1000;
-        const currentExpiry =
-            existing.getData().Property?.RemoveTimer ?? Date.now();
-        const newExpiry = Math.max(currentExpiry, Date.now()) + extendMs;
         const existingProperty = existing.getData().Property ?? {};
-        applyTimerPasswordLock(existing as unknown as BC_AppearanceItem, {
+        applyConsentPadlock(existing as unknown as BC_AppearanceItem, {
             memberNumber: existingProperty.LockMemberNumber ?? lockMemberNumber,
-            removeTimer: newExpiry,
             hint: existingProperty.Hint ?? "Dare in progress!",
             password: existingProperty.Password,
         });
@@ -541,9 +534,8 @@ export async function applyForfeitForDare(
     const lockTime = durationMsOverride ?? forfeit.lockTimeMs;
     if (lockTime) {
         logger.info(`[Casino] Locking forfeit ${forfeitKey} for ${lockTime}ms`);
-        applyTimerPasswordLock(added, {
+        applyConsentPadlock(added, {
             memberNumber: lockMemberNumber,
-            removeTimer: Date.now() + lockTime,
             hint: "Dare in progress!",
         });
 
@@ -610,10 +602,8 @@ function makePet(
     });
     petSuitItem.SetColor(characterHairColor);
     petSuitItem.Extended?.SetType("Classic");
-    applyTimerPasswordLock(petSuitItem, {
+    applyConsentPadlock(petSuitItem, {
         memberNumber: lockMemberNumber,
-        removeTimer:
-            Date.now() + (hours > 0 ? hours * 60 * 60 * 1000 : 20 * 60 * 1000),
         hint: "Better luck next time!",
     });
 
@@ -642,14 +632,6 @@ function makePet(
         const collar = character.Appearance.AddItem(
             AssetGet("ItemNeck", "PetCollar"),
         );
-        /*collar.lock("TimerPasswordPadlock", lockMemberNumber, {
-            Password: generatePassword(),
-            Hint: "Better luck next time!",
-            RemoveItem: true,
-            RemoveTimer: Date.now() + hours * 60 * 60 * 1000,
-            ShowTimer: true,
-            LockSet: true,
-        });*/
         collar.SetCraft({
             Name: `Pixie Casino Pet Collar`,
             Description:

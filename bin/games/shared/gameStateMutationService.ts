@@ -170,6 +170,11 @@ export interface GameStateMutationService {
     ): Promise<KennelSession | undefined>;
     exitCage(memberNumber: number, actor?: number): Promise<boolean>;
     enterKennel(memberNumber: number, actor?: number): Promise<boolean>;
+    startTimedKennelSession(
+        memberNumber: number,
+        expiresAt: number,
+        actor?: number,
+    ): Promise<boolean>;
     exitKennel(memberNumber: number, actor?: number): Promise<boolean>;
     updateGameProgress(
         memberNumber: number,
@@ -276,6 +281,7 @@ type MutationStore = Pick<
     | "recordCageEntry"
     | "recordCageExit"
     | "recordKennelEntry"
+    | "startTimedKennelSession"
     | "recordKennelExit"
     | "beginReleaseRemoval"
     | "recordReleaseRemovalAttempt"
@@ -1060,6 +1066,34 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
             await this.audit(memberNumber, "enterKennel", {}, actor);
             return true;
         }, "enterKennel");
+    }
+
+    public async startTimedKennelSession(
+        memberNumber: number,
+        expiresAt: number,
+        actor = memberNumber,
+    ): Promise<boolean> {
+        this.validateMember(memberNumber);
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+            throw new ValidationError("expiresAt must be in the future", {
+                fields: ["expiresAt"],
+            });
+        }
+        return this.withRetry(async () => {
+            const applied = await this.unifiedStore.startTimedKennelSession(
+                memberNumber,
+                expiresAt,
+                actor,
+            );
+            if (!applied) return false;
+            await this.audit(
+                memberNumber,
+                "startTimedKennelSession",
+                { expiresAt, lockType: "SafewordPadlock" },
+                actor,
+            );
+            return true;
+        }, "startTimedKennelSession");
     }
 
     public async exitKennel(

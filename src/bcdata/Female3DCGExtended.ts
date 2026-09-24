@@ -24027,6 +24027,15 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				{ Name: "Cartoon" },
 			],
 		}, // Oilpaperumbrella
+		ToyHammer: {
+			Archetype: ExtendedArchetype.TYPED,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Options: [{ Name: "NoBonk!" }, { Name: "BONK!" }],
+		}, // ToyHammer
 	}, // ItemHandheld
 	EyeShadow: {
 		Running: {

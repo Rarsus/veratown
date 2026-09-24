@@ -23,7 +23,7 @@ import {
 } from "bc-bot";
 import { wait } from "../hub/utils";
 import { GameTimer } from "./casino/gameTimer";
-import { applyTimerPasswordLock } from "./shared/timerPasswordLock";
+import { applyConsentPadlock } from "./shared/consentPadlock";
 import { CommandValidator } from "./shared/commandValidator";
 import { UnifiedCharacterStore } from "./shared/unifiedCharacterStore";
 import {
@@ -58,6 +58,25 @@ import { GameManager, Game } from "./dare/gameManager";
 // How long a repeat dare-evader stays locked in the pillory (first pass is
 // only locked until their next draw instead - see the "pass" command).
 const PILLORY_REPEAT_LOCK_MS = 4 * 60 * 60 * 1000;
+
+export interface RepeatPilloryLock {
+    memberNumber: number;
+    expiresAt: number;
+    lockType: "SafewordPadlock";
+    status: "active" | "expired" | "safeword-released";
+}
+
+export function createRepeatPilloryLock(
+    memberNumber: number,
+    expiresAt: number,
+): RepeatPilloryLock {
+    return {
+        memberNumber,
+        expiresAt,
+        lockType: "SafewordPadlock",
+        status: "active",
+    };
+}
 
 // How long a player gets to "!dare forfeit" into the kennel instead of
 // having a drawn bondage dare's effect applied automatically.
@@ -237,6 +256,8 @@ Game Overview
     // Members currently pilloried "until their next draw" (first pass),
     // released automatically the next time they successfully !dare draw.
     private pilloriedUntilNextDraw = new Set<number>();
+    private repeatPilloryLocks = new Map<number, RepeatPilloryLock>();
+    private repeatPilloryTimers = new Map<number, GameTimer>();
 
     // Members who've left the room and are on their 1-minute grace period
     // before being purged from the lobby/game they were in.
@@ -399,6 +420,8 @@ Game Overview
      */
     public async cleanup?(): Promise<void> {
         this.turnTimerManager.clearAll();
+        for (const timer of this.repeatPilloryTimers.values()) timer.clear();
+        this.repeatPilloryTimers.clear();
         // Additional cleanup as needed
     }
 
@@ -896,7 +919,7 @@ Game Overview
                     );
                 }
 
-                this.applyPassConsequence(senderCharacter);
+                await this.applyPassConsequence(senderCharacter);
                 this.finishTurn(senderCharacter.MemberNumber);
                 this.persistState();
                 break;
@@ -1289,7 +1312,9 @@ Game Overview
     // both by the explicit "!dare pass" command and by auto-pass when
     // someone doesn't respond to their turn in time (or catches up on
     // penalties for turns missed while disconnected).
-    private applyPassConsequence = (character: API_Character): void => {
+    private applyPassConsequence = async (
+        character: API_Character,
+    ): Promise<void> => {
         const memberNumber = character.MemberNumber;
         const passCount = (this.passCounts.get(memberNumber) ?? 0) + 1;
         this.passCounts.set(memberNumber, passCount);
@@ -1312,15 +1337,22 @@ Game Overview
                 `*${character} chickens out of their dare and is clamped into the pillory - stuck there until their next draw!`,
             );
         } else {
+            const expiresAt = Date.now() + PILLORY_REPEAT_LOCK_MS;
+            this.repeatPilloryLocks.set(
+                memberNumber,
+                createRepeatPilloryLock(memberNumber, expiresAt),
+            );
+            await this.persistStateNow();
             pillory.SetCraft({
                 Name: "Dare: Repeat Evader",
                 Description: `${character} has repeatedly evaded their dares and is locked into the pillory for 4 hours, marked for everyone to see.`,
             });
-            applyTimerPasswordLock(pillory, {
+            applyConsentPadlock(pillory, {
                 memberNumber: this.conn.Player.MemberNumber,
-                removeTimer: Date.now() + PILLORY_REPEAT_LOCK_MS,
+                consentTrigger: "safeword",
                 showTimer: false,
             });
+            this.armRepeatPilloryTimer(memberNumber, expiresAt);
             this.pilloriedUntilNextDraw.delete(memberNumber);
 
             void syncAppearanceMutation(
@@ -1356,6 +1388,7 @@ Game Overview
         }
 
         this.addBinds(memberNumber, passCount === 1 ? 1 : 2);
+        if (passCount === 1) this.persistState();
     };
 
     // Clears a specific game's idle-turn reminder/auto-pass timers, if any
@@ -1449,8 +1482,9 @@ Game Overview
             "Emote",
             `*${character} doesn't respond in time to draw a dare - the bot passes on their behalf!`,
         );
-        this.applyPassConsequence(character);
-        this.finishTurn(memberNumber);
+        void this.applyPassConsequence(character).then(() =>
+            this.finishTurn(memberNumber),
+        );
     };
 
     // Fired whenever anyone leaves the room. Rather than removing them
@@ -1844,6 +1878,7 @@ Game Overview
             bindCounts: [...this.bindCounts.entries()],
             passCounts: [...this.passCounts.entries()],
             pilloriedUntilNextDraw: [...this.pilloriedUntilNextDraw],
+            repeatPilloryLocks: [...this.repeatPilloryLocks.values()],
             dressingBlocked: [...this.dressingBlocked],
             pendingDraws: [...this.pendingDraws.entries()],
             pendingBondage,
@@ -1864,6 +1899,11 @@ Game Overview
         this.pilloriedUntilNextDraw = new Set(
             state.pilloriedUntilNextDraw ?? [],
         );
+        this.repeatPilloryLocks = new Map(
+            (state.repeatPilloryLocks ?? []).map(
+                (lock: RepeatPilloryLock) => [lock.memberNumber, lock] as const,
+            ),
+        );
         this.dressingBlocked = new Map(state.dressingBlocked ?? []);
         this.pendingDraws = new Map(state.pendingDraws ?? []);
 
@@ -1874,6 +1914,10 @@ Game Overview
         }
 
         const now = Date.now();
+
+        for (const lock of this.repeatPilloryLocks.values()) {
+            this.armRepeatPilloryTimer(lock.memberNumber, lock.expiresAt, now);
+        }
 
         for (const [memberNumber, entry] of state.pendingBondage ?? []) {
             const remaining = entry.deadlineAt - now;
@@ -1898,6 +1942,53 @@ Game Overview
             );
             this.disconnectGraceTimers.set(memberNumber, timer);
         }
+    };
+
+    private persistStateNow = async (): Promise<void> => {
+        await this.buildAndSaveState();
+    };
+
+    private armRepeatPilloryTimer = (
+        memberNumber: number,
+        expiresAt: number,
+        now = Date.now(),
+    ): void => {
+        this.repeatPilloryTimers.get(memberNumber)?.clear();
+        const timer = new GameTimer();
+        timer.start(Math.max(0, expiresAt - now), () => {
+            void this.expireRepeatPillory(memberNumber);
+        });
+        this.repeatPilloryTimers.set(memberNumber, timer);
+    };
+
+    private expireRepeatPillory = async (
+        memberNumber: number,
+    ): Promise<void> => {
+        const lock = this.repeatPilloryLocks.get(memberNumber);
+        if (!lock || lock.status !== "active") return;
+
+        const character = this.conn.chatRoom?.findMember(memberNumber);
+        if (!character) {
+            this.armRepeatPilloryTimer(
+                memberNumber,
+                lock.expiresAt,
+                Date.now(),
+            );
+            return;
+        }
+        const pillory = character?.Appearance.getAppearanceData().find(
+            (item) =>
+                item.Group === "ItemArms" &&
+                item.Name === "Pillory" &&
+                item.Property?.LockMemberNumber ===
+                    this.conn.Player.MemberNumber,
+        );
+        if (pillory) character.Appearance.RemoveItem("ItemArms");
+
+        lock.status = "expired";
+        this.repeatPilloryLocks.delete(memberNumber);
+        this.repeatPilloryTimers.delete(memberNumber);
+        this.persistState();
     };
 
     private applyDareEffect = async (

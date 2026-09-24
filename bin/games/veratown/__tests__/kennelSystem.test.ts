@@ -522,6 +522,30 @@ test("KennelSystem recovers a live Kennel device outside the tile", async () => 
     assert.deepEqual(mutations.entries, [11]);
 });
 
+test("KennelSystem releases an expired timed session during recovery", async () => {
+    const created = createCharacter(23);
+    created.character.MapPos = { X: 1, Y: 1 };
+    created.character.Appearance.AddItem({});
+    const mutations = createMutationService({
+        enteredAt: Date.now() - 10_000,
+        totalTime: 0,
+        expiresAt: Date.now() - 1,
+        lockType: "SafewordPadlock",
+    });
+    const { connector } = createConnector([created.character]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+    );
+
+    await system.reloadLocations([]);
+
+    assert.equal(created.device, undefined);
+    assert.deepEqual(mutations.exits, [23]);
+});
+
 test("KennelSystem finalizes an exit only after leaving and removing the device", async () => {
     const created = createCharacter(12);
     const mutations = createMutationService({

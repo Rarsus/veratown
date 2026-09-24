@@ -231,6 +231,7 @@ export class Casino implements GamePlugin {
             this.mutationService,
             undefined,
             this.messageSender,
+            this.unifiedStore,
         );
 
         this.cocktailOfTheDayKey = config?.cocktail;
@@ -507,7 +508,7 @@ export class Casino implements GamePlugin {
      * Cleanup when the plugin is being stopped.
      */
     public async cleanup?(): Promise<void> {
-        // Additional cleanup as needed
+        this.forfeitService.cleanup();
     }
 
     // Store config for registerTriggers method
@@ -560,6 +561,7 @@ export class Casino implements GamePlugin {
     private onCharacterEntered = async (character: API_Character) => {
         if (!this.enabled) return;
 
+        await this.forfeitService.reconcileManagedForfeits(character);
         await this.getStore().setPlayerName(
             character.MemberNumber,
             character.toString(),

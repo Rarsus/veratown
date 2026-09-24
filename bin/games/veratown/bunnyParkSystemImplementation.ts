@@ -118,6 +118,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterPark = async (character: API_Character) => {
         if (!this.enabled) return;
+        await this.punishmentService.recover(character);
         this.messageSender.whisperToCharacter(
             character,
             "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +

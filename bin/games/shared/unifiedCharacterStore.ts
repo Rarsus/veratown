@@ -2053,6 +2053,7 @@ export class UnifiedCharacterStore {
             lastAppearanceAt: profile.veratown.lastAppearanceAt,
             currentRestraints: profile.veratown.currentRestraints,
             bunnyPunishmentArtifact: profile.veratown.bunnyPunishmentArtifact,
+            bunnyPunishmentCount: profile.veratown.bunnyPunishmentCount ?? 0,
             cageIncarcerations: profile.veratown.cageIncarcerations ?? [],
             kennelSessions: profile.veratown.kennelSessions ?? [],
             totalTimeInCages: profile.veratown.totalTimeInCages ?? 0,
@@ -2516,25 +2517,47 @@ export class UnifiedCharacterStore {
 
     public async recordBunnyPunishmentArtifact(
         artifact: BunnyPunishmentArtifact,
+        expectedArtifactVersion?: number,
     ): Promise<void> {
         this.assertMemberNumber(artifact.memberNumber);
         await this.getProfile(artifact.memberNumber);
-        await this.profiles.updateOne(
-            { _id: artifact.memberNumber },
-            {
-                $set: {
-                    "veratown.bunnyPunishmentArtifact": artifact,
-                    "veratown.updatedAt": artifact.appliedAt,
-                    updatedAt: artifact.appliedAt,
-                    lastAccessedAt: artifact.appliedAt,
-                    lastAccessedBy: "veratown",
-                },
-                $inc: {
-                    "veratown.version": asVersion(1),
-                    version: asVersion(1),
-                },
+        const filter =
+            expectedArtifactVersion === undefined
+                ? { _id: artifact.memberNumber }
+                : {
+                      _id: artifact.memberNumber,
+                      $or: [
+                          {
+                              "veratown.bunnyPunishmentArtifact.artifactVersion":
+                                  expectedArtifactVersion,
+                          },
+                          ...(expectedArtifactVersion === 0
+                              ? [
+                                    {
+                                        "veratown.bunnyPunishmentArtifact": {
+                                            $exists: false,
+                                        },
+                                    },
+                                ]
+                              : []),
+                      ],
+                  };
+        const result = await this.profiles.updateOne(filter, {
+            $set: {
+                "veratown.bunnyPunishmentArtifact": artifact,
+                "veratown.updatedAt": artifact.appliedAt,
+                updatedAt: artifact.appliedAt,
+                lastAccessedAt: artifact.appliedAt,
+                lastAccessedBy: "veratown",
             },
-        );
+            $inc: {
+                "veratown.version": asVersion(1),
+                version: asVersion(1),
+            },
+        });
+        if (result.matchedCount === 0) {
+            throw new Error("Bunny punishment artifact version conflict");
+        }
         await this.recordAppearanceLifecycleEvent({
             timestamp: artifact.appliedAt,
             type: "bunny_sign_added",
@@ -3164,6 +3187,51 @@ export class UnifiedCharacterStore {
         await this.recordEvent(event);
         await this.eventBus.publish(event);
         return true;
+    }
+
+    public async startTimedKennelSession(
+        memberNumber: number,
+        expiresAt: number,
+        detailedBy?: number,
+    ): Promise<boolean> {
+        this.assertMemberNumber(memberNumber);
+        await this.init();
+
+        const profile = await this.getProfile(memberNumber);
+        const sessions = [...(profile.veratown.kennelSessions ?? [])];
+        const current = [...sessions]
+            .reverse()
+            .find((session) => !session.releasedAt);
+        if (!current || current.expiresAt !== undefined) return false;
+
+        const now = Date.now();
+        current.expiresAt = expiresAt;
+        current.lockType = "SafewordPadlock";
+        current.detailedBy = detailedBy ?? current.detailedBy;
+        const result = await this.profiles.updateOne(
+            {
+                _id: memberNumber,
+                "veratown.kennelSessions": {
+                    $elemMatch: {
+                        enteredAt: current.enteredAt,
+                        releasedAt: { $exists: false },
+                        expiresAt: { $exists: false },
+                    },
+                },
+            },
+            {
+                $set: {
+                    "veratown.kennelSessions": sessions,
+                    "veratown.updatedAt": now,
+                    "veratown.version": profile.veratown.version + 1,
+                    lastAccessedAt: now,
+                    lastAccessedBy: "veratown",
+                    updatedAt: now,
+                    version: profile.version + 1,
+                },
+            },
+        );
+        return result.modifiedCount === 1;
     }
 
     /**

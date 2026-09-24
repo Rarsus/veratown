@@ -378,12 +378,12 @@ test("ForfeitService: applyForfeit applies item locking", () => {
 
     service.applyForfeit(mockChar as any, "boots", 1111);
     assert.ok(lockCalled);
-    assert.equal(addedItem.Property.LockedBy, "TimerPasswordPadlock");
+    assert.equal(addedItem.Property.LockedBy, "SafewordPadlock");
     assert.equal(addedItem.Property.LockMemberNumber, 1111);
-    assert.equal(addedItem.Property.ShowTimer, true);
+    assert.equal(addedItem.Property.ShowTimer, undefined);
     assert.equal(addedItem.Property.LockSet, true);
-    assert.ok(addedItem.Property.Password);
-    assert.ok(addedItem.Property.RemoveTimer > Date.now());
+    assert.equal(addedItem.Property.Password, undefined);
+    assert.equal(addedItem.Property.RemoveTimer, undefined);
 });
 
 test("ForfeitService: persists applied forfeits through the mutation service", async () => {

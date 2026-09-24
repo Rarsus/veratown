@@ -242,7 +242,7 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
         },
         "veratown.bunnyPunishmentArtifact": {
             type: "object",
-            description: "Durable bunny sign retention artifact",
+            description: "Durable bot-managed Bunny punishment sentence",
         },
         "veratown.bunnyPunishmentCount": {
             type: "int",

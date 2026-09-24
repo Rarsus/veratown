@@ -22,7 +22,7 @@ import { CommandSystemMessageFeatureSystem } from "../shared/commandSystemMessag
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import type { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
-import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
+import { applyConsentPadlock } from "../shared/consentPadlock";
 import type { KennelSystem } from "./kennelSystem";
 import {
     KENNEL_DOOR_CLOSE_DELAY_MS,
@@ -187,7 +187,19 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
 
         // Apply the lock
         const durationMs = minutes * 60 * 1000;
+        const lockExpiry = Date.now() + durationMs;
         try {
+            const persisted =
+                await this.mutationService?.startTimedKennelSession(
+                    target.MemberNumber,
+                    lockExpiry,
+                    sender.MemberNumber,
+                );
+            if (persisted !== true) {
+                throw new Error(
+                    "Active kennel session is already timed or unavailable",
+                );
+            }
             await syncAppearanceMutation(
                 target,
                 () => {
@@ -199,10 +211,8 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
                         );
                     }
 
-                    const lockExpiry = Date.now() + durationMs;
-                    applyTimerPasswordLock(kennel as any, {
+                    applyConsentPadlock(kennel as any, {
                         memberNumber: sender.MemberNumber,
-                        removeTimer: lockExpiry,
                     });
                 },
                 50,

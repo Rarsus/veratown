@@ -6,16 +6,15 @@ export interface TimerPasswordLockOptions {
     hint?: string;
     password?: string;
     showTimer?: boolean;
+    now?: () => number;
 }
 
 export function applyTimerPasswordLock(
     item: any,
     options: TimerPasswordLockOptions,
 ): void {
-    if (
-        !Number.isFinite(options.removeTimer) ||
-        options.removeTimer <= Date.now()
-    ) {
+    const now = options.now ?? Date.now;
+    if (!Number.isFinite(options.removeTimer) || options.removeTimer <= now()) {
         throw new Error("TimerPasswordPadlock requires a future removeTimer");
     }
 

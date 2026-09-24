@@ -19,12 +19,14 @@ import {
     API_AppearanceItem,
 } from "bc-bot";
 import { FORFEITS } from "./forfeits";
-import { applyTimerPasswordLock } from "../shared/timerPasswordLock";
+import { applyConsentPadlock } from "../shared/consentPadlock";
 
 import { createLogger } from "../../logging";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import { DeviceFactory } from "../shared/deviceFactory";
 import type { MessageSender } from "../shared/messageSender";
+import type { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
+import { syncAppearanceMutation } from "../veratown/shared/appearanceSync";
 
 /**
  * Result of forfeit validation
@@ -46,6 +48,7 @@ export class ForfeitService {
     private readonly logger = createLogger("ForfeitService");
     private lockedItems: Map<number, Map<string, number>> = new Map();
     private readonly deviceFactory: DeviceFactory;
+    private readonly expiryTimers = new Map<number, NodeJS.Timeout>();
 
     /** Tracks cheat strikes per member */
     private cheatStrikes: Map<number, number> = new Map();
@@ -54,8 +57,112 @@ export class ForfeitService {
         private readonly mutationService?: GameStateMutationService,
         deviceFactory = new DeviceFactory(),
         private readonly messageSender?: MessageSender,
+        private readonly unifiedStore?: UnifiedCharacterStore,
     ) {
         this.deviceFactory = deviceFactory;
+    }
+
+    private scheduleExpiry(character: API_Character, expiresAt: number): void {
+        const memberNumber = character.MemberNumber;
+        const existing = this.expiryTimers.get(memberNumber);
+        if (existing) clearTimeout(existing);
+
+        const timer = setTimeout(
+            () => void this.reconcileManagedForfeits(character),
+            Math.max(0, expiresAt - Date.now()),
+        );
+        timer.unref?.();
+        this.expiryTimers.set(memberNumber, timer);
+    }
+
+    public async reconcileManagedForfeits(
+        character: API_Character,
+    ): Promise<void> {
+        if (!this.unifiedStore || !this.mutationService) return;
+
+        const view = await this.unifiedStore.getDareView(
+            character.MemberNumber,
+        );
+        let nextExpiry: number | undefined;
+        for (const record of view.activeBondage) {
+            const [rawGroup, ...nameParts] = record.forfeitKey.split(":");
+            const group = rawGroup as AssetGroupName;
+            const itemName = nameParts.join(":");
+            if (
+                !group ||
+                !itemName ||
+                !Object.values(FORFEITS).some((forfeit) =>
+                    forfeit
+                        .items(character)
+                        .some(
+                            (item) =>
+                                item.Group === group && item.Name === itemName,
+                        ),
+                )
+            ) {
+                continue;
+            }
+
+            const currentItem = character.Appearance.InventoryGet(group);
+            if (!currentItem || currentItem.Name !== itemName) {
+                await this.mutationService.removeBondage(
+                    character.MemberNumber,
+                    record.forfeitKey,
+                );
+                await this.mutationService.recordEvent({
+                    timestamp: Date.now(),
+                    type: "casino_forfeit_released",
+                    source: "casino",
+                    actor: character.MemberNumber,
+                    target: character.MemberNumber,
+                    data: { forfeitKey: record.forfeitKey, reason: "safeword" },
+                    processed: true,
+                } as any);
+                continue;
+            }
+
+            if (record.lockedUntil > Date.now()) {
+                nextExpiry = Math.min(
+                    nextExpiry ?? record.lockedUntil,
+                    record.lockedUntil,
+                );
+                continue;
+            }
+
+            await syncAppearanceMutation(
+                character,
+                () => character.Appearance.RemoveItem(group),
+                50,
+                undefined,
+                { reason: "forfeit_expired" },
+            );
+            character.Appearance.MakeAppearanceBundle();
+            const remaining = character.Appearance.InventoryGet(group);
+            if (remaining?.Name === itemName) continue;
+
+            await this.mutationService.removeBondage(
+                character.MemberNumber,
+                record.forfeitKey,
+            );
+            await this.mutationService.recordEvent({
+                timestamp: Date.now(),
+                type: "casino_forfeit_released",
+                source: "casino",
+                actor: character.MemberNumber,
+                target: character.MemberNumber,
+                data: { forfeitKey: record.forfeitKey, reason: "expired" },
+                processed: true,
+            } as any);
+        }
+
+        if (nextExpiry !== undefined)
+            this.scheduleExpiry(character, nextExpiry);
+        else this.expiryTimers.delete(character.MemberNumber);
+    }
+
+    public cleanup(): void {
+        for (const timer of this.expiryTimers.values()) clearTimeout(timer);
+        this.expiryTimers.clear();
     }
 
     /**
@@ -247,9 +354,8 @@ export class ForfeitService {
         // Apply lock if configured
         if (forfeit.lockTimeMs) {
             const lockTimeMs = forfeit.lockTimeMs;
-            applyTimerPasswordLock(added, {
+            applyConsentPadlock(added, {
                 memberNumber: adminMemberNumber,
-                removeTimer: Date.now() + lockTimeMs,
                 hint: "Better luck next time!",
             });
         }
@@ -285,6 +391,10 @@ export class ForfeitService {
             },
             processed: true,
         } as any);
+
+        if (forfeit.lockTimeMs) {
+            this.scheduleExpiry(character, Date.now() + forfeit.lockTimeMs);
+        }
     }
 
     /**
