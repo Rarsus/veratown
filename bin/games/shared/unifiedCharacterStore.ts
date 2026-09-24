@@ -708,6 +708,23 @@ export class UnifiedCharacterStore {
 
         let profile = await this.profiles.findOne({ _id: memberNumber });
         if (profile) {
+            if (!profile.dare) {
+                const dare = createDareState();
+                await this.profiles.updateOne(
+                    { _id: memberNumber },
+                    { $set: { dare } },
+                );
+                profile = { ...profile, dare };
+            } else if (!Array.isArray(profile.dare.suspendedGames)) {
+                await this.profiles.updateOne(
+                    { _id: memberNumber },
+                    { $set: { "dare.suspendedGames": [] } },
+                );
+                profile = {
+                    ...profile,
+                    dare: { ...profile.dare, suspendedGames: [] },
+                };
+            }
             if (!profile.progression) {
                 // Phase 2A.7 migration/backfill: profiles created before
                 // progression tracking existed are missing this field.
@@ -1574,7 +1591,9 @@ export class UnifiedCharacterStore {
             dressingBlockedUntil: profile.dare.dressingBlockedUntil,
             totalGamesPlayed: profile.dare.totalGamesPlayed,
             // Phase 3: Game suspension
-            suspendedGames: profile.dare.suspendedGames.map((g) => g.gameId),
+            suspendedGames: (profile.dare.suspendedGames ?? []).map(
+                (g) => g.gameId,
+            ),
         };
     }
 
