@@ -42,8 +42,11 @@ Implemented and verified in the current worktree:
   restart/reconciliation paths.
 - Shared MongoDB type/schema registration and mutation-store contracts were
   extended for the new state.
+- The consent helper has focused contract coverage, including runtime
+  rejection of unsupported lock types; Bunny artifact closure now uses
+  optimistic version checks to reject stale release workers.
 - `pnpm types`, `git diff --check`, and focused Cage, Kennel, Bunny, Casino, and
-  Dare suites pass independently (76 tests total).
+  Dare suites plus shared consent tests pass independently (84 tests total).
 
 Still outstanding before calling the migration complete:
 
@@ -55,6 +58,10 @@ Still outstanding before calling the migration complete:
   compatibility reads remain in live synchronization and Cage recovery.
 - Full Veratown tests, staging Bondage Club verification, rollback rehearsal,
   feature-flagged worker rollout, and operational diagnostics remain.
+- The repository-wide `pnpm test:unit` run currently has unrelated failures in
+  existing event and release-system fixtures, including missing live connection
+  setup and a port collision; those need separate cleanup before using the full
+  suite as a migration gate.
 
 ## Target Architecture
 
@@ -429,7 +436,8 @@ Release must be safe to run more than once.
 
 ### Milestone 1: Shared infrastructure
 
-- [x] Finalize `consentPadlock.ts` API and production integration.
+- [x] Finalize `consentPadlock.ts` API, production integration, and contract
+      tests.
 - [x] Add typed feature-state persistence and schema validation for migrated
       session/artifact fields.
 - [ ] Add generic mutation-service methods for managed-lock create, reconcile,
@@ -478,8 +486,9 @@ Release must be safe to run more than once.
 - [x] Implement one resettable active sentence per character.
 - [x] Implement expiry release and restart recovery; safeword classification
       still needs dedicated verification.
-- [ ] Protect release with operation IDs and optimistic version checks.
-- [ ] Add Bunny unit, recovery, concurrency, and appearance-verification tests.
+- [x] Protect release with operation IDs and optimistic version checks.
+- [x] Add Bunny unit, recovery, concurrency, and appearance-verification tests;
+      live/staging verification remains outstanding.
 
 ### Milestone 7: Legacy conversion and rollout
 

@@ -462,7 +462,10 @@ export class BunnyPunishmentService {
             cleanupReason: status,
         };
         if (this.repository.updateArtifact) {
-            await this.repository.updateArtifact(closedArtifact);
+            await this.repository.updateArtifact(
+                closedArtifact,
+                artifact.artifactVersion,
+            );
         }
         this.releaseTimers.delete(character.MemberNumber);
     }

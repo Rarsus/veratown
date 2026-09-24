@@ -19,7 +19,10 @@ export interface BunnyPunishmentRepository {
         artifact: BunnyPunishmentArtifact,
         expectedArtifactVersion?: number,
     ): Promise<void>;
-    updateArtifact?(artifact: BunnyPunishmentArtifact): Promise<void>;
+    updateArtifact?(
+        artifact: BunnyPunishmentArtifact,
+        expectedArtifactVersion?: number,
+    ): Promise<void>;
     incrementCount(memberNumber: number): Promise<void>;
     recordAudit(
         memberNumber: number,
@@ -53,8 +56,12 @@ export class UnifiedBunnyPunishmentRepository implements BunnyPunishmentReposito
 
     public async updateArtifact(
         artifact: BunnyPunishmentArtifact,
+        expectedArtifactVersion?: number,
     ): Promise<void> {
-        await this.store.recordBunnyPunishmentArtifact(artifact);
+        await this.store.recordBunnyPunishmentArtifact(
+            artifact,
+            expectedArtifactVersion,
+        );
     }
 
     public async getState(memberNumber: number): Promise<{

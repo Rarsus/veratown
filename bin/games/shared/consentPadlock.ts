@@ -15,6 +15,12 @@ export interface ConsentPadlockOptions {
     showTimer?: boolean;
 }
 
+const CONSENT_PADLOCK_TYPES = new Set<ConsentPadlockType>([
+    "SafewordPadlock",
+    "ExclusivePadlock",
+    "PasswordPadlock",
+]);
+
 /**
  * Resolves the lock policy at one boundary so future consent states can choose
  * a different Bondage Club lock without changing every feature system.
@@ -32,6 +38,11 @@ export function applyConsentPadlock(
     options: ConsentPadlockOptions,
 ): ConsentPadlockType {
     const lockType = resolveConsentPadlockType(options);
+    if (!CONSENT_PADLOCK_TYPES.has(lockType)) {
+        throw new Error(
+            `Unsupported consent padlock type: ${String(lockType)}`,
+        );
+    }
     const lockProperty = {
         ...(lockType === "SafewordPadlock"
             ? {}
