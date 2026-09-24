@@ -45,6 +45,76 @@ const pendingAppearanceConfirmations = new WeakMap<
 >();
 let mutationSequence = 0;
 
+function appearanceItemKey(item: BC_AppearanceItem): string {
+    return `${item.Group}/${item.Name}`;
+}
+
+function sameAppliedItem(
+    observed: BC_AppearanceItem | undefined,
+    expected: BC_AppearanceItem,
+): boolean {
+    if (
+        !observed ||
+        appearanceItemKey(observed) !== appearanceItemKey(expected)
+    )
+        return false;
+
+    const expectedProperty = expected.Property as
+        Record<string, unknown> | undefined;
+    const observedProperty = observed.Property as
+        Record<string, unknown> | undefined;
+    for (const key of [
+        "LockedBy",
+        "LockMemberNumber",
+        "LockSet",
+        "Effect",
+        "Text",
+        "Text2",
+    ]) {
+        if (
+            (expectedProperty?.[key] !== undefined ||
+                observedProperty?.[key] !== undefined) &&
+            JSON.stringify(observedProperty?.[key]) !==
+                JSON.stringify(expectedProperty?.[key])
+        ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function createAppliedItemsPredicate(
+    before: readonly BC_AppearanceItem[],
+    expected: readonly BC_AppearanceItem[],
+): (appearance: readonly BC_AppearanceItem[]) => boolean {
+    const beforeByGroup = new Map(before.map((item) => [item.Group, item]));
+    const expectedByGroup = new Map(expected.map((item) => [item.Group, item]));
+    const changedGroups = [...expectedByGroup.entries()].filter(
+        ([group, item]) => {
+            const previous = beforeByGroup.get(group);
+            return previous === undefined || !sameAppliedItem(previous, item);
+        },
+    );
+
+    return (observed) => {
+        const observedByGroup = new Map(
+            observed.map((item) => [item.Group, item]),
+        );
+        return changedGroups.every(([group, expectedItem]) => {
+            const observedItem = observedByGroup.get(group);
+            if (sameAppliedItem(observedItem, expectedItem)) return true;
+
+            // An occupied slot may reject the new item. That is an accepted
+            // outcome, and the observed previous item remains authoritative.
+            const previousItem = beforeByGroup.get(group);
+            return (
+                previousItem !== undefined &&
+                sameAppliedItem(observedItem, previousItem)
+            );
+        });
+    };
+}
+
 function summarizeAppearance(appearance: readonly BC_AppearanceItem[]) {
     return appearance.map((item) => {
         const property = (item.Property ?? {}) as Record<string, unknown>;
@@ -177,6 +247,7 @@ export function registerAppearanceStateSynchronizer(
     synchronizer: (
         character: API_Character,
         context?: AppearanceMutationContext,
+        observedAppearance?: readonly BC_AppearanceItem[],
     ) => Promise<void>,
 ): void {
     appearanceStateSynchronizers.set(character, synchronizer);
@@ -193,6 +264,7 @@ export async function syncAppearanceMutation(
     onSynchronized?: (
         character: API_Character,
         context?: AppearanceMutationContext,
+        observedAppearance?: readonly BC_AppearanceItem[],
     ) => Promise<void>,
     options?: {
         throwOnSyncFailure?: boolean;
@@ -208,6 +280,8 @@ export async function syncAppearanceMutation(
         sendFullAppearanceUpdate?: boolean;
         awaitServerSync?: boolean;
         serverSyncTimeoutMs?: number;
+        serverSyncAttempts?: number;
+        verifyAppliedItems?: boolean;
         serverSyncPredicate?: (
             appearance: readonly BC_AppearanceItem[],
         ) => boolean;
@@ -243,6 +317,7 @@ async function executeAppearanceMutation(
     onSynchronized?: (
         character: API_Character,
         context?: AppearanceMutationContext,
+        observedAppearance?: readonly BC_AppearanceItem[],
     ) => Promise<void>,
     options?: {
         throwOnSyncFailure?: boolean;
@@ -258,6 +333,8 @@ async function executeAppearanceMutation(
         sendFullAppearanceUpdate?: boolean;
         awaitServerSync?: boolean;
         serverSyncTimeoutMs?: number;
+        serverSyncAttempts?: number;
+        verifyAppliedItems?: boolean;
         serverSyncPredicate?: (
             appearance: readonly BC_AppearanceItem[],
         ) => boolean;
@@ -284,6 +361,26 @@ async function executeAppearanceMutation(
     try {
         // Execute the mutation
         await mutation();
+        context.expectedAppearance =
+            character.Appearance.MakeAppearanceBundle();
+        const appliedItemsPredicate = createAppliedItemsPredicate(
+            beforeAppearance,
+            context.expectedAppearance,
+        );
+        const changedItemGroups = context.expectedAppearance.filter((item) => {
+            const previous = beforeAppearance.find(
+                (candidate) => candidate.Group === item.Group,
+            );
+            return previous === undefined || !sameAppliedItem(previous, item);
+        });
+        const shouldVerifyAppliedItems =
+            options?.verifyAppliedItems !== false &&
+            changedItemGroups.length > 0;
+        const shouldAwaitServerSync =
+            options?.awaitServerSync === true || shouldVerifyAppliedItems;
+        const serverSyncPredicate =
+            options?.serverSyncPredicate ??
+            (shouldVerifyAppliedItems ? appliedItemsPredicate : undefined);
 
         // AddItem() and RemoveItem() queue incremental item updates. A full
         // bundle is opt-in because sending it after every item mutation can
@@ -298,24 +395,44 @@ async function executeAppearanceMutation(
                 source: context.source,
                 reason: context.reason,
                 appearance: summarizeAppearance(localAppearance),
-                awaitServerSync: options.awaitServerSync ?? false,
+                awaitServerSync: shouldAwaitServerSync,
             });
-            const serverSync = options.awaitServerSync
-                ? waitForServerAppearanceSync(
-                      character,
-                      context,
-                      options.serverSyncPredicate,
-                      options.serverSyncTimeoutMs,
-                  )
-                : undefined;
-            if (serverSync) {
+            if (shouldAwaitServerSync) {
+                const attempts = Math.max(1, options.serverSyncAttempts ?? 2);
                 pendingAppearanceConfirmations.set(character, context);
-            }
-            try {
-                character.sendAppearanceUpdate();
-                await serverSync;
-            } finally {
-                if (serverSync) {
+                try {
+                    let lastError: unknown;
+                    for (let attempt = 1; attempt <= attempts; attempt++) {
+                        try {
+                            const serverSync = waitForServerAppearanceSync(
+                                character,
+                                context,
+                                serverSyncPredicate,
+                                options.serverSyncTimeoutMs,
+                            );
+                            character.sendAppearanceUpdate();
+                            await serverSync;
+                            context.verificationStatus = "confirmed";
+                            lastError = undefined;
+                            break;
+                        } catch (error) {
+                            lastError = error;
+                            if (attempt < attempts) {
+                                logger.warn(
+                                    "Retrying authoritative appearance update",
+                                    {
+                                        memberNumber: character.MemberNumber,
+                                        operationId: context.operationId,
+                                        attempt,
+                                        attempts,
+                                    },
+                                );
+                                await wait(delayMs);
+                            }
+                        }
+                    }
+                    if (lastError) throw lastError;
+                } finally {
                     pendingAppearanceConfirmations.delete(character);
                 }
             }
@@ -327,13 +444,14 @@ async function executeAppearanceMutation(
         }
 
         try {
+            const observedAppearance = context.observedAppearance;
             if (options?.deferStateSync) {
                 deferredAppearanceMutationContexts.set(character, context);
             } else {
                 await (
                     onSynchronized ??
                     appearanceStateSynchronizers.get(character)
-                )?.(character, context);
+                )?.(character, context, observedAppearance);
                 logger.debug("Appearance mutation persisted", {
                     memberNumber: character.MemberNumber,
                     operationId: context.operationId,
@@ -352,6 +470,24 @@ async function executeAppearanceMutation(
             if (options?.throwOnSyncFailure) throw error;
         }
     } catch (error) {
+        if (context.expectedAppearance && context.observedAppearance) {
+            context.verificationStatus ??= "timeout";
+            try {
+                await (
+                    onSynchronized ??
+                    appearanceStateSynchronizers.get(character)
+                )?.(character, context, context.observedAppearance);
+            } catch (persistenceError) {
+                logger.error(
+                    "Failed to persist observed appearance after confirmation failure",
+                    persistenceError,
+                    {
+                        memberNumber: character.MemberNumber,
+                        operationId: context.operationId,
+                    },
+                );
+            }
+        }
         logger.error(
             `[AppearanceSync] Failed to sync appearance for ${character.MemberNumber}:`,
             error,
@@ -392,6 +528,7 @@ async function waitForServerAppearanceSync(
 
     await new Promise<void>((resolve, reject) => {
         let settled = false;
+        let rawPacketObserved = false;
         const finish = (error?: Error) => {
             if (settled) return;
             settled = true;
@@ -404,7 +541,20 @@ async function waitForServerAppearanceSync(
             if (error) reject(error);
             else resolve();
         };
-        const onPacket = (diagnostic: unknown) => {
+        const onPacket = (diagnostic: any) => {
+            if (
+                diagnostic?.memberNumber === character.MemberNumber &&
+                Array.isArray(diagnostic.appearance)
+            ) {
+                rawPacketObserved = true;
+                context.observedAppearance = diagnostic.appearance;
+                context.verificationStatus = predicate?.(diagnostic.appearance)
+                    ? "confirmed"
+                    : "mismatch";
+                if (!predicate || context.verificationStatus === "confirmed") {
+                    finish();
+                }
+            }
             logger.debug("Received raw appearance sync packet", {
                 memberNumber: character.MemberNumber,
                 operationId: context.operationId,
@@ -445,6 +595,9 @@ async function waitForServerAppearanceSync(
             }
             const syncedAppearance =
                 syncedCharacter.Appearance.MakeAppearanceBundle();
+            if (!context.observedAppearance) {
+                context.observedAppearance = syncedAppearance;
+            }
             let matches = true;
             if (predicate) {
                 try {
@@ -467,7 +620,7 @@ async function waitForServerAppearanceSync(
                 matches,
                 appearance: summarizeAppearance(syncedAppearance),
             });
-            if (matches) {
+            if (matches && (!predicate || !rawPacketObserved)) {
                 logger.debug("Authoritative appearance confirmation accepted", {
                     memberNumber: character.MemberNumber,
                     operationId: context.operationId,

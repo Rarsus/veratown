@@ -15,6 +15,9 @@ export interface AppearanceMutationContext {
     source: AppearanceMutationSource;
     reason: string;
     cleanupAllowed?: boolean;
+    expectedAppearance?: BC_AppearanceItem[];
+    observedAppearance?: BC_AppearanceItem[];
+    verificationStatus?: "confirmed" | "mismatch" | "timeout" | "observed";
 }
 
 export type AppearanceVerificationStatus =

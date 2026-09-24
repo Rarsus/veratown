@@ -58,6 +58,7 @@ import {
     diffAppearance,
     getBunnySignState,
 } from "../veratown/shared/appearanceLifecycle";
+import { AppearanceSyncRecord } from "./unifiedCharacterTypes";
 import {
     asGameCounter,
     validateCharacterProfileTypes,
@@ -2198,7 +2199,9 @@ export class UnifiedCharacterStore {
             lastPosition: profile.veratown.lastPosition,
             lastPositionAt: profile.veratown.lastPositionAt,
             currentAppearance: profile.veratown.currentAppearance,
+            expectedAppearance: profile.veratown.expectedAppearance,
             lastAppearanceAt: profile.veratown.lastAppearanceAt,
+            lastAppearanceSync: profile.veratown.lastAppearanceSync,
             currentRestraints: profile.veratown.currentRestraints,
             bunnyPunishmentArtifact: profile.veratown.bunnyPunishmentArtifact,
             bunnyPunishmentCount: profile.veratown.bunnyPunishmentCount ?? 0,
@@ -2619,10 +2622,29 @@ export class UnifiedCharacterStore {
         appearance: VeratownState["currentAppearance"],
         restraints: CurrentRestraint[],
         forcePositionPersistence = false,
+        expectedAppearance?: VeratownState["currentAppearance"],
+        appearanceSync?: AppearanceSyncRecord,
     ): Promise<boolean> {
         this.assertMemberNumber(memberNumber);
         await this.getProfile(memberNumber);
         const now = asTimestamp(Date.now());
+        const setFields: Record<string, unknown> = {
+            "veratown.lastPosition": position,
+            "veratown.lastPositionAt": now,
+            "veratown.currentAppearance": appearance,
+            "veratown.lastAppearanceAt": now,
+            "veratown.currentRestraints": restraints,
+            "veratown.updatedAt": now,
+            lastAccessedAt: now,
+            lastAccessedBy: "veratown",
+            updatedAt: now,
+        };
+        if (expectedAppearance !== undefined) {
+            setFields["veratown.expectedAppearance"] = expectedAppearance;
+        }
+        if (appearanceSync !== undefined) {
+            setFields["veratown.lastAppearanceSync"] = appearanceSync;
+        }
         const result = await this.profiles.updateOne(
             forcePositionPersistence
                 ? { _id: memberNumber }
@@ -2643,17 +2665,7 @@ export class UnifiedCharacterStore {
                       ],
                   },
             {
-                $set: {
-                    "veratown.lastPosition": position,
-                    "veratown.lastPositionAt": now,
-                    "veratown.currentAppearance": appearance,
-                    "veratown.lastAppearanceAt": now,
-                    "veratown.currentRestraints": restraints,
-                    "veratown.updatedAt": now,
-                    lastAccessedAt: now,
-                    lastAccessedBy: "veratown",
-                    updatedAt: now,
-                },
+                $set: setFields,
                 $inc: {
                     "veratown.version": asVersion(1),
                     version: asVersion(1),

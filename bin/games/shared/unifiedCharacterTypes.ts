@@ -249,7 +249,9 @@ export interface VeratownState {
     lastPosition?: ChatRoomMapPos;
     lastPositionAt: number;
     currentAppearance?: BC_AppearanceItem[];
+    expectedAppearance?: BC_AppearanceItem[];
     lastAppearanceAt: number;
+    lastAppearanceSync?: AppearanceSyncRecord;
     cageIncarcerations: CageSession[];
     totalTimeInCages: number;
     kennelSessions: KennelSession[];
@@ -266,6 +268,16 @@ export interface VeratownState {
     keypadAccess: KeypadAccessRecord[];
     version: number;
     updatedAt: number;
+}
+
+export interface AppearanceSyncRecord {
+    operationId: string;
+    source: string;
+    reason: string;
+    status: "confirmed" | "mismatch" | "timeout" | "observed";
+    expectedAppearance: BC_AppearanceItem[];
+    observedAppearance: BC_AppearanceItem[];
+    observedAt: number;
 }
 
 // ===== PROGRESSION STATE (Phase 2A.7)
@@ -501,7 +513,9 @@ export interface VeratownView {
     lastPosition?: ChatRoomMapPos;
     lastPositionAt: number;
     currentAppearance?: BC_AppearanceItem[];
+    expectedAppearance?: BC_AppearanceItem[];
     lastAppearanceAt: number;
+    lastAppearanceSync?: AppearanceSyncRecord;
     currentRestraints: CurrentRestraint[];
     cageIncarcerations: CageSession[];
     kennelSessions: KennelSession[];

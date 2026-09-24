@@ -333,6 +333,8 @@ export function createVeratownState(
     return {
         lastPositionAt: now,
         lastAppearanceAt: now,
+        expectedAppearance: undefined,
+        lastAppearanceSync: undefined,
         cageIncarcerations: [],
         totalTimeInCages: 0,
         kennelSessions: [],

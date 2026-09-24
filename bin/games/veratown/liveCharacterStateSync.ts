@@ -19,7 +19,10 @@ import {
     BC_AppearanceItem,
 } from "bc-bot";
 import { createLogger } from "../../logging";
-import { CurrentRestraint } from "../shared/unifiedCharacterTypes";
+import {
+    AppearanceSyncRecord,
+    CurrentRestraint,
+} from "../shared/unifiedCharacterTypes";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import {
     filterValidAppearanceItems,
@@ -117,6 +120,7 @@ export class LiveCharacterStateSync {
         position = character.MapPos,
         forcePositionPersistence = false,
         mutationContext?: AppearanceMutationContext,
+        observedAppearance?: readonly BC_AppearanceItem[],
     ): Promise<boolean> {
         if (
             !mutationContext &&
@@ -127,16 +131,19 @@ export class LiveCharacterStateSync {
         }
         registerAppearanceStateSynchronizer(
             character,
-            async (current, context) => {
+            async (current, context, observed) => {
                 await this.syncCharacter(
                     current,
                     current.MapPos,
                     false,
                     context,
+                    observed,
                 );
             },
         );
-        const appearance = this.normalizedAppearance(character);
+        const appearance = observedAppearance
+            ? filterValidAppearanceItems([...observedAppearance])
+            : this.normalizedAppearance(character);
         const memberNumber = character.MemberNumber;
         const previous = this.syncChains.get(memberNumber) ?? Promise.resolve();
         const next = previous
@@ -165,6 +172,21 @@ export class LiveCharacterStateSync {
                         persisted.currentRestraints ?? [],
                     ),
                     forcePositionPersistence,
+                    mutationContext?.expectedAppearance,
+                    mutationContext?.expectedAppearance
+                        ? ({
+                              operationId: mutationContext.operationId,
+                              source: mutationContext.source,
+                              reason: mutationContext.reason,
+                              status:
+                                  mutationContext.verificationStatus ??
+                                  "observed",
+                              expectedAppearance:
+                                  mutationContext.expectedAppearance,
+                              observedAppearance: appearance,
+                              observedAt: Date.now(),
+                          } satisfies AppearanceSyncRecord)
+                        : undefined,
                 );
                 if (
                     persistedChanged &&

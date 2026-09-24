@@ -141,7 +141,22 @@ export interface AppearancePacketDiagnostic {
         passwordPresent: boolean;
         lockSet?: unknown;
     }>;
+    appearance: BC_AppearanceItem[];
     sourceMemberNumber?: number;
+}
+
+function sanitizeAppearance(
+    appearance: readonly BC_AppearanceItem[] | undefined,
+): BC_AppearanceItem[] {
+    return (appearance ?? []).map((item) => {
+        const copy = structuredClone(item) as BC_AppearanceItem;
+        if (copy.Property && "Password" in copy.Property) {
+            const property = { ...copy.Property } as Record<string, unknown>;
+            delete property.Password;
+            copy.Property = property as BC_AppearanceItem["Property"];
+        }
+        return copy;
+    });
 }
 
 export interface AppearanceItemUpdateDiagnostic {
@@ -183,6 +198,7 @@ function appearancePacketDiagnostic(
                 lockSet: property.LockSet,
             };
         }),
+        appearance: sanitizeAppearance(items),
         ...(sourceMemberNumber === undefined ? {} : { sourceMemberNumber }),
     };
 }
