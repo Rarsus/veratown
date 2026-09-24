@@ -399,6 +399,8 @@ async function waitForServerAppearanceSync(
             connector.off("CharacterSync", onSync);
             connector.off("AppearanceUpdateSent", onPacketSent);
             connector.off("AppearanceSyncReceived", onPacket);
+            connector.off("AppearanceItemUpdateSent", onItemUpdateSent);
+            connector.off("AppearanceItemUpdateReceived", onItemUpdateReceived);
             if (error) reject(error);
             else resolve();
         };
@@ -411,6 +413,22 @@ async function waitForServerAppearanceSync(
         };
         const onPacketSent = (diagnostic: unknown) => {
             logger.debug("Observed outbound appearance update packet", {
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                diagnostic,
+            });
+        };
+        const onItemUpdateSent = (diagnostic: unknown) => {
+            logger.debug("Observed outbound appearance item update", {
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                diagnostic,
+            });
+        };
+        const onItemUpdateReceived = (diagnostic: any) => {
+            if (diagnostic?.targetMemberNumber !== character.MemberNumber)
+                return;
+            logger.debug("Received appearance item update response", {
                 memberNumber: character.MemberNumber,
                 operationId: context.operationId,
                 diagnostic,

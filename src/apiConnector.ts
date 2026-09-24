@@ -117,6 +117,8 @@ interface ConnectorEvents {
     CharacterSync: [character: API_Character];
     AppearanceUpdateSent: [diagnostic: AppearancePacketDiagnostic];
     AppearanceSyncReceived: [diagnostic: AppearancePacketDiagnostic];
+    AppearanceItemUpdateSent: [diagnostic: AppearanceItemUpdateDiagnostic];
+    AppearanceItemUpdateReceived: [diagnostic: AppearanceItemUpdateDiagnostic];
     CharacterLeft: [
         sourceMemberNumber: number,
         character: API_Character,
@@ -140,6 +142,21 @@ export interface AppearancePacketDiagnostic {
         lockSet?: unknown;
     }>;
     sourceMemberNumber?: number;
+}
+
+export interface AppearanceItemUpdateDiagnostic {
+    connectionId: string;
+    direction: "outbound" | "inbound";
+    requestId?: string;
+    targetMemberNumber: number;
+    group: string;
+    name?: string;
+    action: "bind" | "unbind" | "remove" | "update";
+    timestamp: number;
+    lockedBy?: unknown;
+    lockMemberNumber?: unknown;
+    passwordPresent: boolean;
+    lockSet?: unknown;
 }
 
 function appearancePacketDiagnostic(
@@ -170,6 +187,37 @@ function appearancePacketDiagnostic(
     };
 }
 
+function appearanceItemUpdateDiagnostic(
+    connectionId: string,
+    direction: AppearanceItemUpdateDiagnostic["direction"],
+    update: ServerCharacterItemUpdate,
+    requestId?: string,
+): AppearanceItemUpdateDiagnostic {
+    const property = (update.Property ?? {}) as Record<string, unknown>;
+    const hasName = typeof update.Name === "string" && update.Name.length > 0;
+    const hasLock =
+        typeof property.LockedBy === "string" && property.LockedBy.length > 0;
+
+    return {
+        connectionId,
+        direction,
+        ...(requestId === undefined ? {} : { requestId }),
+        targetMemberNumber: update.Target,
+        group: update.Group,
+        ...(hasName ? { name: update.Name } : {}),
+        action: !hasName ? "remove" : hasLock ? "bind" : "unbind",
+        timestamp: Date.now(),
+        lockedBy: property.LockedBy,
+        lockMemberNumber: property.LockMemberNumber,
+        passwordPresent: typeof property.Password === "string",
+        lockSet: property.LockSet,
+    };
+}
+
+function appearanceItemUpdateKey(update: ServerCharacterItemUpdate): string {
+    return `${update.Target}:${update.Group}`;
+}
+
 let connectorSequence = 0;
 
 export class API_Connector extends EventEmitter<ConnectorEvents> {
@@ -184,6 +232,11 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private started = false;
     private shuttingDown = false;
     private roomJoined: RoomDefinition | undefined;
+    private itemUpdateSequence = 0;
+    private pendingItemUpdates = new Map<
+        string,
+        { requestId: string; sentAt: number }
+    >();
 
     private loggedIn = new PromiseResolve<void>();
     private roomSynced = new PromiseResolve<void>();
@@ -721,6 +774,22 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomCharacterItemUpdate = (
         update: ServerCharacterItemUpdate,
     ) => {
+        const key = appearanceItemUpdateKey(update);
+        const pending = this.pendingItemUpdates.get(key);
+        const requestId =
+            pending && Date.now() - pending.sentAt <= 5_000
+                ? pending.requestId
+                : undefined;
+        if (pending) this.pendingItemUpdates.delete(key);
+        this.emit(
+            "AppearanceItemUpdateReceived",
+            appearanceItemUpdateDiagnostic(
+                this.connectionId,
+                "inbound",
+                update,
+                requestId,
+            ),
+        );
         this._chatRoom?.characterItemUpdate(update);
         /*if (update.Target === this._player.MemberNumber) {
             const payload = {
@@ -923,6 +992,20 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     }
 
     public updateCharacterItem(update: ServerCharacterItemUpdate): void {
+        const requestId = `${this.connectionId}-item-${++this.itemUpdateSequence}`;
+        this.pendingItemUpdates.set(appearanceItemUpdateKey(update), {
+            requestId,
+            sentAt: Date.now(),
+        });
+        this.emit(
+            "AppearanceItemUpdateSent",
+            appearanceItemUpdateDiagnostic(
+                this.connectionId,
+                "outbound",
+                update,
+                requestId,
+            ),
+        );
         /*if (update.Target === this.Player.MemberNumber) {
             const payload = {
                 AssetFamily: "Female3DCG",
