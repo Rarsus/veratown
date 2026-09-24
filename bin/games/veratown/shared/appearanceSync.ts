@@ -41,6 +41,19 @@ const deferredAppearanceMutationContexts = new WeakMap<
 >();
 let mutationSequence = 0;
 
+function summarizeAppearance(appearance: readonly BC_AppearanceItem[]) {
+    return appearance.map((item) => {
+        const property = (item.Property ?? {}) as Record<string, unknown>;
+        return {
+            key: `${item.Group}/${item.Name}`,
+            lock: property.LockedBy,
+            lockMemberNumber: property.LockMemberNumber,
+            passwordPresent: typeof property.Password === "string",
+            lockSet: property.LockSet,
+        };
+    });
+}
+
 export async function preflightAppearanceMutation(
     character: API_Character,
     options: { requireFullWardrobeAccess?: boolean } = {},
@@ -245,6 +258,16 @@ async function executeAppearanceMutation(
     }
 
     const context = createMutationContext(character, options);
+    const beforeAppearance = character.Appearance.MakeAppearanceBundle();
+    logger.debug("Appearance mutation started", {
+        memberNumber: character.MemberNumber,
+        operationId: context.operationId,
+        source: context.source,
+        reason: context.reason,
+        before: summarizeAppearance(beforeAppearance),
+        sendFullAppearanceUpdate: options?.sendFullAppearanceUpdate ?? false,
+        awaitServerSync: options?.awaitServerSync ?? false,
+    });
     if (!options?.exclusiveContextHandoff) {
         appearanceMutationContexts.set(character, context);
     }
@@ -258,9 +281,19 @@ async function executeAppearanceMutation(
         // operation is still in flight.
         if (options?.sendFullAppearanceUpdate) {
             character.Appearance.flushUpdates?.();
+            const localAppearance = character.Appearance.MakeAppearanceBundle();
+            logger.debug("Dispatching full appearance update", {
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                source: context.source,
+                reason: context.reason,
+                appearance: summarizeAppearance(localAppearance),
+                awaitServerSync: options.awaitServerSync ?? false,
+            });
             const serverSync = options.awaitServerSync
                 ? waitForServerAppearanceSync(
                       character,
+                      context,
                       options.serverSyncPredicate,
                       options.serverSyncTimeoutMs,
                   )
@@ -282,6 +315,15 @@ async function executeAppearanceMutation(
                     onSynchronized ??
                     appearanceStateSynchronizers.get(character)
                 )?.(character, context);
+                logger.debug("Appearance mutation persisted", {
+                    memberNumber: character.MemberNumber,
+                    operationId: context.operationId,
+                    source: context.source,
+                    reason: context.reason,
+                    appearance: summarizeAppearance(
+                        character.Appearance.MakeAppearanceBundle(),
+                    ),
+                });
             }
         } catch (error) {
             logger.error(
@@ -307,6 +349,7 @@ async function executeAppearanceMutation(
 
 async function waitForServerAppearanceSync(
     character: API_Character,
+    context: AppearanceMutationContext,
     predicate?: (appearance: readonly BC_AppearanceItem[]) => boolean,
     timeoutMs = DEFAULT_SERVER_SYNC_TIMEOUT_MS,
 ): Promise<void> {
@@ -320,6 +363,9 @@ async function waitForServerAppearanceSync(
             "Cannot confirm appearance update without connector events",
             {
                 memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                source: context.source,
+                reason: context.reason,
             },
         );
         return;
@@ -337,30 +383,87 @@ async function waitForServerAppearanceSync(
         };
         const onSync = (syncedCharacter: API_Character) => {
             if (syncedCharacter?.MemberNumber !== character.MemberNumber) {
+                logger.debug("Ignoring unrelated CharacterSync", {
+                    memberNumber: character.MemberNumber,
+                    operationId: context.operationId,
+                    syncedMemberNumber: syncedCharacter?.MemberNumber,
+                });
                 return;
             }
+            const syncedAppearance =
+                syncedCharacter.Appearance.MakeAppearanceBundle();
             let matches = true;
             if (predicate) {
                 try {
-                    matches = predicate(
-                        syncedCharacter.Appearance.MakeAppearanceBundle(),
-                    );
-                } catch {
+                    matches = predicate(syncedAppearance);
+                } catch (error) {
+                    logger.warn("Appearance confirmation predicate threw", {
+                        memberNumber: character.MemberNumber,
+                        operationId: context.operationId,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
                     matches = false;
                 }
             }
-            if (matches) finish();
+            logger.debug("Received CharacterSync for appearance mutation", {
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                matches,
+                appearance: summarizeAppearance(syncedAppearance),
+            });
+            if (matches) {
+                logger.debug("Authoritative appearance confirmation accepted", {
+                    memberNumber: character.MemberNumber,
+                    operationId: context.operationId,
+                });
+                finish();
+            } else {
+                logger.warn(
+                    "Authoritative appearance confirmation mismatched",
+                    {
+                        memberNumber: character.MemberNumber,
+                        operationId: context.operationId,
+                        expectedSource: context.source,
+                        expectedReason: context.reason,
+                        appearance: summarizeAppearance(syncedAppearance),
+                    },
+                );
+            }
         };
         const timer = setTimeout(
-            () =>
+            () => {
+                logger.error(
+                    "Authoritative appearance confirmation timed out",
+                    new Error(
+                        `Server appearance confirmation timed out for ${character.MemberNumber}`,
+                    ),
+                    {
+                        memberNumber: character.MemberNumber,
+                        operationId: context.operationId,
+                        source: context.source,
+                        reason: context.reason,
+                        timeoutMs,
+                    },
+                );
                 finish(
                     new Error(
                         `Server appearance confirmation timed out for ${character.MemberNumber}`,
                     ),
-                ),
+                );
+            },
             Math.max(1, timeoutMs),
         );
         connector.on("CharacterSync", onSync);
+        logger.debug("Waiting for authoritative CharacterSync", {
+            memberNumber: character.MemberNumber,
+            operationId: context.operationId,
+            source: context.source,
+            reason: context.reason,
+            timeoutMs,
+        });
     });
 }
 

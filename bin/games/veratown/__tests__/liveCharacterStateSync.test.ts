@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import { syncAppearanceMutation } from "../shared/appearanceSync";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
@@ -214,6 +215,66 @@ test("syncAppearanceMutation keeps completed mutations retryable when projection
     );
 
     assert.equal(mutated, true);
+});
+
+test("syncAppearanceMutation waits for matching authoritative CharacterSync", async () => {
+    const connection = new EventEmitter() as EventEmitter & {
+        Player: { MemberNumber: number };
+    };
+    connection.Player = { MemberNumber: 7 };
+    let appearance: any[] = [];
+    let remoteAppearance: any[] = [];
+    const character: any = {
+        MemberNumber: 7,
+        connection,
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+            flushUpdates: () => {},
+        },
+        sendAppearanceUpdate: () => {
+            connection.emit("CharacterSync", {
+                MemberNumber: 999,
+                Appearance: {
+                    MakeAppearanceBundle: () => [],
+                },
+            });
+            connection.emit("CharacterSync", {
+                MemberNumber: 7,
+                Appearance: {
+                    MakeAppearanceBundle: () =>
+                        structuredClone(remoteAppearance),
+                },
+            });
+            remoteAppearance = appearance;
+            connection.emit("CharacterSync", {
+                MemberNumber: 7,
+                Appearance: {
+                    MakeAppearanceBundle: () =>
+                        structuredClone(remoteAppearance),
+                },
+            });
+        },
+    };
+
+    await syncAppearanceMutation(
+        character,
+        () => {
+            appearance = [{ Group: "ItemArms", Name: "HeavyYoke" }];
+        },
+        0,
+        undefined,
+        {
+            sendFullAppearanceUpdate: true,
+            awaitServerSync: true,
+            serverSyncPredicate: (syncedAppearance) =>
+                syncedAppearance.some(
+                    (item) =>
+                        item.Group === "ItemArms" && item.Name === "HeavyYoke",
+                ),
+        },
+    );
+
+    assert.deepEqual(appearance, [{ Group: "ItemArms", Name: "HeavyYoke" }]);
 });
 
 test("LiveCharacterStateSync serializes overlapping observations by arrival order", async () => {
