@@ -132,11 +132,20 @@ export class ForfeitService {
                 () => character.Appearance.RemoveItem(group),
                 50,
                 undefined,
-                { reason: "forfeit_expired" },
+                {
+                    reason: "forfeit_expired",
+                    sendFullAppearanceUpdate: true,
+                },
             );
             character.Appearance.MakeAppearanceBundle();
             const remaining = character.Appearance.InventoryGet(group);
-            if (remaining?.Name === itemName) continue;
+            if (remaining?.Name === itemName) {
+                nextExpiry = Math.min(
+                    nextExpiry ?? Date.now() + 1000,
+                    Date.now() + 1000,
+                );
+                continue;
+            }
 
             await this.mutationService.removeBondage(
                 character.MemberNumber,

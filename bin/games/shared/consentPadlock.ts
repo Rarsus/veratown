@@ -56,9 +56,20 @@ export function applyConsentPadlock(
     runtimeItem.lock(lockType, options.memberNumber, lockProperty);
 
     const persistedItem = runtimeItem.getData?.() ?? runtimeItem;
-    if (persistedItem.Property && typeof persistedItem.Property === "object") {
-        delete persistedItem.Property.Lock;
-        delete persistedItem.Property.RemoveTimer;
+    runtimeItem.Property ??= {};
+    const properties = [runtimeItem.Property, persistedItem.Property].filter(
+        (property): property is Record<string, unknown> =>
+            Boolean(property && typeof property === "object"),
+    );
+    for (const property of properties) {
+        property.LockedBy = lockType;
+        property.LockMemberNumber = options.memberNumber;
+        property.Password = lockProperty.Password;
+        property.RemoveItem = true;
+        property.LockSet = true;
+        if (options.hint !== undefined) property.Hint = options.hint;
+        delete property.Lock;
+        delete property.RemoveTimer;
     }
 
     return lockType;

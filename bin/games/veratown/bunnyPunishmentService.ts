@@ -54,6 +54,7 @@ export interface BunnyPunishmentResult {
 
 export const BUNNY_INITIAL_DURATION_MS = 5 * 60 * 1000;
 export const BUNNY_MAX_DURATION_MS = 4 * 60 * 60 * 1000;
+const BUNNY_RELEASE_MAX_ATTEMPTS = 3;
 
 export function calculateBunnyOffenceDuration(offenceNumber: number): {
     offenceNumber: number;
@@ -430,38 +431,47 @@ export class BunnyPunishmentService {
         }
         const operationId = `bunny-release-${artifact.operationId}`;
         let verified = false;
-        await syncAppearanceMutation(
-            character,
-            () => {
-                for (const piece of artifact.restraintPieces) {
-                    const [group] = piece.split("/");
-                    character.Appearance.RemoveItem(group as any);
-                }
-                character.Appearance.RemoveItem(BUNNY_SIGN.group);
-            },
-            this.syncDelayMs,
-            async (currentCharacter, context) =>
-                this.stateSync?.(currentCharacter, context),
-            {
-                throwOnSyncFailure: false,
-                source: "bunny",
-                reason: "bunny_punishment_released",
+        for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    for (const piece of artifact.restraintPieces) {
+                        const [group] = piece.split("/");
+                        character.Appearance.RemoveItem(group as any);
+                    }
+                    character.Appearance.RemoveItem(BUNNY_SIGN.group);
+                },
+                this.syncDelayMs,
+                async (currentCharacter, context) =>
+                    this.stateSync?.(currentCharacter, context),
+                {
+                    throwOnSyncFailure: false,
+                    source: "bunny",
+                    reason: "bunny_punishment_released",
+                    operationId,
+                    cleanupAllowed: true,
+                    exclusiveContextHandoff: true,
+                    requireFullWardrobeAccess: false,
+                    sendFullAppearanceUpdate: true,
+                },
+            );
+            const appearance = character.Appearance.MakeAppearanceBundle();
+            verified =
+                artifact.restraintPieces.every((piece) => {
+                    const [group, asset] = piece.split("/");
+                    return !appearance.some(
+                        (item) => item.Group === group && item.Name === asset,
+                    );
+                }) && !verifyBunnySign(appearance).present;
+            if (verified) break;
+        }
+        if (!verified) {
+            this.logger.warn("Bunny punishment release remains equipped", {
+                memberNumber: character.MemberNumber,
                 operationId,
-                cleanupAllowed: true,
-                exclusiveContextHandoff: true,
-                requireFullWardrobeAccess: false,
-                sendFullAppearanceUpdate: true,
-            },
-        );
-        const appearance = character.Appearance.MakeAppearanceBundle();
-        verified =
-            artifact.restraintPieces.every((piece) => {
-                const [group, asset] = piece.split("/");
-                return !appearance.some(
-                    (item) => item.Group === group && item.Name === asset,
-                );
-            }) && !verifyBunnySign(appearance).present;
-        if (!verified) return;
+            });
+            return;
+        }
         const closedArtifact = {
             ...artifact,
             status,

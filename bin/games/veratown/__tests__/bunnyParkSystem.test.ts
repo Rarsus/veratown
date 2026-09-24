@@ -17,6 +17,7 @@ function createCharacter(
         initialAppearance?: any[];
         accessible?: boolean;
         dropSignOnBundleCall?: number;
+        removeFailures?: number;
     } = {},
 ) {
     let appearance = structuredClone(options.initialAppearance ?? []);
@@ -51,6 +52,7 @@ function createCharacter(
                 const item: any = {
                     Group: data.Group,
                     Name: data.Name,
+                    Property: data.Property,
                     Extended:
                         descriptor.Name === "HempRope"
                             ? {
@@ -71,6 +73,7 @@ function createCharacter(
                     setProperty: (key: string, value: unknown) => {
                         data.Property[key] = value;
                     },
+                    getData: () => data,
                     lock: (lockType: string, lockedBy: number) => {
                         data.Property.LockedBy = lockType;
                         data.Property.LockMemberNumber = lockedBy;
@@ -80,6 +83,10 @@ function createCharacter(
                 return item;
             },
             RemoveItem: (group: string) => {
+                if (options.removeFailures && options.removeFailures > 0) {
+                    options.removeFailures -= 1;
+                    return;
+                }
                 appearance = appearance.filter((item) => item.Group !== group);
             },
             MakeAppearanceBundle: () => {
@@ -367,6 +374,10 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
                     item.Group === "ItemArms" && item.Name === "HeavyYoke",
             );
         assert.equal(yoke?.Property?.LockedBy, "SafewordPadlock");
+        assert.match(yoke?.Property?.Password, /^[A-Za-z0-9]{1,8}$/);
+        assert.equal(yoke?.Property?.RemoveItem, true);
+        assert.equal(yoke?.Property?.LockSet, true);
+        assert.equal(yoke?.Property?.RemoveTimer, undefined);
         const spreader = created
             .appearance()
             .find(
@@ -375,6 +386,10 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
                     item.Name === "HeavySpreaderMetal",
             );
         assert.equal(spreader?.Property?.LockedBy, "SafewordPadlock");
+        assert.match(spreader?.Property?.Password, /^[A-Za-z0-9]{1,8}$/);
+        assert.equal(spreader?.Property?.RemoveItem, true);
+        assert.equal(spreader?.Property?.LockSet, true);
+        assert.equal(spreader?.Property?.RemoveTimer, undefined);
         const sign = created
             .appearance()
             .find(
@@ -384,6 +399,47 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         assert.equal(sign?.Property?.Text, "I step on", config.name);
         assert.equal(sign?.Property?.Text2, "Bunnies", config.name);
     }
+});
+
+test("expired Bunny punishment retries removal before closing its artifact", async () => {
+    const created = createCharacter(21, { removeFailures: 1 });
+    let artifact: any = {
+        memberNumber: 21,
+        operationId: "bunny-test",
+        artifactVersion: 1,
+        status: "active",
+        expiresAt: Date.now() - 1,
+        restraintPieces: ["ItemArms/HeavyYoke", "ItemFeet/HeavySpreaderMetal"],
+        sign: {
+            group: "ItemMisc",
+            asset: "WoodenSign",
+            text: "I step on",
+            text2: "Bunnies",
+        },
+    };
+    const service = new BunnyPunishmentService(
+        createMessageConnection(created.character) as any,
+        {
+            getState: async () => ({ punishmentCount: 1, artifact }),
+            updateArtifact: async (updated: any) => {
+                artifact = updated;
+            },
+            recordArtifact: async () => {},
+            incrementCount: async () => {},
+            recordAudit: async () => {},
+        },
+        async () => {},
+        Math.random,
+        0,
+    );
+
+    await service.recover(created.character);
+
+    assert.equal(artifact.status, "expired");
+    assert.equal(
+        created.appearance().some((item: any) => item.Group === "ItemArms"),
+        false,
+    );
 });
 
 test("bunny punishment sends the complete bundle for remote-character persistence", async () => {

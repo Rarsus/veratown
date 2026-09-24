@@ -2017,7 +2017,31 @@ Game Overview
                 item.Property?.LockMemberNumber ===
                     this.conn.Player.MemberNumber,
         );
-        if (pillory) character.Appearance.RemoveItem("ItemArms");
+        if (pillory) {
+            await syncAppearanceMutation(
+                character,
+                () => character.Appearance.RemoveItem("ItemArms"),
+                50,
+                undefined,
+                {
+                    source: "dare",
+                    reason: "dare_repeat_pillory_expired",
+                    sendFullAppearanceUpdate: true,
+                },
+            );
+            character.Appearance.MakeAppearanceBundle();
+        }
+        const remaining = character.Appearance.getAppearanceData().some(
+            (item) =>
+                item.Group === "ItemArms" &&
+                item.Name === "Pillory" &&
+                item.Property?.LockMemberNumber ===
+                    this.conn.Player.MemberNumber,
+        );
+        if (remaining) {
+            this.armRepeatPilloryTimer(memberNumber, Date.now() + 1000);
+            return;
+        }
 
         lock.status = "expired";
         this.repeatPilloryLocks.delete(memberNumber);

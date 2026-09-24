@@ -801,8 +801,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         },
                         50,
                         this.stateSync,
-                        { sendFullAppearanceUpdate: true },
+                        {
+                            sendFullAppearanceUpdate: true,
+                            throwOnSyncFailure: false,
+                        },
                     );
+                    character.Appearance.MakeAppearanceBundle();
                 } finally {
                     this.releasingCharacters.delete(memberNumber);
                 }
