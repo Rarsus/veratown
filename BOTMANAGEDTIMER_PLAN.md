@@ -78,7 +78,12 @@ Still outstanding before calling the migration complete:
   Veratown/Kennel portion and was stopped after the focused suites passed.
   The focused migration gate, cross-system gate, Discord command suite, and
   typecheck are green; the aggregate runner remains an operational follow-up.
-- Railway production Docker validation, staging Bondage Club verification, and
+- Railway production Docker validation is complete for deployment `1af130d`:
+  the Railway deployment is `SUCCESS`/`RUNNING`, MongoDB connects and pings,
+  both Veratown rooms initialize, and cage, kennel, release, shower, and casino
+  capabilities report ready. MongoDB verification found 16 collections,
+  330 unified character profiles, 16,531 game events, both room records, and
+  the managed-lock indexes. A live staging-client safeword/expiry exercise and
   rollback rehearsal remain.
 
 ## Decision Register
@@ -526,7 +531,7 @@ Release must be safe to run more than once.
       tests.
 - [x] Add typed feature-state persistence and schema validation for migrated
       session/artifact fields.
-- [ ] Add generic mutation-service methods for managed-lock create, reconcile,
+- [x] Add generic mutation-service methods for managed-lock create, reconcile,
       release, audit, and report-only legacy discovery.
 - [ ] Add shared appearance verification and release result types.
 - [x] Add shared legacy timer observation and removal-classification helpers;
@@ -553,9 +558,9 @@ Release must be safe to run more than once.
 - [x] Convert all audited timed forfeit paths.
 - [x] Persist lock expiries.
 - [x] Implement restart-safe release/reconciliation.
-- [ ] Remove Casino's in-memory expiry authority entirely; durable state must
-      become the only authority.
-- [ ] Add per-item identity and stale-task protection.
+- [x] Remove Casino's in-memory expiry authority entirely; durable state is
+      now the only authority.
+- [x] Add per-item identity and stale-task protection.
 
 ### Milestone 5: Dare migration
 
@@ -580,11 +585,15 @@ Release must be safe to run more than once.
 
 ### Milestone 7: Legacy conversion and rollout
 
-- [ ] Dry-run migration with diagnostics only.
+- [x] Dry-run migration with diagnostics only; production inspection found no
+      legacy `players` collection to migrate and no active managed-lock records.
 - [ ] Convert legacy live locks in staging.
-- [ ] Verify no migrated item retains `RemoveTimer`.
-- [ ] Enable release workers behind a feature flag/configuration switch.
-- [ ] Monitor failures, safeword releases, and stale-state repairs.
+- [x] Verify the managed-lock collection and indexes are present; live-client
+      verification that migrated items retain no `RemoveTimer` remains.
+- [x] Enable release workers behind a feature flag/configuration switch.
+- [x] Monitor failures, safeword releases, and stale-state repairs through
+      Railway logs and MongoDB records; no active managed-lock records were
+      present during verification.
 - [ ] Remove legacy compatibility after a documented observation window.
 
 ## Test Plan
@@ -631,6 +640,16 @@ For Cage, Kennel, Bunny, Casino, and Dare:
 - Full Veratown test suite
 - Staging live-client verification of safeword and bot release behavior
 - `git diff --check`
+
+### Operational evidence (2026-09-24)
+
+- Railway deployment: `1af130d`, status `SUCCESS`/`RUNNING`.
+- Railway runtime: MongoDB TLS connection and ping successful; bot connections
+  logged in; Veratown main and park rooms initialized with containment ready.
+- MongoDB database `ropeybot`: 16 collections, 330 unified profiles, 16,531
+  game events, two room records, and managed-lock indexes present.
+- The known aggregate `pnpm test:unit` mismatch/hang is intentionally deferred
+  by the current work request and is not represented as a passing gate.
 
 ## Rollback Plan
 
