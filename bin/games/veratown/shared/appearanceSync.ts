@@ -22,6 +22,7 @@ import {
 const logger = createLogger("appearanceSync");
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
+const DEFAULT_SERVER_SYNC_TIMEOUT_MS = 2_000;
 const appearanceStateSynchronizers = new WeakMap<
     API_Character,
     (
@@ -182,6 +183,11 @@ export async function syncAppearanceMutation(
         skipAuthorizationPreflight?: boolean;
         requireFullWardrobeAccess?: boolean;
         sendFullAppearanceUpdate?: boolean;
+        awaitServerSync?: boolean;
+        serverSyncTimeoutMs?: number;
+        serverSyncPredicate?: (
+            appearance: readonly BC_AppearanceItem[],
+        ) => boolean;
     },
 ): Promise<boolean> {
     const previous =
@@ -227,6 +233,11 @@ async function executeAppearanceMutation(
         skipAuthorizationPreflight?: boolean;
         requireFullWardrobeAccess?: boolean;
         sendFullAppearanceUpdate?: boolean;
+        awaitServerSync?: boolean;
+        serverSyncTimeoutMs?: number;
+        serverSyncPredicate?: (
+            appearance: readonly BC_AppearanceItem[],
+        ) => boolean;
     },
 ): Promise<boolean> {
     if (!options?.skipAuthorizationPreflight) {
@@ -246,8 +257,16 @@ async function executeAppearanceMutation(
         // overwrite a preceding incremental update while a multi-step
         // operation is still in flight.
         if (options?.sendFullAppearanceUpdate) {
-            character.Appearance.flushUpdates();
+            character.Appearance.flushUpdates?.();
+            const serverSync = options.awaitServerSync
+                ? waitForServerAppearanceSync(
+                      character,
+                      options.serverSyncPredicate,
+                      options.serverSyncTimeoutMs,
+                  )
+                : undefined;
             character.sendAppearanceUpdate();
+            await serverSync;
         }
 
         // Wait to ensure sync is visible
@@ -284,6 +303,65 @@ async function executeAppearanceMutation(
     }
 
     return true;
+}
+
+async function waitForServerAppearanceSync(
+    character: API_Character,
+    predicate?: (appearance: readonly BC_AppearanceItem[]) => boolean,
+    timeoutMs = DEFAULT_SERVER_SYNC_TIMEOUT_MS,
+): Promise<void> {
+    const connector = character.connection as any;
+    if (
+        !connector ||
+        typeof connector.on !== "function" ||
+        typeof connector.off !== "function"
+    ) {
+        logger.warn(
+            "Cannot confirm appearance update without connector events",
+            {
+                memberNumber: character.MemberNumber,
+            },
+        );
+        return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const finish = (error?: Error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            connector.off("CharacterSync", onSync);
+            if (error) reject(error);
+            else resolve();
+        };
+        const onSync = (syncedCharacter: API_Character) => {
+            if (syncedCharacter?.MemberNumber !== character.MemberNumber) {
+                return;
+            }
+            let matches = true;
+            if (predicate) {
+                try {
+                    matches = predicate(
+                        syncedCharacter.Appearance.MakeAppearanceBundle(),
+                    );
+                } catch {
+                    matches = false;
+                }
+            }
+            if (matches) finish();
+        };
+        const timer = setTimeout(
+            () =>
+                finish(
+                    new Error(
+                        `Server appearance confirmation timed out for ${character.MemberNumber}`,
+                    ),
+                ),
+            Math.max(1, timeoutMs),
+        );
+        connector.on("CharacterSync", onSync);
+    });
 }
 
 /**

@@ -550,7 +550,14 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     },
                     50,
                     this.stateSync,
-                    { sendFullAppearanceUpdate: true },
+                    {
+                        sendFullAppearanceUpdate: true,
+                        awaitServerSync: true,
+                        serverSyncPredicate: (appearance) =>
+                            !appearance.some(
+                                (item) => item.Group === "ItemDevices",
+                            ),
+                    },
                 );
             } finally {
                 this.releasingCharacters.delete(character.MemberNumber);
@@ -803,6 +810,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         this.stateSync,
                         {
                             sendFullAppearanceUpdate: true,
+                            awaitServerSync: true,
+                            serverSyncPredicate: (appearance) =>
+                                !appearance.some(
+                                    (item) => item.Group === "ItemDevices",
+                                ),
                             throwOnSyncFailure: false,
                         },
                     );

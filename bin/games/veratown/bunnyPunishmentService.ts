@@ -225,6 +225,7 @@ export class BunnyPunishmentService {
         const configuredPieces: string[] = [];
         const mutationErrors: string[] = [];
         let permissionDenied = false;
+        let mutationConfirmed = false;
         try {
             await syncAppearanceMutation(
                 character,
@@ -303,8 +304,19 @@ export class BunnyPunishmentService {
                     exclusiveContextHandoff: true,
                     requireFullWardrobeAccess: false,
                     sendFullAppearanceUpdate: true,
+                    awaitServerSync: true,
+                    serverSyncPredicate: (appearance) => {
+                        const restraintsReady = config.pieces.every((piece) =>
+                            hasBunnyRestraint(appearance, piece),
+                        );
+                        return (
+                            restraintsReady &&
+                            verifyBunnySign(appearance).visible
+                        );
+                    },
                 },
             );
+            mutationConfirmed = true;
         } catch (error) {
             mutationErrors.push(
                 error instanceof Error ? error.message : String(error),
@@ -330,7 +342,10 @@ export class BunnyPunishmentService {
             (piece) => !appliedPieces.includes(piece),
         );
         const signVerification = verifyBunnySign(appliedAppearance);
-        const complete = failedPieces.length === 0 && signVerification.visible;
+        const complete =
+            mutationConfirmed &&
+            failedPieces.length === 0 &&
+            signVerification.visible;
         const failureReason = complete
             ? undefined
             : (mutationError ??
@@ -453,6 +468,14 @@ export class BunnyPunishmentService {
                     exclusiveContextHandoff: true,
                     requireFullWardrobeAccess: false,
                     sendFullAppearanceUpdate: true,
+                    awaitServerSync: true,
+                    serverSyncPredicate: (appearance) =>
+                        artifact.restraintPieces.every(
+                            ([group]) =>
+                                !appearance.some(
+                                    (item) => item.Group === group,
+                                ),
+                        ) && !verifyBunnySign(appearance).present,
                 },
             );
             const appearance = character.Appearance.MakeAppearanceBundle();
