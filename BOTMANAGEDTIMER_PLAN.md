@@ -74,9 +74,10 @@ Still outstanding before calling the migration complete:
   remain in live synchronization and Cage recovery by design.
 - Consistent Discord/admin reporting and complete MongoDB/structured-log audit
   projections remain.
-- The aggregate `pnpm test:unit` gate is still running in a detached bounded
-  process after the focused suites passed; its final TAP result must be recorded
-  before completion.
+- The aggregate `pnpm test:unit` gate did not complete: it hung in the later
+  Veratown/Kennel portion and was stopped after the focused suites passed.
+  The focused migration gate, cross-system gate, Discord command suite, and
+  typecheck are green; the aggregate runner remains an operational follow-up.
 - Railway production Docker validation, staging Bondage Club verification, and
   rollback rehearsal remain.
 
