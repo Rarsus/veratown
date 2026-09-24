@@ -29,7 +29,6 @@ export function resolveConsentPadlockType(
     options: Pick<ConsentPadlockOptions, "consentTrigger" | "lockType"> = {},
 ): ConsentPadlockType {
     if (options.lockType) return options.lockType;
-    if (options.consentTrigger === "admin") return "ExclusivePadlock";
     return "SafewordPadlock";
 }
 

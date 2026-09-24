@@ -86,6 +86,7 @@ export const makeBio = (
 };
 
 export interface CasinoConfig {
+    managedReleaseWorkersEnabled?: boolean;
     cocktail?: string;
     game?: "roulette" | "blackjack";
 
@@ -119,7 +120,6 @@ export class Casino implements GamePlugin {
     private readonly cocktailCatalog: CocktailCatalogService;
     private cocktailCatalogReady?: Promise<void>;
     public multiplier = 1;
-    public lockedItems: Map<number, Map<AssetGroupName, number>> = new Map();
     private gameRegion?: MapRegion;
     private forfeitService: ForfeitService;
     public readonly venueSystem: CasinoVenueSystem;
@@ -135,6 +135,7 @@ export class Casino implements GamePlugin {
     >();
     private readonly lastDailyChipNotificationAt = new Map<number, number>();
     private readonly lastCasinoWelcomeAt = new Map<number, number>();
+    private readonly managedReleaseWorkersEnabled: boolean;
 
     /**
      * Phase 5: Direct UnifiedCharacterStore access (no adapters)
@@ -146,6 +147,18 @@ export class Casino implements GamePlugin {
 
     public getMutationService(): GameStateMutationService {
         return this.mutationService;
+    }
+
+    public isForfeitItemLocked(
+        memberNumber: number,
+        itemGroup: string,
+        itemName: string,
+    ): Promise<boolean> {
+        return this.forfeitService.isItemLocked(
+            memberNumber,
+            itemGroup,
+            itemName,
+        );
     }
 
     public getBioManager(): BioManager {
@@ -236,6 +249,8 @@ export class Casino implements GamePlugin {
 
         this.cocktailOfTheDayKey = config?.cocktail;
         this.cocktailCatalog = new CocktailCatalogService(db);
+        this.managedReleaseWorkersEnabled =
+            config?.managedReleaseWorkersEnabled ?? true;
         this.conn.setItemPermission(ItemPermissionLevel.OwnerOnly);
         this.gameConfig = config;
     }
@@ -561,12 +576,28 @@ export class Casino implements GamePlugin {
     private onCharacterEntered = async (character: API_Character) => {
         if (!this.enabled) return;
 
-        await this.forfeitService.reconcileManagedForfeits(character);
+        if (this.managedReleaseWorkersEnabled) {
+            await this.forfeitService.reconcileManagedForfeits(character);
+        } else {
+            logger.warn("Managed release worker disabled", {
+                worker: "casino",
+                operation: "reconcile-managed-forfeits",
+                memberNumber: character.MemberNumber,
+            });
+        }
         await this.getStore().setPlayerName(
             character.MemberNumber,
             character.toString(),
         );
     };
+
+    public getManagedReleaseWorkerDiagnostics(): Record<string, unknown> {
+        return {
+            enabled: this.managedReleaseWorkersEnabled,
+            worker: "casino",
+            status: this.managedReleaseWorkersEnabled ? "active" : "disabled",
+        };
+    }
 
     private readonly casinoRegionEnterTrigger = guardHandler(
         "casino:enterRegion",
@@ -1018,10 +1049,6 @@ ${forfeitsString()}
 
         sender.Appearance.RemoveItem(restraint.items(sender)[0].Group);
 
-        this.lockedItems
-            .get(sender.MemberNumber)
-            ?.delete(restraint.items(sender)[0].Group);
-
         this.conn.SendMessage(
             "Chat",
             `${sender} paid to remove their ${restraint.name}. Enjoy your freedom, while it lasts.`,
@@ -1135,8 +1162,6 @@ ${forfeitsString()}
             );
             sign.setProperty("Text", "Property of");
             sign.setProperty("Text2", sender.toString());
-
-            this.lockedItems.get(target!.MemberNumber)?.delete("ItemDevices");
 
             this.conn.SendMessage(
                 "Chat",
@@ -1419,21 +1444,6 @@ ${forfeitsString()}
             bet.stakeForfeit,
             this.conn.Player.MemberNumber,
         );
-
-        // Track locked items for later reference
-        const lockTime = FORFEITS[bet.stakeForfeit].lockTimeMs;
-        if (lockTime) {
-            const items = FORFEITS[bet.stakeForfeit].items(char);
-            if (items.length === 1) {
-                this.lockedItems.set(
-                    bet.memberNumber,
-                    this.lockedItems.get(bet.memberNumber) ?? new Map(),
-                );
-                this.lockedItems
-                    .get(bet.memberNumber)
-                    ?.set(items[0].Group, Date.now() + lockTime);
-            }
-        }
     }
 
     public cheatPunishment(char: API_Character, player: any): void {

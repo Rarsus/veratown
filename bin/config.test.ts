@@ -24,6 +24,16 @@ test("configuration applies deterministic safe defaults", () => {
     assert.deepEqual(config.members, []);
     assert.equal(config.mongo_tls, true);
     assert.equal(config.discord_enabled, false);
+    assert.equal(config.managed_release_workers_enabled, true);
+});
+
+test("configuration accepts disabling managed release workers", () => {
+    const config = validateConfig({
+        ...validConfig(),
+        managed_release_workers_enabled: false,
+    });
+
+    assert.equal(config.managed_release_workers_enabled, false);
 });
 
 test("configuration rejects missing and malformed required values", () => {

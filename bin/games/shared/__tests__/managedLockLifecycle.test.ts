@@ -3,6 +3,7 @@ import * as assert from "node:assert/strict";
 import {
     classifyManagedLockRemoval,
     createManagedLockOperationId,
+    discoverLegacyManagedLock,
     readLegacyRemoveTimer,
 } from "../managedLockLifecycle";
 
@@ -63,5 +64,45 @@ test("managed operation ids are stable and escape item delimiters", () => {
     assert.equal(
         first,
         "managed-lock:casino:42:ItemArms:Example%3AItem:forfeit-1",
+    );
+});
+
+test("legacy discovery reports one owner and preserves ambiguity", () => {
+    const base = {
+        memberNumber: 7,
+        itemGroup: "ItemArms",
+        itemName: "Cuffs",
+        enteredAt: 1,
+        lockType: "SafewordPadlock" as const,
+        consentTrigger: "safeword" as const,
+        status: "active" as const,
+        createdAt: 1,
+        updatedAt: 1,
+        version: 1,
+    };
+    const cage = {
+        ...base,
+        feature: "cage" as const,
+        operationId: "cage-operation",
+    };
+    assert.deepEqual(
+        discoverLegacyManagedLock({ ...base, removeTimer: 50 }, [cage]),
+        {
+            observation: { ...base, removeTimer: 50 },
+            ownership: "cage",
+            matchingOperationIds: ["cage-operation"],
+            migrationExpiry: 50,
+        },
+    );
+    assert.equal(
+        discoverLegacyManagedLock({ ...base, removeTimer: 50 }, [
+            cage,
+            {
+                ...cage,
+                feature: "kennel",
+                operationId: "kennel-operation",
+            },
+        ]).ownership,
+        "ambiguous",
     );
 });

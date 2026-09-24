@@ -187,6 +187,7 @@ function createBunnySystem(
     syncDelay = 100,
     recordArtifact: (artifact: any) => Promise<void> = async () => {},
     allowStaticFallbacks = true,
+    managedReleaseWorkersEnabled = true,
 ) {
     const repository = {
         recordArtifact,
@@ -204,11 +205,49 @@ function createBunnySystem(
         connection as any,
         punishmentService,
         allowStaticFallbacks,
+        managedReleaseWorkersEnabled,
     );
     (system as any).applyPunishment = (character: any, config: any) =>
         punishmentService.punish(character, config);
     return system;
 }
+
+test("Bunny Park reports a disabled release worker without disabling locations", async () => {
+    const tileCallbacks: Array<(character: any) => void | Promise<void>> = [];
+    const regionCallbacks: Array<(character: any) => void | Promise<void>> = [];
+    const connector = createConnector(tileCallbacks, regionCallbacks);
+    const system = createBunnySystem(
+        connector as any,
+        async () => {},
+        Math.random,
+        100,
+        async () => {},
+        true,
+        false,
+    );
+
+    await system.reloadLocations([
+        {
+            key: "park_region",
+            name: "Park Region",
+            type: "park_region",
+            region: {
+                TopLeft: { X: 0, Y: 0 },
+                BottomRight: { X: 1, Y: 1 },
+            },
+            enabled: true,
+            createdAt: 0,
+            updatedAt: 0,
+        },
+    ]);
+
+    assert.deepEqual(system.getManagedReleaseWorkerDiagnostics(), {
+        enabled: false,
+        worker: "bunny",
+        status: "disabled",
+    });
+    assert.equal(regionCallbacks.length, 1);
+});
 
 test("secondary Bunny Park does not use a static park region", async () => {
     const tileCallbacks: Array<(character: any) => void | Promise<void>> = [];

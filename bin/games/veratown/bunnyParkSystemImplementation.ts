@@ -20,6 +20,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         conn: API_Connector,
         private readonly punishmentService: BunnyPunishmentService,
         private readonly allowStaticFallbacks = true,
+        private readonly managedReleaseWorkersEnabled = true,
     ) {
         super(conn, "bunnyPark", "Bunny park");
         this.bunnyTrigger = this.guardTileHandler(this.onCharacterStepOnBunny);
@@ -118,7 +119,15 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterPark = async (character: API_Character) => {
         if (!this.enabled) return;
-        await this.punishmentService.recover(character);
+        if (this.managedReleaseWorkersEnabled) {
+            await this.punishmentService.recover(character);
+        } else {
+            this.logger.warn("Managed release worker disabled", {
+                worker: "bunny",
+                operation: "punishment-recovery",
+                memberNumber: character.MemberNumber,
+            });
+        }
         this.messageSender.whisperToCharacter(
             character,
             "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
@@ -161,4 +170,12 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             }
         });
     };
+
+    public getManagedReleaseWorkerDiagnostics(): Record<string, unknown> {
+        return {
+            enabled: this.managedReleaseWorkersEnabled,
+            worker: "bunny",
+            status: this.managedReleaseWorkersEnabled ? "active" : "disabled",
+        };
+    }
 }

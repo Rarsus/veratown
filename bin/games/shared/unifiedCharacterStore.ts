@@ -78,6 +78,13 @@ import {
 import { releaseItemIdentity } from "../veratown/shared/releaseRemovalPolicy";
 import { AuditLogService } from "./auditLogService";
 import { randomUUID } from "node:crypto";
+import type {
+    LegacyManagedLockDiscovery,
+    LegacyManagedLockObservation,
+    ManagedLockRecord,
+    ManagedLockUpdate,
+} from "./managedLockLifecycle";
+import { discoverLegacyManagedLock } from "./managedLockLifecycle";
 
 export const GAME_EVENT_RETENTION_DAYS = 2;
 const GAME_EVENT_RETENTION_MS = GAME_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -175,6 +182,7 @@ function dedupeReleaseItems(items: RemovedBondageItem[]): RemovedBondageItem[] {
 export class UnifiedCharacterStore {
     private profiles: Collection<UnifiedCharacterProfile>;
     private events: Collection<GameEvent>;
+    private managedLocks: Collection<ManagedLockRecord & { _id: string }>;
     private auditLogService: AuditLogService;
     private inited = false;
     private eventBus: EventBus;
@@ -187,6 +195,9 @@ export class UnifiedCharacterStore {
             "unifiedCharacterProfiles",
         );
         this.events = db.collection<GameEvent>("gameEvents");
+        this.managedLocks = db.collection<ManagedLockRecord & { _id: string }>(
+            "managedLockRecords",
+        );
         this.auditLogService = new AuditLogService(db);
         this.eventBus = eventBus ?? new EventBus();
     }
@@ -364,6 +375,14 @@ export class UnifiedCharacterStore {
             { "veratown.roles": 1 },
             { name: "veratown_roles" },
         );
+        await this.managedLocks.createIndex(
+            { memberNumber: 1, status: 1, updatedAt: -1 },
+            { name: "managed_lock_member_status" },
+        );
+        await this.managedLocks.createIndex(
+            { memberNumber: 1, itemGroup: 1, itemName: 1, status: 1 },
+            { name: "managed_lock_item_identity" },
+        );
 
         // Indexes for event queries
         await this.events.createIndex({ timestamp: -1 });
@@ -408,6 +427,88 @@ export class UnifiedCharacterStore {
     public async getProfileIdIntegrityReport(): Promise<ProfileIdIntegrityReport> {
         await this.init();
         return this.inspectProfileIds();
+    }
+
+    public async createManagedLock(
+        record: ManagedLockRecord,
+    ): Promise<ManagedLockRecord> {
+        this.assertMemberNumber(record.memberNumber);
+        await this.init();
+        const result = await this.managedLocks.findOneAndUpdate(
+            { _id: record.operationId },
+            { $setOnInsert: { ...record, _id: record.operationId } },
+            { upsert: true, returnDocument: "after" },
+        );
+        if (!result) throw new DatabaseError("Managed lock was not created");
+        return result;
+    }
+
+    public async getManagedLock(
+        operationId: string,
+    ): Promise<ManagedLockRecord | undefined> {
+        await this.init();
+        return (
+            (await this.managedLocks.findOne({ _id: operationId })) ?? undefined
+        );
+    }
+
+    public async listManagedLocks(
+        memberNumber: number,
+        statuses: readonly ManagedLockRecord["status"][] = ["active"],
+    ): Promise<ManagedLockRecord[]> {
+        this.assertMemberNumber(memberNumber);
+        await this.init();
+        return this.managedLocks
+            .find({ memberNumber, status: { $in: [...statuses] } })
+            .sort({ updatedAt: -1 })
+            .toArray();
+    }
+
+    public async updateManagedLock(
+        operationId: string,
+        expectedVersion: number,
+        updates: ManagedLockUpdate,
+    ): Promise<ManagedLockRecord> {
+        if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+            throw new ValidationError(
+                "expectedVersion must be a positive integer",
+            );
+        }
+        await this.init();
+        const now = Date.now();
+        const result = await this.managedLocks.findOneAndUpdate(
+            { _id: operationId, version: expectedVersion },
+            { $set: { ...updates, updatedAt: now }, $inc: { version: 1 } },
+            { returnDocument: "after" },
+        );
+        if (!result) {
+            throw new DatabaseError("Managed lock version conflict", {
+                operationId,
+                expectedVersion,
+            });
+        }
+        return result;
+    }
+
+    public async discoverLegacyManagedLocks(
+        observations: readonly LegacyManagedLockObservation[],
+    ): Promise<LegacyManagedLockDiscovery[]> {
+        await this.init();
+        const byMember = new Map<number, ManagedLockRecord[]>();
+        for (const observation of observations) {
+            if (!byMember.has(observation.memberNumber)) {
+                byMember.set(
+                    observation.memberNumber,
+                    await this.listManagedLocks(observation.memberNumber),
+                );
+            }
+        }
+        return observations.map((observation) =>
+            discoverLegacyManagedLock(
+                observation,
+                byMember.get(observation.memberNumber) ?? [],
+            ),
+        );
     }
 
     public async repairMalformedProfileIds(
@@ -1063,6 +1164,7 @@ export class UnifiedCharacterStore {
             processed: false,
         };
 
+        await this.events.insertOne(event);
         await this.eventBus.publish(event);
     }
 
@@ -1474,6 +1576,18 @@ export class UnifiedCharacterStore {
             // Phase 3: Game suspension
             suspendedGames: profile.dare.suspendedGames.map((g) => g.gameId),
         };
+    }
+
+    /**
+     * Read the durable expiry for one exact bondage item identity.
+     */
+    public async getActiveBondageLock(
+        memberNumber: number,
+        forfeitKey: string,
+    ): Promise<number | undefined> {
+        const view = await this.getDareView(memberNumber);
+        return view.activeBondage.find((item) => item.forfeitKey === forfeitKey)
+            ?.lockedUntil;
     }
 
     /**

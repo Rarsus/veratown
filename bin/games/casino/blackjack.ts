@@ -1536,10 +1536,13 @@ export class BlackjackGame implements Game {
             FORFEITS[bet.stakeForfeit]?.items(sender).length === 1
         ) {
             const forfeitItem = FORFEITS[bet.stakeForfeit].items(sender)[0];
-            const lockTime = this.casino.lockedItems
-                .get(sender.MemberNumber)
-                ?.get(forfeitItem.Group);
-            if (lockTime && Date.now() < lockTime) {
+            if (
+                await this.casino.isForfeitItemLocked(
+                    sender.MemberNumber,
+                    forfeitItem.Group,
+                    forfeitItem.Name,
+                )
+            ) {
                 this.logger?.info(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );

@@ -437,8 +437,8 @@ function createMockCasino(
         setBio: async () => {},
         applyForfeit: () => {},
         cheatPunishment: () => {},
+        isForfeitItemLocked: async () => false,
         multiplier: options.multiplier ?? 1,
-        lockedItems: new Map(),
     };
 }
 

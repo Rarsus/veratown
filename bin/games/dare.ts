@@ -105,6 +105,7 @@ const MAX_CONCURRENT_GAMES = 3;
 const TOTAL_ROUNDS = 10;
 
 export interface DareConfig {
+    managedReleaseWorkersEnabled?: boolean;
     // If set, dare commands are only handled while the sender stands
     // inside this map region.
     region?: MapRegion;
@@ -282,6 +283,7 @@ Game Overview
     private mutationService: GameStateMutationService;
     private readonly messageFeatureSystem: GamePluginMessageFeatureSystem;
     private readonly messageSender: MessageSender;
+    private readonly managedReleaseWorkersEnabled: boolean;
 
     /**
      * DARE SYSTEM CONSTRUCTOR - Three-Layer Architecture
@@ -302,6 +304,8 @@ Game Overview
         private config?: DareConfig,
         mutationService?: GameStateMutationService,
     ) {
+        this.managedReleaseWorkersEnabled =
+            config?.managedReleaseWorkersEnabled ?? true;
         this.messageSender = new MessageSender(conn);
         // Initialize unified store (Layer 1: character state)
         this.unifiedStore =
@@ -414,6 +418,14 @@ Game Overview
         return `Dare: ${this.enabled ? "enabled" : "disabled"} | Lobby: ${lobbySize} | Active games: ${gameCount}`;
     }
 
+    public getManagedReleaseWorkerDiagnostics(): Record<string, unknown> {
+        return {
+            enabled: this.managedReleaseWorkersEnabled,
+            worker: "dare",
+            status: this.managedReleaseWorkersEnabled ? "active" : "disabled",
+        };
+    }
+
     /**
      * Cleanup when the plugin is being stopped.
      * Optionally saves state and stops timers.
@@ -443,10 +455,17 @@ Game Overview
         // Dressing-block enforcement runs continuously, independent of any
         // game's lifecycle, so it also covers players still bound after a
         // structured game ends (see dressingBlocked's doc comment above).
-        this.turnTimerManager.startStripEnforcementInterval(
-            STRIP_ENFORCE_INTERVAL_MS,
-            () => this.enforceDressingBlocks(),
-        );
+        if (this.managedReleaseWorkersEnabled) {
+            this.turnTimerManager.startStripEnforcementInterval(
+                STRIP_ENFORCE_INTERVAL_MS,
+                () => this.enforceDressingBlocks(),
+            );
+        } else {
+            this.logger.warn("Managed release worker disabled", {
+                worker: "dare",
+                operation: "strip-enforcement",
+            });
+        }
     }
 
     public async reloadLocations(
@@ -1915,8 +1934,19 @@ Game Overview
 
         const now = Date.now();
 
-        for (const lock of this.repeatPilloryLocks.values()) {
-            this.armRepeatPilloryTimer(lock.memberNumber, lock.expiresAt, now);
+        if (this.managedReleaseWorkersEnabled) {
+            for (const lock of this.repeatPilloryLocks.values()) {
+                this.armRepeatPilloryTimer(
+                    lock.memberNumber,
+                    lock.expiresAt,
+                    now,
+                );
+            }
+        } else {
+            this.logger.warn("Managed release worker disabled", {
+                worker: "dare",
+                operation: "repeat-pillory-recovery",
+            });
         }
 
         for (const [memberNumber, entry] of state.pendingBondage ?? []) {

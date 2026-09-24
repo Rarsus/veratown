@@ -48,24 +48,106 @@ Implemented and verified in the current worktree:
 - Shared managed-lock lifecycle helpers now provide typed statuses, stable
   operation IDs, legacy `RemoveTimer` observation, and removal classification;
   Cage and live synchronization use the shared legacy reader.
+- Generic managed-lock records now persist in the `managedLockRecords`
+  collection through `UnifiedCharacterStore` and `GameStateMutationService`,
+  with idempotent create, reconcile, release, audit, and active-record reads.
+- Casino no longer uses an authoritative in-memory `lockedItems` map; Blackjack
+  and Roulette read durable active bondage state by exact item identity and
+  expiry.
+- The global `managed_release_workers_enabled` flag defaults to enabled and is
+  propagated through worker startup with disabled-worker diagnostics.
+- `legacyTimerDiscovery.ts` provides a pure report-only scanner for legacy
+  `RemoveTimer` items, including managed/unmanaged/ambiguous classification;
+  it performs no appearance or release mutation.
+- Focused managed-lock, Casino, consent, legacy-discovery, and release tests
+  pass (89 tests), and the full source typecheck passes.
 - `pnpm types`, `git diff --check`, and focused Cage, Kennel, Bunny, Casino, and
-  Dare suites plus shared consent and lifecycle tests pass independently (83
-  tests total).
+  Dare suites plus shared consent and lifecycle tests pass independently.
 
 Still outstanding before calling the migration complete:
 
-- Dedicated shared-helper, mutation/persistence, legacy-conversion, race, and
-  full integration tests are still needed.
+- Cross-feature stale-operation and concurrent-release tests still need to be
+  expanded beyond the current shared and Casino coverage.
 - Safeword versus unexpected-removal classification and audit coverage need
   explicit verification for every feature.
-- Legacy `RemoveTimer` conversion is not a complete dry-run/staging workflow;
-  compatibility reads remain in live synchronization and Cage recovery.
-- Full Veratown tests, staging Bondage Club verification, rollback rehearsal,
-  feature-flagged worker rollout, and operational diagnostics remain.
-- The repository-wide `pnpm test:unit` run currently has unrelated failures in
-  existing event and release-system fixtures, including missing live connection
-  setup and a port collision; those need separate cleanup before using the full
-  suite as a migration gate.
+- Legacy `RemoveTimer` conversion remains report-only; compatibility reads
+  remain in live synchronization and Cage recovery by design.
+- Consistent Discord/admin reporting and complete MongoDB/structured-log audit
+  projections remain.
+- The aggregate `pnpm test:unit` gate is still running in a detached bounded
+  process after the focused suites passed; its final TAP result must be recorded
+  before completion.
+- Railway production Docker validation, staging Bondage Club verification, and
+  rollback rehearsal remain.
+
+## Decision Register
+
+The following decisions define the remaining implementation and rollout work:
+
+- **Admin lock policy:** admin-triggered migrated locks also use
+  `SafewordPadlock`.
+    - Consequence: administrators cannot create a non-self-releasable migrated
+      lock through this system. Administrative authority must be represented by
+      audit records and commands, not by removing the player's emergency escape.
+- **Legacy migration mode:** report-only. The first migration tool must inspect
+  live appearances and durable state, emit candidates and ambiguities, and
+  never mutate an item or release a character automatically.
+    - Consequence: legacy `TimerPasswordPadlock` items remain active until an
+      explicit future approval-based conversion mode is implemented. New managed
+      locks can still use bot-owned expiry independently.
+- **Player-side removal audit:** every verified player-side removal is recorded
+  as `safeword-released`, including cases where Bondage Club does not expose a
+  safeword-specific event.
+    - Consequence: this maximizes safety and prevents automatic re-locking, but
+      the audit record must state that the classification is policy-inferred when
+      the platform provides no direct event.
+- **Casino lock state:** durable persistence is authoritative and the
+  `ForfeitService.lockedItems` map must be removed rather than retained as a
+  compatibility authority.
+    - Consequence: every Casino gameplay caller must query the durable projection
+      or a purpose-built read cache backed by it; restart behavior becomes correct,
+      but this is a wider Casino refactor.
+- **Unit-test scope:** existing `pnpm test:unit` failures are in scope for this
+  migration and must be fixed or explicitly reclassified with a passing,
+  reproducible baseline.
+    - Consequence: the completion date depends on unrelated event, port, and
+      live-connection fixture cleanup, but the final gate will be meaningful.
+- **Release-worker rollout:** use one global configuration flag for all managed
+  release workers.
+    - Consequence: rollback is operationally simple, but individual features
+      cannot be rolled out independently.
+- **Observability:** expose migration and lifecycle diagnostics through
+  structured Railway logs, durable MongoDB records, and a Discord/admin report
+  command.
+    - Consequence: implementation must define consistent event names and redact
+      sensitive item or character data appropriately across all three surfaces.
+- **Runtime validation environment:** use the production Docker deployment on
+  Railway, with MongoDB records and Railway runtime/deployment logs as the
+  validation evidence.
+    - Consequence: there is no isolated staging environment in this plan. Tests
+      must use designated test characters, a maintenance window, reversible
+      report-only operations, and a documented rollback before live appearance
+      mutations are enabled.
+
+### Implementation requested by these decisions
+
+1. Add generic durable managed-lock mutation methods for create, reconcile,
+   release, audit, and report-only legacy discovery.
+2. Replace Casino's authoritative in-memory lock map with durable reads and
+   update all gameplay callers and restart recovery accordingly.
+3. Add policy-inferred safeword audit events and consistent MongoDB/log/report
+   projections for Cage, Kennel, Bunny, Casino, and Dare.
+4. Add a global managed-release-worker configuration flag and diagnostics for
+   disabled, active, failed, and recovered workers.
+5. Add a report-only legacy scanner with feature ownership detection,
+   ambiguity reporting, expiry-source selection, and no appearance mutation.
+6. Add stale-operation, per-item identity, and concurrent-release tests across
+   Casino, Kennel, Dare, Bunny, and Cage.
+7. Repair the full unit-suite fixtures and assertions, including live connector
+   setup and deterministic port allocation.
+8. Deploy the Docker image to Railway and validate using MongoDB records,
+   Railway deployment/runtime logs, designated test characters, and the
+   rollback procedure.
 
 ## Target Architecture
 
@@ -98,7 +180,7 @@ example:
 
 - `safeword`: `SafewordPadlock`
 - `explicit-consent`: a future configured lock type
-- `admin`: an explicitly configured administrative lock type, if approved
+- `admin`: `SafewordPadlock` unless a future policy explicitly changes it
 - `unknown`: fail safe to `SafewordPadlock`
 
 The resolver must be the only place where feature code chooses the concrete
@@ -434,8 +516,7 @@ Release must be safe to run more than once.
 - [ ] Confirm Bondage Club semantics for `SafewordPadlock`, removal authority,
       and appearance events in a live/staging room.
 - [x] Complete the lock-call inventory, including custom Casino forfeit paths.
-- [ ] Decide whether admin-triggered locks are an explicit exception or also
-      default to `SafewordPadlock`.
+- [x] Decide admin-triggered migrated locks also default to `SafewordPadlock`.
 - [x] Define managed-lock statuses, operation keys, and audit event names.
 
 ### Milestone 1: Shared infrastructure
@@ -445,7 +526,7 @@ Release must be safe to run more than once.
 - [x] Add typed feature-state persistence and schema validation for migrated
       session/artifact fields.
 - [ ] Add generic mutation-service methods for managed-lock create, reconcile,
-      release, and legacy migration.
+      release, audit, and report-only legacy discovery.
 - [ ] Add shared appearance verification and release result types.
 - [x] Add shared legacy timer observation and removal-classification helpers;
       feature-specific ownership migration remains outstanding.
@@ -471,7 +552,8 @@ Release must be safe to run more than once.
 - [x] Convert all audited timed forfeit paths.
 - [x] Persist lock expiries.
 - [x] Implement restart-safe release/reconciliation.
-- [ ] Remove in-memory expiry authority entirely.
+- [ ] Remove Casino's in-memory expiry authority entirely; durable state must
+      become the only authority.
 - [ ] Add per-item identity and stale-task protection.
 
 ### Milestone 5: Dare migration

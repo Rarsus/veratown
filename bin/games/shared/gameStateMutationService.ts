@@ -30,6 +30,12 @@ import {
     ReleaseRemovalFinalSnapshot,
     RemovedBondageItem,
 } from "./unifiedCharacterTypes";
+import type {
+    LegacyManagedLockDiscovery,
+    LegacyManagedLockObservation,
+    ManagedLockRecord,
+    ManagedLockUpdate,
+} from "./managedLockLifecycle";
 
 export type GameType = "casino" | "dare" | "veratown" | string;
 
@@ -244,6 +250,34 @@ export interface GameStateMutationService {
         reason: string,
         actor?: number,
     ): Promise<ReleaseRemovalOperation>;
+    createManagedLock(record: ManagedLockRecord): Promise<ManagedLockRecord>;
+    reconcileManagedLock(
+        operationId: string,
+        expectedVersion: number,
+        updates: ManagedLockUpdate,
+        actor?: number,
+    ): Promise<ManagedLockRecord>;
+    releaseManagedLock(
+        operationId: string,
+        expectedVersion: number,
+        status: Extract<
+            ManagedLockRecord["status"],
+            | "expired"
+            | "safeword-released"
+            | "manual/admin-release"
+            | "unexpected-removal"
+        >,
+        actor?: number,
+    ): Promise<ManagedLockRecord>;
+    auditManagedLock(
+        operationId: string,
+        operation: string,
+        context: Record<string, unknown>,
+        actor?: number,
+    ): Promise<void>;
+    discoverLegacyManagedLocks(
+        observations: readonly LegacyManagedLockObservation[],
+    ): Promise<LegacyManagedLockDiscovery[]>;
 }
 
 type MutationStore = Pick<
@@ -288,6 +322,11 @@ type MutationStore = Pick<
     | "getActiveReleaseRemoval"
     | "completeReleaseRemoval"
     | "failReleaseRemoval"
+    | "createManagedLock"
+    | "updateManagedLock"
+    | "getManagedLock"
+    | "recordAuditEntry"
+    | "discoverLegacyManagedLocks"
 >;
 
 export class GameStateMutationServiceImpl implements GameStateMutationService {
@@ -323,6 +362,96 @@ export class GameStateMutationServiceImpl implements GameStateMutationService {
                 actor,
             );
         }, "updateCharacterProperty");
+    }
+
+    public async createManagedLock(
+        record: ManagedLockRecord,
+    ): Promise<ManagedLockRecord> {
+        this.validateMember(record.memberNumber);
+        return this.withRetry(
+            () => this.unifiedStore.createManagedLock(record),
+            "createManagedLock",
+        );
+    }
+
+    public async reconcileManagedLock(
+        operationId: string,
+        expectedVersion: number,
+        updates: ManagedLockUpdate,
+        actor?: number,
+    ): Promise<ManagedLockRecord> {
+        const record = await this.withRetry(
+            () =>
+                this.unifiedStore.updateManagedLock(
+                    operationId,
+                    expectedVersion,
+                    updates,
+                ),
+            "reconcileManagedLock",
+        );
+        await this.auditAfterMutation(
+            record.memberNumber,
+            "managedLockReconciled",
+            { operationId, status: record.status },
+            actor,
+        );
+        return record;
+    }
+
+    public async releaseManagedLock(
+        operationId: string,
+        expectedVersion: number,
+        status: Extract<
+            ManagedLockRecord["status"],
+            | "expired"
+            | "safeword-released"
+            | "manual/admin-release"
+            | "unexpected-removal"
+        >,
+        actor?: number,
+    ): Promise<ManagedLockRecord> {
+        return this.reconcileManagedLock(
+            operationId,
+            expectedVersion,
+            { status, closedAt: Date.now() },
+            actor,
+        );
+    }
+
+    public async auditManagedLock(
+        operationId: string,
+        operation: string,
+        context: Record<string, unknown>,
+        actor?: number,
+    ): Promise<void> {
+        const record = await this.withRetry(
+            () => this.unifiedStore.getManagedLock(operationId),
+            "getManagedLock",
+        );
+        if (!record) {
+            throw new ValidationError("Managed lock does not exist", {
+                operationId,
+            });
+        }
+        await this.withRetry(
+            () =>
+                this.unifiedStore.recordAuditEntry(
+                    record.memberNumber,
+                    operation,
+                    { operationId, feature: record.feature, ...context },
+                    actor,
+                ),
+            "auditManagedLock",
+        );
+    }
+
+    public async discoverLegacyManagedLocks(
+        observations: readonly LegacyManagedLockObservation[],
+    ): Promise<LegacyManagedLockDiscovery[]> {
+        return this.withRetry(
+            () => this.unifiedStore.discoverLegacyManagedLocks(observations),
+            "discoverLegacyManagedLocks",
+        );
     }
 
     public async updateCharacterName(

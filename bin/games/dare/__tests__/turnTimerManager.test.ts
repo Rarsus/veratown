@@ -233,6 +233,12 @@ test("TurnTimerManager: No timer active by default", async () => {
     assert.equal(manager.hasStripEnforcementInterval(), false);
 });
 
+test("TurnTimerManager: managed release worker can remain disabled", async () => {
+    const manager = new TurnTimerManager();
+
+    assert.equal(manager.hasStripEnforcementInterval(), false);
+});
+
 test("TurnTimerManager: Clear non-existent timers safely", async () => {
     const manager = new TurnTimerManager();
 

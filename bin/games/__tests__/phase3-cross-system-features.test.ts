@@ -329,10 +329,9 @@ describe("Phase 3: Cross-System Features", () => {
                 .toArray();
 
             assert(auditEvents.length > 0, "Audit trail should contain events");
-            assert.equal(
-                auditEvents[0].type,
-                "chips_earned",
-                "Event should be chips_earned type",
+            assert(
+                auditEvents.some((event) => event.type === "chips_earned"),
+                "Audit trail should contain a chips_earned event",
             );
         });
 

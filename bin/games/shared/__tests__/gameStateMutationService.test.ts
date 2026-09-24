@@ -597,3 +597,60 @@ test("GameStateMutationService validates remaining inputs and handles failed aud
 
     await service.awardChips(1, 1, "audit failure");
 });
+
+test("GameStateMutationService owns the managed-lock mutation boundary", async () => {
+    const calls: string[] = [];
+    const record = {
+        memberNumber: 7,
+        feature: "cage" as const,
+        itemGroup: "ItemArms",
+        itemName: "Cuffs",
+        enteredAt: 1,
+        expiresAt: 100,
+        lockType: "SafewordPadlock" as const,
+        consentTrigger: "safeword" as const,
+        status: "active" as const,
+        operationId: "managed-lock:cage:7:ItemArms:Cuffs:entry",
+        createdAt: 1,
+        updatedAt: 1,
+        version: 1,
+    };
+    const store = {
+        createManagedLock: async (value: typeof record) => {
+            calls.push("create");
+            return value;
+        },
+        updateManagedLock: async (
+            _operationId: string,
+            _expectedVersion: number,
+            updates: { status?: string; closedAt?: number },
+        ) => {
+            calls.push("update");
+            return { ...record, ...updates, version: 2 };
+        },
+        getManagedLock: async () => record,
+        recordAuditEntry: async (...args: unknown[]) => {
+            calls.push(`audit:${String(args[1])}`);
+        },
+        discoverLegacyManagedLocks: async () => [],
+    } as any;
+    const service = new GameStateMutationServiceImpl(store, new EventBus());
+
+    await service.createManagedLock(record);
+    const released = await service.releaseManagedLock(
+        record.operationId,
+        1,
+        "expired",
+    );
+    await service.auditManagedLock(record.operationId, "managedLockChecked", {
+        source: "test",
+    });
+
+    assert.equal(released.status, "expired");
+    assert.deepEqual(calls, [
+        "create",
+        "update",
+        "audit:managedLockReconciled",
+        "audit:managedLockChecked",
+    ]);
+});

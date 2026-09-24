@@ -260,6 +260,7 @@ export class Veratown {
         private casinoConfig?: CasinoConfig,
         container?: DIContainer,
         roomKey: string = "main",
+        private readonly managedReleaseWorkersEnabled = true,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
@@ -324,11 +325,19 @@ export class Veratown {
         this.regionManager = new RegionManager();
 
         if (db) {
-            const effectiveDareConfig: DareConfig | undefined =
+            const effectiveDareConfigBase: DareConfig | undefined =
                 dareConfig ??
                 (this.roomKey === "main" && DARE_LOCATION
                     ? { region: DARE_LOCATION }
                     : undefined);
+            const effectiveDareConfig: DareConfig | undefined =
+                effectiveDareConfigBase
+                    ? {
+                          ...effectiveDareConfigBase,
+                          managedReleaseWorkersEnabled:
+                              this.managedReleaseWorkersEnabled,
+                      }
+                    : undefined;
             this.locationStore = new VeratownLocationStore(db, this.roomKey);
             this.roomStore = new VeratownRoomStore(db);
             this.dare = this.initFeature(() => {
@@ -519,6 +528,7 @@ export class Veratown {
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
                     this.roomKey === "main",
+                    this.managedReleaseWorkersEnabled,
                 ),
         );
         this.kennelSystem = this.initFeature(
@@ -538,6 +548,7 @@ export class Veratown {
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
                     this.roomKey === "main",
+                    this.managedReleaseWorkersEnabled,
                 ),
         );
         this.showerSystem = this.initFeature(
@@ -592,6 +603,7 @@ export class Veratown {
                 this.conn,
                 punishmentService,
                 this.roomKey === "main",
+                this.managedReleaseWorkersEnabled,
             );
         });
         this.windowSystem = this.initFeature(

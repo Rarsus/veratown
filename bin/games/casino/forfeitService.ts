@@ -44,9 +44,7 @@ export interface ForfeitValidation {
  * - Forfeit item management
  */
 export class ForfeitService {
-    /** Tracks locked items per member: memberNumber -> (itemGroup -> unlockTime) */
     private readonly logger = createLogger("ForfeitService");
-    private lockedItems: Map<number, Map<string, number>> = new Map();
     private readonly deviceFactory: DeviceFactory;
     private readonly expiryTimers = new Map<number, NodeJS.Timeout>();
 
@@ -244,19 +242,6 @@ export class ForfeitService {
         const forfeit = FORFEITS[forfeitKey];
         const items = forfeit.items(character);
         const colourLayers = forfeit.colourLayers;
-
-        // Handle single item forfeit with locking
-        if (items.length === 1) {
-            const lockTime = forfeit.lockTimeMs;
-            if (lockTime) {
-                if (!this.lockedItems.has(character.MemberNumber)) {
-                    this.lockedItems.set(character.MemberNumber, new Map());
-                }
-                this.lockedItems
-                    .get(character.MemberNumber)
-                    ?.set(items[0].Group, Date.now() + lockTime);
-            }
-        }
 
         // Apply forfeit using custom apply function if available
         if (forfeit.applyItems) {
@@ -480,22 +465,20 @@ export class ForfeitService {
      *
      * @param memberId Member number
      * @param itemGroup Item group to check
+     * @param itemName Exact item name to check
      * @returns true if item is currently locked
      */
-    public isItemLocked(memberId: number, itemGroup: string): boolean {
-        const memberLocks = this.lockedItems.get(memberId);
-        if (!memberLocks) return false;
-
-        const unlockTime = memberLocks.get(itemGroup);
-        if (!unlockTime) return false;
-
-        // Check if lock has expired
-        if (Date.now() >= unlockTime) {
-            memberLocks.delete(itemGroup);
-            return false;
-        }
-
-        return true;
+    public async isItemLocked(
+        memberId: number,
+        itemGroup: string,
+        itemName: string,
+    ): Promise<boolean> {
+        const lockedUntil = await this.getDurableLockUntil(
+            memberId,
+            itemGroup,
+            itemName,
+        );
+        return lockedUntil !== undefined && lockedUntil > Date.now();
     }
 
     /**
@@ -503,43 +486,52 @@ export class ForfeitService {
      *
      * @param memberId Member number
      * @param itemGroup Item group
+     * @param itemName Exact item name
      * @returns Milliseconds remaining, or 0 if not locked
      */
-    public getItemLockRemainingMs(memberId: number, itemGroup: string): number {
-        const memberLocks = this.lockedItems.get(memberId);
-        if (!memberLocks) return 0;
-
-        const unlockTime = memberLocks.get(itemGroup);
-        if (!unlockTime) return 0;
-
-        const remaining = Math.max(0, unlockTime - Date.now());
-        return remaining;
+    public async getItemLockRemainingMs(
+        memberId: number,
+        itemGroup: string,
+        itemName: string,
+    ): Promise<number> {
+        const lockedUntil = await this.getDurableLockUntil(
+            memberId,
+            itemGroup,
+            itemName,
+        );
+        return lockedUntil === undefined
+            ? 0
+            : Math.max(0, lockedUntil - Date.now());
     }
 
-    /**
-     * Clear all expired locks (cleanup operation)
-     */
-    public clearExpiredLocks(): void {
-        const now = Date.now();
-        for (const [memberId, locks] of this.lockedItems.entries()) {
-            for (const [itemGroup, unlockTime] of locks.entries()) {
-                if (now >= unlockTime) {
-                    locks.delete(itemGroup);
-                }
-            }
-            if (locks.size === 0) {
-                this.lockedItems.delete(memberId);
-            }
-        }
+    private async getDurableLockUntil(
+        memberId: number,
+        itemGroup: string,
+        itemName: string,
+    ): Promise<number | undefined> {
+        if (!this.unifiedStore) return undefined;
+        return this.unifiedStore.getActiveBondageLock(
+            memberId,
+            `${itemGroup}:${itemName}`,
+        );
     }
 
     /**
      * Get all locked items for a member
      *
      * @param memberId Member number
-     * @returns Map of locked items (itemGroup -> unlockTime)
+     * @returns Map of locked item identities (group:name -> unlockTime)
      */
-    public getLockedItems(memberId: number): Map<string, number> {
-        return this.lockedItems.get(memberId) ?? new Map();
+    public async getLockedItems(
+        memberId: number,
+    ): Promise<Map<string, number>> {
+        if (!this.unifiedStore) return new Map();
+        const now = Date.now();
+        const view = await this.unifiedStore.getDareView(memberId);
+        return new Map(
+            view.activeBondage
+                .filter((item) => item.lockedUntil > now)
+                .map((item) => [item.forfeitKey, item.lockedUntil]),
+        );
     }
 }

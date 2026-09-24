@@ -31,6 +31,27 @@ export interface ManagedLockRecord {
     version: number;
 }
 
+export interface ManagedLockUpdate {
+    status?: ManagedLockStatus;
+    expiresAt?: number;
+    closedAt?: number;
+}
+
+export interface LegacyManagedLockObservation {
+    memberNumber: number;
+    itemGroup: string;
+    itemName: string;
+    removeTimer?: number;
+    lockType?: string;
+}
+
+export interface LegacyManagedLockDiscovery {
+    observation: LegacyManagedLockObservation;
+    ownership: ManagedLockFeature | "ambiguous";
+    matchingOperationIds: string[];
+    migrationExpiry?: number;
+}
+
 export interface LegacyTimerObservation {
     removeTimer?: number;
     isLegacyTimer: boolean;
@@ -88,4 +109,23 @@ export function createManagedLockOperationId(
     ]
         .map((part) => String(part).replaceAll(":", "%3A"))
         .join(":");
+}
+
+export function discoverLegacyManagedLock(
+    observation: LegacyManagedLockObservation,
+    activeRecords: readonly ManagedLockRecord[],
+): LegacyManagedLockDiscovery {
+    const matches = activeRecords.filter(
+        (record) =>
+            record.memberNumber === observation.memberNumber &&
+            record.itemGroup === observation.itemGroup &&
+            record.itemName === observation.itemName,
+    );
+    const features = [...new Set(matches.map((record) => record.feature))];
+    return {
+        observation,
+        ownership: features.length === 1 ? features[0] : "ambiguous",
+        matchingOperationIds: matches.map((record) => record.operationId),
+        migrationExpiry: observation.removeTimer,
+    };
 }

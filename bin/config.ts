@@ -52,6 +52,9 @@ export interface ConfigFile {
     discord_admin_roles?: string[];
     discord_audit_channel_id?: string;
 
+    // Defaults to true; set to false to pause bot-managed release workers.
+    managed_release_workers_enabled?: boolean;
+
     casino?: CasinoConfig;
     dare?: DareConfig;
 }
@@ -121,6 +124,7 @@ export const configSchema = z
         discord_guild_id: nonEmptyString.optional(),
         discord_admin_roles: z.array(nonEmptyString).default([]),
         discord_audit_channel_id: nonEmptyString.optional(),
+        managed_release_workers_enabled: z.boolean().default(true),
         casino: z
             .object({
                 cocktail: z.string().trim().min(1).optional(),

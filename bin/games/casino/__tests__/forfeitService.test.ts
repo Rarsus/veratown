@@ -137,84 +137,72 @@ test("ForfeitService: resetCheatStrikes clears strikes for member", () => {
 // ForfeitService: Item Locking
 // ============================================================================
 
-test("ForfeitService: isItemLocked returns true for locked items", () => {
-    const service = new ForfeitService();
+function createDurableStore(
+    activeBondage: Array<{ forfeitKey: string; lockedUntil: number }>,
+) {
+    return {
+        getDareView: async () => ({ activeBondage }),
+        getActiveBondageLock: async (
+            _memberNumber: number,
+            forfeitKey: string,
+        ) =>
+            activeBondage.find((item) => item.forfeitKey === forfeitKey)
+                ?.lockedUntil,
+    } as any;
+}
+
+test("ForfeitService: isItemLocked reads locks after service restart", async () => {
     const memberId = 12345;
-    const lockTime = 20 * 60 * 1000; // 20 minutes
+    const store = createDurableStore([
+        {
+            forfeitKey: "ItemBoots:BalletHeels",
+            lockedUntil: Date.now() + 20 * 60 * 1000,
+        },
+    ]);
+    const service = new ForfeitService(undefined, undefined, undefined, store);
+    const restartedService = new ForfeitService(
+        undefined,
+        undefined,
+        undefined,
+        store,
+    );
 
-    // Manually set a lock (normally done by applyForfeit)
-    const lockMap = new Map();
-    lockMap.set("ItemBoots", Date.now() + lockTime);
-    service["lockedItems"] = new Map([[memberId, lockMap]]);
-
-    const isLocked = service.isItemLocked(memberId, "ItemBoots");
+    const isLocked = await restartedService.isItemLocked(
+        memberId,
+        "ItemBoots",
+        "BalletHeels",
+    );
     assert.strictEqual(isLocked, true);
 });
 
-test("ForfeitService: isItemLocked returns false for unlocked items", () => {
-    const service = new ForfeitService();
-    const isLocked = service.isItemLocked(12345, "ItemBoots");
+test("ForfeitService: isItemLocked uses exact item identity", async () => {
+    const store = createDurableStore([
+        { forfeitKey: "ItemBoots:BalletHeels", lockedUntil: Date.now() + 5000 },
+    ]);
+    const service = new ForfeitService(undefined, undefined, undefined, store);
+
+    const isLocked = await service.isItemLocked(
+        12345,
+        "ItemBoots",
+        "OtherBoots",
+    );
     assert.strictEqual(isLocked, false);
 });
 
-test("ForfeitService: getItemLockRemainingMs returns remaining time", () => {
-    const service = new ForfeitService();
-    const memberId = 12345;
-    const lockTime = 5000; // 5 seconds
-
-    const lockMap = new Map();
-    const targetTime = Date.now() + lockTime;
-    lockMap.set("ItemBoots", targetTime);
-    service["lockedItems"] = new Map([[memberId, lockMap]]);
-
-    const remaining = service.getItemLockRemainingMs(memberId, "ItemBoots");
-    assert.ok(remaining > 0 && remaining <= lockTime);
-});
-
-test("ForfeitService: getItemLockRemainingMs returns 0 for unlocked items", () => {
-    const service = new ForfeitService();
-    const remaining = service.getItemLockRemainingMs(12345, "ItemBoots");
-    assert.strictEqual(remaining, 0);
-});
-
-test("ForfeitService: clearExpiredLocks removes expired locks only", () => {
-    const service = new ForfeitService();
-    const memberId = 12345;
-    const now = Date.now();
-
-    const lockMap = new Map();
-    lockMap.set("ItemBoots", now - 1000); // Expired 1 second ago
-    lockMap.set("ItemGag", now + 10000); // Expires in 10 seconds
-    service["lockedItems"] = new Map([[memberId, lockMap]]);
-
-    service.clearExpiredLocks();
-
-    const expiredLocked = service.isItemLocked(memberId, "ItemBoots");
-    assert.strictEqual(expiredLocked, false);
-
-    const stillLocked = service.isItemLocked(memberId, "ItemGag");
-    assert.strictEqual(stillLocked, true);
-});
-
-test("ForfeitService: getLockedItems returns all locked items", () => {
-    const service = new ForfeitService();
-    const memberId = 12345;
-    const lockMap = new Map([
-        ["ItemBoots", Date.now() + 5000],
-        ["ItemGag", Date.now() + 10000],
+test("ForfeitService: expired durable locks are not active", async () => {
+    const store = createDurableStore([
+        { forfeitKey: "ItemBoots:BalletHeels", lockedUntil: Date.now() - 1000 },
     ]);
-    service["lockedItems"] = new Map([[memberId, lockMap]]);
+    const service = new ForfeitService(undefined, undefined, undefined, store);
 
-    const locked = service.getLockedItems(memberId);
-    assert.strictEqual(locked.size, 2);
-    assert.ok(locked.has("ItemBoots"));
-    assert.ok(locked.has("ItemGag"));
-});
-
-test("ForfeitService: getLockedItems returns empty map for member with no locks", () => {
-    const service = new ForfeitService();
-    const locked = service.getLockedItems(99999);
-    assert.strictEqual(locked.size, 0);
+    assert.strictEqual(
+        await service.isItemLocked(12345, "ItemBoots", "BalletHeels"),
+        false,
+    );
+    assert.strictEqual(
+        await service.getItemLockRemainingMs(12345, "ItemBoots", "BalletHeels"),
+        0,
+    );
 });
 
 // ============================================================================

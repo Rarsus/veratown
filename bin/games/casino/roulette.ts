@@ -597,10 +597,13 @@ export class RouletteGame implements Game {
             : undefined;
         if (forfeitDef?.items(sender).length === 1) {
             const forfeitItem = forfeitDef.items(sender)[0];
-            const lockedUntil = this.casino.lockedItems
-                .get(sender.MemberNumber)
-                ?.get(forfeitItem.Group);
-            if (lockedUntil && Date.now() < lockedUntil) {
+            if (
+                await this.casino.isForfeitItemLocked(
+                    sender.MemberNumber,
+                    forfeitItem.Group,
+                    forfeitItem.Name,
+                )
+            ) {
                 this.logger?.info(
                     `CHEATER DETECTED: ${sender} tried to bet ${bet.stakeForfeit} which should be locked`,
                 );

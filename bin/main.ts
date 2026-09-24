@@ -605,6 +605,7 @@ async function initializeVeratownGame(
         config.casino,
         container,
         roomKey,
+        config.managed_release_workers_enabled,
     );
     logger.info("Starting Veratown game initialization", {
         roomKey,
@@ -1125,10 +1126,15 @@ async function main() {
     }
 }
 
-main().catch(async (e) => {
-    const logger = LoggerRegistry.getAppLogger();
-    const error = asAppError(e, "VALIDATION");
-    logger.fatal("Application startup failed", error);
-    await shutdown();
-    process.exit(1);
-});
+if (
+    process.env.NODE_ENV !== "test" &&
+    process.env.NODE_TEST_CONTEXT === undefined
+) {
+    main().catch(async (e) => {
+        const logger = LoggerRegistry.getAppLogger();
+        const error = asAppError(e, "VALIDATION");
+        logger.fatal("Application startup failed", error);
+        await shutdown();
+        process.exit(1);
+    });
+}

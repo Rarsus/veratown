@@ -78,6 +78,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         ) => Promise<void>,
         private readonly delay: (milliseconds: number) => Promise<void> = wait,
         private readonly allowStaticFallbacks = true,
+        private readonly managedReleaseWorkersEnabled = true,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
@@ -218,17 +219,24 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 )
             ).filter((character): character is API_Character => !!character);
             let recoveryFailed = false;
-            await Promise.all(
-                occupants.map((character) =>
-                    this.reconcileCharacter(character).catch((error) => {
-                        recoveryFailed = true;
-                        this.logger.error("Kennel recovery failed", error, {
-                            memberNumber: character.MemberNumber,
-                            position: character.MapPos,
-                        });
-                    }),
-                ),
-            );
+            if (this.managedReleaseWorkersEnabled) {
+                await Promise.all(
+                    occupants.map((character) =>
+                        this.reconcileCharacter(character).catch((error) => {
+                            recoveryFailed = true;
+                            this.logger.error("Kennel recovery failed", error, {
+                                memberNumber: character.MemberNumber,
+                                position: character.MapPos,
+                            });
+                        }),
+                    ),
+                );
+            } else {
+                this.logger.warn("Managed release worker disabled", {
+                    worker: "kennel",
+                    operation: "recovery",
+                });
+            }
             this.lastSuccessfulReconciliationAt = Date.now();
             this.recoveryReady = !recoveryFailed;
             this.recoveryReadinessReason = recoveryFailed
@@ -280,6 +288,12 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             },
             lastSuccessfulBindAt: this.lastSuccessfulBindAt,
             lastSuccessfulReconciliationAt: this.lastSuccessfulReconciliationAt,
+            managedReleaseWorker: {
+                enabled: this.managedReleaseWorkersEnabled,
+                status: this.managedReleaseWorkersEnabled
+                    ? "active"
+                    : "disabled",
+            },
         };
     }
 

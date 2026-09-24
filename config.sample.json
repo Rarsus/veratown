@@ -6,6 +6,7 @@
     "mongo_uri": "mongodb+srv://username:password@cluster.xxx.mongodb.net/ropeybot",
     "mongo_db": "ropeybot",
     "mongo_tls": true,
+    "managed_release_workers_enabled": true,
     "dare": {
         "region": {
             "TopLeft": { "X": 0, "Y": 0 },

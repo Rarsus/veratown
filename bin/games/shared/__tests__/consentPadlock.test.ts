@@ -27,6 +27,10 @@ test("consent resolver defaults to SafewordPadlock", () => {
         resolveConsentPadlockType({ consentTrigger: "unknown" }),
         "SafewordPadlock",
     );
+    assert.equal(
+        resolveConsentPadlockType({ consentTrigger: "admin" }),
+        "SafewordPadlock",
+    );
 });
 
 test("consent helper removes timer authority and preserves lock flags", () => {

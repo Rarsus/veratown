@@ -128,6 +128,11 @@ test("LiveCharacterStateSync records an immediate bunny sign disappearance with 
     const mutations: any[] = [];
     const character: any = {
         MemberNumber: 44,
+        connection: {
+            Player: {
+                MemberNumber: 44,
+            },
+        },
         MapPos: { X: 1, Y: 1 },
         Appearance: {
             MakeAppearanceBundle: () => structuredClone(appearance),

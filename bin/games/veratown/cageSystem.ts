@@ -219,6 +219,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         ) => Promise<void>,
         private readonly timer: CageTimer = systemTimer,
         private readonly allowStaticFallbacks = true,
+        private readonly managedReleaseWorkersEnabled = true,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -438,21 +439,32 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 map.addTileTrigger({ X: x, Y: y }, cageEntryTrigger);
             }
             this.triggersReady = true;
-            for (const character of room.characters) {
-                void this.recoverCagedCharacter(character).catch((error) => {
-                    this.recoveryReady = false;
-                    this.recoveryReadinessReason =
-                        "cage character recovery failed";
-                    this.enabled = false;
-                    this.logger.error("Cage recovery failed", {
-                        memberNumber: character.MemberNumber,
-                        observedAtMs: this.timer.now(),
-                        error,
-                    });
+            if (this.managedReleaseWorkersEnabled) {
+                for (const character of room.characters) {
+                    void this.recoverCagedCharacter(character).catch(
+                        (error) => {
+                            this.recoveryReady = false;
+                            this.recoveryReadinessReason =
+                                "cage character recovery failed";
+                            this.enabled = false;
+                            this.logger.error("Cage recovery failed", {
+                                memberNumber: character.MemberNumber,
+                                observedAtMs: this.timer.now(),
+                                error,
+                            });
+                        },
+                    );
+                }
+                this.recoveryReady = true;
+                this.recoveryReadinessReason = "cage recovery reconciled";
+            } else {
+                this.recoveryReadinessReason =
+                    "cage managed release worker disabled";
+                this.logger.warn("Managed release worker disabled", {
+                    worker: "cage",
+                    operation: "recovery",
                 });
             }
-            this.recoveryReady = true;
-            this.recoveryReadinessReason = "cage recovery reconciled";
 
             this.logger?.info(
                 `[CageSystem] Registered ${this.cagesByPos.size} cage location(s)`,
@@ -495,6 +507,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
             },
             lastSuccessfulBindAt: this.lastSuccessfulBindAt,
             lastSuccessfulReconciliationAt: this.lastSuccessfulReconciliationAt,
+            managedReleaseWorker: {
+                enabled: this.managedReleaseWorkersEnabled,
+                status: this.managedReleaseWorkersEnabled
+                    ? "active"
+                    : "disabled",
+            },
         };
     }
 
