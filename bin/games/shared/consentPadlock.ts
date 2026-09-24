@@ -43,9 +43,7 @@ export function applyConsentPadlock(
         );
     }
     const lockProperty = {
-        ...(lockType === "SafewordPadlock"
-            ? {}
-            : { Password: options.password ?? generatePassword() }),
+        Password: options.password ?? generatePassword(),
         ...(options.hint === undefined ? {} : { Hint: options.hint }),
         RemoveItem: true,
         LockSet: true,

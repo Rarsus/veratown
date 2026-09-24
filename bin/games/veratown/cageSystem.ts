@@ -17,6 +17,7 @@ import {
     API_Character,
     API_Chatroom,
     API_Map,
+    API_AppearanceItem,
     AssetGet,
 } from "bc-bot";
 import { wait } from "../../hub/utils";
@@ -31,9 +32,13 @@ import { GameStateMutationService } from "../shared/gameStateMutationService";
 import {
     preflightAppearanceMutation,
     syncAppearanceMutation,
+    verifyAppearance,
 } from "./shared/appearanceSync";
 import { applyConsentPadlock } from "../shared/consentPadlock";
-import { readLegacyRemoveTimer } from "../shared/managedLockLifecycle";
+import {
+    classifyContainmentRemoval,
+    readLegacyRemoveTimer,
+} from "../shared/managedLockLifecycle";
 import type { CageSession } from "../shared/unifiedCharacterTypes";
 
 export interface CageTimer {
@@ -208,6 +213,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private boundCageTrigger?: (...args: any[]) => void;
     private boundCageEntryTrigger?: (...args: any[]) => void;
     private boundCageInformationTrigger?: (...args: any[]) => void;
+    private boundRoomListenerAttached = false;
+    private readonly releasingCharacters = new Set<number>();
     private lastSuccessfulBindAt?: number;
     private lastSuccessfulReconciliationAt?: number;
 
@@ -247,6 +254,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
         const map = room.map;
         this.boundRoom = room;
         this.boundMap = map;
+        room.on("ItemRemove", this.onCharacterItemRemove);
+        this.boundRoomListenerAttached = true;
         this.registerInformationTrigger(map);
         this.lastSuccessfulBindAt = Date.now();
     }
@@ -261,6 +270,13 @@ export class CageSystem extends AbstractTileFeatureSystem {
             return;
         }
         this.unregisterMapTriggers(map);
+        if (this.boundRoom) {
+            (this.boundRoom as any).off?.(
+                "ItemRemove",
+                this.onCharacterItemRemove,
+            );
+        }
+        this.boundRoomListenerAttached = false;
         this.boundRoom = undefined;
         this.boundMap = undefined;
         this.triggersReady = false;
@@ -504,6 +520,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             listenerBinding: {
                 roomBound: !!this.boundRoom,
                 mapBound: !!this.boundMap,
+                itemRemove: this.boundRoomListenerAttached,
             },
             lastSuccessfulBindAt: this.lastSuccessfulBindAt,
             lastSuccessfulReconciliationAt: this.lastSuccessfulReconciliationAt,
@@ -524,15 +541,21 @@ export class CageSystem extends AbstractTileFeatureSystem {
             character.Appearance.getItemData("ItemDevices")?.Name ===
             "FuturisticCrate"
         ) {
-            await syncAppearanceMutation(
-                character,
-                () => {
-                    character.Appearance.RemoveItem("ItemDevices");
-                },
-                50,
-                this.stateSync,
-                { sendFullAppearanceUpdate: true },
-            );
+            this.releasingCharacters.add(character.MemberNumber);
+            try {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        character.Appearance.RemoveItem("ItemDevices");
+                    },
+                    50,
+                    this.stateSync,
+                    { sendFullAppearanceUpdate: true },
+                );
+            } finally {
+                this.releasingCharacters.delete(character.MemberNumber);
+            }
+
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name ===
                 "FuturisticCrate"
@@ -550,6 +573,34 @@ export class CageSystem extends AbstractTileFeatureSystem {
             this.cagedCharacters.delete(character.MemberNumber);
         }
     }
+
+    private onCharacterItemRemove = (
+        character: API_Character,
+        items: API_AppearanceItem[],
+    ): void => {
+        if (this.releasingCharacters.has(character.MemberNumber)) return;
+        const removed = items.find(
+            (item) =>
+                item.Group === "ItemDevices" && item.Name === "FuturisticCrate",
+        );
+        if (!removed) return;
+
+        void this.monitor.run(character, async () => {
+            if (this.isWearingCage(character)) return;
+            const session = await this.mutationService?.getActiveCageSession(
+                character.MemberNumber,
+            );
+            if (!session) return;
+            const classification = classifyContainmentRemoval(removed);
+            await this.mutationService?.exitCage(character.MemberNumber);
+            this.cagedCharacters.delete(character.MemberNumber);
+            await this.mutationService?.recordAuditEntry(
+                character.MemberNumber,
+                classification,
+                { feature: "cage", reason: "crate_removed" },
+            );
+        });
+    };
 
     private onCharacterEnterCageEntry = async (character: API_Character) => {
         if (!this.enabled) {
@@ -741,15 +792,20 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 character.Appearance.getItemData("ItemDevices")?.Name ===
                 "FuturisticCrate"
             ) {
-                await syncAppearanceMutation(
-                    character,
-                    () => {
-                        character.Appearance.RemoveItem("ItemDevices");
-                    },
-                    50,
-                    this.stateSync,
-                    { sendFullAppearanceUpdate: true },
-                );
+                this.releasingCharacters.add(memberNumber);
+                try {
+                    await syncAppearanceMutation(
+                        character,
+                        () => {
+                            character.Appearance.RemoveItem("ItemDevices");
+                        },
+                        50,
+                        this.stateSync,
+                        { sendFullAppearanceUpdate: true },
+                    );
+                } finally {
+                    this.releasingCharacters.delete(memberNumber);
+                }
             }
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name ===
@@ -987,6 +1043,55 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     memberNumber: character.MemberNumber,
                     authoritativeExpiryMs: authoritativeExpiry,
                     recoveredAtMs: this.timer.now(),
+                });
+            } else if (
+                readLegacyRemoveTimer(
+                    character.Appearance.getItemData("ItemDevices"),
+                ).removeTimer !== undefined &&
+                typeof character.Appearance.InventoryGet === "function"
+            ) {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        const crate =
+                            character.Appearance.InventoryGet?.("ItemDevices");
+                        if (!crate || crate.Name !== "FuturisticCrate") {
+                            throw new Error(
+                                "Cage device unavailable during migration",
+                            );
+                        }
+                        applyConsentPadlock(crate, {
+                            memberNumber: character.MemberNumber,
+                        });
+                    },
+                    50,
+                    this.stateSync,
+                    { throwOnSyncFailure: true },
+                );
+                const verification = verifyAppearance(
+                    character,
+                    (appearance) => {
+                        const crate = appearance.find(
+                            (item) =>
+                                item.Group === "ItemDevices" &&
+                                item.Name === "FuturisticCrate",
+                        );
+                        return (
+                            crate?.Property?.LockedBy === "SafewordPadlock" &&
+                            crate?.Property?.RemoveTimer === undefined &&
+                            typeof crate?.Property?.Password === "string" &&
+                            /^[A-Za-z0-9]{1,8}$/.test(crate.Property.Password)
+                        );
+                    },
+                );
+                if (!verification.verified) {
+                    throw new Error(
+                        `Cage legacy lock migration was not verified: ${verification.status}`,
+                    );
+                }
+                this.logger.info("Cage legacy lock migrated", {
+                    memberNumber: character.MemberNumber,
+                    verification,
                 });
             }
             this.cagedCharacters.set(character.MemberNumber, {

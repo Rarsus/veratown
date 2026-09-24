@@ -5,7 +5,23 @@ import {
     createManagedLockOperationId,
     discoverLegacyManagedLock,
     readLegacyRemoveTimer,
+    classifyContainmentRemoval,
 } from "../managedLockLifecycle";
+
+test("containment removal classifies SafewordPadlock as player release", () => {
+    assert.equal(
+        classifyContainmentRemoval({
+            Property: { LockedBy: "SafewordPadlock" },
+        }),
+        "safeword-released",
+    );
+    assert.equal(
+        classifyContainmentRemoval({
+            Property: { LockedBy: "TimerPasswordPadlock" },
+        }),
+        "unexpected-removal",
+    );
+});
 
 test("legacy timer observation is read once without treating it as policy", () => {
     const expiry = Date.now() + 60_000;

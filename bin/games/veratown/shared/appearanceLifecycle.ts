@@ -17,6 +17,25 @@ export interface AppearanceMutationContext {
     cleanupAllowed?: boolean;
 }
 
+export type AppearanceVerificationStatus =
+    "verified" | "missing" | "mismatch" | "unavailable";
+
+export interface AppearanceVerificationResult {
+    status: AppearanceVerificationStatus;
+    verified: boolean;
+    observedAt: number;
+    itemCount: number;
+    reason?: string;
+}
+
+export interface AppearanceReleaseResult {
+    operationId: string;
+    status: "released" | "pending" | "failed";
+    appearance: AppearanceVerificationResult;
+    persisted: boolean;
+    error?: string;
+}
+
 const activeAppearanceScopes = new WeakMap<object, number>();
 
 export function beginAppearanceScope(character: object): () => void {

@@ -33,7 +33,8 @@ export function durationString(duration: number): string {
 }
 
 export function generatePassword(): string {
-    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const charset =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let retVal = "";
     for (let i = 0, n = charset.length; i < 8; ++i) {
         retVal += charset.charAt(Math.floor(Math.random() * n));

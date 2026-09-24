@@ -17,6 +17,7 @@ import test from "node:test";
 import { createIdempotentMonitor } from "../idempotentMonitor";
 import { createTimerManager } from "../timerManager";
 import { executeWithRetry } from "../executeWithRetry";
+import { verifyAppearance } from "../appearanceSync";
 
 // ============================================================================
 // IdempotentMonitor Tests - Structure Validation
@@ -74,6 +75,40 @@ test("executeWithRetry: Helper is exported correctly", async () => {
         "test-operation",
     );
     assert.strictEqual(result, "success", "Should execute function");
+});
+
+test("verifyAppearance reports verified, mismatch, and unavailable states", () => {
+    const character = {
+        Appearance: {
+            MakeAppearanceBundle: () => [
+                { Group: "ItemDevices", Name: "Kennel" },
+            ],
+        },
+    } as any;
+
+    assert.equal(
+        verifyAppearance(character, (appearance) => appearance.length === 1)
+            .status,
+        "verified",
+    );
+    assert.equal(
+        verifyAppearance(character, (appearance) => appearance.length === 0)
+            .status,
+        "mismatch",
+    );
+
+    const unavailable = verifyAppearance(
+        {
+            Appearance: {
+                MakeAppearanceBundle: () => {
+                    throw new Error("appearance unavailable");
+                },
+            },
+        } as any,
+        () => true,
+    );
+    assert.equal(unavailable.status, "unavailable");
+    assert.equal(unavailable.verified, false);
 });
 
 // ============================================================================

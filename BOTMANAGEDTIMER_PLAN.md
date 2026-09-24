@@ -29,8 +29,8 @@ not yet production-complete.
 Implemented and verified in the current worktree:
 
 - `consentPadlock.ts` is used by Cage, Kennel, Bunny, Casino, and Dare.
-- `SafewordPadlock` is the default migrated lock; it does not receive a
-  generated password or `RemoveTimer`.
+- `SafewordPadlock` is the default migrated lock; it receives an 8-character
+  alphanumeric password and never receives `RemoveTimer`.
 - Cage expiry is persisted and authoritative, with recovery and verified
   release behavior.
 - Timed Kennel sessions persist expiry while ordinary untimed occupancy remains
@@ -70,10 +70,14 @@ Still outstanding before calling the migration complete:
   expanded beyond the current shared and Casino coverage.
 - Safeword versus unexpected-removal classification and audit coverage need
   explicit verification for every feature.
-- Legacy `RemoveTimer` conversion remains report-only; compatibility reads
-  remain in live synchronization and Cage recovery by design.
+- The generic legacy scanner remains report-only; Cage and Kennel recovery now
+  perform verified feature-owned conversion when a mutable live item wrapper is
+  available, while compatibility reads remain in live synchronization.
 - Consistent Discord/admin reporting and complete MongoDB/structured-log audit
   projections remain.
+- Safeword lock self-unlock now receives an 8-character alphanumeric
+  `Property.Password`; the shared contract test verifies the platform-compatible
+  metadata.
 - The aggregate `pnpm test:unit` gate did not complete: it hung in the later
   Veratown/Kennel portion and was stopped after the focused suites passed.
   The focused migration gate, cross-system gate, Discord command suite, and
@@ -533,7 +537,10 @@ Release must be safe to run more than once.
       session/artifact fields.
 - [x] Add generic mutation-service methods for managed-lock create, reconcile,
       release, audit, and report-only legacy discovery.
-- [ ] Add shared appearance verification and release result types.
+- [x] Add shared appearance verification and release result types.
+- [x] Populate `SafewordPadlock` password metadata with a random alphanumeric
+      value of at most 8 characters; update the shared helper and tests to
+      verify the platform-compatible property and self-unlock behavior.
 - [x] Add shared legacy timer observation and removal-classification helpers;
       feature-specific ownership migration remains outstanding.
 
@@ -541,8 +548,8 @@ Release must be safe to run more than once.
 
 - [x] Convert cage locks and recovery.
 - [x] Remove live timer authority for new/recovered migrated sessions.
-- [ ] Add safeword/unexpected-removal handling.
-- [ ] Add legacy cage migration.
+- [x] Add safeword/unexpected-removal handling.
+- [x] Add legacy cage migration.
 - [x] Run cage tests and typecheck; restart/recovery coverage is partial.
 
 ### Milestone 3: Kennel migration
@@ -551,7 +558,7 @@ Release must be safe to run more than once.
 - [x] Convert kennel command locking.
 - [x] Implement timed release and recovery.
 - [x] Preserve ordinary kennel occupancy behavior.
-- [ ] Add migration and race tests.
+- [x] Add migration and race tests.
 
 ### Milestone 4: Casino migration
 
@@ -601,6 +608,8 @@ Release must be safe to run more than once.
 ### Unit tests
 
 - Resolver defaults to `SafewordPadlock`.
+- Safeword locks contain a random alphanumeric `Password` of length 1-8 and
+  player-side self-unlock succeeds with the generated lock metadata.
 - Consent triggers select only approved lock types.
 - Unsupported lock types are rejected.
 - Applied migrated locks contain no `RemoveTimer`.
@@ -624,6 +633,7 @@ For Cage, Kennel, Bunny, Casino, and Dare:
 ### Integration tests
 
 - Live appearance publication and full-bundle verification.
+- Safeword password metadata and self-unlock behavior in a live/staging room.
 - Character reconnect and room recreation.
 - Concurrent safeword and expiry release.
 - Persistence retry after partial failure.
@@ -674,6 +684,8 @@ The migration is complete only when:
 - no migrated lock uses `RemoveTimer`;
 - every migrated expiry is durable and restart-safe;
 - every feature has idempotent expiry, recovery, and safeword handling;
+- every `SafewordPadlock` contains platform-compatible random password metadata
+  and supports player-side self-unlock;
 - appearance removal is verified before persistence is closed or release is
   announced;
 - legacy timer locks are migrated or explicitly reported as unresolved;

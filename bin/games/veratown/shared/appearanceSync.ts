@@ -16,6 +16,7 @@ import { wait } from "../../../hub/utils"; // Adjust path as needed
 import {
     AppearanceMutationContext,
     AppearanceMutationSource,
+    AppearanceVerificationResult,
 } from "./appearanceLifecycle";
 
 const logger = createLogger("appearanceSync");
@@ -282,6 +283,33 @@ export async function addItems(
  */
 export function refreshAppearance(character: API_Character): void {
     character.Appearance.MakeAppearanceBundle();
+}
+
+export function verifyAppearance(
+    character: API_Character,
+    predicate: (appearance: readonly BC_AppearanceItem[]) => boolean,
+): AppearanceVerificationResult {
+    try {
+        const appearance = filterValidAppearanceItems(
+            character.Appearance.MakeAppearanceBundle(),
+        );
+        const verified = predicate(appearance);
+        return {
+            status: verified ? "verified" : "mismatch",
+            verified,
+            observedAt: Date.now(),
+            itemCount: appearance.length,
+            ...(verified ? {} : { reason: "appearance predicate failed" }),
+        };
+    } catch (error) {
+        return {
+            status: "unavailable",
+            verified: false,
+            observedAt: Date.now(),
+            itemCount: 0,
+            reason: error instanceof Error ? error.message : String(error),
+        };
+    }
 }
 
 /**

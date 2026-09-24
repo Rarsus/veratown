@@ -24,6 +24,7 @@ export {
     removeItems,
     addItems,
     refreshAppearance,
+    verifyAppearance,
     hasAppearanceSlot,
     getAppearanceItem,
     getAppearanceBundle,

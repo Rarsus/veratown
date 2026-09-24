@@ -13,6 +13,25 @@ export type ManagedLockStatus =
     | "migration-failed"
     | "reconciliation-failed";
 
+export type ContainmentRemovalClassification =
+    "safeword-released" | "unexpected-removal";
+
+export function classifyContainmentRemoval(
+    item: unknown,
+): ContainmentRemovalClassification {
+    const property =
+        item && typeof item === "object"
+            ? (item as { Property?: unknown }).Property
+            : undefined;
+    const lockedBy =
+        property && typeof property === "object"
+            ? (property as { LockedBy?: unknown }).LockedBy
+            : undefined;
+    return lockedBy === "SafewordPadlock"
+        ? "safeword-released"
+        : "unexpected-removal";
+}
+
 export interface ManagedLockRecord {
     memberNumber: number;
     feature: ManagedLockFeature;

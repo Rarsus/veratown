@@ -30,9 +30,15 @@ import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import {
     preflightAppearanceMutation,
     syncAppearanceMutation,
+    verifyAppearance,
 } from "./shared/appearanceSync";
 import { getLifecycleObjectId } from "./featureSystem";
 import { KennelCommandController } from "./kennelCommands";
+import { applyConsentPadlock } from "../shared/consentPadlock";
+import {
+    classifyContainmentRemoval,
+    readLegacyRemoveTimer,
+} from "../shared/managedLockLifecycle";
 
 const KENNEL_DOOR_CLOSE_MAX_ATTEMPTS = 3;
 const KENNEL_DOOR_CLOSE_RETRY_DELAY_MS = 100;
@@ -70,6 +76,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         { hasDevice: boolean; timestamp: number }
     >();
     private readonly escapedCharacters = new Set<number>();
+    private readonly releasingCharacters = new Set<number>();
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
@@ -338,23 +345,118 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         }
         const inKennel = entryRequested || this.isKennelPosition(character);
         const wearingKennel = this.isWearingKennel(character);
-        const activeSession =
+        let activeSession =
             await this.mutationService?.getActiveKennelSession?.(
                 character.MemberNumber,
             );
+        const legacyExpiry = wearingKennel
+            ? readLegacyRemoveTimer(
+                  character.Appearance.getItemData("ItemDevices"),
+              ).removeTimer
+            : undefined;
+
+        if (!activeSession && legacyExpiry !== undefined) {
+            if (legacyExpiry <= Date.now()) {
+                this.releasingCharacters.add(memberNumber);
+                try {
+                    await syncAppearanceMutation(
+                        character,
+                        () =>
+                            character.Appearance.RemoveItem(
+                                "ItemDevices" as any,
+                            ),
+                        50,
+                        this.stateSync,
+                        { throwOnSyncFailure: true },
+                    );
+                } finally {
+                    this.releasingCharacters.delete(memberNumber);
+                }
+                if (!this.isWearingKennel(character)) {
+                    this.markEscaped(memberNumber);
+                    await this.mutationService?.recordAuditEntry(
+                        memberNumber,
+                        "expired",
+                        { feature: "kennel", reason: "legacy_timer_expired" },
+                    );
+                }
+                return;
+            }
+
+            const migrated =
+                await this.mutationService?.startTimedKennelSession?.(
+                    memberNumber,
+                    legacyExpiry,
+                    memberNumber,
+                );
+            if (migrated !== true) {
+                this.logger.warn("Kennel legacy timer migration deferred", {
+                    memberNumber,
+                    legacyExpiry,
+                });
+                return;
+            }
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    const kennel =
+                        character.Appearance.InventoryGet?.("ItemDevices");
+                    if (!kennel || kennel.Name !== "Kennel") {
+                        throw new Error(
+                            "Kennel device unavailable during migration",
+                        );
+                    }
+                    applyConsentPadlock(kennel as any, {
+                        memberNumber,
+                    });
+                },
+                50,
+                this.stateSync,
+                { throwOnSyncFailure: true },
+            );
+            const verification = verifyAppearance(character, (appearance) => {
+                const kennel = appearance.find(
+                    (item) =>
+                        item.Group === "ItemDevices" && item.Name === "Kennel",
+                );
+                return (
+                    kennel?.Property?.LockedBy === "SafewordPadlock" &&
+                    kennel?.Property?.RemoveTimer === undefined &&
+                    typeof kennel?.Property?.Password === "string" &&
+                    /^[A-Za-z0-9]{1,8}$/.test(kennel.Property.Password)
+                );
+            });
+            if (!verification.verified) {
+                throw new Error(
+                    `Kennel legacy lock migration was not verified: ${verification.status}`,
+                );
+            }
+            activeSession =
+                await this.mutationService?.getActiveKennelSession?.(
+                    memberNumber,
+                );
+        }
 
         if (
             activeSession?.expiresAt !== undefined &&
             activeSession.expiresAt <= Date.now()
         ) {
             if (wearingKennel) {
-                await syncAppearanceMutation(
-                    character,
-                    () => character.Appearance.RemoveItem("ItemDevices" as any),
-                    50,
-                    this.stateSync,
-                    { throwOnSyncFailure: true },
-                );
+                this.releasingCharacters.add(memberNumber);
+                try {
+                    await syncAppearanceMutation(
+                        character,
+                        () =>
+                            character.Appearance.RemoveItem(
+                                "ItemDevices" as any,
+                            ),
+                        50,
+                        this.stateSync,
+                        { throwOnSyncFailure: true },
+                    );
+                } finally {
+                    this.releasingCharacters.delete(memberNumber);
+                }
             }
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name !==
@@ -507,7 +609,29 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         ) {
             return;
         }
-        this.onCharacterSync(character);
+        if (this.releasingCharacters.has(character.MemberNumber)) return;
+        void (async () => {
+            const session =
+                await this.mutationService?.getActiveKennelSession?.(
+                    character.MemberNumber,
+                );
+            if (session && !this.isWearingKennel(character)) {
+                const removed = items.find(
+                    (item) =>
+                        item.Group === "ItemDevices" && item.Name === "Kennel",
+                );
+                await this.mutationService?.recordAuditEntry(
+                    character.MemberNumber,
+                    classifyContainmentRemoval(removed),
+                    { feature: "kennel", reason: "kennel_removed" },
+                );
+            }
+            this.onCharacterSync(character);
+        })().catch((error) => {
+            this.logger.error("Kennel removal reconciliation failed", error, {
+                memberNumber: character.MemberNumber,
+            });
+        });
     };
 
     private isActiveCharacter(character: API_Character): boolean {
