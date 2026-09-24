@@ -332,6 +332,53 @@ test("LiveCharacterStateSync ignores ambient snapshots during an active appearan
     assert.equal(persisted, 1);
 });
 
+test("LiveCharacterStateSync ignores ambient snapshots during authoritative confirmation", async () => {
+    const character = createCharacter(6, { X: 1, Y: 1 }, []);
+    let persisted = 0;
+    let releaseSend: (() => void) | undefined;
+    const sendCompleted = new Promise<void>((resolve) => {
+        releaseSend = resolve;
+    });
+    const connection = new EventEmitter() as EventEmitter & {
+        Player: { MemberNumber: number };
+    };
+    connection.Player = { MemberNumber: 6 };
+    character.connection = connection;
+    character.sendAppearanceUpdate = () => {
+        void sendCompleted;
+    };
+    const store: any = {
+        getVeratownView: async () => ({ currentRestraints: [] }),
+        syncVeratownState: async () => {
+            persisted++;
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(
+        { chatRoom: { characters: [character] }, on: () => {} } as any,
+        store,
+        60_000,
+    );
+
+    const mutation = syncAppearanceMutation(
+        character as any,
+        () => undefined,
+        0,
+        undefined,
+        {
+            sendFullAppearanceUpdate: true,
+            awaitServerSync: true,
+            serverSyncTimeoutMs: 100,
+        },
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(await sync.syncCharacter(character as any), false);
+    assert.equal(persisted, 0);
+    releaseSend?.();
+    await assert.rejects(mutation);
+});
+
 test("LiveCharacterStateSync reconciles every owned bot when room characters omit them", async () => {
     const persisted: Array<{ memberNumber: number; position: unknown }> = [];
     const ownedBots = [10, 20, 30].map((memberNumber, index) =>

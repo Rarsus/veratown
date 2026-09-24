@@ -39,6 +39,10 @@ const deferredAppearanceMutationContexts = new WeakMap<
     API_Character,
     AppearanceMutationContext
 >();
+const pendingAppearanceConfirmations = new WeakMap<
+    API_Character,
+    AppearanceMutationContext
+>();
 let mutationSequence = 0;
 
 function summarizeAppearance(appearance: readonly BC_AppearanceItem[]) {
@@ -115,6 +119,12 @@ export function takeAppearanceMutationContext(
     const deferred = deferredAppearanceMutationContexts.get(character);
     deferredAppearanceMutationContexts.delete(character);
     return deferred;
+}
+
+export function hasPendingAppearanceConfirmation(
+    character: API_Character,
+): boolean {
+    return pendingAppearanceConfirmations.has(character);
 }
 
 function createMutationContext(
@@ -298,8 +308,17 @@ async function executeAppearanceMutation(
                       options.serverSyncTimeoutMs,
                   )
                 : undefined;
-            character.sendAppearanceUpdate();
-            await serverSync;
+            if (serverSync) {
+                pendingAppearanceConfirmations.set(character, context);
+            }
+            try {
+                character.sendAppearanceUpdate();
+                await serverSync;
+            } finally {
+                if (serverSync) {
+                    pendingAppearanceConfirmations.delete(character);
+                }
+            }
         }
 
         // Wait to ensure sync is visible
@@ -378,8 +397,24 @@ async function waitForServerAppearanceSync(
             settled = true;
             clearTimeout(timer);
             connector.off("CharacterSync", onSync);
+            connector.off("AppearanceUpdateSent", onPacketSent);
+            connector.off("AppearanceSyncReceived", onPacket);
             if (error) reject(error);
             else resolve();
+        };
+        const onPacket = (diagnostic: unknown) => {
+            logger.debug("Received raw appearance sync packet", {
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                diagnostic,
+            });
+        };
+        const onPacketSent = (diagnostic: unknown) => {
+            logger.debug("Observed outbound appearance update packet", {
+                memberNumber: character.MemberNumber,
+                operationId: context.operationId,
+                diagnostic,
+            });
         };
         const onSync = (syncedCharacter: API_Character) => {
             if (syncedCharacter?.MemberNumber !== character.MemberNumber) {
@@ -457,6 +492,8 @@ async function waitForServerAppearanceSync(
             Math.max(1, timeoutMs),
         );
         connector.on("CharacterSync", onSync);
+        connector.on("AppearanceUpdateSent", onPacketSent);
+        connector.on("AppearanceSyncReceived", onPacket);
         logger.debug("Waiting for authoritative CharacterSync", {
             memberNumber: character.MemberNumber,
             operationId: context.operationId,

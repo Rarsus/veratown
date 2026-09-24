@@ -115,6 +115,8 @@ interface ConnectorEvents {
     RoomCreate: [];
     CharacterEntered: [character: API_Character];
     CharacterSync: [character: API_Character];
+    AppearanceUpdateSent: [diagnostic: AppearancePacketDiagnostic];
+    AppearanceSyncReceived: [diagnostic: AppearancePacketDiagnostic];
     CharacterLeft: [
         sourceMemberNumber: number,
         character: API_Character,
@@ -123,6 +125,52 @@ interface ConnectorEvents {
     ];
     RoomUpdate: [obj: ServerChatRoomSyncPropertiesMessage];
 }
+
+export interface AppearancePacketDiagnostic {
+    connectionId: string;
+    direction: "outbound" | "inbound";
+    memberNumber: number;
+    timestamp: number;
+    itemKeys: string[];
+    lockShapes: Array<{
+        key: string;
+        lockedBy?: unknown;
+        lockMemberNumber?: unknown;
+        passwordPresent: boolean;
+        lockSet?: unknown;
+    }>;
+    sourceMemberNumber?: number;
+}
+
+function appearancePacketDiagnostic(
+    connectionId: string,
+    direction: AppearancePacketDiagnostic["direction"],
+    memberNumber: number,
+    appearance: readonly BC_AppearanceItem[] | undefined,
+    sourceMemberNumber?: number,
+): AppearancePacketDiagnostic {
+    const items = appearance ?? [];
+    return {
+        connectionId,
+        direction,
+        memberNumber,
+        timestamp: Date.now(),
+        itemKeys: items.map((item) => `${item.Group}/${item.Name}`),
+        lockShapes: items.map((item) => {
+            const property = (item.Property ?? {}) as Record<string, unknown>;
+            return {
+                key: `${item.Group}/${item.Name}`,
+                lockedBy: property.LockedBy,
+                lockMemberNumber: property.LockMemberNumber,
+                passwordPresent: typeof property.Password === "string",
+                lockSet: property.LockSet,
+            };
+        }),
+        ...(sourceMemberNumber === undefined ? {} : { sourceMemberNumber }),
+    };
+}
+
+let connectorSequence = 0;
 
 export class API_Connector extends EventEmitter<ConnectorEvents> {
     private sock: Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -155,6 +203,8 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private bot?: LogicBase;
 
+    public readonly connectionId: string;
+
     constructor(
         private url: string,
         public username: string,
@@ -162,6 +212,8 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         env: "live" | "test",
     ) {
         super();
+
+        this.connectionId = `${username}-${++connectorSequence}`;
 
         const origin =
             env === "live"
@@ -513,7 +565,16 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomSyncCharacter = (
         resp: ServerChatRoomSyncCharacterResponse,
     ) => {
-        //console.log("sync character", resp);
+        this.emit(
+            "AppearanceSyncReceived",
+            appearancePacketDiagnostic(
+                this.connectionId,
+                "inbound",
+                resp.Character.MemberNumber,
+                resp.Character.Appearance,
+                resp.SourceMemberNumber,
+            ),
+        );
         this._chatRoom?.characterSync(
             resp.Character.MemberNumber,
             transformToCharacterData(resp.Character),
@@ -531,7 +592,16 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomSyncSingle = (
         resp: ServerChatRoomSyncCharacterResponse,
     ) => {
-        //console.log("sync single", resp);
+        this.emit(
+            "AppearanceSyncReceived",
+            appearancePacketDiagnostic(
+                this.connectionId,
+                "inbound",
+                resp.Character.MemberNumber,
+                resp.Character.Appearance,
+                resp.SourceMemberNumber,
+            ),
+        );
         this._chatRoom?.characterSync(
             resp.Character.MemberNumber,
             transformToCharacterData(resp.Character),
@@ -865,7 +935,15 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     }
 
     public updateCharacter(update: Partial<API_Character_Data>): void {
-        // console.log("sending ChatRoomCharacterUpdate", JSON.stringify(update));
+        this.emit(
+            "AppearanceUpdateSent",
+            appearancePacketDiagnostic(
+                this.connectionId,
+                "outbound",
+                this._player?.MemberNumber ?? 0,
+                update.Appearance,
+            ),
+        );
         this.wrappedSock.emit("ChatRoomCharacterUpdate", update);
     }
 

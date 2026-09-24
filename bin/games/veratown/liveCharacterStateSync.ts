@@ -23,6 +23,7 @@ import { CurrentRestraint } from "../shared/unifiedCharacterTypes";
 import { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
 import {
     filterValidAppearanceItems,
+    hasPendingAppearanceConfirmation,
     takeAppearanceMutationContext,
     registerAppearanceStateSynchronizer,
 } from "./shared/appearanceSync";
@@ -117,7 +118,11 @@ export class LiveCharacterStateSync {
         forcePositionPersistence = false,
         mutationContext?: AppearanceMutationContext,
     ): Promise<boolean> {
-        if (!mutationContext && hasActiveAppearanceScope(character)) {
+        if (
+            !mutationContext &&
+            (hasActiveAppearanceScope(character) ||
+                hasPendingAppearanceConfirmation(character))
+        ) {
             return false;
         }
         registerAppearanceStateSynchronizer(
