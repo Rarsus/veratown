@@ -410,6 +410,51 @@ async function executeAppearanceMutation(
                                 serverSyncPredicate,
                                 options.serverSyncTimeoutMs,
                             );
+                            if (context.expectedAppearance) {
+                                const appearance =
+                                    character.Appearance as typeof character.Appearance & {
+                                        applyBundle?: (
+                                            items: BC_AppearanceItem[],
+                                            cfg?: unknown,
+                                            skipGroups?: unknown[],
+                                            sendUpdate?: boolean,
+                                        ) => boolean;
+                                    };
+                                if (
+                                    typeof appearance.applyBundle === "function"
+                                ) {
+                                    appearance.applyBundle(
+                                        context.expectedAppearance,
+                                        undefined,
+                                        [],
+                                        false,
+                                    );
+                                } else {
+                                    logger.error(
+                                        "Cannot restore expected appearance before retry",
+                                        new Error(
+                                            "Appearance.applyBundle is unavailable",
+                                        ),
+                                        {
+                                            memberNumber:
+                                                character.MemberNumber,
+                                            operationId: context.operationId,
+                                            attempt,
+                                        },
+                                    );
+                                }
+                            }
+                            logger.debug(
+                                "Dispatching authoritative appearance retry",
+                                {
+                                    memberNumber: character.MemberNumber,
+                                    operationId: context.operationId,
+                                    attempt,
+                                    appearance: summarizeAppearance(
+                                        context.expectedAppearance ?? [],
+                                    ),
+                                },
+                            );
                             character.sendAppearanceUpdate();
                             await serverSync;
                             context.verificationStatus = "confirmed";
