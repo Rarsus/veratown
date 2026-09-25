@@ -2,6 +2,7 @@ import {
     API_Character,
     API_Connector,
     AssetGet,
+    BC_AppearanceItem,
     getAssetDef,
     getExtendedAssetDef,
 } from "bc-bot";
@@ -109,6 +110,7 @@ export function validateBunnyRestraintConfig(
 type BunnyStateSync = (
     character: API_Character,
     context?: AppearanceMutationContext,
+    observedAppearance?: readonly BC_AppearanceItem[],
 ) => Promise<void>;
 
 export class BunnyPunishmentService {
@@ -353,7 +355,11 @@ export class BunnyPunishmentService {
                 async (current, mutationContext) => {
                     authoritativeAppearance =
                         mutationContext?.observedAppearance;
-                    return this.stateSync?.(current, mutationContext);
+                    return this.stateSync?.(
+                        current,
+                        mutationContext,
+                        authoritativeAppearance,
+                    );
                 },
                 {
                     throwOnSyncFailure: false,

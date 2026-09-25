@@ -189,6 +189,7 @@ function createBunnySystem(
     stateSync: (
         character: any,
         context?: any,
+        observedAppearance?: readonly any[],
     ) => Promise<void> = async () => {},
     random: () => number = Math.random,
     syncDelay = 100,
@@ -330,12 +331,14 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         const created = createCharacter(index + 1);
         const persisted: any[] = [];
         let mutationContext: any;
+        let observedAppearance: readonly any[] | undefined;
         let ambientContext: unknown;
         const system = createBunnySystem(
             createMessageConnection(created.character) as any,
-            async (character, context) => {
+            async (character, context, observed) => {
                 persisted.push(character.Appearance.MakeAppearanceBundle());
                 mutationContext = context;
+                observedAppearance = observed;
                 ambientContext = getAppearanceMutationContext(character);
             },
             deterministicRandom(index),
@@ -355,6 +358,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         assert.equal(mutationContext?.operationId, result.operationId);
         assert.equal(mutationContext?.source, "bunny");
         assert.equal(mutationContext?.reason, "bunny_punishment_applied");
+        assert.equal(observedAppearance, mutationContext?.observedAppearance);
         assert.equal(ambientContext, undefined);
         assert.equal(persisted.length, 1, config.name);
         for (const piece of config.pieces) {

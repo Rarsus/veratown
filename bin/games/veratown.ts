@@ -591,13 +591,14 @@ export class Veratown {
             const punishmentService = new BunnyPunishmentService(
                 this.conn,
                 punishmentRepository,
-                (character, context) =>
+                (character, context, observedAppearance) =>
                     this.liveCharacterStateSync
                         ?.syncCharacter(
                             character,
                             character.MapPos,
                             false,
                             context,
+                            observedAppearance,
                         )
                         .then(() => undefined) ?? Promise.resolve(),
                 undefined,
