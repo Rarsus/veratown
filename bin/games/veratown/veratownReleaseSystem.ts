@@ -36,6 +36,7 @@ import {
     PosturePreserver,
     syncAppearanceMutation,
 } from "./shared";
+import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import {
     isEffectivelyUnlockedBondageItem,
     normalizeReleaseAppearanceItem,
@@ -169,9 +170,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         private characterProfileStore?: any,
         private unifiedStore?: UnifiedCharacterStore,
         private mutationService?: GameStateMutationService,
-        private appearanceStateSync?: (
-            character: API_Character,
-        ) => Promise<void>,
+        private appearanceStateSync?: AppearanceStateSynchronizer,
         private readonly recordBunnyCleanup?: (
             character: API_Character,
             releaseOperation: string,

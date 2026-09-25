@@ -524,9 +524,15 @@ export class Veratown {
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
-                    (character) =>
+                    (character, context, observedAppearance) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                                observedAppearance,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
                     this.roomKey === "main",
@@ -544,9 +550,15 @@ export class Veratown {
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
-                    (character) =>
+                    (character, context, observedAppearance) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                                observedAppearance,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                     undefined,
                     this.roomKey === "main",
@@ -558,9 +570,15 @@ export class Veratown {
                 new ShowerSystem(
                     this.conn,
                     this.conn2,
-                    (character) =>
+                    (character, context, observedAppearance) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                                observedAppearance,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                     this.roomKey === "main",
                 ),
@@ -569,9 +587,15 @@ export class Veratown {
             () =>
                 new BedSystem(
                     this.conn,
-                    (character) =>
+                    (character, context, observedAppearance) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                                observedAppearance,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                     this.roomKey === "main",
                 ),
@@ -674,9 +698,15 @@ export class Veratown {
             () =>
                 new FurnitureBondageSystem(
                     this.conn,
-                    (character) =>
+                    (character, context, observedAppearance) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                                observedAppearance,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                 ),
         );
@@ -698,9 +728,15 @@ export class Veratown {
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
-                    (character) =>
+                    (character, context, observedAppearance) =>
                         this.liveCharacterStateSync
-                            ?.syncCharacter(character)
+                            ?.syncCharacter(
+                                character,
+                                character.MapPos,
+                                false,
+                                context,
+                                observedAppearance,
+                            )
                             .then(() => undefined) ?? Promise.resolve(),
                     async (character, releaseOperation) => {
                         const view =

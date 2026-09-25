@@ -530,8 +530,12 @@ export class BunnyPunishmentService {
                     character.Appearance.RemoveItem(BUNNY_SIGN.group);
                 },
                 this.syncDelayMs,
-                async (currentCharacter, context) =>
-                    this.stateSync?.(currentCharacter, context),
+                async (currentCharacter, context, observedAppearance) =>
+                    this.stateSync?.(
+                        currentCharacter,
+                        context,
+                        observedAppearance,
+                    ),
                 {
                     throwOnSyncFailure: false,
                     source: "bunny",

@@ -28,6 +28,7 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
 import type { ReleaseSystem } from "./veratownReleaseSystem";
 import { createIdempotentMonitor } from "./shared";
+import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { beginAppearanceScope } from "./shared/appearanceLifecycle";
 
@@ -48,9 +49,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private conn2?: API_Connector,
-        private readonly stateSync?: (
-            character: API_Character,
-        ) => Promise<void>,
+        private readonly stateSync?: AppearanceStateSynchronizer,
         private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "shower", "Showers");

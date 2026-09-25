@@ -17,6 +17,7 @@ import { wait } from "../../hub/utils";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
+import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 interface BondageRestraint {
@@ -96,9 +97,7 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
 
     public constructor(
         conn: API_Connector,
-        private readonly stateSync?: (
-            character: API_Character,
-        ) => Promise<void>,
+        private readonly stateSync?: AppearanceStateSynchronizer,
     ) {
         super(conn, "furnitureBondage", "Bondage furniture");
         this.furnitureTrigger = this.guardTileHandler(

@@ -28,6 +28,7 @@ import { KENNEL_POSITIONS, KENNEL_DOOR_CLOSE_DELAY_MS } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import {
+    AppearanceStateSynchronizer,
     preflightAppearanceMutation,
     syncAppearanceMutation,
     verifyAppearance,
@@ -80,9 +81,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
-        private readonly stateSync?: (
-            character: API_Character,
-        ) => Promise<void>,
+        private readonly stateSync?: AppearanceStateSynchronizer,
         private readonly delay: (milliseconds: number) => Promise<void> = wait,
         private readonly allowStaticFallbacks = true,
         private readonly managedReleaseWorkersEnabled = true,

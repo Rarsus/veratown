@@ -23,6 +23,7 @@ import {
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
+import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 
 // While a character remains on a bed tile, keeps checking whether they have
@@ -46,9 +47,7 @@ export class BedSystem extends AbstractTileFeatureSystem {
 
     public constructor(
         conn: API_Connector,
-        private readonly stateSync?: (
-            character: API_Character,
-        ) => Promise<void>,
+        private readonly stateSync?: AppearanceStateSynchronizer,
         private readonly allowStaticFallbacks = true,
     ) {
         super(conn, "bed", "Beds");

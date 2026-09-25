@@ -19,6 +19,7 @@ export {
 
 // Appearance synchronization
 export {
+    AppearanceStateSynchronizer,
     syncAppearanceMutation,
     registerAppearanceStateSynchronizer,
     removeItems,

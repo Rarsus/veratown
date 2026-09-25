@@ -23,12 +23,14 @@ const logger = createLogger("appearanceSync");
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 const DEFAULT_SERVER_SYNC_TIMEOUT_MS = 2_000;
+export type AppearanceStateSynchronizer = (
+    character: API_Character,
+    context?: AppearanceMutationContext,
+    observedAppearance?: readonly BC_AppearanceItem[],
+) => Promise<void>;
 const appearanceStateSynchronizers = new WeakMap<
     API_Character,
-    (
-        character: API_Character,
-        context?: AppearanceMutationContext,
-    ) => Promise<void>
+    AppearanceStateSynchronizer
 >();
 const appearanceMutationContexts = new WeakMap<
     API_Character,
@@ -254,11 +256,7 @@ function createMutationContext(
  */
 export function registerAppearanceStateSynchronizer(
     character: API_Character,
-    synchronizer: (
-        character: API_Character,
-        context?: AppearanceMutationContext,
-        observedAppearance?: readonly BC_AppearanceItem[],
-    ) => Promise<void>,
+    synchronizer: AppearanceStateSynchronizer,
 ): void {
     appearanceStateSynchronizers.set(character, synchronizer);
 }

@@ -30,6 +30,7 @@ import { createIdempotentMonitor } from "./shared";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { GameStateMutationService } from "../shared/gameStateMutationService";
 import {
+    AppearanceStateSynchronizer,
     preflightAppearanceMutation,
     syncAppearanceMutation,
     verifyAppearance,
@@ -221,9 +222,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
-        private readonly stateSync?: (
-            character: API_Character,
-        ) => Promise<void>,
+        private readonly stateSync?: AppearanceStateSynchronizer,
         private readonly timer: CageTimer = systemTimer,
         private readonly allowStaticFallbacks = true,
         private readonly managedReleaseWorkersEnabled = true,
