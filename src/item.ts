@@ -89,6 +89,7 @@ function compressExtendedProperties(
     }
 
     for (const key of Object.keys(baseline)) allowed.add(key);
+    for (const key of Object.keys(property)) allowed.add(key);
 
     if ((item as any).Property?.LockedBy) {
         for (const key of [

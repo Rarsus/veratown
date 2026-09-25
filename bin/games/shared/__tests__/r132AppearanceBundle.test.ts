@@ -103,3 +103,58 @@ test("R132 vibrator defaults are omitted from appearance bundles", () => {
 
     assert.equal(bundle.Property, undefined);
 });
+
+test("R132 text item properties survive extended property compression", () => {
+    const bundle = toAppearanceBundle({
+        Group: "ItemMisc",
+        Name: "WoodenSign",
+        Property: {
+            Text: "I step on",
+            Text2: "Bunnies",
+        },
+    } as any);
+
+    assert.deepEqual(bundle.Property, {
+        Text: "I step on",
+        Text2: "Bunnies",
+    });
+});
+
+test("R132 extended items preserve lock configuration for every lock type", () => {
+    const lockProperties = [
+        {
+            LockedBy: "SafewordPadlock",
+            LockMemberNumber: 123,
+            Password: "safe",
+            RemoveItem: true,
+            LockSet: true,
+        },
+        {
+            LockedBy: "ExclusivePadlock",
+            LockMemberNumber: 123,
+            Password: "exclusive",
+            RemoveItem: false,
+            LockSet: true,
+            ShowTimer: false,
+        },
+        {
+            LockedBy: "TimerPasswordPadlock",
+            LockMemberNumber: 123,
+            Password: "timer",
+            RemoveItem: true,
+            LockSet: true,
+            RemoveTimer: 14_400,
+            ShowTimer: true,
+        },
+    ];
+
+    for (const property of lockProperties) {
+        const bundle = toAppearanceBundle({
+            Group: "ItemFeet",
+            Name: "HeavySpreaderMetal",
+            Property: property,
+        } as any);
+
+        assert.deepEqual(bundle.Property, property);
+    }
+});
