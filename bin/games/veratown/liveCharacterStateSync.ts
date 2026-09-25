@@ -40,6 +40,10 @@ const logger = createLogger("LiveCharacterStateSync");
 const RECONCILIATION_INTERVAL_MS = 60_000;
 let syncOperationSequence = 0;
 
+export type CharacterObservationHandler = (
+    character: API_Character,
+) => void | Promise<void>;
+
 export interface SelfPositionSyncDiagnostic {
     memberNumber: number;
     requestedPosition?: { X: number; Y: number };
@@ -71,14 +75,15 @@ export class LiveCharacterStateSync {
         private readonly store: UnifiedCharacterStore,
         private readonly intervalMs: number = RECONCILIATION_INTERVAL_MS,
         ownedConnections: API_Connector[] = [conn],
+        private readonly onCharacterObserved?: CharacterObservationHandler,
     ) {
         this.ownedConnections = [...new Set([this.conn, ...ownedConnections])];
     }
 
     public start(): void {
         if (this.reconciliationTimer) return;
-        this.conn.on("Message", this.onInteraction);
         for (const connection of this.ownedConnections) {
+            connection.on("Message", this.onInteraction);
             connection.on("MapPosition", (memberNumber, position) =>
                 this.onMovement(connection, memberNumber, position),
             );
@@ -95,14 +100,16 @@ export class LiveCharacterStateSync {
             const self = this.observedSelf(connection);
             if (self) characters.set(self.MemberNumber, self);
         }
-        for (const character of this.conn.chatRoom?.characters ?? []) {
-            if (!characters.has(character.MemberNumber)) {
-                characters.set(character.MemberNumber, character);
+        for (const connection of this.ownedConnections) {
+            for (const character of connection.chatRoom?.characters ?? []) {
+                if (!characters.has(character.MemberNumber)) {
+                    characters.set(character.MemberNumber, character);
+                }
             }
         }
         await Promise.all(
             [...characters.values()].map((character) =>
-                this.syncCharacter(character).catch((error) => {
+                this.observeCharacter(character).catch((error) => {
                     logger.error(
                         "Failed to reconcile live character state",
                         error,
@@ -113,6 +120,14 @@ export class LiveCharacterStateSync {
                 }),
             ),
         );
+    }
+
+    private async observeCharacter(
+        character: API_Character,
+        position?: { X: number; Y: number },
+    ): Promise<void> {
+        await this.syncCharacter(character, position);
+        await this.onCharacterObserved?.(character);
     }
 
     public async syncCharacter(
@@ -285,7 +300,7 @@ export class LiveCharacterStateSync {
     }
 
     private onInteraction = (message: API_Message): void => {
-        void this.syncCharacter(message.sender).catch((error) => {
+        void this.observeCharacter(message.sender).catch((error) => {
             logger.error("Failed to synchronize interaction state", error, {
                 memberNumber: message.sender.MemberNumber,
             });
@@ -303,7 +318,7 @@ export class LiveCharacterStateSync {
                 ? connection.Player
                 : undefined);
         if (!character) return;
-        void this.syncCharacter(character, position).catch((error) => {
+        void this.observeCharacter(character, position).catch((error) => {
             logger.error("Failed to synchronize movement state", error, {
                 memberNumber,
             });

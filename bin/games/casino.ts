@@ -591,6 +591,11 @@ export class Casino implements GamePlugin {
         );
     };
 
+    public async reconcileCharacter(character: API_Character): Promise<void> {
+        if (!this.enabled || !this.managedReleaseWorkersEnabled) return;
+        await this.forfeitService.reconcileManagedForfeits(character);
+    }
+
     public getManagedReleaseWorkerDiagnostics(): Record<string, unknown> {
         return {
             enabled: this.managedReleaseWorkersEnabled,

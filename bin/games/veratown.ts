@@ -436,6 +436,7 @@ export class Veratown {
                     (connection): connection is API_Connector =>
                         connection !== undefined,
                 ),
+                (character) => this.reconcileManagedTimers(character),
             );
             this.liveCharacterStateSync.start();
             this.locationEventSystem = new LocationEventSystem(db, {
@@ -1415,6 +1416,32 @@ export class Veratown {
     private onAuxiliaryBotDisconnected = () => {
         this.updateContainmentReadiness();
     };
+
+    private async reconcileManagedTimers(
+        character: API_Character,
+    ): Promise<void> {
+        if (!this.managedReleaseWorkersEnabled) return;
+        const checks = [
+            this.cageSystem?.reconcileCharacter(character),
+            this.kennelSystem?.reconcileCharacter(character),
+            this.bunnyParkSystem?.reconcileCharacter(character),
+            this.casino?.reconcileCharacter(character),
+            this.dare?.reconcileCharacter(character),
+        ].filter((check): check is Promise<void> => check !== undefined);
+        const results = await Promise.allSettled(checks);
+        results.forEach((result) => {
+            if (result.status === "rejected") {
+                logger.error(
+                    "Managed timer reconciliation failed",
+                    result.reason,
+                    {
+                        memberNumber: character.MemberNumber,
+                        roomKey: this.roomKey,
+                    },
+                );
+            }
+        });
+    }
 
     private attachContainmentFeatures(): void {
         this.cageSystem?.attachToRoom?.();

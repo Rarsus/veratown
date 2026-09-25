@@ -457,19 +457,17 @@ export class CageSystem extends AbstractTileFeatureSystem {
             this.triggersReady = true;
             if (this.managedReleaseWorkersEnabled) {
                 for (const character of room.characters) {
-                    void this.recoverCagedCharacter(character).catch(
-                        (error) => {
-                            this.recoveryReady = false;
-                            this.recoveryReadinessReason =
-                                "cage character recovery failed";
-                            this.enabled = false;
-                            this.logger.error("Cage recovery failed", {
-                                memberNumber: character.MemberNumber,
-                                observedAtMs: this.timer.now(),
-                                error,
-                            });
-                        },
-                    );
+                    void this.reconcileCharacter(character).catch((error) => {
+                        this.recoveryReady = false;
+                        this.recoveryReadinessReason =
+                            "cage character recovery failed";
+                        this.enabled = false;
+                        this.logger.error("Cage recovery failed", {
+                            memberNumber: character.MemberNumber,
+                            observedAtMs: this.timer.now(),
+                            error,
+                        });
+                    });
                 }
                 this.recoveryReady = true;
                 this.recoveryReadinessReason = "cage recovery reconciled";
@@ -870,9 +868,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         }
     }
 
-    private async recoverCagedCharacter(
-        character: API_Character,
-    ): Promise<void> {
+    public async reconcileCharacter(character: API_Character): Promise<void> {
         await this.monitor.run(character, async () => {
             let session = await this.mutationService?.getActiveCageSession(
                 character.MemberNumber,

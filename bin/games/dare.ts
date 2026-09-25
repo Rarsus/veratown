@@ -426,6 +426,13 @@ Game Overview
         };
     }
 
+    public async reconcileCharacter(character: API_Character): Promise<void> {
+        if (!this.managedReleaseWorkersEnabled) return;
+        if (this.repeatPilloryLocks.has(character.MemberNumber)) {
+            await this.expireRepeatPillory(character.MemberNumber, character);
+        }
+    }
+
     /**
      * Cleanup when the plugin is being stopped.
      * Optionally saves state and stops timers.
@@ -1997,11 +2004,13 @@ Game Overview
 
     private expireRepeatPillory = async (
         memberNumber: number,
+        observedCharacter?: API_Character,
     ): Promise<void> => {
         const lock = this.repeatPilloryLocks.get(memberNumber);
         if (!lock || lock.status !== "active") return;
 
-        const character = this.conn.chatRoom?.findMember(memberNumber);
+        const character =
+            observedCharacter ?? this.conn.chatRoom?.findMember(memberNumber);
         if (!character) {
             this.armRepeatPilloryTimer(
                 memberNumber,

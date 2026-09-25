@@ -178,4 +178,9 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
             status: this.managedReleaseWorkersEnabled ? "active" : "disabled",
         };
     }
+
+    public async reconcileCharacter(character: API_Character): Promise<void> {
+        if (!this.enabled || !this.managedReleaseWorkersEnabled) return;
+        await this.punishmentService.recover(character);
+    }
 }

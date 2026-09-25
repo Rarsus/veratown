@@ -328,7 +328,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         );
     };
 
-    private async reconcileCharacter(character: API_Character): Promise<void> {
+    public async reconcileCharacter(character: API_Character): Promise<void> {
         await this.monitor.run(character, () =>
             this.reconcileCharacterState(character),
         );
