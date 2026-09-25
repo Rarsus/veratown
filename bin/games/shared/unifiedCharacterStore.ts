@@ -16,6 +16,7 @@ import { isDeepStrictEqual } from "node:util";
 import { ClientSession, Collection, Db, ObjectId } from "mongodb";
 import { BC_AppearanceItem } from "bc-bot";
 import { DatabaseError, ValidationError } from "../../errors";
+import { createLogger } from "../../logging";
 import {
     UnifiedCharacterProfile,
     GameEvent,
@@ -181,6 +182,7 @@ function dedupeReleaseItems(items: RemovedBondageItem[]): RemovedBondageItem[] {
  * from the unified profile. All mutations emit events via the EventBus.
  */
 export class UnifiedCharacterStore {
+    private readonly logger = createLogger("UnifiedCharacterStore");
     private profiles: Collection<UnifiedCharacterProfile>;
     private events: Collection<GameEvent>;
     private managedLocks: Collection<ManagedLockRecord & { _id: string }>;
@@ -2679,8 +2681,23 @@ export class UnifiedCharacterStore {
         artifact: BunnyPunishmentArtifact,
         expectedArtifactVersion?: number,
     ): Promise<void> {
+        const stageContext = {
+            memberNumber: artifact.memberNumber,
+            operationId: artifact.operationId,
+            artifactVersion: artifact.artifactVersion,
+        };
+        const startedAt = Date.now();
+        this.logger.debug("Bunny artifact store stage started", {
+            ...stageContext,
+            stage: "getProfile",
+        });
         this.assertMemberNumber(artifact.memberNumber);
         await this.getProfile(artifact.memberNumber);
+        this.logger.debug("Bunny artifact store stage completed", {
+            ...stageContext,
+            stage: "getProfile",
+            elapsedMs: Date.now() - startedAt,
+        });
         const filter =
             expectedArtifactVersion === undefined
                 ? { _id: artifact.memberNumber }
@@ -2702,6 +2719,11 @@ export class UnifiedCharacterStore {
                               : []),
                       ],
                   };
+        const updateStartedAt = Date.now();
+        this.logger.debug("Bunny artifact store stage started", {
+            ...stageContext,
+            stage: "profile.updateOne",
+        });
         const result = await this.profiles.updateOne(filter, {
             $set: {
                 "veratown.bunnyPunishmentArtifact": artifact,
@@ -2715,10 +2737,17 @@ export class UnifiedCharacterStore {
                 version: asVersion(1),
             },
         });
+        this.logger.debug("Bunny artifact store stage completed", {
+            ...stageContext,
+            stage: "profile.updateOne",
+            elapsedMs: Date.now() - updateStartedAt,
+            matchedCount: result.matchedCount,
+            modifiedCount: result.modifiedCount,
+        });
         if (result.matchedCount === 0) {
             throw new Error("Bunny punishment artifact version conflict");
         }
-        await this.recordAppearanceLifecycleEvent({
+        const event = {
             timestamp: artifact.appliedAt,
             type: "bunny_sign_added",
             source: "veratown",
@@ -2734,6 +2763,28 @@ export class UnifiedCharacterStore {
             processed: false,
             correlationId: artifact.operationId,
             deliveryId: `bunny-sign-added:${artifact.operationId}`,
+        } satisfies GameEvent;
+        this.logger.debug("Bunny artifact store stage started", {
+            ...stageContext,
+            stage: "event.record",
+        });
+        await this.recordEvent(event);
+        this.logger.debug("Bunny artifact store stage completed", {
+            ...stageContext,
+            stage: "event.record",
+            elapsedMs: Date.now() - startedAt,
+        });
+        const publishStartedAt = Date.now();
+        this.logger.debug("Bunny artifact store stage started", {
+            ...stageContext,
+            stage: "event.publish",
+        });
+        await this.eventBus.publish(event);
+        this.logger.debug("Bunny artifact store stage completed", {
+            ...stageContext,
+            stage: "event.publish",
+            elapsedMs: Date.now() - publishStartedAt,
+            totalElapsedMs: Date.now() - startedAt,
         });
     }
 

@@ -55,6 +55,7 @@ export interface BunnyPunishmentResult {
 export const BUNNY_INITIAL_DURATION_MS = 5 * 60 * 1000;
 export const BUNNY_MAX_DURATION_MS = 4 * 60 * 60 * 1000;
 const BUNNY_RELEASE_MAX_ATTEMPTS = 3;
+const BUNNY_PERSISTENCE_WATCHDOG_MS = 10_000;
 
 export function calculateBunnyOffenceDuration(offenceNumber: number): {
     offenceNumber: number;
@@ -538,9 +539,16 @@ export class BunnyPunishmentService {
             appliedPieces,
         };
         try {
-            await this.repository.recordArtifact(
-                artifact,
-                artifact.artifactVersion > 1 ? artifact.artifactVersion - 1 : 0,
+            await this.runPersistenceStage(
+                "artifact.record",
+                () =>
+                    this.repository.recordArtifact(
+                        artifact,
+                        artifact.artifactVersion > 1
+                            ? artifact.artifactVersion - 1
+                            : 0,
+                    ),
+                context,
             );
         } catch (error) {
             this.logger.error(
@@ -554,32 +562,84 @@ export class BunnyPunishmentService {
             return;
         }
         await Promise.all([
-            this.repository
-                .incrementCount(character.MemberNumber)
-                .catch((error) =>
-                    this.logger.warn(
-                        "Bunny punishment count persistence failed",
-                        {
-                            ...context,
-                            error:
-                                error instanceof Error
-                                    ? error.message
-                                    : String(error),
-                        },
+            this.runPersistenceStage(
+                "count.increment",
+                () => this.repository.incrementCount(character.MemberNumber),
+                context,
+            ).catch((error) =>
+                this.logger.warn("Bunny punishment count persistence failed", {
+                    ...context,
+                    appliedPieces,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }),
+            ),
+            this.runPersistenceStage(
+                "audit.record",
+                () =>
+                    this.repository.recordAudit(
+                        character.MemberNumber,
+                        auditDetails,
                     ),
-                ),
-            this.repository
-                .recordAudit(character.MemberNumber, auditDetails)
-                .catch((error) =>
-                    this.logger.warn("Bunny punishment audit failed", {
-                        ...context,
-                        appliedPieces,
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    }),
-                ),
+                context,
+            ).catch((error) =>
+                this.logger.warn("Bunny punishment audit failed", {
+                    ...context,
+                    appliedPieces,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }),
+            ),
         ]);
+        this.logger.debug("Bunny punishment persistence stages completed", {
+            ...context,
+            appliedPieces,
+            expiresAt: artifact.expiresAt,
+            durationMs: artifact.durationMs,
+        });
+    }
+
+    private async runPersistenceStage<T>(
+        stage: string,
+        operation: () => Promise<T>,
+        context: {
+            memberNumber: number;
+            operationId: string;
+            configuration: string;
+            requestedPieces: string[];
+        },
+    ): Promise<T> {
+        const startedAt = Date.now();
+        const watchdog = setTimeout(() => {
+            this.logger.warn("Bunny persistence stage still pending", {
+                ...context,
+                stage,
+                elapsedMs: Date.now() - startedAt,
+                watchdogMs: BUNNY_PERSISTENCE_WATCHDOG_MS,
+            });
+        }, BUNNY_PERSISTENCE_WATCHDOG_MS);
+        watchdog.unref?.();
+        this.logger.debug("Bunny persistence stage started", {
+            ...context,
+            stage,
+        });
+        try {
+            const result = await operation();
+            this.logger.debug("Bunny persistence stage completed", {
+                ...context,
+                stage,
+                elapsedMs: Date.now() - startedAt,
+            });
+            return result;
+        } catch (error) {
+            this.logger.error("Bunny persistence stage failed", error, {
+                ...context,
+                stage,
+                elapsedMs: Date.now() - startedAt,
+            });
+            throw error;
+        } finally {
+            clearTimeout(watchdog);
+        }
     }
 }
