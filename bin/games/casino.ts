@@ -1433,17 +1433,27 @@ ${forfeitsString()}
         const char = this.conn?.chatRoom?.findMember(bet.memberNumber);
         if (!char) return;
 
-        // Use ForfeitService to apply the forfeit
-        this.forfeitService.applyForfeit(
-            char,
-            bet.stakeForfeit,
-            this.conn.Player.MemberNumber,
-        );
-        await this.forfeitService.persistForfeit(
-            char,
-            bet.stakeForfeit,
-            this.conn.Player.MemberNumber,
-        );
+        try {
+            this.forfeitService.applyForfeit(
+                char,
+                bet.stakeForfeit,
+                this.conn.Player.MemberNumber,
+            );
+            await this.forfeitService.persistForfeit(
+                char,
+                bet.stakeForfeit,
+                this.conn.Player.MemberNumber,
+            );
+        } catch (error) {
+            logger.error("Casino forfeit could not be applied", error, {
+                memberNumber: bet.memberNumber,
+                forfeitKey: bet.stakeForfeit,
+            });
+            this.messageSender.whisperToCharacter(
+                char,
+                "The casino could not apply that forfeit. Your bet was not processed.",
+            );
+        }
     }
 
     public cheatPunishment(char: API_Character, player: any): void {

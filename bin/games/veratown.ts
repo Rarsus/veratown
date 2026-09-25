@@ -600,7 +600,9 @@ export class Veratown {
                         )
                         .then(() => undefined) ?? Promise.resolve(),
                 undefined,
+                100,
                 this.bunnyDebugUnlockDurationMs,
+                this.unifiedCharacterStore?.getEventBus(),
             );
             return new BunnyParkSystem(
                 this.conn,

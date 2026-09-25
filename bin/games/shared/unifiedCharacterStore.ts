@@ -86,6 +86,7 @@ import type {
     ManagedLockRecord,
     ManagedLockUpdate,
 } from "./managedLockLifecycle";
+import { classifyContainmentRemoval } from "./managedLockLifecycle";
 import { discoverLegacyManagedLock } from "./managedLockLifecycle";
 
 export const GAME_EVENT_RETENTION_DAYS = 2;
@@ -2708,15 +2709,11 @@ export class UnifiedCharacterStore {
                               "veratown.bunnyPunishmentArtifact.artifactVersion":
                                   expectedArtifactVersion,
                           },
-                          ...(expectedArtifactVersion === 0
-                              ? [
-                                    {
-                                        "veratown.bunnyPunishmentArtifact": {
-                                            $exists: false,
-                                        },
-                                    },
-                                ]
-                              : []),
+                          {
+                              "veratown.bunnyPunishmentArtifact.status": {
+                                  $ne: "active",
+                              },
+                          },
                       ],
                   };
         const updateStartedAt = Date.now();
@@ -2877,7 +2874,21 @@ export class UnifiedCharacterStore {
         this.assertMemberNumber(memberNumber);
         const diff = diffAppearance(before, after);
         const profile = await this.getProfile(memberNumber);
+        const safewordRemoved = context.cleanupAllowed
+            ? []
+            : diff.removed.filter(
+                  (item) =>
+                      classifyContainmentRemoval(item) === "safeword-released",
+              );
+        if (safewordRemoved.length > 0) {
+            await this.reconcileSafewordReleases(
+                memberNumber,
+                safewordRemoved,
+                context,
+            );
+        }
         const artifact = profile.veratown.bunnyPunishmentArtifact;
+
         const withinBunnyDiagnosticWindow =
             artifact?.status === "active" &&
             context.timestamp - artifact.appliedAt <= 1000 &&
@@ -3016,6 +3027,7 @@ export class UnifiedCharacterStore {
             artifact.status === "active" &&
             previousSign.present &&
             (!currentSign.present || !currentSign.visible) &&
+            safewordRemoved.length === 0 &&
             !context.cleanupAllowed;
         if (unexpectedBunnyDegradation) {
             const degradedAt = Date.now();
@@ -3061,6 +3073,85 @@ export class UnifiedCharacterStore {
                 visibilityChanged: diff.visibilityChanged,
             },
         );
+    }
+
+    private async reconcileSafewordReleases(
+        memberNumber: number,
+        removedItems: readonly BC_AppearanceItem[],
+        context: AppearanceMutationContext,
+    ): Promise<void> {
+        const now = Date.now();
+        const removedKeys = [
+            ...new Set(
+                removedItems.map((item) => `${item.Group}/${item.Name}`),
+            ),
+        ];
+        await this.managedLocks.updateMany(
+            {
+                memberNumber,
+                status: "active",
+                lockType: "SafewordPadlock",
+                $expr: {
+                    $in: [
+                        { $concat: ["$itemGroup", "/", "$itemName"] },
+                        removedKeys,
+                    ],
+                },
+            },
+            {
+                $set: {
+                    status: "safeword-released",
+                    closedAt: now,
+                    updatedAt: now,
+                },
+                $inc: { version: 1 },
+            },
+        );
+
+        const artifact = (await this.getProfile(memberNumber)).veratown
+            .bunnyPunishmentArtifact;
+        if (artifact?.status === "active") {
+            const bunnyKeys = new Set(artifact.restraintPieces);
+            if (
+                removedItems.some((item) =>
+                    bunnyKeys.has(`${item.Group}/${item.Name}`),
+                )
+            ) {
+                await this.profiles.updateOne(
+                    {
+                        _id: memberNumber,
+                        "veratown.bunnyPunishmentArtifact.operationId":
+                            artifact.operationId,
+                        "veratown.bunnyPunishmentArtifact.status": "active",
+                    },
+                    {
+                        $set: {
+                            "veratown.bunnyPunishmentArtifact.status":
+                                "safeword-released",
+                            "veratown.bunnyPunishmentArtifact.cleanedAt": now,
+                            "veratown.bunnyPunishmentArtifact.cleanupReason":
+                                "safeword-released",
+                        },
+                    },
+                );
+            }
+        }
+
+        await this.recordAppearanceLifecycleEvent({
+            timestamp: now,
+            type: "bondage_removed",
+            source: "veratown",
+            actor: memberNumber,
+            target: memberNumber,
+            data: {
+                reason: "safeword-released",
+                operationId: context.operationId,
+                removedItems,
+            },
+            processed: false,
+            correlationId: `safeword-release:${memberNumber}:${now}`,
+            deliveryId: `safeword-release:${memberNumber}:${now}`,
+        });
     }
 
     private async recordAppearanceLifecycleEvent(

@@ -23,6 +23,7 @@ import {
     verifyBunnySign,
 } from "./bunnyPunishmentEngine";
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
+import type { EventBus } from "../shared/eventBus";
 import {
     applyConsentPadlock,
     resolveConsentPadlockType,
@@ -125,7 +126,15 @@ export class BunnyPunishmentService {
         private readonly random: () => number = Math.random,
         private readonly syncDelayMs = 100,
         private readonly debugUnlockDurationMs?: number,
-    ) {}
+        eventBus?: EventBus,
+    ) {
+        eventBus?.subscribe("bondage_removed", async (event) => {
+            if (event.data.reason !== "safeword-released") return;
+            const timer = this.releaseTimers.get(event.target);
+            if (timer) clearTimeout(timer);
+            this.releaseTimers.delete(event.target);
+        });
+    }
 
     public async punish(
         character: API_Character,

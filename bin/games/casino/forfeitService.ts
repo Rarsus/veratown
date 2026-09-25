@@ -47,6 +47,7 @@ export class ForfeitService {
     private readonly logger = createLogger("ForfeitService");
     private readonly deviceFactory: DeviceFactory;
     private readonly expiryTimers = new Map<number, NodeJS.Timeout>();
+    private readonly trackedCharacters = new Map<number, API_Character>();
 
     /** Tracks cheat strikes per member */
     private cheatStrikes: Map<number, number> = new Map();
@@ -58,6 +59,12 @@ export class ForfeitService {
         private readonly unifiedStore?: UnifiedCharacterStore,
     ) {
         this.deviceFactory = deviceFactory;
+        const eventBus = this.unifiedStore?.getEventBus?.();
+        eventBus?.subscribe("bondage_removed", async (event) => {
+            if (event.data.reason !== "safeword-released") return;
+            const character = this.trackedCharacters.get(event.target);
+            if (character) await this.reconcileManagedForfeits(character);
+        });
     }
 
     private scheduleExpiry(character: API_Character, expiresAt: number): void {
@@ -76,6 +83,7 @@ export class ForfeitService {
     public async reconcileManagedForfeits(
         character: API_Character,
     ): Promise<void> {
+        this.trackedCharacters.set(character.MemberNumber, character);
         if (!this.unifiedStore || !this.mutationService) return;
 
         const view = await this.unifiedStore.getDareView(
@@ -360,6 +368,7 @@ export class ForfeitService {
         forfeitKey: string,
         adminMemberNumber: number,
     ): Promise<void> {
+        this.trackedCharacters.set(character.MemberNumber, character);
         if (!this.mutationService) return;
 
         const forfeit = FORFEITS[forfeitKey];
