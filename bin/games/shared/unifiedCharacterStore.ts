@@ -2874,12 +2874,15 @@ export class UnifiedCharacterStore {
         this.assertMemberNumber(memberNumber);
         const diff = diffAppearance(before, after);
         const profile = await this.getProfile(memberNumber);
-        const safewordRemoved = context.cleanupAllowed
-            ? []
-            : diff.removed.filter(
-                  (item) =>
-                      classifyContainmentRemoval(item) === "safeword-released",
-              );
+        const isSafewordRelease = context.releaseCause === "safeword";
+        const safewordRemoved =
+            context.cleanupAllowed || !isSafewordRelease
+                ? []
+                : diff.removed.filter(
+                      (item) =>
+                          classifyContainmentRemoval(item) ===
+                          "safeword-released",
+                  );
         if (safewordRemoved.length > 0) {
             await this.reconcileSafewordReleases(
                 memberNumber,
@@ -3145,6 +3148,8 @@ export class UnifiedCharacterStore {
             target: memberNumber,
             data: {
                 reason: "safeword-released",
+                releaseCause: "safeword",
+                bunnyOperationId: artifact?.operationId,
                 operationId: context.operationId,
                 removedItems,
             },

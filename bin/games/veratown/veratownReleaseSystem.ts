@@ -747,7 +747,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         await wait(this.TIMINGS.ITEM_REMOVAL_PROCESSING);
-        await syncAppearanceMutation(character, () => undefined, 0);
+        await syncAppearanceMutation(character, () => undefined, 0, undefined, {
+            releaseCause: "feature",
+        });
     }
 
     private sendParoleNotification(
@@ -1280,7 +1282,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             () => undefined,
             0,
             this.appearanceStateSync,
-            { throwOnSyncFailure: true },
+            { releaseCause: "feature", throwOnSyncFailure: true },
         );
 
         await this.unifiedStore?.completeReleaseRemoval(
@@ -1371,7 +1373,9 @@ export class ReleaseSystem implements VeratownFeatureSystem {
         }
 
         await wait(100);
-        await syncAppearanceMutation(character, () => undefined, 0);
+        await syncAppearanceMutation(character, () => undefined, 0, undefined, {
+            releaseCause: "feature",
+        });
 
         this.logger?.info(
             `[ReleaseSystem] Item restoration complete: ${successCount} success, ${failedCount} failed`,

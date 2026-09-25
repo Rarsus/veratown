@@ -249,6 +249,7 @@ export class VeratownAdminCommands extends CommandSystemMessageFeatureSystem {
             {
                 source: "veratown",
                 reason: "admin_unrestrain",
+                releaseCause: "admin",
             },
         );
 

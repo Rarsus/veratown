@@ -2034,6 +2034,7 @@ Game Overview
                 undefined,
                 {
                     source: "dare",
+                    releaseCause: "timer",
                     reason: "dare_repeat_pillory_expired",
                     sendFullAppearanceUpdate: true,
                 },

@@ -80,6 +80,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             delayMs,
             this.stateSync,
             {
+                releaseCause: "feature",
                 source: "shower",
                 reason: "shower_appearance_change",
             },

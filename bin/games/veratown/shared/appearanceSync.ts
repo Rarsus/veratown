@@ -203,6 +203,7 @@ function createMutationContext(
         context?: Partial<AppearanceMutationContext>;
         source?: AppearanceMutationSource;
         reason?: string;
+        releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
         cleanupAllowed?: boolean;
     },
@@ -225,6 +226,15 @@ function createMutationContext(
             options?.context?.reason ??
             inherited?.reason ??
             "unknown_external_mutation",
+        ...(options?.releaseCause !== undefined ||
+        options?.context?.releaseCause !== undefined
+            ? {
+                  releaseCause:
+                      options?.releaseCause ?? options?.context?.releaseCause,
+              }
+            : inherited?.releaseCause !== undefined
+              ? { releaseCause: inherited.releaseCause }
+              : {}),
         ...(options?.cleanupAllowed !== undefined ||
         options?.context?.cleanupAllowed !== undefined
             ? {
@@ -271,6 +281,7 @@ export async function syncAppearanceMutation(
         context?: Partial<AppearanceMutationContext>;
         source?: AppearanceMutationSource;
         reason?: string;
+        releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;
@@ -324,6 +335,7 @@ async function executeAppearanceMutation(
         context?: Partial<AppearanceMutationContext>;
         source?: AppearanceMutationSource;
         reason?: string;
+        releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;

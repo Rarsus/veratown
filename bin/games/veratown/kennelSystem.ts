@@ -367,7 +367,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                             ),
                         50,
                         this.stateSync,
-                        { throwOnSyncFailure: true },
+                        {
+                            releaseCause: "timer",
+                            throwOnSyncFailure: true,
+                        },
                     );
                 } finally {
                     this.releasingCharacters.delete(memberNumber);

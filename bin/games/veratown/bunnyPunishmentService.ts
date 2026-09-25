@@ -113,6 +113,7 @@ type BunnyStateSync = (
 
 export class BunnyPunishmentService {
     private punishmentSequence = 0;
+    private readonly operationQueues = new Map<number, Promise<unknown>>();
     private readonly releaseTimers = new Map<
         number,
         ReturnType<typeof setTimeout>
@@ -129,7 +130,17 @@ export class BunnyPunishmentService {
         eventBus?: EventBus,
     ) {
         eventBus?.subscribe("bondage_removed", async (event) => {
-            if (event.data.reason !== "safeword-released") return;
+            if (
+                event.data.reason !== "safeword-released" ||
+                event.data.releaseCause !== "safeword"
+            )
+                return;
+            const state = await this.repository.getState?.(event.target);
+            if (
+                event.data.bunnyOperationId &&
+                state?.artifact?.operationId !== event.data.bunnyOperationId
+            )
+                return;
             const timer = this.releaseTimers.get(event.target);
             if (timer) clearTimeout(timer);
             this.releaseTimers.delete(event.target);
@@ -140,15 +151,25 @@ export class BunnyPunishmentService {
         character: API_Character,
         configuration?: BunnyRestraintConfig,
     ): Promise<BunnyPunishmentResult> {
-        await this.recover(character);
-        const config = configuration ?? this.pickConfiguration();
-        if (!config) {
-            throw new Error("No bunny punishment configuration is available");
-        }
-        return this.applyPunishment(character, config);
+        return this.withMemberOperation(character.MemberNumber, async () => {
+            await this.recoverUnsafe(character);
+            const config = configuration ?? this.pickConfiguration();
+            if (!config) {
+                throw new Error(
+                    "No bunny punishment configuration is available",
+                );
+            }
+            return this.applyPunishment(character, config);
+        });
     }
 
     public async recover(character: API_Character): Promise<void> {
+        await this.withMemberOperation(character.MemberNumber, () =>
+            this.recoverUnsafe(character),
+        );
+    }
+
+    private async recoverUnsafe(character: API_Character): Promise<void> {
         const state = await this.repository.getState?.(character.MemberNumber);
         const artifact = state?.artifact;
         if (!artifact || artifact.status !== "active") return;
@@ -157,6 +178,27 @@ export class BunnyPunishmentService {
             return;
         }
         await this.release(character, artifact, "expired");
+    }
+
+    private async withMemberOperation<T>(
+        memberNumber: number,
+        operation: () => Promise<T>,
+    ): Promise<T> {
+        const previous =
+            this.operationQueues.get(memberNumber) ?? Promise.resolve();
+        const current = previous.catch(() => undefined).then(operation);
+        const settled = current.then(
+            () => undefined,
+            () => undefined,
+        );
+        this.operationQueues.set(memberNumber, settled);
+        try {
+            return await current;
+        } finally {
+            if (this.operationQueues.get(memberNumber) === settled) {
+                this.operationQueues.delete(memberNumber);
+            }
+        }
     }
 
     private pickConfiguration(): BunnyRestraintConfig | undefined {
@@ -487,6 +529,7 @@ export class BunnyPunishmentService {
                 {
                     throwOnSyncFailure: false,
                     source: "bunny",
+                    releaseCause: "timer",
                     reason: "bunny_punishment_released",
                     operationId,
                     cleanupAllowed: true,

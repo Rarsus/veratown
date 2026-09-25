@@ -807,6 +807,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         50,
                         this.stateSync,
                         {
+                            releaseCause: "timer",
                             sendFullAppearanceUpdate: true,
                             awaitServerSync: true,
                             serverSyncPredicate: (appearance) =>

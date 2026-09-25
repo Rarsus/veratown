@@ -9,11 +9,15 @@ export type AppearanceMutationSource =
     | "veratown"
     | "unknown_external_mutation";
 
+export type AppearanceReleaseCause =
+    "safeword" | "admin" | "timer" | "feature" | "external";
+
 export interface AppearanceMutationContext {
     operationId: string;
     timestamp: number;
     source: AppearanceMutationSource;
     reason: string;
+    releaseCause?: AppearanceReleaseCause;
     cleanupAllowed?: boolean;
     expectedAppearance?: BC_AppearanceItem[];
     observedAppearance?: BC_AppearanceItem[];

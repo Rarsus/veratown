@@ -61,7 +61,11 @@ export class ForfeitService {
         this.deviceFactory = deviceFactory;
         const eventBus = this.unifiedStore?.getEventBus?.();
         eventBus?.subscribe("bondage_removed", async (event) => {
-            if (event.data.reason !== "safeword-released") return;
+            if (
+                event.data.reason !== "safeword-released" ||
+                event.data.releaseCause !== "safeword"
+            )
+                return;
             const character = this.trackedCharacters.get(event.target);
             if (character) await this.reconcileManagedForfeits(character);
         });
@@ -121,7 +125,11 @@ export class ForfeitService {
                     source: "casino",
                     actor: character.MemberNumber,
                     target: character.MemberNumber,
-                    data: { forfeitKey: record.forfeitKey, reason: "safeword" },
+                    data: {
+                        forfeitKey: record.forfeitKey,
+                        reason: "safeword",
+                        releaseCause: "safeword",
+                    },
                     processed: true,
                 } as any);
                 continue;
@@ -141,6 +149,7 @@ export class ForfeitService {
                 50,
                 undefined,
                 {
+                    releaseCause: "timer",
                     reason: "forfeit_expired",
                     sendFullAppearanceUpdate: true,
                 },
@@ -165,7 +174,11 @@ export class ForfeitService {
                 source: "casino",
                 actor: character.MemberNumber,
                 target: character.MemberNumber,
-                data: { forfeitKey: record.forfeitKey, reason: "expired" },
+                data: {
+                    forfeitKey: record.forfeitKey,
+                    reason: "expired",
+                    releaseCause: "timer",
+                },
                 processed: true,
             } as any);
         }

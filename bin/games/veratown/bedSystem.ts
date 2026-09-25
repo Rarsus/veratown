@@ -247,6 +247,7 @@ export class BedSystem extends AbstractTileFeatureSystem {
             () => undefined,
             0,
             this.stateSync,
+            { releaseCause: "feature" },
         );
     }
 
@@ -271,6 +272,7 @@ export class BedSystem extends AbstractTileFeatureSystem {
             () => undefined,
             0,
             this.stateSync,
+            { releaseCause: "feature" },
         );
     }
 }

@@ -88,6 +88,7 @@ export class LiveAppearanceRemovalCoordinator {
                     undefined,
                     {
                         throwOnSyncFailure: true,
+                        releaseCause: "feature",
                         source: "release",
                         reason: "release_strip",
                         operationId: releaseOperation,
