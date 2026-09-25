@@ -123,6 +123,7 @@ export class BunnyPunishmentService {
         private readonly stateSync?: BunnyStateSync,
         private readonly random: () => number = Math.random,
         private readonly syncDelayMs = 100,
+        private readonly debugUnlockDurationMs?: number,
     ) {}
 
     public async punish(
@@ -372,9 +373,15 @@ export class BunnyPunishmentService {
             return result;
         }
 
-        const duration = calculateBunnyOffenceDuration(
+        const calculatedDuration = calculateBunnyOffenceDuration(
             (persistedState?.punishmentCount ?? 0) + 1,
         );
+        const duration = this.debugUnlockDurationMs
+            ? {
+                  ...calculatedDuration,
+                  durationMs: this.debugUnlockDurationMs,
+              }
+            : calculatedDuration;
         const artifact: BunnyPunishmentArtifact = {
             memberNumber: character.MemberNumber,
             operationId,

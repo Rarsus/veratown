@@ -367,7 +367,7 @@ test("ForfeitService: applyForfeit applies item locking", () => {
     service.applyForfeit(mockChar as any, "boots", 1111);
     assert.ok(lockCalled);
     assert.equal(addedItem.Property.LockedBy, "SafewordPadlock");
-    assert.match(addedItem.Property.Password, /^[A-Za-z0-9]{8}$/);
+    assert.match(addedItem.Property.Password, /^[A-Z]{8}$/);
     assert.equal(addedItem.Property.RemoveItem, true);
     assert.equal(addedItem.Property.LockMemberNumber, 1111);
     assert.equal(addedItem.Property.ShowTimer, undefined);

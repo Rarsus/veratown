@@ -261,6 +261,7 @@ export class Veratown {
         container?: DIContainer,
         roomKey: string = "main",
         private readonly managedReleaseWorkersEnabled = true,
+        private readonly bunnyDebugUnlockDurationMs?: number,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
@@ -598,6 +599,8 @@ export class Veratown {
                             context,
                         )
                         .then(() => undefined) ?? Promise.resolve(),
+                undefined,
+                this.bunnyDebugUnlockDurationMs,
             );
             return new BunnyParkSystem(
                 this.conn,

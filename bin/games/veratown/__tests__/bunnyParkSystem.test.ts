@@ -195,6 +195,7 @@ function createBunnySystem(
     recordArtifact: (artifact: any) => Promise<void> = async () => {},
     allowStaticFallbacks = true,
     managedReleaseWorkersEnabled = true,
+    debugUnlockDurationMs?: number,
 ) {
     const repository = {
         recordArtifact,
@@ -207,6 +208,7 @@ function createBunnySystem(
         stateSync,
         random,
         syncDelay,
+        debugUnlockDurationMs,
     );
     const system = new BunnyParkSystem(
         connection as any,
@@ -374,7 +376,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
                     item.Group === "ItemArms" && item.Name === "HeavyYoke",
             );
         assert.equal(yoke?.Property?.LockedBy, "SafewordPadlock");
-        assert.match(yoke?.Property?.Password, /^[A-Za-z0-9]{1,8}$/);
+        assert.match(yoke?.Property?.Password, /^[A-Z]{1,8}$/);
         assert.equal(yoke?.Property?.RemoveItem, true);
         assert.equal(yoke?.Property?.LockSet, true);
         assert.equal(yoke?.Property?.RemoveTimer, undefined);
@@ -386,7 +388,7 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
                     item.Name === "HeavySpreaderMetal",
             );
         assert.equal(spreader?.Property?.LockedBy, "SafewordPadlock");
-        assert.match(spreader?.Property?.Password, /^[A-Za-z0-9]{1,8}$/);
+        assert.match(spreader?.Property?.Password, /^[A-Z]{1,8}$/);
         assert.equal(spreader?.Property?.RemoveItem, true);
         assert.equal(spreader?.Property?.LockSet, true);
         assert.equal(spreader?.Property?.RemoveTimer, undefined);
@@ -399,6 +401,32 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         assert.equal(sign?.Property?.Text, "I step on", config.name);
         assert.equal(sign?.Property?.Text2, "Bunnies", config.name);
     }
+});
+
+test("Bunny punishment applies the debug unlock duration override", async () => {
+    const created = createCharacter(22);
+    let artifact: any;
+    const system = createBunnySystem(
+        createMessageConnection(created.character) as any,
+        async () => {},
+        deterministicRandom(0),
+        0,
+        async (recordedArtifact) => {
+            artifact = recordedArtifact;
+        },
+        true,
+        true,
+        60_000,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(artifact.durationMs, 60_000);
+    assert.equal(artifact.expiresAt - artifact.appliedAt, 60_000);
 });
 
 test("expired Bunny punishment retries removal before closing its artifact", async () => {

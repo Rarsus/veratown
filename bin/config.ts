@@ -55,6 +55,9 @@ export interface ConfigFile {
     // Defaults to true; set to false to pause bot-managed release workers.
     managed_release_workers_enabled?: boolean;
 
+    // Optional temporary Bunny punishment duration override, in milliseconds.
+    bunny_debug_unlock_duration_ms?: number;
+
     casino?: CasinoConfig;
     dare?: DareConfig;
 }
@@ -125,6 +128,7 @@ export const configSchema = z
         discord_admin_roles: z.array(nonEmptyString).default([]),
         discord_audit_channel_id: nonEmptyString.optional(),
         managed_release_workers_enabled: z.boolean().default(true),
+        bunny_debug_unlock_duration_ms: z.number().int().positive().optional(),
         casino: z
             .object({
                 cocktail: z.string().trim().min(1).optional(),

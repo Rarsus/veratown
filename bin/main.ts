@@ -241,6 +241,19 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
     if (process.env.BOT_GAME !== undefined) config.game = process.env.BOT_GAME;
     if (process.env.BC_SERVER_URL !== undefined)
         config.url = process.env.BC_SERVER_URL;
+    if (process.env.BUNNY_DEBUG_UNLOCK_DURATION_MS !== undefined) {
+        const durationMs = Number.parseInt(
+            process.env.BUNNY_DEBUG_UNLOCK_DURATION_MS,
+            10,
+        );
+        if (!Number.isSafeInteger(durationMs) || durationMs <= 0) {
+            throw configurationIssue(
+                "BUNNY_DEBUG_UNLOCK_DURATION_MS",
+                "must be a positive integer number of milliseconds",
+            );
+        }
+        config.bunny_debug_unlock_duration_ms = durationMs;
+    }
 
     // ============================================================================
     // MONGODB CONFIGURATION
@@ -352,6 +365,8 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
         room: config.room?.Name || "<default>",
         superusersCount: config.superusers?.length || 0,
         roomAdminsCount: config.room?.Admin?.length || 0,
+        bunnyDebugUnlockDurationMs:
+            config.bunny_debug_unlock_duration_ms ?? "default",
     });
 
     return validateConfig(config);
@@ -606,6 +621,7 @@ async function initializeVeratownGame(
         container,
         roomKey,
         config.managed_release_workers_enabled,
+        config.bunny_debug_unlock_duration_ms,
     );
     logger.info("Starting Veratown game initialization", {
         roomKey,

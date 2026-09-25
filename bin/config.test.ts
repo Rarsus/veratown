@@ -36,6 +36,15 @@ test("configuration accepts disabling managed release workers", () => {
     assert.equal(config.managed_release_workers_enabled, false);
 });
 
+test("configuration accepts a positive Bunny unlock duration override", () => {
+    const config = validateConfig({
+        ...validConfig(),
+        bunny_debug_unlock_duration_ms: 60_000,
+    });
+
+    assert.equal(config.bunny_debug_unlock_duration_ms, 60_000);
+});
+
 test("configuration rejects missing and malformed required values", () => {
     assert.throws(
         () => validateConfig(validConfig({ user: "", superusers: ["admin"] })),

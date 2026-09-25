@@ -30,7 +30,7 @@ Implemented and verified in the current worktree:
 
 - `consentPadlock.ts` is used by Cage, Kennel, Bunny, Casino, and Dare.
 - `SafewordPadlock` is the default migrated lock; it receives an 8-character
-  alphanumeric password and never receives `RemoveTimer`.
+  uppercase A-Z password and never receives `RemoveTimer`.
 - Cage expiry is persisted and authoritative, with recovery and verified
   release behavior.
 - Timed Kennel sessions persist expiry while ordinary untimed occupancy remains
@@ -75,7 +75,7 @@ Still outstanding before calling the migration complete:
   available, while compatibility reads remain in live synchronization.
 - Consistent Discord/admin reporting and complete MongoDB/structured-log audit
   projections remain.
-- Safeword lock self-unlock now receives an 8-character alphanumeric
+- Safeword lock self-unlock now receives an 8-character uppercase A-Z
   `Property.Password`; the shared contract test verifies the platform-compatible
   metadata.
 - The aggregate `pnpm test:unit` gate did not complete: it hung in the later
