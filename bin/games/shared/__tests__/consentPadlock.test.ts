@@ -45,6 +45,7 @@ test("consent helper removes timer authority and preserves lock flags", () => {
     assert.equal(item.lockType, "SafewordPadlock");
     assert.equal(item.Property.RemoveTimer, undefined);
     assert.equal(item.Property.RemoveItem, true);
+    assert.equal(item.Property.RemoveOnUnlock, true);
     assert.equal(item.Property.LockSet, true);
     assert.match(String(item.Property.Password), /^[A-Z]{8}$/);
 });
@@ -61,6 +62,7 @@ test("consent helper supports approved non-safeword lock types", () => {
     assert.equal(lockType, "PasswordPadlock");
     assert.equal(item.Property.Password, "test-password");
     assert.equal(item.Property.ShowTimer, false);
+    assert.equal(item.Property.RemoveOnUnlock, undefined);
     assert.equal(item.Property.RemoveTimer, undefined);
 });
 

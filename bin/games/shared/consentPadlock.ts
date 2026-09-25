@@ -46,6 +46,7 @@ export function applyConsentPadlock(
         Password: options.password ?? generatePassword(),
         ...(options.hint === undefined ? {} : { Hint: options.hint }),
         RemoveItem: true,
+        ...(lockType === "SafewordPadlock" ? { RemoveOnUnlock: true } : {}),
         LockSet: true,
         ...(lockType === "SafewordPadlock"
             ? {}
@@ -67,6 +68,7 @@ export function applyConsentPadlock(
         property.Password = lockProperty.Password;
         property.RemoveItem = true;
         property.LockSet = true;
+        if (lockType === "SafewordPadlock") property.RemoveOnUnlock = true;
         if (options.hint !== undefined) property.Hint = options.hint;
         delete property.Lock;
         delete property.RemoveTimer;
