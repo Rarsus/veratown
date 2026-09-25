@@ -224,14 +224,22 @@ test("syncAppearanceMutation waits for matching authoritative CharacterSync", as
     connection.Player = { MemberNumber: 7 };
     let appearance: any[] = [];
     let remoteAppearance: any[] = [];
+    let sendAttempts = 0;
     const character: any = {
         MemberNumber: 7,
         connection,
         Appearance: {
             MakeAppearanceBundle: () => structuredClone(appearance),
             flushUpdates: () => {},
+            applyBundle: (items: any[]) => {
+                appearance = structuredClone(items);
+            },
         },
         sendAppearanceUpdate: () => {
+            sendAttempts += 1;
+            if (sendAttempts === 1) {
+                appearance = [];
+            }
             connection.emit("CharacterSync", {
                 MemberNumber: 999,
                 Appearance: {
@@ -266,6 +274,8 @@ test("syncAppearanceMutation waits for matching authoritative CharacterSync", as
         {
             sendFullAppearanceUpdate: true,
             awaitServerSync: true,
+            serverSyncTimeoutMs: 20,
+            serverSyncAttempts: 2,
             serverSyncPredicate: (syncedAppearance) =>
                 syncedAppearance.some(
                     (item) =>
@@ -275,6 +285,7 @@ test("syncAppearanceMutation waits for matching authoritative CharacterSync", as
     );
 
     assert.deepEqual(appearance, [{ Group: "ItemArms", Name: "HeavyYoke" }]);
+    assert.equal(sendAttempts, 2);
 });
 
 test("LiveCharacterStateSync serializes overlapping observations by arrival order", async () => {
