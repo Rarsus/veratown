@@ -169,13 +169,6 @@ export function toAppearanceBundle(item: BC_AppearanceItem): BC_AppearanceItem {
     if (bundle.Property) {
         const compressed = compressExtendedProperties(bundle);
         const property = compressed ?? { ...bundle.Property };
-        if (property.LockedBy && Array.isArray(property.Effect)) {
-            property.Effect = (property.Effect as unknown[]).filter(
-                (effect) => effect !== "Lock",
-            );
-            if ((property.Effect as unknown[]).length === 0)
-                delete property.Effect;
-        }
         if (Object.keys(property).length === 0) delete bundle.Property;
         else bundle.Property = property;
     }

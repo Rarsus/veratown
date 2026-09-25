@@ -228,6 +228,8 @@ export class BunnyPunishmentService {
         const mutationErrors: string[] = [];
         let permissionDenied = false;
         let mutationConfirmed = false;
+        let authoritativeAppearance:
+            AppearanceMutationContext["observedAppearance"] | undefined;
         try {
             await syncAppearanceMutation(
                 character,
@@ -297,7 +299,11 @@ export class BunnyPunishmentService {
                     }
                 },
                 this.syncDelayMs,
-                async (current, context) => this.stateSync?.(current, context),
+                async (current, mutationContext) => {
+                    authoritativeAppearance =
+                        mutationContext?.observedAppearance;
+                    return this.stateSync?.(current, mutationContext);
+                },
                 {
                     throwOnSyncFailure: false,
                     source: "bunny",
@@ -327,7 +333,9 @@ export class BunnyPunishmentService {
         const mutationError =
             mutationErrors.length > 0 ? mutationErrors.join("; ") : undefined;
 
-        const appliedAppearance = character.Appearance.MakeAppearanceBundle();
+        const appliedAppearance =
+            authoritativeAppearance ??
+            character.Appearance.MakeAppearanceBundle();
         const appliedPieces = attemptedPieces.filter((piece) => {
             const [group, asset] = piece.split("/");
             const configuredPiece = config.pieces.find(
@@ -529,6 +537,7 @@ export class BunnyPunishmentService {
             operationId: string;
             configuration: string;
             requestedPieces: string[];
+            observedAppearance?: AppearanceMutationContext["observedAppearance"];
         },
     ): Promise<void> {
         const auditDetails: BunnyPunishmentAuditDetails = {

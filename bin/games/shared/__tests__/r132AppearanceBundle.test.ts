@@ -23,7 +23,7 @@ test("R132 appearance bundles omit empty properties", () => {
     assert.equal(bundle.Property, undefined);
 });
 
-test("R132 appearance bundles keep lock metadata without redundant Lock effect", () => {
+test("R132 appearance bundles keep lock metadata and the lock effect", () => {
     const bundle = toAppearanceBundle({
         Group: "ItemDevices",
         Name: "Cage",
@@ -37,6 +37,7 @@ test("R132 appearance bundles keep lock metadata without redundant Lock effect",
     assert.deepEqual(bundle.Property, {
         LockedBy: "OwnerPadlock",
         LockMemberNumber: 123,
+        Effect: ["Lock"],
     });
 });
 
