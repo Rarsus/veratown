@@ -622,7 +622,7 @@ async function initializeVeratownGame(
         roomKey,
         config.managed_release_workers_enabled,
         config.bunny_debug_unlock_duration_ms,
-        config.action_layer_bunny_appearance_enabled,
+        config.action_layer_bunny_restraints_enabled,
         config.action_layer_release_removal_enabled,
     );
     logger.info("Starting Veratown game initialization", {

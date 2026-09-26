@@ -104,6 +104,93 @@ test("dispatches an empty-group add without claiming server confirmation", async
     assert.equal(adapter.capabilities.confirmsAuthoritatively, true);
 });
 
+test("applies extended type, color, craft, and safeword lock metadata", async () => {
+    const state: FakeItem[] = [];
+    let addedDescriptor: unknown;
+    const runtime = {
+        MemberNumber: 11,
+        Appearance: {
+            MakeAppearanceBundle: () => state.map((item) => ({ ...item })),
+            AddItem: (descriptor: any) => {
+                addedDescriptor = descriptor;
+                const data: FakeItem = {
+                    Group: "ItemFeet",
+                    Name: "HeavySpreaderMetal",
+                    Property: {},
+                };
+                state.push(data);
+                return {
+                    Extended: {
+                        SetType: (value: string) => {
+                            data.Property!.Type = value;
+                        },
+                    },
+                    SetColor: (value: string) => {
+                        data.Property!.Color = value;
+                    },
+                    SetCraft: (value: unknown) => {
+                        data.Property!.Craft = value;
+                    },
+                    lock: (
+                        type: string,
+                        memberNumber: number,
+                        property: Record<string, unknown>,
+                    ) => {
+                        data.Property = {
+                            ...data.Property,
+                            ...property,
+                            LockedBy: type,
+                            LockMemberNumber: memberNumber,
+                        };
+                    },
+                };
+            },
+        },
+    };
+    const adapter = new BCAppearanceActionAdapter({ now: () => 400 });
+
+    const result = await adapter.add(
+        runtime as never,
+        {
+            group: "ItemFeet",
+            asset: "HeavySpreaderMetal",
+            extendedType: "Wide",
+        },
+        {
+            ...makePolicy("metadata-add"),
+            itemOptions: {
+                color: "#FF69B4",
+                craft: {
+                    name: "HeavySpreaderMetal",
+                    description: "Created by a Bunny hater",
+                },
+                lock: {
+                    type: "SafewordPadlock",
+                    memberNumber: 99,
+                    password: "TESTPASS",
+                },
+            },
+        },
+    );
+
+    assert.equal(result.status, "in_progress");
+    assert.ok(addedDescriptor);
+    assert.deepEqual(state[0].Property, {
+        Type: "Wide",
+        Color: "#FF69B4",
+        Craft: {
+            Name: "HeavySpreaderMetal",
+            Description: "Created by a Bunny hater",
+        },
+        Password: "TESTPASS",
+        RemoveItem: true,
+        RemoveOnUnlock: true,
+        LockSet: true,
+        LockedBy: "SafewordPadlock",
+        LockMemberNumber: 99,
+    });
+});
+
 test("blocks locked and ambiguous removal targets", async () => {
     const runtime = makeCharacter([
         {

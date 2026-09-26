@@ -267,7 +267,7 @@ export class Veratown {
         roomKey: string = "main",
         private readonly managedReleaseWorkersEnabled = true,
         private readonly bunnyDebugUnlockDurationMs?: number,
-        private readonly actionLayerBunnyAppearanceEnabled = false,
+        private readonly actionLayerBunnyRestraintsEnabled = false,
         private readonly actionLayerReleaseRemovalEnabled = false,
     ) {
         this.conn = connections.main;
@@ -279,8 +279,8 @@ export class Veratown {
             this.container.register(
                 DIServiceKeys.ACTION_LAYER_ROLLOUT,
                 new ActionLayerRolloutController({
-                    bunnyAppearanceEnabled:
-                        this.actionLayerBunnyAppearanceEnabled,
+                    bunnyRestraintsEnabled:
+                        this.actionLayerBunnyRestraintsEnabled,
                     releaseRemovalEnabled:
                         this.actionLayerReleaseRemovalEnabled,
                 }),
@@ -655,6 +655,18 @@ export class Veratown {
                 100,
                 this.bunnyDebugUnlockDurationMs,
                 this.unifiedCharacterStore?.getEventBus(),
+                this.container.has(
+                    DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                ) && this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                    ? {
+                          appearanceService: this.container.get(
+                              DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                          ),
+                          rollout: this.container.get(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          ),
+                      }
+                    : undefined,
             );
             return new BunnyParkSystem(
                 this.conn,

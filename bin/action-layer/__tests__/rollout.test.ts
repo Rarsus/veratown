@@ -4,14 +4,14 @@ import { ActionLayerRolloutController } from "../rollout";
 
 test("selects the action path and owns the operation until release", () => {
     const rollout = new ActionLayerRolloutController({
-        bunnyAppearanceEnabled: true,
+        bunnyRestraintsEnabled: true,
     });
 
-    const lease = rollout.begin("bunny-appearance", "bunny-1");
+    const lease = rollout.begin("bunny-restraints", "bunny-1");
     assert.equal(lease.path, "action");
     assert.deepEqual(rollout.snapshot().activeOperationIds, ["bunny-1"]);
     assert.throws(
-        () => rollout.begin("bunny-appearance", "bunny-1"),
+        () => rollout.begin("bunny-restraints", "bunny-1"),
         /Operation already owned/,
     );
 
@@ -38,13 +38,13 @@ test("rollback sends new operations to legacy while preserving the active lease"
 test("disabled operations default to legacy and can be enabled explicitly", () => {
     const rollout = new ActionLayerRolloutController();
     assert.equal(
-        rollout.begin("bunny-appearance", "bunny-legacy").path,
+        rollout.begin("bunny-restraints", "bunny-legacy").path,
         "legacy",
     );
 
-    rollout.setEnabled("bunny-appearance", true);
+    rollout.setEnabled("bunny-restraints", true);
     assert.equal(
-        rollout.begin("bunny-appearance", "bunny-action").path,
+        rollout.begin("bunny-restraints", "bunny-action").path,
         "action",
     );
 });

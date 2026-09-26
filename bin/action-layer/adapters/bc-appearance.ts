@@ -17,6 +17,7 @@ import {
     AppearanceConfirmationRegistry,
     type AppearanceConfirmationKey,
 } from "../appearance-confirmation";
+import { AssetGet } from "bc-bot";
 import type { API_Character, BC_AppearanceItem } from "bc-bot";
 
 export interface BCAppearanceAdapterOptions {
@@ -139,14 +140,45 @@ function blocked(
     );
 }
 
-function itemForAdd(identity: AppearanceItemIdentity): BC_AppearanceItem {
-    return {
-        Group: identity.group,
-        Name: identity.asset,
-        ...(identity.extendedType === undefined
-            ? {}
-            : { Property: { TypeRecord: { typed: identity.extendedType } } }),
-    } as BC_AppearanceItem;
+function generatePassword(): string {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    return Array.from(
+        { length: 8 },
+        () => alphabet[Math.floor(Math.random() * alphabet.length)],
+    ).join("");
+}
+
+function configureAddedItem(
+    item: any,
+    identity: AppearanceItemIdentity,
+    policy: AppearanceMutationPolicy,
+): void {
+    if (identity.extendedType) item.Extended?.SetType(identity.extendedType);
+    if (policy.itemOptions?.color !== undefined) {
+        item.SetColor?.(policy.itemOptions.color);
+    }
+    if (policy.itemOptions?.craft !== undefined) {
+        item.SetCraft?.({
+            Name: policy.itemOptions.craft.name,
+            Description: policy.itemOptions.craft.description,
+        });
+    }
+
+    const lock = policy.itemOptions?.lock;
+    if (!lock) return;
+    if (typeof item.lock !== "function") {
+        throw new Error("BC appearance item does not support locking");
+    }
+    const password = lock.password ?? generatePassword();
+    item.lock(lock.type, lock.memberNumber, {
+        Password: password,
+        ...(lock.hint === undefined ? {} : { Hint: lock.hint }),
+        RemoveItem: true,
+        ...(lock.type === "SafewordPadlock"
+            ? { RemoveOnUnlock: true }
+            : { ShowTimer: lock.showTimer ?? false }),
+        LockSet: true,
+    });
 }
 
 function identityKey(item: AppearanceItemIdentity): string {
@@ -538,7 +570,29 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             policy,
             "add",
             () => {
-                character.Appearance.AddItem(itemForAdd(item));
+                const asset = AssetGet(
+                    item.group as never,
+                    item.asset as never,
+                );
+                if (!asset)
+                    throw new Error(
+                        `Appearance asset unavailable: ${item.group}/${item.asset}`,
+                    );
+                if (
+                    typeof (character as any).IsItemPermissionAccessible ===
+                        "function" &&
+                    !(character as any).IsItemPermissionAccessible(asset)
+                ) {
+                    throw new Error(
+                        `Appearance permission denied: ${item.group}/${item.asset}`,
+                    );
+                }
+                const added = character.Appearance.AddItem(asset as never);
+                if (!added)
+                    throw new Error(
+                        `Appearance asset could not be added: ${item.group}/${item.asset}`,
+                    );
+                configureAddedItem(added, item, policy);
             },
             context,
             startedAt,

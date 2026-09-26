@@ -63,6 +63,24 @@ export interface AppearanceItemIdentity {
     readonly extendedType?: string;
 }
 
+export type AppearanceLockType =
+    "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
+
+export interface AppearanceItemMutationOptions {
+    readonly color?: string;
+    readonly craft?: {
+        readonly name: string;
+        readonly description: string;
+    };
+    readonly lock?: {
+        readonly type: AppearanceLockType;
+        readonly memberNumber: number;
+        readonly password?: string;
+        readonly hint?: string;
+        readonly showTimer?: boolean;
+    };
+}
+
 export type AppearanceLockMode = "none" | "safeword" | "exclusive" | "password";
 
 export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
@@ -74,6 +92,7 @@ export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
     >;
     readonly reason: string;
     readonly lockMode?: AppearanceLockMode;
+    readonly itemOptions?: AppearanceItemMutationOptions;
     readonly cleanupAllowed?: boolean;
 }
 

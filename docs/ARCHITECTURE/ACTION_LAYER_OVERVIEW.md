@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.10"
-status: "Proposed - Bunny restraint package simplified; live qualification pending"
+version: "1.13"
+status: "Proposed - generated BC definitions boundary documented; live qualification pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -80,7 +80,7 @@ service, or runtime registration has been migrated.
 - [x] Workload instrumentation for queue wait, event-loop delay, heap, CPU,
       GC pauses, synthetic timers, listener count, retries, and confirmation
       timeouts.
-- [x] DI-registered rollout controller with legacy-default feature switches,
+- [x] DI-registered release rollout controller with a legacy-default switch,
       exclusive operation ownership, and rollback behavior.
 - [x] Narrow release target-removal migration behind the rollout controller;
       legacy paths remain the default.
@@ -96,7 +96,9 @@ service, or runtime registration has been migrated.
 - [x] Bunny punishment is restraint-only: sign configuration, application,
       verification, artifact storage, cleanup, and Bunny sign lifecycle events
       have been removed.
-- [x] 56 focused action-layer tests passing, with strict TypeScript and
+- [x] The Bunny punishment system itself remains active; only its obsolete sign
+      behavior was removed.
+- [x] 57 focused action-layer tests passing, with strict TypeScript and
       formatting checks passing after the confirmation contract slice.
 
 ### Explicitly not complete
@@ -239,8 +241,7 @@ gates before feature migration.
 
 The next three migration gates now have an isolated, rollback-controlled
 implementation. `ActionLayerRolloutController` is registered through DI and
-uses `action_layer_bunny_appearance_enabled` and
-`action_layer_release_removal_enabled`, both defaulting to `false`.
+uses `action_layer_release_removal_enabled`, defaulting to `false`.
 
 Each migrated operation acquires one lease before dispatch. The lease selects
 either the action or legacy path, prevents a second owner for the same
@@ -249,10 +250,11 @@ action-path starts and sends new operations to legacy while an existing action
 lease is allowed to finish. This prevents an old and new implementation from
 claiming the same in-flight operation.
 
-The Bunny punishment package now owns only its configured restraint pieces.
-There is no Bunny sign application or cleanup. Restraint removal remains on the
-existing Bunny mutation flow because the action adapter does not yet apply
-Bunny colors, craft metadata, extended types, or consent padlocks. The release slice routes selected target removal
+The Bunny punishment system now has an opt-in restraint-only action path. There
+is no Bunny sign application or cleanup. With the switch disabled, restraint
+application remains on the legacy mutation flow. With it enabled, the action
+adapter applies asset lookup, permission checks, colors, craft metadata,
+extended types, and consent-padlock semantics. The release slice routes selected target removal
 through the action appearance service when enabled, with authoritative
 confirmation required; blocked, completed, and already-satisfied outcomes are
 terminal for that path and never fall back to the legacy mutator.
@@ -268,10 +270,13 @@ Validation completed for this phase:
   existing tests; one unrelated legacy malformed-placeholder test remains
   failing in `appearanceSync.ts`.
 
-The next qualification gate is a real-room rehearsal with both switches off,
-then one switch enabled at a time, recording confirmation latency, blocked
+The next qualification gate is a real-room rehearsal with the release switch
+off, then enabled, recording confirmation latency, blocked
 removals, rollback behavior, and durable projection results. No default runtime
 configuration enables either migration switch.
+
+The Bunny restraint switch is also disabled by default. It must be qualified in
+the same staged manner before it can become a production path.
 
 ### Phase 0 correlation-ID implementation result
 
@@ -325,10 +330,34 @@ Validation completed for this phase:
 
 ### Bunny package configuration result
 
-The Bunny punishment package contains only its configured restraint pieces.
+The Bunny punishment system remains active and contains only its configured
+restraint pieces.
 There is no sign configuration, sign artifact field, or sign application or
 cleanup path in the Bunny system. Other features may still use WoodenSign
 independently.
+
+### Bunny restraint adapter implementation result
+
+The action-layer Bunny restraint path is now implemented but opt-in. It uses
+the existing `BunnyRestraintConfig` pieces and maps each piece into an explicit
+appearance mutation request. The BC adapter resolves the asset, checks item
+permission, applies extended type, color, craft metadata, and the configured
+SafewordPadlock or ExclusivePadlock. Safeword locks retain `RemoveOnUnlock`;
+the legacy `applyConsentPadlock` path remains unchanged when the switch is off.
+
+The rollout lease owns the complete restraint operation, so an enabled action
+path never falls back to the legacy callback for the same operation ID. A
+blocked or failed piece remains visible in the structured result and prevents
+the punishment from being reported complete. No sign behavior was added back.
+
+Validation completed:
+
+- Adapter contract coverage verifies extended type, color, craft, and safeword
+  lock metadata.
+- Rollout coverage verifies the Bunny restraint operation can select the action
+  path while release rollback behavior remains intact.
+- Bunny, synchronization, and action-layer focused tests pass.
+- Strict TypeScript and formatting validation pass.
 
 ### BC call inventory and adapter boundary
 
@@ -362,6 +391,41 @@ Supporting BC dependencies also occur throughout the feature tree:
   concerns. They are BC dependencies but are not action operations and should
   remain outside the first action-family migration.
 
+### Generated BC definitions and domain boundary
+
+The generated files under `src/dist/bcdata/` are valuable authoritative BC
+reference data, but they serve a different purpose from the action-layer
+domain. They should be reused inside adapters and asset/map validation code,
+not imported into pure planners, workflows, persistence contracts, or tests.
+
+Use the generated BC definitions as follows:
+
+- `Female3DCG` supplies official asset definitions and asset metadata for
+  `AssetGet` resolution and validation.
+- `Female3DCGExtended` supplies typed and modular item options, archetypes, and
+  property rules. It should replace ad hoc stringification of
+  `Property.TypeRecord` in the BC adapter.
+- `ChatRoomMap` supplies official map tiles and objects for a future map
+  adapter; the action domain should expose normalized positions, tiles, and
+  registration handles instead.
+- `defs` supplies BC enums and wire-level structures at the transport boundary,
+  not as workflow state or durable business contracts.
+
+The preferred import path is the public `bc-bot` package surface or a narrow
+adapter module. Direct imports from generated `src/dist/bcdata/*.js` files
+should remain isolated because generated paths and upstream shapes may change.
+
+The action-layer domain remains intentionally smaller and bot-specific:
+
+| Layer             | Owns                                                                                  | Must not own                                                  |
+| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Generated BC data | Official assets, extended options, map definitions, BC wire shapes                    | Workflow policy, persistence state, rollout decisions         |
+| BC adapter        | Lookup, translation, validation, lock/property mapping, packet/API calls              | Bunny stages, release authority, durable artifact writes      |
+| Action domain     | Stable identity, mutation policy, observed result, failure status, operation identity | Browser hooks, generated asset registries, raw packet bundles |
+
+This separation avoids duplicating official BC data while preventing the domain
+from becoming coupled to a large generated browser-oriented API.
+
 #### Adapter assumption register
 
 The following assumptions must be verified by adapter tests or live connector
@@ -374,8 +438,8 @@ evidence before a caller is migrated:
 | `RemoveItem(group)` removes only the intended target                             | BC removal is group-based                                                                 | Re-observe the group, require exact identity match, preserve locked or ambiguous items, then verify absence                               |
 | `Property.LockedBy` and `Property.LockMemberNumber` identify effective ownership | Connector diagnostics expose these fields                                                 | Treat explicit ownership as locked; do not infer unlocked from missing fields alone                                                       |
 | `LockSet` or a password without ownership is safe to remove                      | Legacy data can contain incomplete lock shapes                                            | Classify as ambiguous and fail closed when preservation is enabled                                                                        |
-| `Property.TypeRecord` can be represented by one string                           | The current isolated adapter stringifies the raw record                                   | This is not verified for typed or modular assets; extended-item translation remains unsupported until asset-definition tests exist        |
-| `AssetGet(group, name)` is available and returns a valid BC asset                | Feature systems use it before `AddItem()`                                                 | The adapter must own lookup and reject missing assets; the current adapter does not yet perform this validation                           |
+| `Property.TypeRecord` can be represented by one string                           | The current isolated adapter still normalizes it conservatively                           | Resolve typed/modular values through `Female3DCGExtended`; do not persist raw generated records in the domain                             |
+| `AssetGet(group, name)` is available and returns a valid BC asset                | The BC adapter now resolves assets before add dispatch                                    | Keep lookup and missing-asset rejection in the adapter; add asset-definition contract tests                                               |
 | Local mutation completion implies server acceptance                              | Legacy code often observes local appearance after dispatch                                | Explicitly false; mutating results remain `in_progress` until connector confirmation                                                      |
 | Connector appearance events can be correlated to one operation                   | The adapter serializes one operation per member and matches the exact expected post-state | Keep member, operation ID, epoch, timestamp, and predicate checks; do not treat an uncorrelated packet as confirmation                    |
 | Connector connection identity is a reconnect epoch                               | The adapter advances an epoch on disconnect or connection identity change                 | Keep lifecycle tests and qualify the mapping against real reconnect behavior before durable retries                                       |
@@ -395,9 +459,8 @@ return:
 
 - applying, changing, or removing locks, including safeword
   `RemoveOnUnlock`, exclusive, password, and timer-password semantics;
-- validated `AssetGet` lookup, extended asset-definition resolution, typed or
-  modular `TypeRecord` construction, and `isClothing`/`isBind`/`isNaked`
-  classification;
+- extended asset-definition resolution, typed or modular `TypeRecord`
+  construction, and `isClothing`/`isBind`/`isNaked` classification;
 - full bundle application through `Appearance.applyBundle()`;
 - explicit `flushUpdates()` or `sendAppearanceUpdate()` coordination;
 - appearance property-only updates and item permission changes;
@@ -1143,9 +1206,8 @@ Each step has a completion gate and preserves the new/old boundary:
 8. [x] Add DI and feature-flag selection with rollback before migration. The
        rollout controller stops new action-path starts, preserves operation
        ownership, and routes new work to legacy during rollback.
-9. [x] Migrate one narrow Bunny appearance operation: artifact-owned sign
-       cleanup. Restraint construction, safeword `RemoveOnUnlock`, persistence,
-       and full Bunny staging comparison remain pending.
+9. [ ] Migrate the Bunny restraint package only after asset, lock, permission,
+       persistence, and authoritative-confirmation contracts are complete.
 10. [x] Add the release-removal action branch for selected live targets. It
         requires authoritative confirmation and never falls back to legacy for
         the same operation. Full release qualification for unlocked, locked,

@@ -8,7 +8,7 @@
     "mongo_tls": true,
     "managed_release_workers_enabled": true,
     "bunny_debug_unlock_duration_ms": 60000,
-    "action_layer_bunny_appearance_enabled": false,
+    "action_layer_bunny_restraints_enabled": false,
     "action_layer_release_removal_enabled": false,
     "dare": {
         "region": {
