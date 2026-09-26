@@ -356,6 +356,10 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         assert.equal(result.signPresent, true, config.name);
         assert.equal(result.signVisible, true, config.name);
         assert.equal(mutationContext?.operationId, result.operationId);
+        assert.equal(
+            mutationContext?.correlationId,
+            `appearance:${result.operationId}`,
+        );
         assert.equal(mutationContext?.source, "bunny");
         assert.equal(mutationContext?.reason, "bunny_punishment_applied");
         assert.equal(observedAppearance, mutationContext?.observedAppearance);

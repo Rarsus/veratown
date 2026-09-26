@@ -272,6 +272,7 @@ export interface VeratownState {
 
 export interface AppearanceSyncRecord {
     operationId: string;
+    correlationId: string;
     source: string;
     reason: string;
     status: "confirmed" | "mismatch" | "timeout" | "observed";

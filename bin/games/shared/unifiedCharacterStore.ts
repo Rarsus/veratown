@@ -2917,6 +2917,7 @@ export class UnifiedCharacterStore {
                 target: memberNumber,
                 data: {
                     operationId: context.operationId,
+                    correlationId: context.correlationId,
                     source: context.source,
                     reason: context.reason,
                     before,
@@ -2927,12 +2928,13 @@ export class UnifiedCharacterStore {
                     visibilityChanged: diff.visibilityChanged,
                 },
                 processed: false,
-                correlationId: context.operationId,
+                correlationId: context.correlationId,
             },
         ];
 
         const bunnyData = {
             operationId: context.operationId,
+            correlationId: context.correlationId,
             source: context.source,
             reason: context.reason,
             previousAppearance: before,
@@ -2958,7 +2960,7 @@ export class UnifiedCharacterStore {
                 target: memberNumber,
                 data: bunnyData,
                 processed: false,
-                correlationId: context.operationId,
+                correlationId: context.correlationId,
             });
         } else if (
             tracksBunnySign &&
@@ -2973,7 +2975,7 @@ export class UnifiedCharacterStore {
                 target: memberNumber,
                 data: bunnyData,
                 processed: false,
-                correlationId: context.operationId,
+                correlationId: context.correlationId,
             });
             if (context.cleanupAllowed && artifact) {
                 events.push({
@@ -2987,7 +2989,7 @@ export class UnifiedCharacterStore {
                         cleanupPolicy: artifact?.cleanupPolicy,
                     },
                     processed: false,
-                    correlationId: context.operationId,
+                    correlationId: context.correlationId,
                 });
             }
         } else if (
@@ -3005,7 +3007,7 @@ export class UnifiedCharacterStore {
                 target: memberNumber,
                 data: bunnyData,
                 processed: false,
-                correlationId: context.operationId,
+                correlationId: context.correlationId,
             });
         } else if (
             tracksBunnySign &&
@@ -3021,7 +3023,7 @@ export class UnifiedCharacterStore {
                 target: memberNumber,
                 data: bunnyData,
                 processed: false,
-                correlationId: context.operationId,
+                correlationId: context.correlationId,
             });
         }
 
@@ -3066,6 +3068,7 @@ export class UnifiedCharacterStore {
             memberNumber,
             {
                 operationId: context.operationId,
+                correlationId: context.correlationId,
                 source: context.source,
                 reason: context.reason,
                 before,

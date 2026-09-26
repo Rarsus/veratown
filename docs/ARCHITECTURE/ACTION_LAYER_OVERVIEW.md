@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.7"
-status: "Proposed - rollback-controlled Bunny/release migration slices implemented; live qualification pending"
+version: "1.8"
+status: "Proposed - legacy appearance correlation IDs propagated; live qualification pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -84,6 +84,9 @@ service, or runtime registration has been migrated.
       exclusive operation ownership, and rollback behavior.
 - [x] Narrow Bunny sign-cleanup migration and release target-removal migration
       behind the rollout controller; legacy paths remain the default.
+- [x] Legacy appearance callers now receive explicit operation and correlation
+      IDs through the shared mutation context, persisted sync records, and
+      lifecycle/audit events.
 - [x] 56 focused action-layer tests passing, with strict TypeScript and
       formatting checks passing after the confirmation contract slice.
 
@@ -96,8 +99,8 @@ service, or runtime registration has been migrated.
 - [ ] Movement, communication, map, permission, and inventory adapters.
 - [ ] Durable workflow orchestration, restart/reconnect recovery, audits, or
       persistence wiring. The current workflow model is pure and in-memory.
-- [ ] Bunny or release migration, feature flags, DI registration, or rollback
-      switching.
+- [ ] Full Bunny or release migration. Feature flags, DI registration, and
+      rollback switching exist only for the narrow migrated slices.
 - [ ] The required 30-minute 19-character soak test and production performance
       gate. The current workload is a short deterministic harness, not a release
       qualification run.
@@ -260,6 +263,27 @@ The next qualification gate is a real-room rehearsal with both switches off,
 then one switch enabled at a time, recording confirmation latency, blocked
 removals, rollback behavior, and durable projection results. No default runtime
 configuration enables either migration switch.
+
+### Phase 0 correlation-ID implementation result
+
+The remaining Phase 0 identity gap was opportune to close before further
+migration. Existing Bunny and release flows already generated stable operation
+IDs, while legacy callers that omitted one were assigned an ID by
+`syncAppearanceMutation`. The missing piece was an explicit correlation field
+at the shared appearance boundary.
+
+`AppearanceMutationContext` now carries `correlationId`. Callers may supply one;
+otherwise the legacy boundary derives `appearance:<operationId>`. The value is
+propagated into `AppearanceSyncRecord`, appearance lifecycle events, Bunny
+diagnostics, and audit payloads. The mutation behavior, rollout path, and
+legacy/action ownership rules are unchanged.
+
+Validation completed:
+
+- Focused legacy appearance and Bunny tests pass with correlation propagation.
+- Strict TypeScript and Prettier validation pass.
+- No new runtime migration switch was enabled and no action-layer path was
+  mixed into legacy mutation execution by this change.
 
 ### BC call inventory and adapter boundary
 
@@ -982,7 +1006,9 @@ Migration is incremental and should preserve existing behavior after each step.
 - [x] Document every currently identified adapter assumption and unsupported BC
       operation. The register is a living gate and must grow when new call
       sites are found.
-- [ ] Add operation and correlation IDs to legacy callers where missing.
+- [x] Add operation and correlation IDs to legacy callers where missing. The
+      shared appearance boundary generates deterministic fallback IDs and
+      persists the correlation through lifecycle and audit records.
 - [x] Enforce the new-to-old import boundary in the isolated package.
 
 ### Phase 1: Appearance foundation

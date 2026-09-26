@@ -14,6 +14,7 @@ export type AppearanceReleaseCause =
 
 export interface AppearanceMutationContext {
     operationId: string;
+    correlationId: string;
     timestamp: number;
     source: AppearanceMutationSource;
     reason: string;

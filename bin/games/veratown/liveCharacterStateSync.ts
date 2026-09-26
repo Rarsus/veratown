@@ -174,6 +174,7 @@ export class LiveCharacterStateSync {
                     takeAppearanceMutationContext(character) ??
                     ({
                         operationId: `sync-${memberNumber}-${Date.now()}-${++syncOperationSequence}`,
+                        correlationId: `appearance-sync:${memberNumber}:${Date.now()}:${syncOperationSequence}`,
                         timestamp: Date.now(),
                         source: "unknown_external_mutation",
                         reason: "unknown_external_mutation",
@@ -191,6 +192,7 @@ export class LiveCharacterStateSync {
                     mutationContext?.expectedAppearance
                         ? ({
                               operationId: mutationContext.operationId,
+                              correlationId: mutationContext.correlationId,
                               source: mutationContext.source,
                               reason: mutationContext.reason,
                               status:

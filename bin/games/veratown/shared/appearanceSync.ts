@@ -207,6 +207,7 @@ function createMutationContext(
         reason?: string;
         releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
+        correlationId?: string;
         cleanupAllowed?: boolean;
     },
 ): AppearanceMutationContext {
@@ -217,6 +218,15 @@ function createMutationContext(
             options?.operationId ??
             inherited?.operationId ??
             `appearance-${character.MemberNumber}-${timestamp}-${++mutationSequence}`,
+        correlationId:
+            options?.correlationId ??
+            options?.context?.correlationId ??
+            inherited?.correlationId ??
+            `appearance:${
+                options?.operationId ??
+                inherited?.operationId ??
+                `appearance-${character.MemberNumber}-${timestamp}-${mutationSequence}`
+            }`,
         timestamp,
         source:
             options?.source ??
@@ -281,6 +291,7 @@ export async function syncAppearanceMutation(
         reason?: string;
         releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
+        correlationId?: string;
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;
         exclusiveContextHandoff?: boolean;
