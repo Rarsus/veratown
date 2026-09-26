@@ -76,6 +76,27 @@ test("coalesces duplicate operation IDs and bounds pending work", async () => {
     });
 });
 
+test("scopes duplicate operation IDs to their character", async () => {
+    const scheduler = new ActionScheduler();
+    let firstCalls = 0;
+    let secondCalls = 0;
+
+    const first = scheduler.schedule(11, "shared-id", async () => {
+        firstCalls += 1;
+        return "first";
+    });
+    const second = scheduler.schedule(12, "shared-id", async () => {
+        secondCalls += 1;
+        return "second";
+    });
+
+    assert.notStrictEqual(first, second);
+    assert.equal(await first, "first");
+    assert.equal(await second, "second");
+    assert.equal(firstCalls, 1);
+    assert.equal(secondCalls, 1);
+});
+
 test("close prevents new work without cancelling in-flight work", async () => {
     const scheduler = new ActionScheduler();
     const gate = deferred<void>();

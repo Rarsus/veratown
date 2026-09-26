@@ -1,9 +1,9 @@
 ---
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
-date: "September 25, 2026"
-version: "1.0"
-status: "Proposed - implementation plan"
+date: "September 26, 2026"
+version: "1.1"
+status: "Proposed - isolated groundwork implemented; migration pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -28,6 +28,51 @@ client into Node. Instead, the bot should implement the smallest BC-domain
 adapter needed by each action. This preserves server compatibility while
 avoiding browser globals, UI lifecycle assumptions, and a large brittle
 dependency surface.
+
+## Implementation Status
+
+This document describes both the target architecture and the current delivery
+state. The completed work is intentionally limited to the isolated package at
+`bin/action-layer/`. No legacy feature system, Bunny workflow, persistence
+service, or runtime registration has been migrated.
+
+### Completed groundwork
+
+- [x] Domain contracts for action status, metadata, contexts, policies, and
+      appearance, movement, communication, and map adapter shapes.
+- [x] Per-character bounded scheduler with failure isolation, duplicate
+      coalescing scoped by character, queue limits, and close behavior.
+- [x] Validated execution policies for timeouts, retry budgets, and deadlines.
+- [x] Bounded action executor with cooperative cancellation and structured
+      timeout or exception results.
+- [x] Pure appearance planner for exact identity matching, group conflicts,
+      locked or ambiguous item protection, and idempotent removals.
+- [x] In-memory appearance adapter used as a transport-free contract double.
+- [x] Adapter tests covering confirmation delay, timeout, idempotency, lock
+      protection, metadata, and failure behavior.
+- [x] Automated import-boundary test rejecting legacy, persistence, and
+      `bc-bot` dependencies from action-layer TypeScript files.
+- [x] Deterministic 19-character workload harness with latency percentiles,
+      queue-drain checks, and failure injection.
+- [x] 31 focused action-layer tests passing, with strict TypeScript and
+      formatting checks passing.
+
+### Explicitly not complete
+
+- [ ] A real Bondage Club or `bc-bot` adapter.
+- [ ] Authoritative connector confirmation and reconnect-epoch handling.
+- [ ] Movement, communication, map, permission, and inventory adapters.
+- [ ] Durable workflow orchestration, recovery, audits, or persistence wiring.
+- [ ] Bunny or release migration, feature flags, DI registration, or rollback
+      switching.
+- [ ] The required 30-minute 19-character soak test and production performance
+      gate. The current workload is a short deterministic harness, not a release
+      qualification run.
+
+The isolated package is therefore a testable foundation, not production-ready
+action infrastructure. The next implementation phase must add one real
+adapter behind the existing contracts without importing that adapter into
+legacy feature systems.
 
 ## Goals
 
@@ -655,47 +700,77 @@ Migration is incremental and should preserve existing behavior after each step.
 
 ### Phase 0: Boundaries and inventory
 
-- Freeze the domain action vocabulary and result statuses.
-- Inventory direct `bc-bot` calls in feature systems.
-- Identify existing helpers that already provide action behavior.
-- Document adapter assumptions and unsupported BC operations.
-- Add operation and correlation IDs where missing.
+- [x] Freeze the initial domain action vocabulary and result statuses.
+- [ ] Inventory all direct `bc-bot` calls in feature systems.
+- [x] Identify the first existing appearance behavior and define an isolated
+      replacement contract.
+- [ ] Document every adapter assumption and unsupported BC operation.
+- [ ] Add operation and correlation IDs to legacy callers where missing.
+- [x] Enforce the new-to-old import boundary in the isolated package.
 
 ### Phase 1: Appearance foundation
 
-- Extract domain identities and appearance policies.
-- Wrap `syncAppearanceMutation` behind an appearance action adapter.
-- Move release removal classification behind the same removal contract.
-- Add adapter contract tests and focused Bunny regression cases.
-- Preserve the current `RemoveOnUnlock` safeword behavior.
+- [x] Extract domain identities, lock states, and appearance policies.
+- [x] Prove planner, executor, scheduler, and adapter behavior with an
+      in-memory contract double.
+- [ ] Wrap `syncAppearanceMutation` behind a real appearance action adapter.
+- [ ] Move release removal classification behind the same removal contract.
+- [ ] Add real-adapter contract tests and focused Bunny regression cases.
+- [ ] Preserve and verify the current `RemoveOnUnlock` safeword behavior in
+      the migrated path.
 
 ### Phase 2: Communication and movement
 
-- Wrap `messageSender` and connector movement calls.
-- Return delivery and observed-position results.
-- Integrate reconnect epochs and stale-confirmation handling.
-- Migrate low-risk callers first: narration, notifications, and position sync.
+- [ ] Wrap `messageSender` and connector movement calls.
+- [ ] Return delivery and observed-position results.
+- [ ] Integrate reconnect epochs and stale-confirmation handling.
+- [ ] Migrate low-risk callers first: narration, notifications, and position
+      sync.
 
 ### Phase 3: Map operations and trigger lifecycle
 
-- Define idempotent map registration handles.
-- Migrate Bunny park and other tile systems.
-- Ensure reload and shutdown remove old registrations.
-- Test room recreation and duplicate trigger registration.
+- [ ] Define idempotent map registration handles.
+- [ ] Migrate Bunny park and other tile systems.
+- [ ] Ensure reload and shutdown remove old registrations.
+- [ ] Test room recreation and duplicate trigger registration.
 
 ### Phase 4: Workflow extraction
 
-- Extract Bunny punishment as the reference workflow.
-- Extract release stages around shared appearance actions.
-- Migrate kennel, cage, furniture, and other high-risk systems one at a time.
-- Keep durable transitions in existing mutation services.
+- [ ] Extract Bunny punishment as the reference workflow.
+- [ ] Extract release stages around shared appearance actions.
+- [ ] Migrate kennel, cage, furniture, and other high-risk systems one at a
+      time.
+- [ ] Keep durable transitions in existing mutation services.
 
 ### Phase 5: Consolidation and enforcement
 
-- Remove duplicate direct action helpers only after callers migrate.
-- Add lint or review checks for prohibited direct mutations in workflows.
-- Publish adapter compatibility and rollback documentation.
-- Measure action reliability in staging before expanding scope.
+- [ ] Remove duplicate direct action helpers only after callers migrate.
+- [ ] Add lint or review checks for prohibited direct mutations in workflows.
+- [ ] Publish adapter compatibility and rollback documentation.
+- [ ] Measure action reliability in staging before expanding scope.
+
+### Next implementation steps
+
+The next steps are deliberately ordered to preserve the new/old boundary:
+
+1. Inventory the real appearance call paths and identify the smallest
+   `bc-bot` surface needed for observation, add, remove, and confirmation.
+2. Add a real adapter under `bin/action-layer/adapters/` only. Keep all
+   `bc-bot` imports inside that adapter and add contract tests using a mocked
+   connector or character.
+3. Implement authoritative confirmation, listener cleanup, reconnect epochs,
+   and stale-confirmation rejection for appearance mutations.
+4. Run failure-injection tests for connector loss, delayed confirmation,
+   rejected mutations, changed group occupancy, and process recovery.
+5. Complete the inventory and 30-minute performance harness before any Bunny
+   or release caller is migrated.
+6. Add a feature flag or DI-selected implementation, then migrate one narrow
+   Bunny appearance operation with the old path available for rollback.
+7. Migrate release removal only after locked, unlocked, ambiguous, and
+   `RemoveOnUnlock` cases pass against the real adapter.
+
+No step in this sequence should modify `bin/games/**` until the real adapter,
+confirmation semantics, failure tests, and rollback control are ready.
 
 ## Rollout and Rollback
 
@@ -752,19 +827,23 @@ The action layer is ready for production use when:
 
 ## Initial Implementation Recommendation
 
-Start with a narrow vertical slice rather than creating every interface at
-once:
+The initial isolated slice is complete. It deliberately stopped before
+legacy integration:
 
-1. Define `AppearanceItemIdentity`, `AppearanceMutationPolicy`, and
-   `ActionResult`.
-2. Wrap the existing appearance synchronization and live removal behavior.
-3. Migrate Bunny punishment and its expiry cleanup to the wrapper.
-4. Add explicit tests for locked and unlocked device policies.
-5. Validate server confirmation, persistence, restart recovery, and rollback.
-6. Use the proven appearance adapter shape for movement, communication, and
-   map actions.
+1. [x] Define `AppearanceItemIdentity`, `AppearanceMutationPolicy`, and
+       `ActionResult`.
+2. [x] Build an isolated scheduler, executor, planner, and in-memory
+       appearance adapter.
+3. [x] Add explicit tests for locked, ambiguous, unlocked, idempotent, and
+       timeout behavior.
+4. [x] Add a dependency-boundary test and a short 19-character workload.
+5. [ ] Implement authoritative behavior in a real `bc-bot` adapter.
+6. [ ] Validate server confirmation, persistence, restart recovery, and
+       rollback.
+7. [ ] Use the proven appearance adapter shape for movement, communication,
+       and map actions.
 
-This sequence delivers immediate value to the most failure-prone operation,
-keeps the first change reversible, and lets the repository's existing
-appearance and mutation machinery remain the source of truth while the new
-boundary is proven.
+The next milestone is not a Bunny migration. It is a real appearance adapter
+with confirmation and failure-injection evidence, still isolated from legacy
+callers. Only after that milestone passes should a feature-flagged vertical
+slice be introduced.

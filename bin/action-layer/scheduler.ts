@@ -49,7 +49,8 @@ export class ActionScheduler {
         }
         if (!operationId.trim()) throw new Error("operationId is required");
 
-        const existing = this.operations.get(operationId);
+        const operationKey = `${memberNumber}:${operationId}`;
+        const existing = this.operations.get(operationKey);
         if (existing) return existing as Promise<T>;
 
         const queue = this.queues.get(memberNumber) ?? {
@@ -70,7 +71,7 @@ export class ActionScheduler {
             () => undefined,
         );
         queue.tail = settled;
-        this.operations.set(operationId, result);
+        this.operations.set(operationKey, result);
 
         const release = () => {
             queue.pending -= 1;
@@ -80,8 +81,8 @@ export class ActionScheduler {
             ) {
                 this.queues.delete(memberNumber);
             }
-            if (this.operations.get(operationId) === result) {
-                this.operations.delete(operationId);
+            if (this.operations.get(operationKey) === result) {
+                this.operations.delete(operationKey);
             }
         };
         result.then(release, release);
