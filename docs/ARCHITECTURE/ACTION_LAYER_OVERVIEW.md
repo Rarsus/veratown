@@ -2,7 +2,7 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.16"
+version: "1.17"
 status: "Proposed - local Bunny/release qualification and durable recovery boundaries implemented behind disabled switches; live evidence pending"
 ---
 
@@ -40,6 +40,10 @@ still pending.
 
 ### Current snapshot
 
+- The maintained feature-by-feature ownership registry and UML diagrams are in
+  [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md). It is the source of truth for
+  which slices are action-layer enabled, which responsibilities remain legacy,
+  and which evidence gates are still open.
 - Qualification, recovery, and soak tests pass, with strict TypeScript and
   formatting checks passing.
 - Generated BC typed and modular definitions are translated only at the BC
@@ -48,9 +52,32 @@ still pending.
   rollout leases, and rollback routing, but both switches are disabled by
   default.
 - The Bunny action path projects its artifact from the adapter-returned
-  confirmed observation and journals the operation before mutation.
+  confirmed observation. It can use the tested workflow-recovery journal seam
+  when one is injected; the current production constructor does not inject
+  that optional recovery service.
 - Live-room confirmation, production persistence validation, and the actual
   30-minute 19-character qualification remain open evidence gates.
+
+### Migration status answer
+
+**Bunny is not fully migrated to the new method.** Only the narrow restraint
+application operation has an opt-in action-layer path. The rollout switch
+`action_layer_bunny_restraints_enabled` defaults to `false`, so normal runtime
+behavior remains on the legacy path.
+
+`BunnyPunishmentService` still owns configuration selection and validation,
+active-artifact decisions, punishment artifact persistence, expiry scheduling,
+release cleanup, and the surrounding business orchestration. The optional
+`VeratownWorkflowRecovery` interface and journal are implemented and tested,
+but the current production `Veratown` wiring injects only the action appearance
+service and rollout controller. It does not yet inject a production recovery
+journal.
+
+See [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md) for the maintained registry,
+ownership tables, UML diagrams, evidence ledger, and documentation maintenance
+rules. Do not describe Bunny as fully migrated until that registry's remaining
+workflow, durable-storage, live-confirmation, restart/reconnect, and cleanup
+gates are closed.
 
 ### Completed groundwork
 
@@ -122,9 +149,9 @@ still pending.
 - [x] Storage-agnostic durable workflow journal with optimistic versions,
       idempotent operation keys, restart restoration, terminal-state protection,
       and persistence-failure tests.
-- [x] Veratown recovery boundary wired into the opt-in Bunny and release
-      migration interfaces; journal completion follows confirmed durable
-      projection.
+- [x] Veratown recovery boundary implemented and tested as an optional Bunny
+      and release migration interface; runtime injection and production journal
+      storage remain pending.
 - [x] Soak runner with retained samples, hard threshold evaluation, a
       19-character qualification command, and a 25-character headroom mode.
 
