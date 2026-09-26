@@ -45,6 +45,7 @@ import {
 
 import { createLogger } from "../../logging";
 import { MessageSender } from "../shared/messageSender";
+import type { ActionLayerRemovalMigration } from "./shared/liveAppearanceRemovalCoordinator";
 
 /**
  * Removed bondage item tracking
@@ -160,8 +161,7 @@ export class ReleaseSystem implements VeratownFeatureSystem {
     private paroleMonitor = createIdempotentMonitor<API_Character>(
         "ReleaseSystem.parole",
     );
-    private readonly liveRemovalCoordinator =
-        new LiveAppearanceRemovalCoordinator();
+    private readonly liveRemovalCoordinator: LiveAppearanceRemovalCoordinator;
     private releaseOperationSequence = 0;
 
     public constructor(
@@ -175,8 +175,13 @@ export class ReleaseSystem implements VeratownFeatureSystem {
             character: API_Character,
             releaseOperation: string,
         ) => Promise<void>,
+        actionLayerRemoval?: ActionLayerRemovalMigration,
     ) {
         this.messageSender = new MessageSender(conn);
+        this.liveRemovalCoordinator = new LiveAppearanceRemovalCoordinator(
+            3,
+            actionLayerRemoval,
+        );
         if (unifiedStore) {
             this.mutationService ??= new GameStateMutationServiceImpl(
                 unifiedStore,

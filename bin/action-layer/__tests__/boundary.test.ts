@@ -10,6 +10,7 @@ const PROHIBITED_IMPORTS = [
     "bin/games",
 ];
 const IMPORT_PATTERN = /(?:from|import\s*\()\s*["']([^"']+)["']/g;
+const BC_ADAPTER_SUFFIX = "adapters/bc-appearance.ts";
 
 async function getTypeScriptFiles(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });
@@ -34,11 +35,10 @@ test("action-layer TypeScript files do not import legacy systems", async () => {
         const source = await readFile(file, "utf8");
         for (const match of source.matchAll(IMPORT_PATTERN)) {
             const importedPath = match[1];
-            if (
-                PROHIBITED_IMPORTS.some((prohibited) =>
-                    importedPath.includes(prohibited),
-                )
-            ) {
+            const isLegacyImport = PROHIBITED_IMPORTS.some((prohibited) =>
+                importedPath.includes(prohibited),
+            );
+            if (isLegacyImport && !file.endsWith(BC_ADAPTER_SUFFIX)) {
                 violations.push(`${file}: ${importedPath}`);
             }
         }

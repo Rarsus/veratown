@@ -58,6 +58,10 @@ export interface ConfigFile {
     // Optional temporary Bunny punishment duration override, in milliseconds.
     bunny_debug_unlock_duration_ms?: number;
 
+    // Action-layer migration switches. Both default to the legacy path.
+    action_layer_bunny_appearance_enabled?: boolean;
+    action_layer_release_removal_enabled?: boolean;
+
     casino?: CasinoConfig;
     dare?: DareConfig;
 }
@@ -129,6 +133,8 @@ export const configSchema = z
         discord_audit_channel_id: nonEmptyString.optional(),
         managed_release_workers_enabled: z.boolean().default(true),
         bunny_debug_unlock_duration_ms: z.number().int().positive().optional(),
+        action_layer_bunny_appearance_enabled: z.boolean().default(false),
+        action_layer_release_removal_enabled: z.boolean().default(false),
         casino: z
             .object({
                 cocktail: z.string().trim().min(1).optional(),

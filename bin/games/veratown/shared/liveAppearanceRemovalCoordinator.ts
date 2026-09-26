@@ -4,6 +4,10 @@ import {
     filterValidAppearanceItems,
 } from "./appearanceSync";
 import { isEffectivelyUnlockedBondageItem } from "./releaseRemovalPolicy";
+import type {
+    ActionLayerRolloutController,
+    AppearanceActionService,
+} from "../../../action-layer";
 
 export interface LiveRemovalTarget {
     group: string;
@@ -11,6 +15,11 @@ export interface LiveRemovalTarget {
     lockType?: string;
     lockedBy?: string;
     lockFingerprint?: string;
+}
+
+export interface ActionLayerRemovalMigration {
+    readonly appearanceService: AppearanceActionService<API_Character>;
+    readonly rollout: ActionLayerRolloutController;
 }
 
 function targetKey(target: LiveRemovalTarget): string {
@@ -29,7 +38,10 @@ function matchesTarget(item: any, target: LiveRemovalTarget): boolean {
 export class LiveAppearanceRemovalCoordinator {
     private readonly inFlight = new Map<string, Promise<void>>();
 
-    public constructor(private readonly maxAttempts = 3) {}
+    public constructor(
+        private readonly maxAttempts = 3,
+        private readonly actionLayer?: ActionLayerRemovalMigration,
+    ) {}
 
     public async remove(
         character: API_Character,
@@ -69,6 +81,49 @@ export class LiveAppearanceRemovalCoordinator {
                 matchesTarget(item, target),
             );
             if (matches.length === 0) return;
+
+            const operationKey = `${releaseOperation}:${targetKey(target)}`;
+            const lease = this.actionLayer?.rollout.begin(
+                "release-removal",
+                operationKey,
+            );
+            if (lease?.path === "action") {
+                try {
+                    const result =
+                        await this.actionLayer!.appearanceService.remove(
+                            character,
+                            { group: target.group, asset: target.name },
+                            {
+                                operationId: operationKey,
+                                memberNumber: character.MemberNumber,
+                                source: "release",
+                                reason: "release_strip",
+                                timeoutMs: 2_000,
+                                maxAttempts: 1,
+                                retryDelayMs: 0,
+                                preserveLockedItems: true,
+                                requireServerConfirmation: true,
+                                cleanupAllowed:
+                                    target.group === "ItemMisc" &&
+                                    target.name === "WoodenSign",
+                            },
+                        );
+                    if (
+                        result.status === "completed" ||
+                        result.status === "already_satisfied" ||
+                        result.status === "blocked"
+                    ) {
+                        return;
+                    }
+                    throw new Error(
+                        result.reason ??
+                            `Action-layer removal did not complete for ${target.group}/${target.name}`,
+                    );
+                } finally {
+                    lease.release();
+                }
+            }
+            lease?.release();
 
             // RemoveItem is group-based. Never risk removing an owner lock
             // sharing the target's group.

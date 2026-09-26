@@ -34,6 +34,10 @@ import type {
     BunnyPunishmentRepository,
 } from "./bunnyPunishmentRepository";
 import { createLogger } from "../../logging";
+import type {
+    ActionLayerRolloutController,
+    AppearanceActionService,
+} from "../../action-layer";
 
 export type BunnyPunishmentStatus =
     "completed" | "partial" | "failed" | "skipped";
@@ -52,6 +56,11 @@ export interface BunnyPunishmentResult {
     failureReason?: string;
     operationId?: string;
     skipped?: boolean;
+}
+
+export interface BunnyActionLayerMigration {
+    readonly appearanceService: AppearanceActionService<API_Character>;
+    readonly rollout: ActionLayerRolloutController;
 }
 
 export const BUNNY_INITIAL_DURATION_MS = 5 * 60 * 1000;
@@ -130,6 +139,7 @@ export class BunnyPunishmentService {
         private readonly syncDelayMs = 100,
         private readonly debugUnlockDurationMs?: number,
         eventBus?: EventBus,
+        private readonly actionLayer?: BunnyActionLayerMigration,
     ) {
         eventBus?.subscribe("bondage_removed", async (event) => {
             if (
@@ -518,53 +528,107 @@ export class BunnyPunishmentService {
             return;
         }
         const operationId = `bunny-release-${artifact.operationId}`;
+        const lease = this.actionLayer?.rollout.begin(
+            "bunny-appearance",
+            operationId,
+        );
+        const useActionLayer = lease?.path === "action";
         let verified = false;
-        for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
-            await syncAppearanceMutation(
-                character,
-                () => {
-                    for (const piece of artifact.restraintPieces) {
-                        const [group] = piece.split("/");
-                        character.Appearance.RemoveItem(group as any);
+        try {
+            for (
+                let attempt = 0;
+                attempt < BUNNY_RELEASE_MAX_ATTEMPTS;
+                attempt++
+            ) {
+                await syncAppearanceMutation(
+                    character,
+                    () => {
+                        for (const piece of artifact.restraintPieces) {
+                            const [group] = piece.split("/");
+                            character.Appearance.RemoveItem(group as any);
+                        }
+                        if (!useActionLayer) {
+                            character.Appearance.RemoveItem(BUNNY_SIGN.group);
+                        }
+                    },
+                    this.syncDelayMs,
+                    async (currentCharacter, context, observedAppearance) =>
+                        this.stateSync?.(
+                            currentCharacter,
+                            context,
+                            observedAppearance,
+                        ),
+                    {
+                        throwOnSyncFailure: false,
+                        source: "bunny",
+                        releaseCause: "timer",
+                        reason: "bunny_punishment_released",
+                        operationId,
+                        cleanupAllowed: true,
+                        exclusiveContextHandoff: true,
+                        requireFullWardrobeAccess: false,
+                        sendFullAppearanceUpdate: true,
+                        awaitServerSync: true,
+                        serverSyncPredicate: (appearance) =>
+                            artifact.restraintPieces.every(
+                                ([group]) =>
+                                    !appearance.some(
+                                        (item) => item.Group === group,
+                                    ),
+                            ) &&
+                            (useActionLayer ||
+                                !verifyBunnySign(appearance).present),
+                    },
+                );
+                if (useActionLayer) {
+                    const signResult =
+                        await this.actionLayer!.appearanceService.remove(
+                            character,
+                            {
+                                group: BUNNY_SIGN.group,
+                                asset: BUNNY_SIGN.asset,
+                            },
+                            {
+                                operationId: `${operationId}:sign`,
+                                memberNumber: character.MemberNumber,
+                                source: "bunny",
+                                reason: "bunny_punishment_sign_cleanup",
+                                timeoutMs: 2_000,
+                                maxAttempts: 1,
+                                retryDelayMs: 0,
+                                preserveLockedItems: true,
+                                requireServerConfirmation: true,
+                                cleanupAllowed: true,
+                            },
+                        );
+                    if (
+                        signResult.status !== "completed" &&
+                        signResult.status !== "already_satisfied"
+                    ) {
+                        throw new Error(
+                            signResult.reason ??
+                                "Bunny sign action-layer cleanup did not complete",
+                        );
                     }
-                    character.Appearance.RemoveItem(BUNNY_SIGN.group);
-                },
-                this.syncDelayMs,
-                async (currentCharacter, context, observedAppearance) =>
-                    this.stateSync?.(
-                        currentCharacter,
-                        context,
-                        observedAppearance,
-                    ),
-                {
-                    throwOnSyncFailure: false,
-                    source: "bunny",
-                    releaseCause: "timer",
-                    reason: "bunny_punishment_released",
-                    operationId,
-                    cleanupAllowed: true,
-                    exclusiveContextHandoff: true,
-                    requireFullWardrobeAccess: false,
-                    sendFullAppearanceUpdate: true,
-                    awaitServerSync: true,
-                    serverSyncPredicate: (appearance) =>
-                        artifact.restraintPieces.every(
-                            ([group]) =>
-                                !appearance.some(
-                                    (item) => item.Group === group,
-                                ),
-                        ) && !verifyBunnySign(appearance).present,
-                },
-            );
-            const appearance = character.Appearance.MakeAppearanceBundle();
-            verified =
-                artifact.restraintPieces.every((piece) => {
-                    const [group, asset] = piece.split("/");
-                    return !appearance.some(
-                        (item) => item.Group === group && item.Name === asset,
+                    await this.stateSync?.(
+                        character,
+                        undefined,
+                        character.Appearance.MakeAppearanceBundle(),
                     );
-                }) && !verifyBunnySign(appearance).present;
-            if (verified) break;
+                }
+                const appearance = character.Appearance.MakeAppearanceBundle();
+                verified =
+                    artifact.restraintPieces.every((piece) => {
+                        const [group, asset] = piece.split("/");
+                        return !appearance.some(
+                            (item) =>
+                                item.Group === group && item.Name === asset,
+                        );
+                    }) && !verifyBunnySign(appearance).present;
+                if (verified) break;
+            }
+        } finally {
+            lease?.release();
         }
         if (!verified) {
             this.logger.warn("Bunny punishment release remains equipped", {

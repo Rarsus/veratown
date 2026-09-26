@@ -67,6 +67,7 @@ export type AppearanceLockMode = "none" | "safeword" | "exclusive" | "password";
 
 export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
     readonly operationId: string;
+    readonly memberNumber: number;
     readonly source: Extract<
         ActionSource,
         "bunny" | "release" | "feature" | "admin" | "external"

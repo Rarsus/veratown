@@ -4,6 +4,7 @@ import { isClothing } from "../../../../src/assetHelpers";
 import { ReleaseSystem } from "../veratownReleaseSystem";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
 import { LiveAppearanceRemovalCoordinator } from "../shared";
+import { ActionLayerRolloutController } from "../../../action-layer";
 import {
     isEffectivelyUnlockedBondageItem,
     normalizeReleaseAppearanceItem,
@@ -287,6 +288,51 @@ test("live removal retries a partial mutation and is idempotent after success", 
 
     assert.equal(attempts, 2);
     assert.deepEqual(appearance, []);
+});
+
+test("enabled release migration owns removal without calling the legacy mutator", async () => {
+    let legacyRemoveCalls = 0;
+    let actionCalls = 0;
+    const character: any = {
+        MemberNumber: 145,
+        Appearance: {
+            MakeAppearanceBundle: () => [
+                { Group: "ItemArms", Name: "ActionCuffs", Property: {} },
+            ],
+            RemoveItem: () => {
+                legacyRemoveCalls += 1;
+            },
+        },
+    };
+    const coordinator = new LiveAppearanceRemovalCoordinator(2, {
+        rollout: new ActionLayerRolloutController({
+            releaseRemovalEnabled: true,
+        }),
+        appearanceService: {
+            remove: async () => {
+                actionCalls += 1;
+                return {
+                    status: "completed" as const,
+                    metadata: {
+                        operationId: "release-action-1",
+                        actionId: "appearance.remove",
+                        memberNumber: 145,
+                        attempt: 1,
+                        startedAt: 1,
+                        completedAt: 2,
+                    },
+                };
+            },
+        } as any,
+    });
+
+    await coordinator.remove(character, "release-action-1", {
+        group: "ItemArms",
+        name: "ActionCuffs",
+    });
+
+    assert.equal(actionCalls, 1);
+    assert.equal(legacyRemoveCalls, 0);
 });
 
 test("release lock policy fails closed for every effective or ambiguous lock", () => {

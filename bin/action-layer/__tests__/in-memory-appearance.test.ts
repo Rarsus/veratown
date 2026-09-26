@@ -7,6 +7,7 @@ function policy(operationId: string, overrides = {}) {
     return {
         ...createActionExecutionPolicy(overrides),
         operationId,
+        memberNumber: 5,
         source: "feature" as const,
         reason: "contract test",
     };

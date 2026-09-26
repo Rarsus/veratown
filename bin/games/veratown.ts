@@ -68,6 +68,11 @@ import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
 import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSystem";
 import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
 import { DIContainer, DIServiceKeys } from "../di/container";
+import {
+    ActionLayerRolloutController,
+    AppearanceActionService,
+    BCAppearanceActionAdapter,
+} from "../action-layer";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
 import {
     BotHelpMonitorProvider,
@@ -262,12 +267,33 @@ export class Veratown {
         roomKey: string = "main",
         private readonly managedReleaseWorkersEnabled = true,
         private readonly bunnyDebugUnlockDurationMs?: number,
+        private readonly actionLayerBunnyAppearanceEnabled = false,
+        private readonly actionLayerReleaseRemovalEnabled = false,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
         this.conn3 = connections.casino;
         this.roomKey = normalizeVeratownRoomKey(roomKey);
         this.container = container || new DIContainer();
+        if (!this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)) {
+            this.container.register(
+                DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                new ActionLayerRolloutController({
+                    bunnyAppearanceEnabled:
+                        this.actionLayerBunnyAppearanceEnabled,
+                    releaseRemovalEnabled:
+                        this.actionLayerReleaseRemovalEnabled,
+                }),
+            );
+        }
+        if (
+            !this.container.has(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
+        ) {
+            this.container.register(
+                DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                new AppearanceActionService(new BCAppearanceActionAdapter()),
+            );
+        }
 
         this.commandParser = new CommandParser(
             this.conn,
@@ -629,6 +655,18 @@ export class Veratown {
                 100,
                 this.bunnyDebugUnlockDurationMs,
                 this.unifiedCharacterStore?.getEventBus(),
+                this.container.has(
+                    DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                ) && this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                    ? {
+                          appearanceService: this.container.get(
+                              DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                          ),
+                          rollout: this.container.get(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          ),
+                      }
+                    : undefined,
             );
             return new BunnyParkSystem(
                 this.conn,
@@ -752,6 +790,18 @@ export class Veratown {
                             );
                         }
                     },
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                    ) && this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                        ? {
+                              appearanceService: this.container.get(
+                                  DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                              ),
+                              rollout: this.container.get(
+                                  DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                              ),
+                          }
+                        : undefined,
                 ),
         );
         this.locationMonitorSystem = this.initFeature(

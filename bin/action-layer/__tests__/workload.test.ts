@@ -11,6 +11,25 @@ test("runs the default-sized character workload without residual queues", async 
     assert.equal(result.failedCount, 0);
     assert.deepEqual(result.pendingByCharacter, {});
     assert.ok(result.p95LatencyMs >= 0);
+    assert.ok(result.queueWaitP95Ms >= 0);
+    assert.ok(result.eventLoopDelayP99Ms >= 0);
+    assert.ok(result.heapUsedPeakBytes >= result.heapUsedStartBytes);
+    assert.ok(result.cpuUserMs >= 0);
+    assert.ok(result.gcPauseP95Ms >= 0);
+    assert.equal(result.activeListenersPeak, 0);
+    assert.equal(result.retryCount, 0);
+    assert.equal(result.confirmationTimeoutCount, 0);
+});
+
+test("tracks synthetic timers while they are active", async () => {
+    const result = await runActionLayerWorkload({
+        characterCount: 19,
+        actionsPerCharacter: 2,
+        actionDelayMs: 1,
+    });
+
+    assert.ok(result.activeTimersPeak > 0);
+    assert.deepEqual(result.pendingByCharacter, {});
 });
 
 test("keeps failures local while completing the remaining workload", async () => {

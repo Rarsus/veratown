@@ -39,6 +39,11 @@ function contextFromPolicy(
     policy: AppearanceMutationPolicy,
     memberNumber: number,
 ): ActionContext {
+    if (policy.memberNumber !== memberNumber) {
+        throw new Error(
+            "Appearance policy memberNumber does not match adapter",
+        );
+    }
     return {
         operationId: policy.operationId,
         memberNumber,

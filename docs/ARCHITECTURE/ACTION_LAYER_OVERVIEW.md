@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.1"
-status: "Proposed - isolated groundwork implemented; migration pending"
+version: "1.7"
+status: "Proposed - rollback-controlled Bunny/release migration slices implemented; live qualification pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -48,31 +48,304 @@ service, or runtime registration has been migrated.
 - [x] Pure appearance planner for exact identity matching, group conflicts,
       locked or ambiguous item protection, and idempotent removals.
 - [x] In-memory appearance adapter used as a transport-free contract double.
+- [x] Workflow-facing appearance action service that validates admission,
+      serializes per-character work, and coalesces duplicate operation keys.
+- [x] Pure versioned workflow state model with explicit legal transitions,
+      terminal-state protection, and recovery from failed state.
+- [x] Transport-neutral appearance capability and confirmation contracts with
+      reconnect-epoch correlation, cancellation, and stale-event rejection.
+- [x] Isolated `bc-bot` appearance adapter that translates live bundles, maps
+      lock metadata conservatively, and applies planner protection before
+      group-based mutations.
+- [x] BC adapter contract tests for empty-slot additions, occupied-group
+      conflicts, locked or ambiguous removal protection, and local-dispatch
+      status.
 - [x] Adapter tests covering confirmation delay, timeout, idempotency, lock
       protection, metadata, and failure behavior.
 - [x] Automated import-boundary test rejecting legacy, persistence, and
       `bc-bot` dependencies from action-layer TypeScript files.
 - [x] Deterministic 19-character workload harness with latency percentiles,
       queue-drain checks, and failure injection.
-- [x] 31 focused action-layer tests passing, with strict TypeScript and
-      formatting checks passing.
+- [x] Runtime feature-system inventory of direct BC operations, grouped by
+      appearance, locking, messaging, movement, map, permissions, and asset
+      resolution.
+- [x] Adapter assumption register and unsupported-operation matrix documenting
+      the boundary between the current isolated adapter and legacy callers.
+- [x] Opt-in authoritative appearance confirmation with timeout, cancellation,
+      disconnect, reconnect-epoch, and listener cleanup handling in the BC
+      adapter.
+- [x] Adapter failure-injection and recovery tests for confirmation timeout,
+      connector loss, reconnect recovery, adapter exceptions, duplicate
+      delivery, and changed group occupancy.
+- [x] Workload instrumentation for queue wait, event-loop delay, heap, CPU,
+      GC pauses, synthetic timers, listener count, retries, and confirmation
+      timeouts.
+- [x] DI-registered rollout controller with legacy-default feature switches,
+      exclusive operation ownership, and rollback behavior.
+- [x] Narrow Bunny sign-cleanup migration and release target-removal migration
+      behind the rollout controller; legacy paths remain the default.
+- [x] 56 focused action-layer tests passing, with strict TypeScript and
+      formatting checks passing after the confirmation contract slice.
 
 ### Explicitly not complete
 
-- [ ] A real Bondage Club or `bc-bot` adapter.
-- [ ] Authoritative connector confirmation and reconnect-epoch handling.
+- [ ] Production qualification of authoritative connector confirmation. The
+      adapter now supports it when `requireServerConfirmation` is enabled, but
+      real-room evidence, durable workflow integration, and live reconnect
+      qualification remain pending.
 - [ ] Movement, communication, map, permission, and inventory adapters.
-- [ ] Durable workflow orchestration, recovery, audits, or persistence wiring.
+- [ ] Durable workflow orchestration, restart/reconnect recovery, audits, or
+      persistence wiring. The current workflow model is pure and in-memory.
 - [ ] Bunny or release migration, feature flags, DI registration, or rollback
       switching.
 - [ ] The required 30-minute 19-character soak test and production performance
       gate. The current workload is a short deterministic harness, not a release
       qualification run.
+- [ ] Feature-system migration. The inventory found approximately 129 direct
+      appearance operations, 2 lock applications, 333 message or reply calls,
+      49 map mutations, and 5 teleport calls in non-test feature code.
+- [ ] Full Bunny punishment migration. Restraint construction, extended-item
+      configuration, consent padlocks, and Bunny persistence remain on the
+      legacy path; only sign cleanup is migrated.
+- [ ] Full release workflow migration. The action path covers selected live
+      removal targets, while classification, nudity, teleport, parole, and
+      durable release transitions remain legacy-owned.
 
 The isolated package is therefore a testable foundation, not production-ready
-action infrastructure. The next implementation phase must add one real
-adapter behind the existing contracts without importing that adapter into
-legacy feature systems.
+action infrastructure. The BC adapter can now await an inbound authoritative
+appearance snapshot, but it remains isolated from legacy callers until live
+connector evidence, durable workflow integration, and rollback controls are
+complete.
+
+### Latest implementation result
+
+The latest isolated slice added the workflow-facing appearance service and a
+pure workflow state model. The service is now the intended admission boundary
+for appearance actions: it validates operation context, schedules work through
+the per-character scheduler, delegates transport work to an adapter, and
+coalesces duplicate operation keys. The workflow model provides versioned
+`pending`, `running`, `waiting`, `completed`, `failed`, and `cancelled` states
+with guarded transitions, but it does not persist state or run timers.
+
+Validation completed for this slice:
+
+- 4 workflow state-model tests passed.
+- The existing appearance service and adapter tests passed.
+- Strict TypeScript compilation passed.
+- Prettier validation passed after formatting the new model and tests.
+- No files under `bin/games/**` were modified and the import boundary remains
+  intact.
+
+This result advances the layered foundation but does not advance the migration
+boundary. The next production-relevant evidence still requires a real adapter,
+authoritative connector confirmation, and failure-injection coverage.
+
+### Current implementation result
+
+The confirmation phase added a transport-neutral capability contract and an
+in-memory confirmation registry. Pending appearance operations are correlated
+by member number, operation ID, and connection epoch. The registry accepts an
+event only when all three values match, rejects stale events from an earlier
+epoch, removes pending state on cancellation or reconnect invalidation, and
+does not replay duplicate confirmations.
+
+Validation completed for this phase:
+
+- 5 confirmation and reconnect-epoch tests passed.
+- Strict TypeScript compilation passed.
+- Prettier validation passed.
+- The registry remains transport-free and contains no `bc-bot` or persistence
+  dependency.
+
+This is a contract and failure-model milestone only. It does not prove that
+Bondage Club emits the required confirmation event or that the adapter can map
+real BC lock metadata correctly.
+
+### BC adapter implementation result
+
+The first real transport slice now lives in
+`bin/action-layer/adapters/bc-appearance.ts`. It uses the actual `bc-bot`
+character appearance API to observe bundles, add items, and remove by group.
+The adapter remains outside legacy feature systems and is the only action-layer
+file currently permitted to import `bc-bot`.
+
+The adapter translates `Group`, `Name`, and `Property.TypeRecord` into domain
+identity values. It classifies explicit lock ownership as locked and incomplete
+lock markers such as `LockSet` or a password without ownership as ambiguous.
+Both locked and ambiguous items are preserved when the removal policy requires
+protected-item preservation. Additions never silently replace an occupied
+group, and mutations return `in_progress` because no connector confirmation is
+requested. When `requireServerConfirmation` is enabled, the adapter waits for
+and validates an inbound authoritative appearance snapshot before returning
+`completed`.
+
+Validation completed for this phase:
+
+- 8 BC adapter contract tests passed, including confirmation, timeout,
+  disconnect, reconnect, exception, and changed-group cases.
+- The import-boundary test permits `bc-bot` only in the dedicated adapter and
+  continues to reject legacy imports elsewhere in the action layer.
+- Strict TypeScript compilation and Prettier validation passed.
+- No legacy caller or file under `bin/games/**` was modified.
+
+The next gate is production qualification: verify the event correlation and
+epoch behavior in a real room, then connect confirmed results to durable
+workflow transitions without migrating legacy callers prematurely.
+
+### Confirmation, recovery, and workload implementation result
+
+The BC adapter now supports opt-in confirmation through
+`AppearanceMutationPolicy.requireServerConfirmation`. It subscribes before
+dispatch, accepts only an inbound appearance snapshot matching the requested
+post-state, and returns `completed` only after that observation. Without the
+policy flag it retains the prior `in_progress` local-dispatch behavior.
+
+Confirmation cleanup is performed on accepted confirmation, timeout,
+cancellation, connector disconnect, and reconnect failure. Connector epochs
+advance on disconnect or connection identity change; stale pending registry
+entries are invalidated and the action is returned as a retryable transient
+failure. The adapter serializes operations per character, so an operation is
+correlated by member, operation ID, epoch, timestamp, and an exact expected
+appearance predicate rather than assuming a BC packet contains the bot's
+operation ID.
+
+Recovery tests now cover delayed or missing confirmation, connector loss and
+new-epoch recovery, adapter exceptions, duplicate confirmation delivery, and a
+replacement appearing in a target group before removal. The workload harness
+now reports queue wait, event-loop delay p99/max, heap start/end/peak, CPU,
+GC pause p95/max, synthetic timer peak, listener peak, retry count, and
+confirmation-timeout count. Its listener, retry, and confirmation-timeout
+values are currently zero because the synthetic harness does not yet create
+those dependency events; the adapter tests cover the corresponding lifecycle
+paths.
+
+This phase does not prove 30-minute stability, real-room packet behavior,
+durable restart recovery, or persistence correctness. Those remain explicit
+gates before feature migration.
+
+### Rollout and migration implementation result
+
+The next three migration gates now have an isolated, rollback-controlled
+implementation. `ActionLayerRolloutController` is registered through DI and
+uses `action_layer_bunny_appearance_enabled` and
+`action_layer_release_removal_enabled`, both defaulting to `false`.
+
+Each migrated operation acquires one lease before dispatch. The lease selects
+either the action or legacy path, prevents a second owner for the same
+operation ID, and is released only when that path finishes. Rollback stops new
+action-path starts and sends new operations to legacy while an existing action
+lease is allowed to finish. This prevents an old and new implementation from
+claiming the same in-flight operation.
+
+The Bunny slice migrates only artifact-owned WoodenSign cleanup during Bunny
+release. Restraint removal remains on the existing Bunny mutation flow because
+the action adapter does not yet apply Bunny colors, craft metadata, extended
+types, or consent padlocks. The release slice routes selected target removal
+through the action appearance service when enabled, with authoritative
+confirmation required; blocked, completed, and already-satisfied outcomes are
+terminal for that path and never fall back to the legacy mutator.
+
+Validation completed for this phase:
+
+- Rollout controller tests cover action selection, operation ownership,
+  disabled defaults, and rollback behavior.
+- Release migration coverage proves the enabled action path does not call the
+  legacy `RemoveItem` mutator.
+- Strict TypeScript and formatting checks pass.
+- The focused release suite passes the new migration test and nine of ten
+  existing tests; one unrelated legacy malformed-placeholder test remains
+  failing in `appearanceSync.ts`.
+
+The next qualification gate is a real-room rehearsal with both switches off,
+then one switch enabled at a time, recording confirmation latency, blocked
+removals, rollback behavior, and durable projection results. No default runtime
+configuration enables either migration switch.
+
+### BC call inventory and adapter boundary
+
+The runtime inventory covered non-test TypeScript under `bin/games/**`. Import
+counts are not action counts: many files import BC types, command parsers, or
+configuration structures without performing a transport operation. The
+following operation counts are approximate line-level matches and are used as
+scope indicators, not as production metrics:
+
+| Direct BC operation family                                | Approximate matches | Primary feature surfaces                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------- | ------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Appearance observe, add, remove, bundle, and update calls |                 129 | `veratown/shared/appearanceSync.ts`, `bunnyPunishmentService.ts`, `veratownReleaseSystem.ts`, `kennelSystem.ts`, `cageSystem.ts`, `showerSystem.ts`, `furnitureBondageSystem.ts`, `bedSystem.ts`, `catDogSystem.ts`, `casino.ts`, `casino/forfeits.ts`, `casino/forfeitService.ts`, `casino/blackjack.ts`, `casino/roulette.ts`, and `dare.ts` |
+| Lock application                                          |                   2 | `shared/consentPadlock.ts`, `shared/timerPasswordLock.ts`                                                                                                                                                                                                                                                                                      |
+| Messages and replies                                      |                 333 | `shared/messageSender.ts`, `casino.ts`, `casino/blackjack.ts`, `casino/roulette.ts`, `dare.ts`, `veratownNarrationUtils.ts`, and feature message systems                                                                                                                                                                                       |
+| Map object and trigger mutations                          |                  49 | `shared/abstractTileFeatureSystem.ts`, `bunnyParkSystemImplementation.ts`, `kennelSystem.ts`, `locationMonitorSystem.ts`, `cageSystem.ts`, `furnitureBondageSystem.ts`, `showerSystem.ts`, `windowSystem.ts`, `catDogSystem.ts`, `casino.ts`, and keypad systems                                                                               |
+| Teleport dispatch                                         |                   5 | `veratownReleaseSystem.ts`, `catDogSystem.ts`                                                                                                                                                                                                                                                                                                  |
+
+Supporting BC dependencies also occur throughout the feature tree:
+
+- `AssetGet`, `getExtendedAssetDef`, `isClothing`, `isBind`, and `isNaked`
+  drive asset validation, extended-item construction, release classification,
+  shower restoration, and nudity verification.
+- `InventoryGet`, `MakeAppearanceBundle`, `getAppearanceData`, and
+  `sendAppearanceUpdate` are used for slot inspection, snapshots, local
+  mutation flushing, and full-update dispatch.
+- `setItemPermission` changes room-level item permissions and is separate from
+  character appearance; the casino currently calls it directly.
+- `MapPos`, `MapPosition`, room map APIs, and connector lifecycle events provide
+  observed state and trigger ownership, not merely static configuration.
+- `CommandParser`, `RoomDefinition`, and room serialization are integration
+  concerns. They are BC dependencies but are not action operations and should
+  remain outside the first action-family migration.
+
+#### Adapter assumption register
+
+The following assumptions must be verified by adapter tests or live connector
+evidence before a caller is migrated:
+
+| Assumption                                                                       | Current evidence                                                                          | Required treatment                                                                                                                        |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `MakeAppearanceBundle()` is a usable pre-action local projection                 | Used by legacy sync, release, Bunny, and the isolated adapter                             | Re-observe immediately before every mutation; never call it authoritative server confirmation                                             |
+| `AddItem()` dispatches an item update and returns a usable runtime item          | `src/appearance.ts` exposes `AddItem(BC_AppearanceItem)`                                  | Verify asset/property normalization, server acceptance, and post-update observation; raw bundle construction is not yet proven sufficient |
+| `RemoveItem(group)` removes only the intended target                             | BC removal is group-based                                                                 | Re-observe the group, require exact identity match, preserve locked or ambiguous items, then verify absence                               |
+| `Property.LockedBy` and `Property.LockMemberNumber` identify effective ownership | Connector diagnostics expose these fields                                                 | Treat explicit ownership as locked; do not infer unlocked from missing fields alone                                                       |
+| `LockSet` or a password without ownership is safe to remove                      | Legacy data can contain incomplete lock shapes                                            | Classify as ambiguous and fail closed when preservation is enabled                                                                        |
+| `Property.TypeRecord` can be represented by one string                           | The current isolated adapter stringifies the raw record                                   | This is not verified for typed or modular assets; extended-item translation remains unsupported until asset-definition tests exist        |
+| `AssetGet(group, name)` is available and returns a valid BC asset                | Feature systems use it before `AddItem()`                                                 | The adapter must own lookup and reject missing assets; the current adapter does not yet perform this validation                           |
+| Local mutation completion implies server acceptance                              | Legacy code often observes local appearance after dispatch                                | Explicitly false; mutating results remain `in_progress` until connector confirmation                                                      |
+| Connector appearance events can be correlated to one operation                   | The adapter serializes one operation per member and matches the exact expected post-state | Keep member, operation ID, epoch, timestamp, and predicate checks; do not treat an uncorrelated packet as confirmation                    |
+| Connector connection identity is a reconnect epoch                               | The adapter advances an epoch on disconnect or connection identity change                 | Keep lifecycle tests and qualify the mapping against real reconnect behavior before durable retries                                       |
+| `flushUpdates()` or `sendAppearanceUpdate()` is safe to repeat                   | Legacy appearance sync uses both paths                                                    | Keep behind the adapter; prove idempotency and avoid retrying a mutation without re-observation                                           |
+| Map and room objects remain valid across room recreation                         | Feature systems retain map and connector references                                       | Add lifecycle-owned handles and invalidate them on disconnect or room replacement                                                         |
+| `MapPos` is authoritative after teleport                                         | Release and CatDog poll or observe it after `mapTeleport()`                               | Treat dispatch and arrival as separate results; direct `MapPos` assignment is not a supported fallback                                    |
+| `SendMessage()` means delivered message                                          | `MessageSender` reports a boolean-style send result                                       | Expose queued, sent, rejected, and unknown delivery; do not make durable workflow success depend on queueing alone                        |
+| Map trigger registration is idempotent                                           | Features add and remove tile and region callbacks directly                                | Return stable registration handles and guarantee cleanup on disable, reload, room recreation, and shutdown                                |
+| `setMapFromData()` is a safe tile update                                         | Admin code uses it for full map replacement                                               | Treat as a separate privileged map-replacement operation with validation and rollback; it is not covered by tile actions                  |
+| Item permission changes affect only the intended room state                      | Casino calls `setItemPermission()` directly                                               | Add room-scoped observe/update permission actions with authorization and confirmation                                                     |
+
+#### Unsupported BC operations in the current action layer
+
+The current `BCAppearanceActionAdapter` does **not** support these operations.
+They must not be called through it or inferred from its successful local
+return:
+
+- applying, changing, or removing locks, including safeword
+  `RemoveOnUnlock`, exclusive, password, and timer-password semantics;
+- validated `AssetGet` lookup, extended asset-definition resolution, typed or
+  modular `TypeRecord` construction, and `isClothing`/`isBind`/`isNaked`
+  classification;
+- full bundle application through `Appearance.applyBundle()`;
+- explicit `flushUpdates()` or `sendAppearanceUpdate()` coordination;
+- appearance property-only updates and item permission changes;
+- message send, reply, whisper, emote, delivery confirmation, and
+  deduplication;
+- movement commands, teleportation, arrival confirmation, and stale position
+  rejection;
+- map object updates, full map replacement, tile triggers, enter-region
+  triggers, leave-region triggers, and trigger lifecycle handles;
+- inventory semantics beyond identity observation, including inventory
+  ownership, permission, and asset-specific property inspection;
+- `CommandParser`, room serialization, and other command or room bootstrap
+  concerns, which are integration boundaries rather than action primitives.
+
+These unsupported operations are intentional boundaries, not missing fallbacks.
+Legacy callers remain unchanged until an owning action contract, adapter
+implementation, contract tests, failure behavior, and rollback control exist.
 
 ## Goals
 
@@ -701,10 +974,14 @@ Migration is incremental and should preserve existing behavior after each step.
 ### Phase 0: Boundaries and inventory
 
 - [x] Freeze the initial domain action vocabulary and result statuses.
-- [ ] Inventory all direct `bc-bot` calls in feature systems.
+- [x] Inventory all direct `bc-bot` calls in feature systems, including
+      appearance, locks, messages, movement, map, permissions, and asset
+      resolution. Counts and primary call surfaces are recorded above.
 - [x] Identify the first existing appearance behavior and define an isolated
       replacement contract.
-- [ ] Document every adapter assumption and unsupported BC operation.
+- [x] Document every currently identified adapter assumption and unsupported BC
+      operation. The register is a living gate and must grow when new call
+      sites are found.
 - [ ] Add operation and correlation IDs to legacy callers where missing.
 - [x] Enforce the new-to-old import boundary in the isolated package.
 
@@ -713,9 +990,13 @@ Migration is incremental and should preserve existing behavior after each step.
 - [x] Extract domain identities, lock states, and appearance policies.
 - [x] Prove planner, executor, scheduler, and adapter behavior with an
       in-memory contract double.
+- [x] Add the initial BC translation and local-dispatch adapter without
+      changing legacy callers.
 - [ ] Wrap `syncAppearanceMutation` behind a real appearance action adapter.
 - [ ] Move release removal classification behind the same removal contract.
-- [ ] Add real-adapter contract tests and focused Bunny regression cases.
+- [x] Add real-adapter contract tests for confirmation, timeout, disconnect,
+      reconnect, exceptions, and changed group occupancy. Focused Bunny
+      regression cases remain pending.
 - [ ] Preserve and verify the current `RemoveOnUnlock` safeword behavior in
       the migrated path.
 
@@ -751,23 +1032,49 @@ Migration is incremental and should preserve existing behavior after each step.
 
 ### Next implementation steps
 
-The next steps are deliberately ordered to preserve the new/old boundary:
+The following sequence is the implementation checklist for the layered model.
+Each step has a completion gate and preserves the new/old boundary:
 
-1. Inventory the real appearance call paths and identify the smallest
-   `bc-bot` surface needed for observation, add, remove, and confirmation.
-2. Add a real adapter under `bin/action-layer/adapters/` only. Keep all
-   `bc-bot` imports inside that adapter and add contract tests using a mocked
-   connector or character.
-3. Implement authoritative confirmation, listener cleanup, reconnect epochs,
-   and stale-confirmation rejection for appearance mutations.
-4. Run failure-injection tests for connector loss, delayed confirmation,
-   rejected mutations, changed group occupancy, and process recovery.
-5. Complete the inventory and 30-minute performance harness before any Bunny
-   or release caller is migrated.
-6. Add a feature flag or DI-selected implementation, then migrate one narrow
-   Bunny appearance operation with the old path available for rollback.
-7. Migrate release removal only after locked, unlocked, ambiguous, and
-   `RemoveOnUnlock` cases pass against the real adapter.
+1. [x] Complete the feature-system BC call-path inventory. Record direct
+       appearance, lock, message, movement, map, permission, and asset calls,
+       then map each call to the smallest adapter capability. The inventory is
+       complete for the current non-test `bin/games/**` tree; new call sites
+       must extend it.
+2. [x] Define the transport-neutral adapter capability and confirmation
+       contracts. The isolated model includes observation, mutation capability,
+       cancellation, and connection epoch correlation. The BC-specific event
+       mapping and connector implementation remain part of step 3.
+3. [x] Implement the initial real appearance adapter behind the existing
+       `AppearanceActionAdapter` and `AppearanceActionService`. Translate BC item
+       and lock metadata into domain values without leaking BC types into domain,
+       planner, workflow, or test modules. Confirmation is now opt-in and
+       lifecycle-managed; durable integration remains pending.
+4. [x] Add adapter contract tests with mocked character and connector
+       behavior. The current tests cover missing slots, unlocked devices,
+       ambiguous lock metadata, occupied groups, authoritative post-state,
+       timeout, disconnect, reconnect, exceptions, and local-dispatch status.
+5. [x] Add initial confirmation lifecycle protection to the real adapter.
+       Listeners and timers are removed on success, timeout, cancellation,
+       connector loss, and reconnect failure. Production room qualification
+       remains pending.
+6. [x] Add adapter-level failure-injection and recovery tests for delayed and
+       missing confirmations, disconnect/reconnect, changed group occupancy,
+       adapter exceptions, and duplicate delivery. Process-recovery state
+       handoff and durable workflow recovery remain pending.
+7. [x] Extend the workload harness with event-loop delay, queue wait, heap,
+       timers/listeners, CPU, retries, confirmation-timeout, and GC metrics.
+       The required 30-minute 19-character qualification and 25-character
+       headroom run remain pending.
+8. [x] Add DI and feature-flag selection with rollback before migration. The
+       rollout controller stops new action-path starts, preserves operation
+       ownership, and routes new work to legacy during rollback.
+9. [x] Migrate one narrow Bunny appearance operation: artifact-owned sign
+       cleanup. Restraint construction, safeword `RemoveOnUnlock`, persistence,
+       and full Bunny staging comparison remain pending.
+10. [x] Add the release-removal action branch for selected live targets. It
+        requires authoritative confirmation and never falls back to legacy for
+        the same operation. Full release qualification for unlocked, locked,
+        ambiguous, wrong-lock, and durable recovery cases remains pending.
 
 No step in this sequence should modify `bin/games/**` until the real adapter,
 confirmation semantics, failure tests, and rollback control are ready.
@@ -837,13 +1144,16 @@ legacy integration:
 3. [x] Add explicit tests for locked, ambiguous, unlocked, idempotent, and
        timeout behavior.
 4. [x] Add a dependency-boundary test and a short 19-character workload.
-5. [ ] Implement authoritative behavior in a real `bc-bot` adapter.
-6. [ ] Validate server confirmation, persistence, restart recovery, and
+5. [x] Add the workflow-facing appearance service and versioned workflow state
+       model without persistence or legacy imports.
+6. [x] Implement initial opt-in authoritative behavior in a real `bc-bot`
+       adapter with lifecycle cleanup and epoch-aware recovery.
+7. [ ] Validate server confirmation, persistence, restart recovery, and
        rollback.
-7. [ ] Use the proven appearance adapter shape for movement, communication,
+8. [ ] Use the proven appearance adapter shape for movement, communication,
        and map actions.
 
-The next milestone is not a Bunny migration. It is a real appearance adapter
-with confirmation and failure-injection evidence, still isolated from legacy
-callers. Only after that milestone passes should a feature-flagged vertical
-slice be introduced.
+The next milestone is live qualification of the two disabled-by-default
+migration switches, followed by durable projection and rollback evidence. The
+full Bunny and release workflows must not be migrated until lock, asset,
+restart, persistence, and staging behavior are proven.

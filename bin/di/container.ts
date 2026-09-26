@@ -238,4 +238,6 @@ export const DIServiceKeys = {
     KEYPAD_DOOR_SYSTEM: "keypadDoorSystem",
     KIDNAPPERS_GAME_PERSISTENCE: "kidnappersGamePersistence",
     KIDNAPPERS_GAME_LIFECYCLE_SERVICE: "kidnappersGameLifecycleService",
+    ACTION_LAYER_ROLLOUT: "actionLayerRollout",
+    ACTION_LAYER_APPEARANCE_SERVICE: "actionLayerAppearanceService",
 } as const;
