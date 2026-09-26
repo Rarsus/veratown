@@ -14,6 +14,36 @@ export interface ActionLayerWorkloadOptions {
     readonly failEvery?: number;
 }
 
+export interface ActionLayerWorkloadThresholds {
+    readonly maxP95LatencyMs?: number;
+    readonly maxP99LatencyMs?: number;
+    readonly maxQueueWaitP95Ms?: number;
+    readonly maxEventLoopDelayP99Ms?: number;
+    readonly maxHeapGrowthBytes?: number;
+    readonly maxActiveTimersPeak?: number;
+    readonly maxFailedCount?: number;
+    readonly requireEmptyQueues?: boolean;
+}
+
+export interface ActionLayerWorkloadQualification {
+    readonly passed: boolean;
+    readonly violations: readonly string[];
+}
+
+export interface ActionLayerSoakOptions extends ActionLayerWorkloadOptions {
+    readonly durationMs: number;
+    readonly thresholds?: ActionLayerWorkloadThresholds;
+}
+
+export interface ActionLayerSoakResult {
+    readonly durationMs: number;
+    readonly requestedDurationMs: number;
+    readonly iterations: number;
+    readonly samples: readonly ActionLayerWorkloadResult[];
+    readonly aggregate: ActionLayerWorkloadResult;
+    readonly qualification: ActionLayerWorkloadQualification;
+}
+
 export interface ActionLayerWorkloadResult {
     readonly characterCount: number;
     readonly actionCount: number;
@@ -61,6 +91,12 @@ function percentile(values: readonly number[], percentage: number): number {
 function validatePositiveInteger(value: number, name: string): void {
     if (!Number.isInteger(value) || value < 1) {
         throw new Error(`${name} must be a positive integer`);
+    }
+}
+
+function validateThreshold(value: number | undefined, name: string): void {
+    if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+        throw new Error(`${name} must be a non-negative finite number`);
     }
 }
 
@@ -224,5 +260,140 @@ export async function runActionLayerWorkload(
         retryCount: 0,
         confirmationTimeoutCount: 0,
         pendingByCharacter: scheduler.snapshot().pendingByCharacter,
+    };
+}
+
+function aggregateWorkloads(
+    samples: readonly ActionLayerWorkloadResult[],
+): ActionLayerWorkloadResult {
+    const first = samples[0];
+    const totalActions = samples.reduce(
+        (total, sample) => total + sample.actionCount,
+        0,
+    );
+    const completedCount = samples.reduce(
+        (total, sample) => total + sample.completedCount,
+        0,
+    );
+    const failedCount = samples.reduce(
+        (total, sample) => total + sample.failedCount,
+        0,
+    );
+    const maxOf = (selector: (sample: ActionLayerWorkloadResult) => number) =>
+        Math.max(...samples.map(selector));
+    return {
+        ...first,
+        characterCount: Math.max(
+            ...samples.map((sample) => sample.characterCount),
+        ),
+        actionCount: totalActions,
+        completedCount,
+        failedCount,
+        p50LatencyMs: maxOf((sample) => sample.p50LatencyMs),
+        p95LatencyMs: maxOf((sample) => sample.p95LatencyMs),
+        p99LatencyMs: maxOf((sample) => sample.p99LatencyMs),
+        maxLatencyMs: maxOf((sample) => sample.maxLatencyMs),
+        queueWaitP95Ms: maxOf((sample) => sample.queueWaitP95Ms),
+        eventLoopDelayP99Ms: maxOf((sample) => sample.eventLoopDelayP99Ms),
+        eventLoopDelayMaxMs: maxOf((sample) => sample.eventLoopDelayMaxMs),
+        heapUsedStartBytes: Math.min(
+            ...samples.map((sample) => sample.heapUsedStartBytes),
+        ),
+        heapUsedEndBytes: samples.at(-1)!.heapUsedEndBytes,
+        heapUsedPeakBytes: maxOf((sample) => sample.heapUsedPeakBytes),
+        cpuUserMs: samples.reduce(
+            (total, sample) => total + sample.cpuUserMs,
+            0,
+        ),
+        cpuSystemMs: samples.reduce(
+            (total, sample) => total + sample.cpuSystemMs,
+            0,
+        ),
+        gcPauseP95Ms: maxOf((sample) => sample.gcPauseP95Ms),
+        gcPauseMaxMs: maxOf((sample) => sample.gcPauseMaxMs),
+        activeTimersPeak: maxOf((sample) => sample.activeTimersPeak),
+        activeListenersPeak: maxOf((sample) => sample.activeListenersPeak),
+        retryCount: samples.reduce(
+            (total, sample) => total + sample.retryCount,
+            0,
+        ),
+        confirmationTimeoutCount: samples.reduce(
+            (total, sample) => total + sample.confirmationTimeoutCount,
+            0,
+        ),
+        pendingByCharacter: samples.at(-1)!.pendingByCharacter,
+    };
+}
+
+export function evaluateActionLayerWorkload(
+    result: ActionLayerWorkloadResult,
+    thresholds: ActionLayerWorkloadThresholds = {},
+): ActionLayerWorkloadQualification {
+    const violations: string[] = [];
+    const checks: readonly [string, number | undefined, number][] = [
+        ["p95 latency", thresholds.maxP95LatencyMs, result.p95LatencyMs],
+        ["p99 latency", thresholds.maxP99LatencyMs, result.p99LatencyMs],
+        ["queue wait p95", thresholds.maxQueueWaitP95Ms, result.queueWaitP95Ms],
+        [
+            "event loop delay p99",
+            thresholds.maxEventLoopDelayP99Ms,
+            result.eventLoopDelayP99Ms,
+        ],
+        [
+            "heap growth",
+            thresholds.maxHeapGrowthBytes,
+            result.heapUsedEndBytes - result.heapUsedStartBytes,
+        ],
+        [
+            "active timers",
+            thresholds.maxActiveTimersPeak,
+            result.activeTimersPeak,
+        ],
+        ["failed actions", thresholds.maxFailedCount, result.failedCount],
+    ];
+    for (const [name, maximum, actual] of checks) {
+        if (maximum !== undefined && actual > maximum) {
+            violations.push(`${name} ${actual} exceeds ${maximum}`);
+        }
+    }
+    if (
+        thresholds.requireEmptyQueues !== false &&
+        Object.keys(result.pendingByCharacter).length > 0
+    ) {
+        violations.push("pending character queues remain");
+    }
+    return { passed: violations.length === 0, violations };
+}
+
+export async function runActionLayerSoak(
+    options: ActionLayerSoakOptions,
+): Promise<ActionLayerSoakResult> {
+    if (!Number.isInteger(options.durationMs) || options.durationMs < 1) {
+        throw new Error("durationMs must be a positive integer");
+    }
+    const thresholds = options.thresholds ?? {};
+    validateThreshold(thresholds.maxP95LatencyMs, "maxP95LatencyMs");
+    validateThreshold(thresholds.maxP99LatencyMs, "maxP99LatencyMs");
+    validateThreshold(thresholds.maxQueueWaitP95Ms, "maxQueueWaitP95Ms");
+    validateThreshold(
+        thresholds.maxEventLoopDelayP99Ms,
+        "maxEventLoopDelayP99Ms",
+    );
+    validateThreshold(thresholds.maxHeapGrowthBytes, "maxHeapGrowthBytes");
+    validateThreshold(thresholds.maxActiveTimersPeak, "maxActiveTimersPeak");
+    validateThreshold(thresholds.maxFailedCount, "maxFailedCount");
+    const startedAt = Date.now();
+    const samples: ActionLayerWorkloadResult[] = [];
+    do {
+        samples.push(await runActionLayerWorkload(options));
+    } while (Date.now() - startedAt < options.durationMs);
+    const aggregate = aggregateWorkloads(samples);
+    return {
+        durationMs: Date.now() - startedAt,
+        requestedDurationMs: options.durationMs,
+        iterations: samples.length,
+        samples,
+        aggregate,
+        qualification: evaluateActionLayerWorkload(aggregate, thresholds),
     };
 }

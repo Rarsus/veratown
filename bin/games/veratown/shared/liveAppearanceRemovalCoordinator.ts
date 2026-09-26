@@ -8,6 +8,7 @@ import type {
     ActionLayerRolloutController,
     AppearanceActionService,
 } from "../../../action-layer";
+import type { VeratownWorkflowRecovery } from "./veratownWorkflowRecovery";
 
 export interface LiveRemovalTarget {
     group: string;
@@ -20,6 +21,7 @@ export interface LiveRemovalTarget {
 export interface ActionLayerRemovalMigration {
     readonly appearanceService: AppearanceActionService<API_Character>;
     readonly rollout: ActionLayerRolloutController;
+    readonly workflowRecovery?: VeratownWorkflowRecovery;
 }
 
 function targetKey(target: LiveRemovalTarget): string {
@@ -73,6 +75,27 @@ export class LiveAppearanceRemovalCoordinator {
         target: LiveRemovalTarget,
     ): Promise<void> {
         let lastError: unknown;
+        const workflowRecovery = this.actionLayer?.workflowRecovery;
+        let workflowState = workflowRecovery
+            ? await workflowRecovery.start(
+                  `${character.MemberNumber}:${releaseOperation}:${targetKey(target)}`,
+                  character.MemberNumber,
+                  "release",
+                  { target: `${target.group}/${target.name}` },
+              )
+            : undefined;
+        if (workflowState && workflowRecovery) {
+            workflowState = await workflowRecovery.resume(workflowState);
+        }
+        const finishWorkflow = async (
+            outcome: "completed" | "failed",
+        ): Promise<void> => {
+            if (!workflowState || !workflowRecovery) return;
+            workflowState =
+                outcome === "completed"
+                    ? await workflowRecovery.complete(workflowState)
+                    : await workflowRecovery.fail(workflowState);
+        };
         for (let attempt = 0; attempt < this.maxAttempts; attempt++) {
             const current = filterValidAppearanceItems(
                 character.Appearance.MakeAppearanceBundle(),
@@ -80,7 +103,10 @@ export class LiveAppearanceRemovalCoordinator {
             const matches = current.filter((item) =>
                 matchesTarget(item, target),
             );
-            if (matches.length === 0) return;
+            if (matches.length === 0) {
+                await finishWorkflow("completed");
+                return;
+            }
 
             // Apply the same fail-closed release classification before either
             // implementation path. The action adapter must not broaden the
@@ -90,6 +116,7 @@ export class LiveAppearanceRemovalCoordinator {
                     .filter((item) => item.Group === target.group)
                     .some((item) => !isEffectivelyUnlockedBondageItem(item))
             ) {
+                await finishWorkflow("failed");
                 return;
             }
 
@@ -121,9 +148,13 @@ export class LiveAppearanceRemovalCoordinator {
                         );
                     if (
                         result.status === "completed" ||
-                        result.status === "already_satisfied" ||
-                        result.status === "blocked"
+                        result.status === "already_satisfied"
                     ) {
+                        await finishWorkflow("completed");
+                        return;
+                    }
+                    if (result.status === "blocked") {
+                        await finishWorkflow("failed");
                         return;
                     }
                     throw new Error(
@@ -157,12 +188,16 @@ export class LiveAppearanceRemovalCoordinator {
                 const remaining = filterValidAppearanceItems(
                     character.Appearance.MakeAppearanceBundle(),
                 ).some((item) => matchesTarget(item, target));
-                if (!remaining) return;
+                if (!remaining) {
+                    await finishWorkflow("completed");
+                    return;
+                }
             } catch (error) {
                 lastError = error;
             }
         }
 
+        await finishWorkflow("failed");
         if (lastError) throw lastError;
         throw new Error(
             `Live appearance removal did not complete for ${target.group}/${target.name}`,

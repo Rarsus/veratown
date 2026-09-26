@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.14"
-status: "Proposed - generated BC adapter translation and Bunny/release contract gates implemented; live qualification pending"
+version: "1.16"
+status: "Proposed - local Bunny/release qualification and durable recovery boundaries implemented behind disabled switches; live evidence pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -32,9 +32,25 @@ dependency surface.
 ## Implementation Status
 
 This document describes both the target architecture and the current delivery
-state. The completed work is intentionally limited to the isolated package at
-`bin/action-layer/`. No legacy feature system, Bunny workflow, persistence
-service, or runtime registration has been migrated.
+state. The completed work spans the isolated package at `bin/action-layer/`
+and two narrow, opt-in integration slices for Bunny restraint application and
+release target removal. No broad feature-system migration has occurred. Both
+runtime switches remain disabled by default, and live production evidence is
+still pending.
+
+### Current snapshot
+
+- Qualification, recovery, and soak tests pass, with strict TypeScript and
+  formatting checks passing.
+- Generated BC typed and modular definitions are translated only at the BC
+  adapter boundary, including copy-chain resolution.
+- Bunny restraint application and selected release removal have action paths,
+  rollout leases, and rollback routing, but both switches are disabled by
+  default.
+- The Bunny action path projects its artifact from the adapter-returned
+  confirmed observation and journals the operation before mutation.
+- Live-room confirmation, production persistence validation, and the actual
+  30-minute 19-character qualification remain open evidence gates.
 
 ### Completed groundwork
 
@@ -100,40 +116,52 @@ service, or runtime registration has been migrated.
       behavior was removed.
 - [x] Generated BC typed-definition copy-chain translation and release
       lock-preservation qualification coverage.
-- [x] 58 focused action-layer tests passing, with strict TypeScript and
-      formatting checks passing after the confirmation contract slice.
+- [x] Local Bunny and release staging qualification compares requested, local,
+      confirmed, and persisted projections, including ownership, duplicate
+      protection, rollback, protected locks, ambiguity, and changed groups.
+- [x] Storage-agnostic durable workflow journal with optimistic versions,
+      idempotent operation keys, restart restoration, terminal-state protection,
+      and persistence-failure tests.
+- [x] Veratown recovery boundary wired into the opt-in Bunny and release
+      migration interfaces; journal completion follows confirmed durable
+      projection.
+- [x] Soak runner with retained samples, hard threshold evaluation, a
+      19-character qualification command, and a 25-character headroom mode.
 
 ### Explicitly not complete
 
 - [ ] Production qualification of authoritative connector confirmation. The
-      adapter now supports it when `requireServerConfirmation` is enabled, but
-      real-room evidence, durable workflow integration, and live reconnect
-      qualification remain pending.
+      adapter and recovery boundary support it when
+      `requireServerConfirmation` is enabled, but real-room evidence and live
+      reconnect qualification remain pending.
 - [ ] Movement, communication, map, permission, and inventory adapters.
-- [ ] Durable workflow orchestration, restart/reconnect recovery, audits, or
-      persistence wiring. The current workflow model is pure and in-memory.
+- [ ] Production storage implementation and live restart/reconnect rehearsal
+      for the journal. Existing artifact/profile stores remain the source of
+      truth until that rehearsal passes.
 - [ ] Full Bunny or release migration. Feature flags, DI registration, and
       rollback switching exist only for the narrow migrated slices.
-- [ ] The required 30-minute 19-character soak test and production performance
-      gate. The current workload is a short deterministic harness, not a release
-      qualification run.
+- [ ] The actual 30-minute 19-character soak and production performance gate.
+      Run `pnpm qualification:action-layer` and
+      `pnpm qualification:action-layer -- --headroom` in the qualification
+      environment; short deterministic command runs are covered by tests.
 - [ ] Feature-system migration. The inventory found approximately 129 direct
       appearance operations, 2 lock applications, 333 message or reply calls,
       49 map mutations, and 5 teleport calls in non-test feature code.
-- [ ] Full Bunny punishment migration. Restraint construction, extended-item
-      configuration, consent padlocks, and Bunny persistence remain on the
-      legacy path.
+- [ ] Full Bunny punishment migration. The restraint-only action path and
+      journal boundary exist behind a disabled switch, but legacy remains
+      default until production storage, expiry recovery rehearsal, and live
+      qualification are complete.
 - [ ] Full release workflow migration. The action path covers selected live
       removal targets, while classification, nudity, teleport, parole, and
       durable release transitions remain legacy-owned.
 
-The isolated package is therefore a testable foundation, not production-ready
-action infrastructure. The BC adapter can now await an inbound authoritative
-appearance snapshot, but it remains isolated from legacy callers until live
-connector evidence, durable workflow integration, and rollback controls are
-complete.
+The action layer is therefore a testable foundation with two narrow pilot
+integration slices, not production-ready action infrastructure. The BC adapter
+can await an inbound authoritative appearance snapshot, but broad feature
+callers remain on legacy paths until live connector evidence, durable workflow
+integration, and rollback controls are complete.
 
-### Latest implementation result
+### Historical foundation milestone
 
 The latest isolated slice added the workflow-facing appearance service and a
 pure workflow state model. The service is now the intended admission boundary
@@ -149,14 +177,14 @@ Validation completed for this slice:
 - The existing appearance service and adapter tests passed.
 - Strict TypeScript compilation passed.
 - Prettier validation passed after formatting the new model and tests.
-- No files under `bin/games/**` were modified and the import boundary remains
-  intact.
+- At that milestone no files under `bin/games/**` were modified; later narrow
+  Bunny and release integration slices are documented below.
 
 This result advances the layered foundation but does not advance the migration
 boundary. The next production-relevant evidence still requires a real adapter,
 authoritative connector confirmation, and failure-injection coverage.
 
-### Current implementation result
+### Historical confirmation milestone
 
 The confirmation phase added a transport-neutral capability contract and an
 in-memory confirmation registry. Pending appearance operations are correlated
@@ -177,7 +205,7 @@ This is a contract and failure-model milestone only. It does not prove that
 Bondage Club emits the required confirmation event or that the adapter can map
 real BC lock metadata correctly.
 
-### BC adapter implementation result
+### Initial BC adapter milestone
 
 The first real transport slice now lives in
 `bin/action-layer/adapters/bc-appearance.ts`. It uses the actual `bc-bot`
@@ -202,7 +230,8 @@ Validation completed for this phase:
 - The import-boundary test permits `bc-bot` only in the dedicated adapter and
   continues to reject legacy imports elsewhere in the action layer.
 - Strict TypeScript compilation and Prettier validation passed.
-- No legacy caller or file under `bin/games/**` was modified.
+- At this milestone no legacy caller or file under `bin/games/**` was modified;
+  later narrow rollout integration is documented below.
 
 The next gate is production qualification: verify the event correlation and
 epoch behavior in a real room, then connect confirmed results to durable
@@ -243,7 +272,8 @@ gates before feature migration.
 
 The next three migration gates now have an isolated, rollback-controlled
 implementation. `ActionLayerRolloutController` is registered through DI and
-uses `action_layer_release_removal_enabled`, defaulting to `false`.
+uses `action_layer_release_removal_enabled`, defaulting to `false`; the Bunny
+switch is also disabled by default.
 
 Each migrated operation acquires one lease before dispatch. The lease selects
 either the action or legacy path, prevents a second owner for the same
@@ -256,8 +286,8 @@ The Bunny punishment system now has an opt-in restraint-only action path. There
 is no Bunny sign application or cleanup. With the switch disabled, restraint
 application remains on the legacy mutation flow. With it enabled, the action
 adapter applies asset lookup, permission checks, colors, craft metadata,
-extended types, and consent-padlock semantics. The release slice routes selected target removal
-through the action appearance service when enabled, with authoritative
+extended types, and consent-padlock semantics. The release slice routes
+selected target removal through the action appearance service when enabled, with authoritative
 confirmation required; blocked, completed, and already-satisfied outcomes are
 terminal for that path and never fall back to the legacy mutator.
 
@@ -268,9 +298,8 @@ Validation completed for this phase:
 - Release migration coverage proves the enabled action path does not call the
   legacy `RemoveItem` mutator.
 - Strict TypeScript and formatting checks pass.
-- The focused release suite passes the new migration test and nine of ten
-  existing tests; one unrelated legacy malformed-placeholder test remains
-  failing in `appearanceSync.ts`.
+- The focused Bunny/release run passes 30 of 31 tests; one unrelated legacy
+  malformed-placeholder test remains failing in `appearanceSync.ts`.
 
 The next qualification gate is a real-room rehearsal with the release switch
 off, then enabled, recording confirmation latency, blocked
@@ -301,13 +330,14 @@ Validation completed:
 - No new runtime migration switch was enabled and no action-layer path was
   mixed into legacy mutation execution by this change.
 
-### Phase 1 appearance foundation implementation result
+### Historical Phase 1 appearance foundation milestone
 
 The shared `syncAppearanceMutation` boundary now accepts an explicit,
 single-item action mutation declaration containing the action service, item
 identity, operation, and policy. When present, it executes only the action
-service and does not invoke the legacy mutation callback. Bunny restraint
-mutations remain on the legacy path until their full intent contract is ready.
+service and does not invoke the legacy mutation callback. The legacy Bunny
+path remains the default, while the separate restraint-only action path is
+available behind its rollout switch.
 
 Release removal now performs the effective-unlock, bondage, neck, and
 ambiguous-lock safety classification before selecting an implementation path.
@@ -320,9 +350,11 @@ construction. Regression coverage verifies that a safeword padlock with
 `RemoveOnUnlock` is still treated as protected by release classification. The
 full Bunny restraint migration remains intentionally pending because colors,
 craft metadata, extended types, permission checks, and consent-padlock
-application are not yet represented by the action contract.
+application are now represented by the narrow action contract. The remaining
+gates are authoritative projection into the durable Bunny artifact, live
+qualification, restart recovery, and rollback evidence.
 
-Validation completed for this phase:
+Validation recorded for that phase:
 
 - The focused synchronization/Bunny/release run passed 43 of 44 tests.
 - The new action-bridge, release ownership, and `RemoveOnUnlock` tests passed.
@@ -1096,7 +1128,6 @@ The Bunny suite should explicitly cover:
 - wrong lock type rejection;
 - unlocked device removal by the general release workflow;
 - Bunny-specific expiry cleanup;
-- sign loss and restoration;
 - server confirmation and persistence of the observed bundle;
 - duplicate punishment trigger and duplicate release.
 
@@ -1227,23 +1258,49 @@ Each step has a completion gate and preserves the new/old boundary:
         representative typed and modular assets, including copy-chain
         resolution and semantic option-name tests. Controlled-room and
         malformed/missing-definition qualification remains pending.
-12. [ ] Run Bunny restraint staging with the switch disabled and enabled, then
-        compare requested, local, confirmed, and persisted projections. Verify
-        one operation owner, rollback to legacy, and no duplicate item adds.
+12. [x] Add automated Bunny restraint staging with the switch disabled and
+        enabled, comparing requested, local, confirmed, and persisted
+        projections. The harness verifies one owner, rollback to legacy, and
+        no duplicate item adds; live-room evidence remains pending.
 13. [x] Add local release qualification coverage for unlocked, locked,
-        ambiguous, and action-path ownership cases. Real-room staging for
-        wrong-lock, changed-group, confirmation latency, and rollback remains
-        pending.
-14. [ ] Run release staging for unlocked, locked, ambiguous, wrong-lock, and
-        changed-group cases. Record confirmation latency, preserved items,
-        durable removal attempts, and rollback behavior.
-15. [ ] Add durable restart/reconnect recovery for active Bunny and release
-        operations before enabling either switch in production.
-16. [ ] Extend the workload harness into the 30-minute 19-character soak and
-        25-character headroom qualification with hard-threshold enforcement.
+        ambiguous, wrong-lock, changed-group, and action-path ownership cases.
+        The fail-closed matrix is automated; live-room staging remains pending.
+14. [x] Add automated release staging for unlocked, locked, ambiguous,
+        wrong-lock, and changed-group cases. The harness records confirmed and
+        persisted projections and rollback ownership; real-room confirmation
+        latency and durable-store evidence remain pending.
+15. [x] Add the durable workflow journal, optimistic versions, idempotent
+        operation keys, persistence-failure handling, and restart restoration
+        boundary for active Bunny and release operations. Production storage
+        and live reconnect rehearsal remain pending.
+16. [x] Extend the workload harness into a repeated soak with retained samples
+        and hard-threshold enforcement. The repository provides runnable
+        19-character and 25-character headroom commands; the actual 30-minute
+        qualification run remains an external gate.
 
-No step in this sequence should modify `bin/games/**` until the real adapter,
-confirmation semantics, failure tests, and rollback control are ready.
+### Next Course to Full Layered Model
+
+The next migration sequence is intentionally evidence-driven:
+
+1. Run the controlled-room Bunny and release rehearsals with both switches
+   disabled, then enabled, and retain confirmation, rollback, and journal
+   records.
+2. Run the 30-minute 19-character qualification and the 25-character
+   headroom command. Do not enable either switch until the hard thresholds and
+   restart/reconnect checks pass.
+3. Migrate communication and movement adapters, starting with narration,
+   notifications, and position synchronization.
+4. Migrate map operations and trigger lifecycle, including room recreation and
+   duplicate registration cleanup.
+5. Extract the full Bunny and release workflows around the durable recovery
+   boundary, then migrate kennel, cage, and furniture workflows one at a time.
+6. Add enforcement checks for direct BC mutations in migrated workflows and
+   remove legacy mutation paths only after rollback evidence is retained.
+
+Steps 9 through 13 intentionally modify only the explicitly scoped Bunny and
+release integration surfaces. Broader `bin/games/**` migrations remain gated
+until real adapter evidence, confirmation semantics, failure tests, durable
+projection, and rollback control are ready.
 
 ## Rollout and Rollback
 
@@ -1300,8 +1357,8 @@ The action layer is ready for production use when:
 
 ## Initial Implementation Recommendation
 
-The initial isolated slice is complete. It deliberately stopped before
-legacy integration:
+The initial isolated slice is complete. Narrow legacy integration has since
+been added behind disabled rollout switches:
 
 1. [x] Define `AppearanceItemIdentity`, `AppearanceMutationPolicy`, and
        `ActionResult`.

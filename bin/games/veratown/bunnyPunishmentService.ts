@@ -34,10 +34,13 @@ import type {
     ActionLayerRolloutController,
     AppearanceActionService,
 } from "../../action-layer";
+import type { AppearanceObservation } from "../../action-layer/domain";
+import type { VeratownWorkflowRecovery } from "./shared/veratownWorkflowRecovery";
 
 export interface BunnyActionLayerMigration {
     readonly appearanceService: AppearanceActionService<API_Character>;
     readonly rollout: ActionLayerRolloutController;
+    readonly workflowRecovery?: VeratownWorkflowRecovery;
 }
 
 export type BunnyPunishmentStatus =
@@ -296,12 +299,31 @@ export class BunnyPunishmentService {
         let mutationConfirmed = false;
         let authoritativeAppearance:
             AppearanceMutationContext["observedAppearance"] | undefined;
+        let confirmedActionAppearance: AppearanceObservation | undefined;
         const lease = this.actionLayer?.rollout.begin(
             "bunny-restraints",
             operationId,
         );
+        let workflowState:
+            Awaited<ReturnType<VeratownWorkflowRecovery["start"]>> | undefined;
         try {
             if (lease?.path === "action") {
+                if (this.actionLayer?.workflowRecovery) {
+                    workflowState =
+                        await this.actionLayer.workflowRecovery.start(
+                            operationId,
+                            character.MemberNumber,
+                            "bunny",
+                            {
+                                target: attemptedPieces.join(","),
+                                configuration: config.name,
+                            },
+                        );
+                    workflowState =
+                        await this.actionLayer.workflowRecovery.resume(
+                            workflowState,
+                        );
+                }
                 for (const piece of config.pieces) {
                     try {
                         const result =
@@ -354,6 +376,7 @@ export class BunnyPunishmentService {
                                     `failed to add ${bunnyPieceKey(piece)}`,
                             );
                         }
+                        confirmedActionAppearance = result.value;
                         configuredPieces.push(bunnyPieceKey(piece));
                     } catch (error) {
                         mutationErrors.push(
@@ -454,15 +477,20 @@ export class BunnyPunishmentService {
         const mutationError =
             mutationErrors.length > 0 ? mutationErrors.join("; ") : undefined;
 
-        const appliedAppearance =
-            authoritativeAppearance ??
-            character.Appearance.MakeAppearanceBundle();
         const appliedPieces = attemptedPieces.filter((piece) => {
             const [group, asset] = piece.split("/");
             const configuredPiece = config.pieces.find(
                 (candidate) =>
                     candidate.group === group && candidate.asset === asset,
             );
+            if (confirmedActionAppearance) {
+                return confirmedActionAppearance.items.some(
+                    (item) => item.group === group && item.asset === asset,
+                );
+            }
+            const appliedAppearance =
+                authoritativeAppearance ??
+                character.Appearance.MakeAppearanceBundle();
             return configuredPiece
                 ? hasBunnyRestraint(appliedAppearance, configuredPiece)
                 : appliedAppearance.some(
@@ -493,6 +521,9 @@ export class BunnyPunishmentService {
             operationId,
         };
         if (!complete) {
+            if (workflowState && this.actionLayer?.workflowRecovery) {
+                await this.actionLayer.workflowRecovery.fail(workflowState);
+            }
             return result;
         }
 
@@ -530,6 +561,9 @@ export class BunnyPunishmentService {
             artifact,
             context,
         );
+        if (workflowState && this.actionLayer?.workflowRecovery) {
+            await this.actionLayer.workflowRecovery.complete(workflowState);
+        }
         this.scheduleRelease(character, artifact);
         return result;
     }
