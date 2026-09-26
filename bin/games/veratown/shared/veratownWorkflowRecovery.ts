@@ -25,6 +25,7 @@ export class VeratownWorkflowRecovery {
             readonly target: string;
             readonly [key: string]: unknown;
         },
+        stage: string = source,
     ): Promise<WorkflowState<string, VeratownWorkflowData>> {
         const restored = await this.journal.restore<
             string,
@@ -35,12 +36,33 @@ export class VeratownWorkflowRecovery {
             createWorkflowState<string, VeratownWorkflowData>(
                 operationId,
                 memberNumber,
-                source,
+                stage,
                 {
                     source,
                     ...data,
                 },
             ),
+        );
+    }
+
+    public async advance(
+        state: WorkflowState<string, VeratownWorkflowData>,
+        stage: string,
+        data?: Record<string, unknown>,
+    ): Promise<WorkflowState<string, VeratownWorkflowData>> {
+        if (isWorkflowTerminal(state.status)) return state;
+        const nextStatus = state.status === "running" ? "waiting" : "running";
+        return this.journal.persistTransition(
+            state,
+            transitionWorkflow(state, nextStatus, {
+                stage,
+                data: data
+                    ? {
+                          ...state.data,
+                          ...data,
+                      }
+                    : state.data,
+            }),
         );
     }
 

@@ -51,12 +51,13 @@ still pending.
 - Bunny restraint application and selected release removal have action paths,
   rollout leases, and rollback routing, but both switches are disabled by
   default.
-- The Bunny action path projects its artifact from the adapter-returned
-  confirmed observation. It can use the tested workflow-recovery journal seam
-  when one is injected; the current production constructor does not inject
-  that optional recovery service.
-- Live-room confirmation, production persistence validation, and the actual
-  30-minute 19-character qualification remain open evidence gates.
+- The Bunny workflow projects its artifact from the adapter-returned confirmed
+  observation and is wired to the production Mongo workflow journal. Startup
+  restores journal records and active artifacts; shutdown disposes workflow
+  timers and subscriptions.
+- Live-room confirmation, reconnect/rollback rehearsal, atomic projection
+  validation, and the actual 30-minute 19-character qualification remain open
+  evidence gates.
 
 ### Migration status answer
 
@@ -65,13 +66,11 @@ application operation has an opt-in action-layer path. The rollout switch
 `action_layer_bunny_restraints_enabled` defaults to `false`, so normal runtime
 behavior remains on the legacy path.
 
-`BunnyPunishmentService` still owns configuration selection and validation,
-active-artifact decisions, punishment artifact persistence, expiry scheduling,
-release cleanup, and the surrounding business orchestration. The optional
-`VeratownWorkflowRecovery` interface and journal are implemented and tested,
-but the current production `Veratown` wiring injects only the action appearance
-service and rollout controller. It does not yet inject a production recovery
-journal.
+`BunnyPunishmentWorkflow` now owns configuration selection and validation,
+active-artifact decisions, versioned workflow stages, punishment persistence,
+expiry scheduling, release cleanup, and the surrounding business
+orchestration. `BunnyPunishmentService` remains a compatibility facade, and
+`VeratownWorkflowRecovery` is injected with Mongo-backed journal storage.
 
 See [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md) for the maintained registry,
 ownership tables, UML diagrams, evidence ledger, and documentation maintenance

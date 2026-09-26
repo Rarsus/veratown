@@ -14,6 +14,7 @@ export interface WorkflowJournalStorage {
     ): Promise<WorkflowJournalRecord<TStage, TData> | undefined>;
     write<TStage extends string, TData>(
         record: WorkflowJournalRecord<TStage, TData>,
+        expectedVersion?: number,
     ): Promise<void>;
     list<TStage extends string, TData>(): Promise<
         readonly WorkflowJournalRecord<TStage, TData>[]
@@ -95,7 +96,10 @@ export class WorkflowJournal {
                 `Terminal workflow cannot change: ${state.operationId}`,
             );
         }
-        await this.storage.write({ state, persistedAt: this.now() });
+        await this.storage.write(
+            { state, persistedAt: this.now() },
+            existing.state.version,
+        );
         return state;
     }
 
@@ -147,10 +151,20 @@ export class InMemoryWorkflowJournalStorage implements WorkflowJournalStorage {
 
     public async write<TStage extends string, TData>(
         record: WorkflowJournalRecord<TStage, TData>,
+        expectedVersion?: number,
     ): Promise<void> {
         if (this.failNextWrite) {
             this.failNextWrite = false;
             throw new Error("workflow persistence failed");
+        }
+        const existing = this.records.get(record.state.operationId);
+        if (
+            expectedVersion !== undefined &&
+            (!existing || existing.state.version !== expectedVersion)
+        ) {
+            throw new WorkflowJournalConflictError(
+                `Stale workflow version for ${record.state.operationId}`,
+            );
         }
         this.records.set(
             record.state.operationId,

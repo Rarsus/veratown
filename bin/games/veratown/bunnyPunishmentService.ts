@@ -20,7 +20,7 @@ import {
     planBunnyPunishment,
 } from "./bunnyPunishmentEngine";
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
-import type { EventBus } from "../shared/eventBus";
+import type { EventBus, GameEventListener } from "../shared/eventBus";
 import {
     applyConsentPadlock,
     resolveConsentPadlockType,
@@ -118,7 +118,7 @@ type BunnyStateSync = (
     observedAppearance?: readonly BC_AppearanceItem[],
 ) => Promise<void>;
 
-export class BunnyPunishmentService {
+export class BunnyPunishmentWorkflow {
     private punishmentSequence = 0;
     private readonly operationQueues = new Map<number, Promise<unknown>>();
     private readonly releaseTimers = new Map<
@@ -126,6 +126,25 @@ export class BunnyPunishmentService {
         ReturnType<typeof setTimeout>
     >();
     private readonly logger = createLogger("BunnyPunishmentService");
+    private readonly eventBus?: EventBus;
+    private readonly releaseEventListener: GameEventListener = async (
+        event,
+    ) => {
+        if (
+            event.data.reason !== "safeword-released" ||
+            event.data.releaseCause !== "safeword"
+        )
+            return;
+        const state = await this.repository.getState?.(event.target);
+        if (
+            event.data.bunnyOperationId &&
+            state?.artifact?.operationId !== event.data.bunnyOperationId
+        )
+            return;
+        const timer = this.releaseTimers.get(event.target);
+        if (timer) clearTimeout(timer);
+        this.releaseTimers.delete(event.target);
+    };
 
     public constructor(
         private readonly conn: API_Connector,
@@ -137,22 +156,26 @@ export class BunnyPunishmentService {
         eventBus?: EventBus,
         private readonly actionLayer?: BunnyActionLayerMigration,
     ) {
-        eventBus?.subscribe("bondage_removed", async (event) => {
-            if (
-                event.data.reason !== "safeword-released" ||
-                event.data.releaseCause !== "safeword"
-            )
-                return;
-            const state = await this.repository.getState?.(event.target);
-            if (
-                event.data.bunnyOperationId &&
-                state?.artifact?.operationId !== event.data.bunnyOperationId
-            )
-                return;
-            const timer = this.releaseTimers.get(event.target);
-            if (timer) clearTimeout(timer);
-            this.releaseTimers.delete(event.target);
-        });
+        this.eventBus = eventBus;
+        eventBus?.subscribe("bondage_removed", this.releaseEventListener);
+    }
+
+    public async shutdown(): Promise<void> {
+        this.eventBus?.unsubscribe(
+            "bondage_removed",
+            this.releaseEventListener,
+        );
+        for (const timer of this.releaseTimers.values()) clearTimeout(timer);
+        this.releaseTimers.clear();
+    }
+
+    public restoreActive(): ReturnType<
+        VeratownWorkflowRecovery["restoreActive"]
+    > {
+        return (
+            this.actionLayer?.workflowRecovery?.restoreActive() ??
+            Promise.resolve([])
+        );
     }
 
     public async punish(
@@ -293,6 +316,23 @@ export class BunnyPunishmentService {
             };
         }
 
+        let workflowState:
+            Awaited<ReturnType<VeratownWorkflowRecovery["start"]>> | undefined;
+        if (this.actionLayer?.workflowRecovery) {
+            workflowState = await this.actionLayer.workflowRecovery.start(
+                operationId,
+                character.MemberNumber,
+                "bunny",
+                {
+                    target: attemptedPieces.join(","),
+                    configuration: config.name,
+                },
+                "apply",
+            );
+            workflowState =
+                await this.actionLayer.workflowRecovery.resume(workflowState);
+        }
+
         const configuredPieces: string[] = [];
         const mutationErrors: string[] = [];
         let permissionDenied = false;
@@ -304,26 +344,8 @@ export class BunnyPunishmentService {
             "bunny-restraints",
             operationId,
         );
-        let workflowState:
-            Awaited<ReturnType<VeratownWorkflowRecovery["start"]>> | undefined;
         try {
             if (lease?.path === "action") {
-                if (this.actionLayer?.workflowRecovery) {
-                    workflowState =
-                        await this.actionLayer.workflowRecovery.start(
-                            operationId,
-                            character.MemberNumber,
-                            "bunny",
-                            {
-                                target: attemptedPieces.join(","),
-                                configuration: config.name,
-                            },
-                        );
-                    workflowState =
-                        await this.actionLayer.workflowRecovery.resume(
-                            workflowState,
-                        );
-                }
                 for (const piece of config.pieces) {
                     try {
                         const result =
@@ -474,6 +496,22 @@ export class BunnyPunishmentService {
         } finally {
             lease?.release();
         }
+        if (workflowState && this.actionLayer?.workflowRecovery) {
+            try {
+                workflowState = await this.actionLayer.workflowRecovery.advance(
+                    workflowState,
+                    "confirm",
+                );
+                workflowState =
+                    await this.actionLayer.workflowRecovery.resume(
+                        workflowState,
+                    );
+            } catch (error) {
+                mutationErrors.push(
+                    error instanceof Error ? error.message : String(error),
+                );
+            }
+        }
         const mutationError =
             mutationErrors.length > 0 ? mutationErrors.join("; ") : undefined;
 
@@ -536,6 +574,14 @@ export class BunnyPunishmentService {
                   durationMs: this.debugUnlockDurationMs,
               }
             : calculatedDuration;
+        if (workflowState && this.actionLayer?.workflowRecovery) {
+            workflowState = await this.actionLayer.workflowRecovery.advance(
+                workflowState,
+                "persist",
+            );
+            workflowState =
+                await this.actionLayer.workflowRecovery.resume(workflowState);
+        }
         const artifact: BunnyPunishmentArtifact = {
             memberNumber: character.MemberNumber,
             operationId,
@@ -553,15 +599,29 @@ export class BunnyPunishmentService {
             cleanupPolicy: "explicit_cleanup_only",
             status: "active",
         };
-        await this.recordSuccessfulPunishment(
-            character,
-            config,
-            attemptedPieces,
-            appliedPieces,
-            artifact,
-            context,
-        );
+        try {
+            await this.recordSuccessfulPunishment(
+                character,
+                config,
+                attemptedPieces,
+                appliedPieces,
+                artifact,
+                context,
+            );
+        } catch (error) {
+            if (workflowState && this.actionLayer?.workflowRecovery) {
+                await this.actionLayer.workflowRecovery.fail(workflowState);
+            }
+            throw error;
+        }
         if (workflowState && this.actionLayer?.workflowRecovery) {
+            workflowState = await this.actionLayer.workflowRecovery.advance(
+                workflowState,
+                "scheduled",
+                { expiresAt: artifact.expiresAt },
+            );
+            workflowState =
+                await this.actionLayer.workflowRecovery.resume(workflowState);
             await this.actionLayer.workflowRecovery.complete(workflowState);
         }
         this.scheduleRelease(character, artifact);
@@ -603,6 +663,22 @@ export class BunnyPunishmentService {
             return;
         }
         const operationId = `bunny-release-${artifact.operationId}`;
+        let workflowState:
+            Awaited<ReturnType<VeratownWorkflowRecovery["start"]>> | undefined;
+        if (this.actionLayer?.workflowRecovery) {
+            workflowState = await this.actionLayer.workflowRecovery.start(
+                operationId,
+                character.MemberNumber,
+                "bunny",
+                {
+                    target: artifact.restraintPieces.join(","),
+                    releaseStatus: status,
+                },
+                "release",
+            );
+            workflowState =
+                await this.actionLayer.workflowRecovery.resume(workflowState);
+        }
         let verified = false;
         for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
             await syncAppearanceMutation(
@@ -650,11 +726,22 @@ export class BunnyPunishmentService {
             if (verified) break;
         }
         if (!verified) {
+            if (workflowState && this.actionLayer?.workflowRecovery) {
+                await this.actionLayer.workflowRecovery.fail(workflowState);
+            }
             this.logger.warn("Bunny punishment release remains equipped", {
                 memberNumber: character.MemberNumber,
                 operationId,
             });
             return;
+        }
+        if (workflowState && this.actionLayer?.workflowRecovery) {
+            workflowState = await this.actionLayer.workflowRecovery.advance(
+                workflowState,
+                "cleanup",
+            );
+            workflowState =
+                await this.actionLayer.workflowRecovery.resume(workflowState);
         }
         const closedArtifact = {
             ...artifact,
@@ -663,10 +750,20 @@ export class BunnyPunishmentService {
             cleanupReason: status,
         };
         if (this.repository.updateArtifact) {
-            await this.repository.updateArtifact(
-                closedArtifact,
-                artifact.artifactVersion,
-            );
+            try {
+                await this.repository.updateArtifact(
+                    closedArtifact,
+                    artifact.artifactVersion,
+                );
+            } catch (error) {
+                if (workflowState && this.actionLayer?.workflowRecovery) {
+                    await this.actionLayer.workflowRecovery.fail(workflowState);
+                }
+                throw error;
+            }
+        }
+        if (workflowState && this.actionLayer?.workflowRecovery) {
+            await this.actionLayer.workflowRecovery.complete(workflowState);
         }
         this.releaseTimers.delete(character.MemberNumber);
     }
@@ -691,41 +788,22 @@ export class BunnyPunishmentService {
             restraintPieces: attemptedPieces,
             appliedPieces,
         };
-        try {
-            await this.runPersistenceStage(
-                "artifact.record",
-                () =>
-                    this.repository.recordArtifact(
-                        artifact,
-                        artifact.artifactVersion > 1
-                            ? artifact.artifactVersion - 1
-                            : 0,
-                    ),
-                context,
-            );
-        } catch (error) {
-            this.logger.error(
-                "Bunny punishment artifact persistence failed",
-                error,
-                {
-                    ...context,
-                    appliedPieces,
-                },
-            );
-            return;
-        }
+        await this.runPersistenceStage(
+            "artifact.record",
+            () =>
+                this.repository.recordArtifact(
+                    artifact,
+                    artifact.artifactVersion > 1
+                        ? artifact.artifactVersion - 1
+                        : 0,
+                ),
+            context,
+        );
         await Promise.all([
             this.runPersistenceStage(
                 "count.increment",
                 () => this.repository.incrementCount(character.MemberNumber),
                 context,
-            ).catch((error) =>
-                this.logger.warn("Bunny punishment count persistence failed", {
-                    ...context,
-                    appliedPieces,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                }),
             ),
             this.runPersistenceStage(
                 "audit.record",
@@ -735,13 +813,6 @@ export class BunnyPunishmentService {
                         auditDetails,
                     ),
                 context,
-            ).catch((error) =>
-                this.logger.warn("Bunny punishment audit failed", {
-                    ...context,
-                    appliedPieces,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                }),
             ),
         ]);
         this.logger.debug("Bunny punishment persistence stages completed", {
@@ -794,5 +865,52 @@ export class BunnyPunishmentService {
         } finally {
             clearTimeout(watchdog);
         }
+    }
+}
+
+export class BunnyPunishmentService {
+    private readonly workflow: BunnyPunishmentWorkflow;
+
+    public constructor(
+        conn: API_Connector,
+        repository: BunnyPunishmentRepository,
+        stateSync?: BunnyStateSync,
+        random: () => number = Math.random,
+        syncDelayMs = 100,
+        debugUnlockDurationMs?: number,
+        eventBus?: EventBus,
+        actionLayer?: BunnyActionLayerMigration,
+    ) {
+        this.workflow = new BunnyPunishmentWorkflow(
+            conn,
+            repository,
+            stateSync,
+            random,
+            syncDelayMs,
+            debugUnlockDurationMs,
+            eventBus,
+            actionLayer,
+        );
+    }
+
+    public punish(
+        character: API_Character,
+        configuration?: BunnyRestraintConfig,
+    ): Promise<BunnyPunishmentResult> {
+        return this.workflow.punish(character, configuration);
+    }
+
+    public recover(character: API_Character): Promise<void> {
+        return this.workflow.recover(character);
+    }
+
+    public restoreActive(): ReturnType<
+        BunnyPunishmentWorkflow["restoreActive"]
+    > {
+        return this.workflow.restoreActive();
+    }
+
+    public shutdown(): Promise<void> {
+        return this.workflow.shutdown();
     }
 }

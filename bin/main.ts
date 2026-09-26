@@ -54,6 +54,9 @@ import { KidnappersGamePersistence } from "./games/kidnappers/kidnappersGamePers
 import { KidnappersGameLifecycleService } from "./games/kidnappers/kidnappersGameLifecycleService";
 import { createKidnappersAuditSubscriber } from "./games/kidnappers/kidnappersGameMessaging";
 import { StartupProgress } from "./startupProgress";
+import { MongoWorkflowJournalStorage } from "./games/shared/mongoWorkflowJournalStorage";
+import { WorkflowJournal } from "./games/shared/durableWorkflowJournal";
+import { VeratownWorkflowRecovery } from "./games/veratown/shared/veratownWorkflowRecovery";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -537,6 +540,20 @@ async function initializeVeratownGame(
     // Create DI container for service management
     const container = new DIContainer();
     container.register(DIServiceKeys.CONFIGURATION, config);
+
+    const workflowJournalStorage = new MongoWorkflowJournalStorage(db);
+    await workflowJournalStorage.initialize();
+    const workflowJournal = new WorkflowJournal(workflowJournalStorage);
+    const workflowRecovery = new VeratownWorkflowRecovery(workflowJournal);
+    container.register(
+        DIServiceKeys.WORKFLOW_JOURNAL_STORAGE,
+        workflowJournalStorage,
+    );
+    container.register(DIServiceKeys.WORKFLOW_JOURNAL, workflowJournal);
+    container.register(
+        DIServiceKeys.VERATOWN_WORKFLOW_RECOVERY,
+        workflowRecovery,
+    );
 
     const {
         unifiedStore,

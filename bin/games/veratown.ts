@@ -257,6 +257,7 @@ export class Veratown {
     // Stores location data (cages, keypads, monitors, etc.) in the database,
     // with config fallback. Only set when mongo_uri/mongo_db are configured.
     private locationStore?: VeratownLocationStore;
+    private bunnyPunishmentService?: BunnyPunishmentService;
 
     public constructor(
         connections: VeratownConnections,
@@ -665,9 +666,17 @@ export class Veratown {
                           rollout: this.container.get(
                               DIServiceKeys.ACTION_LAYER_ROLLOUT,
                           ),
+                          workflowRecovery: this.container.has(
+                              DIServiceKeys.VERATOWN_WORKFLOW_RECOVERY,
+                          )
+                              ? this.container.get(
+                                    DIServiceKeys.VERATOWN_WORKFLOW_RECOVERY,
+                                )
+                              : undefined,
                       }
                     : undefined,
             );
+            this.bunnyPunishmentService = punishmentService;
             return new BunnyParkSystem(
                 this.conn,
                 punishmentService,
@@ -1012,6 +1021,33 @@ export class Veratown {
             warnAfterMs: 5_000,
             context: roomContext,
         });
+        if (this.container.has(DIServiceKeys.VERATOWN_WORKFLOW_RECOVERY)) {
+            const recovery = this.container.get<{
+                restoreActive(): Promise<readonly unknown[]>;
+            }>(DIServiceKeys.VERATOWN_WORKFLOW_RECOVERY);
+            const activeWorkflows = await startup.phase(
+                "workflow-recovery",
+                () => recovery.restoreActive(),
+                { warnAfterMs: 5_000, context: roomContext },
+            );
+            logger.info("Veratown workflow journal restored", {
+                ...roomContext,
+                activeWorkflowCount: activeWorkflows.length,
+            });
+        }
+        if (this.managedReleaseWorkersEnabled && this.bunnyPunishmentService) {
+            await startup.phase(
+                "bunny-recovery",
+                () =>
+                    Promise.all(
+                        (this.conn.chatRoom?.characters ?? []).map(
+                            (character) =>
+                                this.bunnyPunishmentService!.recover(character),
+                        ),
+                    ).then(() => undefined),
+                { warnAfterMs: 5_000, context: roomContext },
+            );
+        }
         this.attachContainmentFeatures();
         await startup.phase("location-reload", () => this.reloadLocations(), {
             warnAfterMs: 5_000,
@@ -1054,6 +1090,7 @@ export class Veratown {
     }
 
     public async shutdown(): Promise<void> {
+        await this.bunnyPunishmentService?.shutdown();
         await this.locationStore?.unwatchLocations();
         this.locationStore?.removeAllListeners("locationChanged");
         this.detachContainmentFeatures();
