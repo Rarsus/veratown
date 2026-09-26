@@ -15,13 +15,9 @@ import {
     BunnyRestraintConfig,
 } from "./veratownConfig";
 import {
-    BUNNY_SIGN,
-    BUNNY_SIGN_TEXT,
-    BUNNY_SIGN_TEXT2,
     bunnyPieceKey,
     hasBunnyRestraint,
     planBunnyPunishment,
-    verifyBunnySign,
 } from "./bunnyPunishmentEngine";
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
 import type { EventBus } from "../shared/eventBus";
@@ -34,10 +30,6 @@ import type {
     BunnyPunishmentRepository,
 } from "./bunnyPunishmentRepository";
 import { createLogger } from "../../logging";
-import type {
-    ActionLayerRolloutController,
-    AppearanceActionService,
-} from "../../action-layer";
 
 export type BunnyPunishmentStatus =
     "completed" | "partial" | "failed" | "skipped";
@@ -50,17 +42,9 @@ export interface BunnyPunishmentResult {
     appliedPieces: string[];
     failedPieces: string[];
     finalVerification: boolean;
-    signPresent: boolean;
-    signVisible: boolean;
-    signFailureReason?: string;
     failureReason?: string;
     operationId?: string;
     skipped?: boolean;
-}
-
-export interface BunnyActionLayerMigration {
-    readonly appearanceService: AppearanceActionService<API_Character>;
-    readonly rollout: ActionLayerRolloutController;
 }
 
 export const BUNNY_INITIAL_DURATION_MS = 5 * 60 * 1000;
@@ -139,7 +123,6 @@ export class BunnyPunishmentService {
         private readonly syncDelayMs = 100,
         private readonly debugUnlockDurationMs?: number,
         eventBus?: EventBus,
-        private readonly actionLayer?: BunnyActionLayerMigration,
     ) {
         eventBus?.subscribe("bondage_removed", async (event) => {
             if (
@@ -224,23 +207,14 @@ export class BunnyPunishmentService {
         config: BunnyRestraintConfig,
     ): Promise<BunnyPunishmentResult> {
         const operationId = `bunny-${character.MemberNumber}-${Date.now()}-${++this.punishmentSequence}`;
-        const attemptedPieces = [
-            ...config.pieces.map(bunnyPieceKey),
-            bunnyPieceKey(BUNNY_SIGN),
-        ];
+        const validationErrors = validateBunnyRestraintConfig(config);
+        const attemptedPieces = [...config.pieces.map(bunnyPieceKey)];
         const context = {
             memberNumber: character.MemberNumber,
             operationId,
             configuration: config.name,
             requestedPieces: attemptedPieces,
         };
-        const validationErrors = validateBunnyRestraintConfig(config);
-        const signAsset = AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset);
-        if (!signAsset || !getAssetDef(signAsset)) {
-            validationErrors.push(
-                `asset unavailable: ${bunnyPieceKey(BUNNY_SIGN)}`,
-            );
-        }
         if (validationErrors.length > 0) {
             const failureReason = validationErrors.join("; ");
             return {
@@ -251,8 +225,6 @@ export class BunnyPunishmentService {
                 appliedPieces: [],
                 failedPieces: attemptedPieces,
                 finalVerification: false,
-                signPresent: false,
-                signVisible: false,
                 failureReason,
                 operationId,
             };
@@ -262,15 +234,38 @@ export class BunnyPunishmentService {
         const persistedState = await this.repository.getState?.(
             character.MemberNumber,
         );
+        const activeArtifact = persistedState?.artifact;
+        if (
+            activeArtifact?.status === "active" &&
+            activeArtifact.expiresAt > Date.now()
+        ) {
+            const appliedPieces = attemptedPieces.filter((piece) => {
+                const [group, asset] = piece.split("/");
+                return currentAppearance.some(
+                    (item) => item.Group === group && item.Name === asset,
+                );
+            });
+            return {
+                success: true,
+                status: "skipped",
+                skipped: true,
+                configuration: config.name,
+                attemptedPieces,
+                appliedPieces,
+                failedPieces: attemptedPieces.filter(
+                    (piece) => !appliedPieces.includes(piece),
+                ),
+                finalVerification: true,
+                operationId: activeArtifact.operationId,
+            };
+        }
         const currentPlan = planBunnyPunishment(currentAppearance, {
             ...config,
             pieces: config.pieces,
         });
-        const currentSign = verifyBunnySign(currentAppearance);
         if (
             currentPlan.exactPieces.length ===
                 currentPlan.requestedPieces.length &&
-            currentSign.visible &&
             persistedState?.artifact?.status !== "active"
         ) {
             return {
@@ -282,8 +277,6 @@ export class BunnyPunishmentService {
                 appliedPieces: attemptedPieces,
                 failedPieces: [],
                 finalVerification: true,
-                signPresent: true,
-                signVisible: true,
             };
         }
 
@@ -339,27 +332,6 @@ export class BunnyPunishmentService {
                             );
                         }
                     }
-
-                    if (!permissionDenied || configuredPieces.length > 0) {
-                        try {
-                            const sign =
-                                character.Appearance.AddItem(signAsset);
-                            if (!sign) {
-                                throw new Error(
-                                    `failed to add ${bunnyPieceKey(BUNNY_SIGN)}`,
-                                );
-                            }
-                            sign.setProperty("Text", BUNNY_SIGN_TEXT);
-                            sign.setProperty("Text2", BUNNY_SIGN_TEXT2);
-                            configuredPieces.push(bunnyPieceKey(BUNNY_SIGN));
-                        } catch (error) {
-                            mutationErrors.push(
-                                error instanceof Error
-                                    ? error.message
-                                    : String(error),
-                            );
-                        }
-                    }
                 },
                 this.syncDelayMs,
                 async (current, mutationContext) => {
@@ -384,10 +356,7 @@ export class BunnyPunishmentService {
                         const restraintsReady = config.pieces.every((piece) =>
                             hasBunnyRestraint(appearance, piece),
                         );
-                        return (
-                            restraintsReady &&
-                            verifyBunnySign(appearance).visible
-                        );
+                        return restraintsReady;
                     },
                 },
             );
@@ -418,11 +387,7 @@ export class BunnyPunishmentService {
         const failedPieces = attemptedPieces.filter(
             (piece) => !appliedPieces.includes(piece),
         );
-        const signVerification = verifyBunnySign(appliedAppearance);
-        const complete =
-            mutationConfirmed &&
-            failedPieces.length === 0 &&
-            signVerification.visible;
+        const complete = mutationConfirmed && failedPieces.length === 0;
         const failureReason = complete
             ? undefined
             : (mutationError ??
@@ -439,9 +404,6 @@ export class BunnyPunishmentService {
             appliedPieces,
             failedPieces,
             finalVerification: complete,
-            signPresent: signVerification.present,
-            signVisible: signVerification.visible,
-            signFailureReason: signVerification.reason,
             failureReason,
             operationId,
         };
@@ -461,12 +423,6 @@ export class BunnyPunishmentService {
         const artifact: BunnyPunishmentArtifact = {
             memberNumber: character.MemberNumber,
             operationId,
-            sign: {
-                group: BUNNY_SIGN.group,
-                asset: BUNNY_SIGN.asset,
-                text: BUNNY_SIGN_TEXT,
-                text2: BUNNY_SIGN_TEXT2,
-            },
             appliedAt: Date.now(),
             restraintPieces: appliedPieces,
             offenceNumber: duration.offenceNumber,
@@ -528,117 +484,51 @@ export class BunnyPunishmentService {
             return;
         }
         const operationId = `bunny-release-${artifact.operationId}`;
-        const lease = this.actionLayer?.rollout.begin(
-            "bunny-appearance",
-            operationId,
-        );
-        const useActionLayer = lease?.path === "action";
         let verified = false;
-        try {
-            for (
-                let attempt = 0;
-                attempt < BUNNY_RELEASE_MAX_ATTEMPTS;
-                attempt++
-            ) {
-                await syncAppearanceMutation(
-                    character,
-                    () => {
-                        for (const piece of artifact.restraintPieces) {
-                            const [group] = piece.split("/");
-                            character.Appearance.RemoveItem(group as any);
-                        }
-                        if (!useActionLayer) {
-                            character.Appearance.RemoveItem(BUNNY_SIGN.group);
-                        }
-                    },
-                    this.syncDelayMs,
-                    async (currentCharacter, context, observedAppearance) =>
-                        this.stateSync?.(
-                            currentCharacter,
-                            context,
-                            observedAppearance,
+        for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
+            await syncAppearanceMutation(
+                character,
+                () => {
+                    for (const piece of artifact.restraintPieces) {
+                        const [group] = piece.split("/");
+                        character.Appearance.RemoveItem(group as any);
+                    }
+                },
+                this.syncDelayMs,
+                async (currentCharacter, context, observedAppearance) =>
+                    this.stateSync?.(
+                        currentCharacter,
+                        context,
+                        observedAppearance,
+                    ),
+                {
+                    throwOnSyncFailure: false,
+                    source: "bunny",
+                    releaseCause: "timer",
+                    reason: "bunny_punishment_released",
+                    operationId,
+                    cleanupAllowed: true,
+                    exclusiveContextHandoff: true,
+                    requireFullWardrobeAccess: false,
+                    sendFullAppearanceUpdate: true,
+                    awaitServerSync: true,
+                    serverSyncPredicate: (appearance) =>
+                        artifact.restraintPieces.every(
+                            ([group]) =>
+                                !appearance.some(
+                                    (item) => item.Group === group,
+                                ),
                         ),
-                    {
-                        throwOnSyncFailure: false,
-                        source: "bunny",
-                        releaseCause: "timer",
-                        reason: "bunny_punishment_released",
-                        operationId,
-                        cleanupAllowed: true,
-                        exclusiveContextHandoff: true,
-                        requireFullWardrobeAccess: false,
-                        sendFullAppearanceUpdate: true,
-                        awaitServerSync: true,
-                        serverSyncPredicate: (appearance) =>
-                            artifact.restraintPieces.every(
-                                ([group]) =>
-                                    !appearance.some(
-                                        (item) => item.Group === group,
-                                    ),
-                            ) &&
-                            (useActionLayer ||
-                                !verifyBunnySign(appearance).present),
-                    },
+                },
+            );
+            const appearance = character.Appearance.MakeAppearanceBundle();
+            verified = artifact.restraintPieces.every((piece) => {
+                const [group, asset] = piece.split("/");
+                return !appearance.some(
+                    (item) => item.Group === group && item.Name === asset,
                 );
-                if (useActionLayer) {
-                    await syncAppearanceMutation(
-                        character,
-                        () => undefined,
-                        0,
-                        async (
-                            currentCharacter,
-                            mutationContext,
-                            observedAppearance,
-                        ) =>
-                            this.stateSync?.(
-                                currentCharacter,
-                                mutationContext,
-                                observedAppearance,
-                            ),
-                        {
-                            throwOnSyncFailure: true,
-                            skipAuthorizationPreflight: true,
-                            exclusiveContextHandoff: true,
-                            source: "bunny",
-                            reason: "bunny_punishment_sign_cleanup",
-                            operationId: `${operationId}:sign`,
-                            cleanupAllowed: true,
-                            actionLayer: {
-                                service: this.actionLayer!.appearanceService,
-                                operation: "remove",
-                                item: {
-                                    group: BUNNY_SIGN.group,
-                                    asset: BUNNY_SIGN.asset,
-                                },
-                                policy: {
-                                    operationId: `${operationId}:sign`,
-                                    memberNumber: character.MemberNumber,
-                                    source: "bunny",
-                                    reason: "bunny_punishment_sign_cleanup",
-                                    timeoutMs: 2_000,
-                                    maxAttempts: 1,
-                                    retryDelayMs: 0,
-                                    preserveLockedItems: true,
-                                    requireServerConfirmation: true,
-                                    cleanupAllowed: true,
-                                },
-                            },
-                        },
-                    );
-                }
-                const appearance = character.Appearance.MakeAppearanceBundle();
-                verified =
-                    artifact.restraintPieces.every((piece) => {
-                        const [group, asset] = piece.split("/");
-                        return !appearance.some(
-                            (item) =>
-                                item.Group === group && item.Name === asset,
-                        );
-                    }) && !verifyBunnySign(appearance).present;
-                if (verified) break;
-            }
-        } finally {
-            lease?.release();
+            });
+            if (verified) break;
         }
         if (!verified) {
             this.logger.warn("Bunny punishment release remains equipped", {
@@ -680,7 +570,6 @@ export class BunnyPunishmentService {
             operationId: context.operationId,
             configuration: config.name,
             restraintPieces: attemptedPieces,
-            sign: artifact.sign,
             appliedPieces,
         };
         try {

@@ -655,18 +655,6 @@ export class Veratown {
                 100,
                 this.bunnyDebugUnlockDurationMs,
                 this.unifiedCharacterStore?.getEventBus(),
-                this.container.has(
-                    DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
-                ) && this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
-                    ? {
-                          appearanceService: this.container.get(
-                              DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
-                          ),
-                          rollout: this.container.get(
-                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
-                          ),
-                      }
-                    : undefined,
             );
             return new BunnyParkSystem(
                 this.conn,

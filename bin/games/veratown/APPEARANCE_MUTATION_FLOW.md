@@ -183,9 +183,8 @@ projection when that projection is available.
 
 ## Bunny Punishment State Machine
 
-The Bunny system adds configured restraint pieces and a configured sign,
-records a durable artifact, schedules a release, and later removes exactly the
-artifact-owned groups.
+The Bunny system adds configured restraint pieces, records a durable artifact,
+schedules a release, and later removes exactly the artifact-owned groups.
 
 ```mermaid
 stateDiagram-v2
@@ -198,7 +197,7 @@ stateDiagram-v2
     ScheduleExisting --> [*]
 
     ReleaseExisting --> RemoveBondage
-    RemoveBondage --> ReleaseConfirmed: restraint groups and sign absent
+    RemoveBondage --> ReleaseConfirmed: restraint groups absent
     RemoveBondage --> RemoveRetry: mismatch or timeout
     RemoveRetry --> RemoveBondage: attempts remain
     RemoveRetry --> ReleasePending: equipment still present
@@ -211,12 +210,11 @@ stateDiagram-v2
     InspectCurrentAppearance --> ApplyBondage: work required
 
     ApplyBondage --> AddConfiguredPieces
-    AddConfiguredPieces --> AddBunnySign
-    AddBunnySign --> ExpectedAppearance
+    AddConfiguredPieces --> ExpectedAppearance
     ExpectedAppearance --> SendAuthoritativeUpdate
     SendAuthoritativeUpdate --> AwaitConfirmation
 
-    AwaitConfirmation --> Confirmed: restraints and sign match
+    AwaitConfirmation --> Confirmed: restraints match
     AwaitConfirmation --> RetryApplication: mismatch or timeout
     RetryApplication --> SendAuthoritativeUpdate: attempts remain
     RetryApplication --> PartialOrFailed: attempts exhausted
@@ -240,18 +238,16 @@ stateDiagram-v2
 1. Recover any existing Bunny artifact before applying a new punishment.
 2. Select and validate the configured restraint pieces.
 3. Inspect the current appearance.
-4. Skip when all required pieces and the correctly configured sign already
-   exist and no active artifact is present.
+4. Skip when all required pieces already exist and no active artifact is
+   present.
 5. Add each permitted restraint piece and apply its color, craft metadata,
    extended type, and consent padlock configuration.
-6. Add the Bunny sign and set its text properties.
-7. Send a full appearance update and wait for authoritative confirmation.
-8. Require every configured restraint and the visible Bunny sign in the server
-   predicate.
-9. Forward `observedAppearance` to the Bunny state synchronizer.
-10. Persist the authoritative projection and derive the actually applied pieces
-    from it.
-11. Record the durable Bunny artifact and schedule its release timer.
+6. Send a full appearance update and wait for authoritative confirmation.
+7. Require every configured restraint in the server predicate.
+8. Forward `observedAppearance` to the Bunny state synchronizer.
+9. Persist the authoritative projection and derive the actually applied pieces
+   from it.
+10. Record the durable Bunny artifact and schedule its release timer.
 
 The result calculation prefers the authoritative snapshot and only falls back
 to the local appearance bundle when no observed snapshot exists.
@@ -259,9 +255,9 @@ to the local appearance bundle when no observed snapshot exists.
 ### Bunny release flow
 
 1. Confirm the artifact still belongs to the current operation and version.
-2. Remove each artifact restraint group and the Bunny sign group.
+2. Remove each artifact restraint group.
 3. Send a full appearance update and wait for authoritative confirmation.
-4. Require every artifact restraint group and the sign to be absent.
+4. Require every artifact restraint group to be absent.
 5. Forward the observed removal snapshot to `LiveCharacterStateSync`.
 6. Retry when confirmation mismatches or times out.
 7. Close the durable artifact only after removal is verified.

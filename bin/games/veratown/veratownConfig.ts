@@ -207,9 +207,7 @@ export interface BunnyRestraintConfig {
     pieces: BunnyRestraintPiece[];
 }
 
-// The single universal punishment for stepping on a bunny. The HeavyYoke and
-// HeavySpreaderMetal are suitable for all character bodies; the WoodenSign
-// renders at the neck. Both restraints receive an exclusive padlock.
+// The single universal punishment for stepping on a bunny.
 export const BUNNY_RESTRAINT_CONFIGS: BunnyRestraintConfig[] = [
     {
         name: "Heavy Yoke and Neck Sign",

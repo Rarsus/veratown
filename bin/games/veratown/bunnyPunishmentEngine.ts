@@ -4,14 +4,7 @@ import type {
     BunnyRestraintPiece,
 } from "./veratownConfig";
 
-export const BUNNY_SIGN = {
-    group: "ItemMisc",
-    asset: "WoodenSign",
-} as const;
-export const BUNNY_SIGN_TEXT = "I step on";
-export const BUNNY_SIGN_TEXT2 = "Bunnies";
-
-export type BunnyPunishmentPiece = BunnyRestraintPiece | typeof BUNNY_SIGN;
+export type BunnyPunishmentPiece = BunnyRestraintPiece;
 
 export interface BunnyAppearanceItem {
     Group: string;
@@ -27,12 +20,6 @@ export interface BunnyPunishmentPlan {
     blockedPieces: BunnyPunishmentPiece[];
 }
 
-export interface BunnySignVerification {
-    present: boolean;
-    visible: boolean;
-    reason?: string;
-}
-
 export function bunnyPieceKey(piece: { group: string; asset: string }): string {
     return `${piece.group}/${piece.asset}`;
 }
@@ -46,7 +33,7 @@ export function planBunnyPunishment(
     currentAppearance: readonly BunnyAppearanceItem[],
     config: BunnyRestraintConfig,
 ): BunnyPunishmentPlan {
-    const requestedPieces = [...config.pieces, BUNNY_SIGN];
+    const requestedPieces = [...config.pieces];
     const currentByGroup = new Map(
         currentAppearance.map((item) => [item.Group, item]),
     );
@@ -140,49 +127,4 @@ export function hasBunnyRestraint(
     }
 
     return true;
-}
-
-export function verifyBunnySign(
-    appearance: readonly BunnyAppearanceItem[],
-): BunnySignVerification {
-    const sign = appearance.find(
-        (item) =>
-            item.Group === BUNNY_SIGN.group && item.Name === BUNNY_SIGN.asset,
-    );
-    if (!sign) {
-        return {
-            present: false,
-            visible: false,
-            reason: "WoodenSign is missing from the appearance bundle",
-        };
-    }
-
-    const extended = getExtendedAssetDef(
-        AssetGet(BUNNY_SIGN.group, BUNNY_SIGN.asset),
-    );
-    const property = (sign.Property ?? {}) as {
-        Text?: unknown;
-        Text2?: unknown;
-    };
-    const textConfig =
-        extended?.Archetype === "text" ? extended.MaxLength : undefined;
-    const textFits =
-        typeof property.Text === "string" &&
-        typeof property.Text2 === "string" &&
-        (!textConfig?.Text || property.Text.length <= textConfig.Text) &&
-        (!textConfig?.Text2 || property.Text2.length <= textConfig.Text2);
-    const visible =
-        textFits &&
-        property.Text === BUNNY_SIGN_TEXT &&
-        property.Text2 === BUNNY_SIGN_TEXT2;
-
-    return {
-        present: true,
-        visible,
-        ...(visible
-            ? {}
-            : {
-                  reason: "WoodenSign is present but its render text properties are incomplete or invalid",
-              }),
-    };
 }

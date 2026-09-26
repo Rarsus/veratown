@@ -75,17 +75,6 @@ export interface AppearanceDiff {
     }>;
 }
 
-export interface BunnySignState {
-    present: boolean;
-    visible: boolean;
-    text?: string;
-    text2?: string;
-}
-
-const BUNNY_SIGN = { Group: "ItemMisc", Name: "WoodenSign" } as const;
-const BUNNY_SIGN_TEXT = "I step on";
-const BUNNY_SIGN_TEXT2 = "Bunnies";
-
 function itemKey(item: BC_AppearanceItem): string {
     return `${item.Group}/${item.Name}`;
 }
@@ -110,28 +99,6 @@ function isVisible(item: BC_AppearanceItem): boolean {
         visible !== false &&
         visible !== "false"
     );
-}
-
-export function getBunnySignState(
-    appearance: readonly BC_AppearanceItem[],
-): BunnySignState {
-    const sign = appearance.find(
-        (item) =>
-            item.Group === BUNNY_SIGN.Group && item.Name === BUNNY_SIGN.Name,
-    );
-    if (!sign) return { present: false, visible: false };
-
-    const text = propertyValue(sign, "Text");
-    const text2 = propertyValue(sign, "Text2");
-    return {
-        present: true,
-        visible:
-            isVisible(sign) &&
-            text === BUNNY_SIGN_TEXT &&
-            text2 === BUNNY_SIGN_TEXT2,
-        ...(typeof text === "string" ? { text } : {}),
-        ...(typeof text2 === "string" ? { text2 } : {}),
-    };
 }
 
 export function diffAppearance(
@@ -163,5 +130,3 @@ export function diffAppearance(
 
     return { added, removed, replaced, visibilityChanged };
 }
-
-export { BUNNY_SIGN_TEXT, BUNNY_SIGN_TEXT2 };

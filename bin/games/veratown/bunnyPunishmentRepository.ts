@@ -6,7 +6,6 @@ export interface BunnyPunishmentAuditDetails {
     operationId: string;
     configuration: string;
     restraintPieces: string[];
-    sign: BunnyPunishmentArtifact["sign"];
     appliedPieces: string[];
 }
 

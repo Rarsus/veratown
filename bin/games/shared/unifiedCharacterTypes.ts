@@ -189,12 +189,6 @@ export interface ReleaseParoleState {
 export interface BunnyPunishmentArtifact {
     memberNumber: number;
     operationId: string;
-    sign: {
-        group: "ItemMisc";
-        asset: "WoodenSign";
-        text: string;
-        text2: string;
-    };
     appliedAt: number;
     restraintPieces: string[];
     offenceNumber: number;
@@ -440,11 +434,6 @@ export interface GameEvent {
         | "effect_cancelled"
         | "effect_expired"
         | "appearance_mutation"
-        | "bunny_sign_added"
-        | "bunny_sign_removed"
-        | "bunny_sign_hidden"
-        | "bunny_sign_restored"
-        | "bunny_sign_cleanup"
         | "kidnappers_game_event"
         | "kidnappers_player_message";
     source:

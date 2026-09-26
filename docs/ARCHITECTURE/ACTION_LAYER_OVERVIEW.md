@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.9"
-status: "Proposed - Phase 1 appearance bridge and release safety integration implemented; live qualification pending"
+version: "1.10"
+status: "Proposed - Bunny restraint package simplified; live qualification pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -82,8 +82,8 @@ service, or runtime registration has been migrated.
       timeouts.
 - [x] DI-registered rollout controller with legacy-default feature switches,
       exclusive operation ownership, and rollback behavior.
-- [x] Narrow Bunny sign-cleanup migration and release target-removal migration
-      behind the rollout controller; legacy paths remain the default.
+- [x] Narrow release target-removal migration behind the rollout controller;
+      legacy paths remain the default.
 - [x] Legacy appearance callers now receive explicit operation and correlation
       IDs through the shared mutation context, persisted sync records, and
       lifecycle/audit events.
@@ -93,6 +93,9 @@ service, or runtime registration has been migrated.
       selecting either the action or legacy implementation path.
 - [x] Bunny safeword `RemoveOnUnlock` preservation is covered by release
       classification regression coverage.
+- [x] Bunny punishment is restraint-only: sign configuration, application,
+      verification, artifact storage, cleanup, and Bunny sign lifecycle events
+      have been removed.
 - [x] 56 focused action-layer tests passing, with strict TypeScript and
       formatting checks passing after the confirmation contract slice.
 
@@ -115,7 +118,7 @@ service, or runtime registration has been migrated.
       49 map mutations, and 5 teleport calls in non-test feature code.
 - [ ] Full Bunny punishment migration. Restraint construction, extended-item
       configuration, consent padlocks, and Bunny persistence remain on the
-      legacy path; only sign cleanup is migrated.
+      legacy path.
 - [ ] Full release workflow migration. The action path covers selected live
       removal targets, while classification, nudity, teleport, parole, and
       durable release transitions remain legacy-owned.
@@ -246,10 +249,10 @@ action-path starts and sends new operations to legacy while an existing action
 lease is allowed to finish. This prevents an old and new implementation from
 claiming the same in-flight operation.
 
-The Bunny slice migrates only artifact-owned WoodenSign cleanup during Bunny
-release. Restraint removal remains on the existing Bunny mutation flow because
-the action adapter does not yet apply Bunny colors, craft metadata, extended
-types, or consent padlocks. The release slice routes selected target removal
+The Bunny punishment package now owns only its configured restraint pieces.
+There is no Bunny sign application or cleanup. Restraint removal remains on the
+existing Bunny mutation flow because the action adapter does not yet apply
+Bunny colors, craft metadata, extended types, or consent padlocks. The release slice routes selected target removal
 through the action appearance service when enabled, with authoritative
 confirmation required; blocked, completed, and already-satisfied outcomes are
 terminal for that path and never fall back to the legacy mutator.
@@ -296,8 +299,8 @@ Validation completed:
 The shared `syncAppearanceMutation` boundary now accepts an explicit,
 single-item action mutation declaration containing the action service, item
 identity, operation, and policy. When present, it executes only the action
-service and does not invoke the legacy mutation callback. Bunny WoodenSign
-cleanup uses this bridge when its rollout lease selects the action path.
+service and does not invoke the legacy mutation callback. Bunny restraint
+mutations remain on the legacy path until their full intent contract is ready.
 
 Release removal now performs the effective-unlock, bondage, neck, and
 ambiguous-lock safety classification before selecting an implementation path.
@@ -319,6 +322,13 @@ Validation completed for this phase:
 - The remaining failure is the pre-existing malformed-placeholder test in
   legacy `appearanceSync.ts`; it is unrelated to this Phase 1 change.
 - Strict TypeScript and Prettier validation pass.
+
+### Bunny package configuration result
+
+The Bunny punishment package contains only its configured restraint pieces.
+There is no sign configuration, sign artifact field, or sign application or
+cleanup path in the Bunny system. Other features may still use WoodenSign
+independently.
 
 ### BC call inventory and adapter boundary
 
@@ -762,13 +772,12 @@ The Bunny system is the first useful reference workflow:
 3. Observe the current appearance.
 4. Plan exact, missing, and blocked pieces without overwriting occupied slots.
 5. Apply each configured device and its explicit lock policy.
-6. Apply and configure the WoodenSign.
-7. Await authoritative appearance confirmation.
-8. Persist the artifact, audit record, and offence count through the mutation
+6. Await authoritative appearance confirmation.
+7. Persist the artifact, audit record, and offence count through the mutation
    boundary.
-9. Schedule durable release recovery.
-10. On expiry or authorized release, remove recorded devices and sign, verify
-    absence, and close the artifact.
+8. Schedule durable release recovery.
+9. On expiry or authorized release, remove recorded devices, verify absence,
+   and close the artifact.
 
 The workflow must distinguish:
 
