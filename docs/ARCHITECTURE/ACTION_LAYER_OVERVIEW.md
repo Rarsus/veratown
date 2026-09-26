@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.8"
-status: "Proposed - legacy appearance correlation IDs propagated; live qualification pending"
+version: "1.9"
+status: "Proposed - Phase 1 appearance bridge and release safety integration implemented; live qualification pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -87,6 +87,12 @@ service, or runtime registration has been migrated.
 - [x] Legacy appearance callers now receive explicit operation and correlation
       IDs through the shared mutation context, persisted sync records, and
       lifecycle/audit events.
+- [x] Explicit single-item legacy appearance mutations can delegate through
+      the action-layer service without executing the legacy callback.
+- [x] Release removal applies the same fail-closed eligibility gate before
+      selecting either the action or legacy implementation path.
+- [x] Bunny safeword `RemoveOnUnlock` preservation is covered by release
+      classification regression coverage.
 - [x] 56 focused action-layer tests passing, with strict TypeScript and
       formatting checks passing after the confirmation contract slice.
 
@@ -284,6 +290,35 @@ Validation completed:
 - Strict TypeScript and Prettier validation pass.
 - No new runtime migration switch was enabled and no action-layer path was
   mixed into legacy mutation execution by this change.
+
+### Phase 1 appearance foundation implementation result
+
+The shared `syncAppearanceMutation` boundary now accepts an explicit,
+single-item action mutation declaration containing the action service, item
+identity, operation, and policy. When present, it executes only the action
+service and does not invoke the legacy mutation callback. Bunny WoodenSign
+cleanup uses this bridge when its rollout lease selects the action path.
+
+Release removal now performs the effective-unlock, bondage, neck, and
+ambiguous-lock safety classification before selecting an implementation path.
+The action adapter then performs exact identity and group-conflict planning;
+the legacy coordinator retains its existing retry and verification behavior.
+This prevents the action path from broadening release authority.
+
+The existing consent-padlock behavior remains authoritative for Bunny restraint
+construction. Regression coverage verifies that a safeword padlock with
+`RemoveOnUnlock` is still treated as protected by release classification. The
+full Bunny restraint migration remains intentionally pending because colors,
+craft metadata, extended types, permission checks, and consent-padlock
+application are not yet represented by the action contract.
+
+Validation completed for this phase:
+
+- The focused synchronization/Bunny/release run passed 43 of 44 tests.
+- The new action-bridge, release ownership, and `RemoveOnUnlock` tests passed.
+- The remaining failure is the pre-existing malformed-placeholder test in
+  legacy `appearanceSync.ts`; it is unrelated to this Phase 1 change.
+- Strict TypeScript and Prettier validation pass.
 
 ### BC call inventory and adapter boundary
 
@@ -1018,13 +1053,18 @@ Migration is incremental and should preserve existing behavior after each step.
       in-memory contract double.
 - [x] Add the initial BC translation and local-dispatch adapter without
       changing legacy callers.
-- [ ] Wrap `syncAppearanceMutation` behind a real appearance action adapter.
-- [ ] Move release removal classification behind the same removal contract.
+- [x] Wrap explicitly declared single-item `syncAppearanceMutation` operations
+      behind the real appearance action adapter. Arbitrary multi-item legacy
+      closures remain legacy-owned until they have explicit intent contracts.
+- [x] Move release removal eligibility classification ahead of action/legacy
+      path selection while retaining exact identity planning in the action
+      adapter.
 - [x] Add real-adapter contract tests for confirmation, timeout, disconnect,
       reconnect, exceptions, and changed group occupancy. Focused Bunny
       regression cases remain pending.
-- [ ] Preserve and verify the current `RemoveOnUnlock` safeword behavior in
-      the migrated path.
+- [x] Preserve and verify the current `RemoveOnUnlock` safeword behavior in
+      release classification. Applying Bunny restraint locks remains outside
+      the migrated action contract.
 
 ### Phase 2: Communication and movement
 

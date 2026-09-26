@@ -387,6 +387,17 @@ test("release lock policy fails closed for every effective or ambiguous lock", (
         }),
         false,
     );
+    assert.equal(
+        isEffectivelyUnlockedBondageItem({
+            Group: "ItemArms",
+            Name: "SafewordCuffs",
+            Property: {
+                Lock: "SafewordPadlock",
+                RemoveOnUnlock: true,
+            },
+        }),
+        false,
+    );
 });
 
 test("release normalization and identity exclude placeholders and include lock fingerprints", () => {

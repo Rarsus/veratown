@@ -217,6 +217,57 @@ test("syncAppearanceMutation keeps completed mutations retryable when projection
     assert.equal(mutated, true);
 });
 
+test("syncAppearanceMutation delegates declared mutations to the action adapter", async () => {
+    let legacyMutationCalled = false;
+    let actionCalls = 0;
+    const character = createCharacter(8, { X: 1, Y: 1 }, []);
+
+    await syncAppearanceMutation(
+        character as any,
+        () => {
+            legacyMutationCalled = true;
+        },
+        0,
+        undefined,
+        {
+            skipAuthorizationPreflight: true,
+            actionLayer: {
+                service: {
+                    remove: async () => {
+                        actionCalls += 1;
+                        return {
+                            status: "already_satisfied" as const,
+                            metadata: {
+                                operationId: "appearance-bridge-8",
+                                actionId: "appearance.remove",
+                                memberNumber: 8,
+                                attempt: 1,
+                                startedAt: 1,
+                                completedAt: 2,
+                            },
+                        };
+                    },
+                } as any,
+                operation: "remove",
+                item: { group: "ItemArms", asset: "Cuffs" },
+                policy: {
+                    operationId: "appearance-bridge-8",
+                    memberNumber: 8,
+                    source: "release",
+                    reason: "bridge-test",
+                    timeoutMs: 100,
+                    maxAttempts: 1,
+                    retryDelayMs: 0,
+                    requireServerConfirmation: true,
+                },
+            },
+        },
+    );
+
+    assert.equal(actionCalls, 1);
+    assert.equal(legacyMutationCalled, false);
+});
+
 test("syncAppearanceMutation waits for matching authoritative CharacterSync", async () => {
     const connection = new EventEmitter() as EventEmitter & {
         Player: { MemberNumber: number };

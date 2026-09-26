@@ -82,6 +82,17 @@ export class LiveAppearanceRemovalCoordinator {
             );
             if (matches.length === 0) return;
 
+            // Apply the same fail-closed release classification before either
+            // implementation path. The action adapter must not broaden the
+            // legacy release policy for neck, locked, or ambiguous items.
+            if (
+                current
+                    .filter((item) => item.Group === target.group)
+                    .some((item) => !isEffectivelyUnlockedBondageItem(item))
+            ) {
+                return;
+            }
+
             const operationKey = `${releaseOperation}:${targetKey(target)}`;
             const lease = this.actionLayer?.rollout.begin(
                 "release-removal",
@@ -124,16 +135,6 @@ export class LiveAppearanceRemovalCoordinator {
                 }
             }
             lease?.release();
-
-            // RemoveItem is group-based. Never risk removing an owner lock
-            // sharing the target's group.
-            if (
-                current
-                    .filter((item) => item.Group === target.group)
-                    .some((item) => !isEffectivelyUnlockedBondageItem(item))
-            ) {
-                return;
-            }
 
             try {
                 await syncAppearanceMutation(

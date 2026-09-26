@@ -18,6 +18,11 @@ import {
     AppearanceMutationSource,
     AppearanceVerificationResult,
 } from "./appearanceLifecycle";
+import type {
+    AppearanceActionService,
+    AppearanceItemIdentity,
+    AppearanceMutationPolicy,
+} from "../../../action-layer";
 
 const logger = createLogger("appearanceSync");
 
@@ -46,6 +51,13 @@ const pendingAppearanceConfirmations = new WeakMap<
     AppearanceMutationContext
 >();
 let mutationSequence = 0;
+
+export interface ActionLayerAppearanceMutation {
+    readonly service: AppearanceActionService<API_Character>;
+    readonly operation: "add" | "remove";
+    readonly item: AppearanceItemIdentity;
+    readonly policy: AppearanceMutationPolicy;
+}
 
 function appearanceItemKey(item: BC_AppearanceItem): string {
     return `${item.Group}/${item.Name}`;
@@ -208,6 +220,7 @@ function createMutationContext(
         releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
         correlationId?: string;
+        actionLayer?: ActionLayerAppearanceMutation;
         cleanupAllowed?: boolean;
     },
 ): AppearanceMutationContext {
@@ -292,6 +305,7 @@ export async function syncAppearanceMutation(
         releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
         correlationId?: string;
+        actionLayer?: ActionLayerAppearanceMutation;
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;
         exclusiveContextHandoff?: boolean;
@@ -346,6 +360,8 @@ async function executeAppearanceMutation(
         reason?: string;
         releaseCause?: AppearanceMutationContext["releaseCause"];
         operationId?: string;
+        correlationId?: string;
+        actionLayer?: ActionLayerAppearanceMutation;
         cleanupAllowed?: boolean;
         deferStateSync?: boolean;
         exclusiveContextHandoff?: boolean;
@@ -380,6 +396,40 @@ async function executeAppearanceMutation(
         appearanceMutationContexts.set(character, context);
     }
     try {
+        if (options?.actionLayer) {
+            const actionResult =
+                options.actionLayer.operation === "add"
+                    ? await options.actionLayer.service.add(
+                          character,
+                          options.actionLayer.item,
+                          options.actionLayer.policy,
+                      )
+                    : await options.actionLayer.service.remove(
+                          character,
+                          options.actionLayer.item,
+                          options.actionLayer.policy,
+                      );
+            const observed = character.Appearance.MakeAppearanceBundle();
+            context.expectedAppearance = observed;
+            context.observedAppearance = observed;
+            context.verificationStatus =
+                actionResult.status === "completed" ||
+                actionResult.status === "already_satisfied"
+                    ? "confirmed"
+                    : "mismatch";
+            if (
+                actionResult.status !== "completed" &&
+                actionResult.status !== "already_satisfied"
+            ) {
+                throw new Error(
+                    actionResult.reason ??
+                        `Action-layer appearance ${options.actionLayer.operation} did not complete`,
+                );
+            }
+            await onSynchronized?.(character, context, observed);
+            return true;
+        }
+
         // Execute the mutation
         await mutation();
         context.expectedAppearance =

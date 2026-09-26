@@ -581,39 +581,49 @@ export class BunnyPunishmentService {
                     },
                 );
                 if (useActionLayer) {
-                    const signResult =
-                        await this.actionLayer!.appearanceService.remove(
-                            character,
-                            {
-                                group: BUNNY_SIGN.group,
-                                asset: BUNNY_SIGN.asset,
-                            },
-                            {
-                                operationId: `${operationId}:sign`,
-                                memberNumber: character.MemberNumber,
-                                source: "bunny",
-                                reason: "bunny_punishment_sign_cleanup",
-                                timeoutMs: 2_000,
-                                maxAttempts: 1,
-                                retryDelayMs: 0,
-                                preserveLockedItems: true,
-                                requireServerConfirmation: true,
-                                cleanupAllowed: true,
-                            },
-                        );
-                    if (
-                        signResult.status !== "completed" &&
-                        signResult.status !== "already_satisfied"
-                    ) {
-                        throw new Error(
-                            signResult.reason ??
-                                "Bunny sign action-layer cleanup did not complete",
-                        );
-                    }
-                    await this.stateSync?.(
+                    await syncAppearanceMutation(
                         character,
-                        undefined,
-                        character.Appearance.MakeAppearanceBundle(),
+                        () => undefined,
+                        0,
+                        async (
+                            currentCharacter,
+                            mutationContext,
+                            observedAppearance,
+                        ) =>
+                            this.stateSync?.(
+                                currentCharacter,
+                                mutationContext,
+                                observedAppearance,
+                            ),
+                        {
+                            throwOnSyncFailure: true,
+                            skipAuthorizationPreflight: true,
+                            exclusiveContextHandoff: true,
+                            source: "bunny",
+                            reason: "bunny_punishment_sign_cleanup",
+                            operationId: `${operationId}:sign`,
+                            cleanupAllowed: true,
+                            actionLayer: {
+                                service: this.actionLayer!.appearanceService,
+                                operation: "remove",
+                                item: {
+                                    group: BUNNY_SIGN.group,
+                                    asset: BUNNY_SIGN.asset,
+                                },
+                                policy: {
+                                    operationId: `${operationId}:sign`,
+                                    memberNumber: character.MemberNumber,
+                                    source: "bunny",
+                                    reason: "bunny_punishment_sign_cleanup",
+                                    timeoutMs: 2_000,
+                                    maxAttempts: 1,
+                                    retryDelayMs: 0,
+                                    preserveLockedItems: true,
+                                    requireServerConfirmation: true,
+                                    cleanupAllowed: true,
+                                },
+                            },
+                        },
                     );
                 }
                 const appearance = character.Appearance.MakeAppearanceBundle();
