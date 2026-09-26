@@ -17,7 +17,7 @@ import {
     AppearanceConfirmationRegistry,
     type AppearanceConfirmationKey,
 } from "../appearance-confirmation";
-import { AssetGet } from "bc-bot";
+import { AssetGet, getExtendedAssetDef } from "bc-bot";
 import type { API_Character, BC_AppearanceItem } from "bc-bot";
 
 export interface BCAppearanceAdapterOptions {
@@ -89,14 +89,61 @@ function lockStateOf(
 }
 
 function toIdentity(item: BC_AppearanceItem): AppearanceItemIdentity {
-    const typeRecord = propertyOf(item).TypeRecord;
+    const extendedType = extendedTypeOf(item);
     return {
         group: item.Group,
         asset: item.Name,
-        ...(typeRecord === undefined
-            ? {}
-            : { extendedType: String(typeRecord) }),
+        ...(extendedType === undefined ? {} : { extendedType }),
     };
+}
+
+function extendedTypeOf(item: BC_AppearanceItem): string | undefined {
+    const typeRecord = propertyOf(item).TypeRecord;
+    if (typeRecord === undefined) return undefined;
+    if (typeof typeRecord === "string") return typeRecord;
+    if (!typeRecord || typeof typeRecord !== "object") return undefined;
+
+    let definition = getExtendedAssetDef({
+        Group: item.Group,
+        Name: item.Name,
+    } as BC_AppearanceItem) as any;
+    while (definition?.CopyConfig) {
+        const copy = definition.CopyConfig;
+        definition = getExtendedAssetDef({
+            Group: copy.GroupName ?? item.Group,
+            Name: copy.AssetName,
+        } as BC_AppearanceItem) as any;
+    }
+    if (!definition) return undefined;
+
+    if (definition.Archetype === "typed") {
+        const index = (typeRecord as Record<string, unknown>).typed;
+        const option =
+            typeof index === "number" ? definition.Options?.[index] : undefined;
+        return typeof option?.Name === "string"
+            ? option.Name
+            : typeof index === "number"
+              ? `typed:${index}`
+              : undefined;
+    }
+
+    if (definition.Archetype === "modular") {
+        const values = Object.entries(typeRecord as Record<string, unknown>)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([key, index]) => {
+                const module = definition.Modules?.find(
+                    (candidate: any) => candidate.Key === key,
+                );
+                const option =
+                    typeof index === "number"
+                        ? module?.Options?.[index]
+                        : undefined;
+                return `${key}=${option?.Name ?? String(index)}`;
+            });
+        return values.length > 0 ? values.join(",") : undefined;
+    }
+
+    return undefined;
 }
 
 function toObservedItem(item: BC_AppearanceItem): ObservedAppearanceItem {

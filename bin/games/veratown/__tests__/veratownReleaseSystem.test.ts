@@ -335,6 +335,56 @@ test("enabled release migration owns removal without calling the legacy mutator"
     assert.equal(legacyRemoveCalls, 0);
 });
 
+test("enabled release migration preserves locked and ambiguous targets", async () => {
+    let actionCalls = 0;
+    let legacyRemoveCalls = 0;
+    const rollout = new ActionLayerRolloutController({
+        releaseRemovalEnabled: true,
+    });
+    const coordinator = new LiveAppearanceRemovalCoordinator(2, {
+        rollout,
+        appearanceService: {
+            remove: async () => {
+                actionCalls += 1;
+                return {
+                    status: "completed" as const,
+                    metadata: {} as any,
+                };
+            },
+        } as any,
+    });
+
+    for (const item of [
+        {
+            Group: "ItemArms",
+            Name: "OwnerCuffs",
+            Property: { Lock: "OwnerPadlock", LockedBy: 145 },
+        },
+        {
+            Group: "ItemLegs",
+            Name: "AmbiguousCuffs",
+            Property: { LockSet: true },
+        },
+    ]) {
+        const character: any = {
+            MemberNumber: 145,
+            Appearance: {
+                MakeAppearanceBundle: () => [item],
+                RemoveItem: () => {
+                    legacyRemoveCalls += 1;
+                },
+            },
+        };
+        await coordinator.remove(character, `release-${item.Name}`, {
+            group: item.Group,
+            name: item.Name,
+        });
+    }
+
+    assert.equal(actionCalls, 0);
+    assert.equal(legacyRemoveCalls, 0);
+});
+
 test("release lock policy fails closed for every effective or ambiguous lock", () => {
     const locks = [
         "OwnerPadlock",

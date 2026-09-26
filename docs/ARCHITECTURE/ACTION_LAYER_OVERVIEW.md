@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.13"
-status: "Proposed - generated BC definitions boundary documented; live qualification pending"
+version: "1.14"
+status: "Proposed - generated BC adapter translation and Bunny/release contract gates implemented; live qualification pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -98,7 +98,9 @@ service, or runtime registration has been migrated.
       have been removed.
 - [x] The Bunny punishment system itself remains active; only its obsolete sign
       behavior was removed.
-- [x] 57 focused action-layer tests passing, with strict TypeScript and
+- [x] Generated BC typed-definition copy-chain translation and release
+      lock-preservation qualification coverage.
+- [x] 58 focused action-layer tests passing, with strict TypeScript and
       formatting checks passing after the confirmation contract slice.
 
 ### Explicitly not complete
@@ -438,7 +440,7 @@ evidence before a caller is migrated:
 | `RemoveItem(group)` removes only the intended target                             | BC removal is group-based                                                                 | Re-observe the group, require exact identity match, preserve locked or ambiguous items, then verify absence                               |
 | `Property.LockedBy` and `Property.LockMemberNumber` identify effective ownership | Connector diagnostics expose these fields                                                 | Treat explicit ownership as locked; do not infer unlocked from missing fields alone                                                       |
 | `LockSet` or a password without ownership is safe to remove                      | Legacy data can contain incomplete lock shapes                                            | Classify as ambiguous and fail closed when preservation is enabled                                                                        |
-| `Property.TypeRecord` can be represented by one string                           | The current isolated adapter still normalizes it conservatively                           | Resolve typed/modular values through `Female3DCGExtended`; do not persist raw generated records in the domain                             |
+| `Property.TypeRecord` can be represented by one string                           | The adapter resolves typed/modular records through official copy-chain definitions        | Keep semantic option names in the domain; retain raw BC records only at the adapter boundary                                              |
 | `AssetGet(group, name)` is available and returns a valid BC asset                | The BC adapter now resolves assets before add dispatch                                    | Keep lookup and missing-asset rejection in the adapter; add asset-definition contract tests                                               |
 | Local mutation completion implies server acceptance                              | Legacy code often observes local appearance after dispatch                                | Explicitly false; mutating results remain `in_progress` until connector confirmation                                                      |
 | Connector appearance events can be correlated to one operation                   | The adapter serializes one operation per member and matches the exact expected post-state | Keep member, operation ID, epoch, timestamp, and predicate checks; do not treat an uncorrelated packet as confirmation                    |
@@ -459,8 +461,8 @@ return:
 
 - applying, changing, or removing locks, including safeword
   `RemoveOnUnlock`, exclusive, password, and timer-password semantics;
-- extended asset-definition resolution, typed or modular `TypeRecord`
-  construction, and `isClothing`/`isBind`/`isNaked` classification;
+- `isClothing`/`isBind`/`isNaked` classification and broader asset-property
+  semantics outside the Bunny restraint metadata contract;
 - full bundle application through `Appearance.applyBundle()`;
 - explicit `flushUpdates()` or `sendAppearanceUpdate()` coordination;
 - appearance property-only updates and item permission changes;
@@ -1137,6 +1139,13 @@ Migration is incremental and should preserve existing behavior after each step.
 - [x] Preserve and verify the current `RemoveOnUnlock` safeword behavior in
       release classification. Applying Bunny restraint locks remains outside
       the migrated action contract.
+- [x] Use official generated BC extended definitions at the adapter boundary
+      for typed and modular identity normalization, including copy-chain
+      resolution.
+- [x] Extend the Bunny adapter contract with asset, permission, color, craft,
+      extended-type, and consent-lock qualification coverage.
+- [x] Extend release qualification coverage for locked and ambiguous target
+      preservation under the action rollout path.
 
 ### Phase 2: Communication and movement
 
@@ -1206,12 +1215,32 @@ Each step has a completion gate and preserves the new/old boundary:
 8. [x] Add DI and feature-flag selection with rollback before migration. The
        rollout controller stops new action-path starts, preserves operation
        ownership, and routes new work to legacy during rollback.
-9. [ ] Migrate the Bunny restraint package only after asset, lock, permission,
-       persistence, and authoritative-confirmation contracts are complete.
+9. [x] Implement the opt-in Bunny restraint adapter path with asset, lock,
+       permission, metadata, and authoritative-confirmation contracts. Live
+       room, persistence, and rollback qualification remain pending.
 10. [x] Add the release-removal action branch for selected live targets. It
         requires authoritative confirmation and never falls back to legacy for
         the same operation. Full release qualification for unlocked, locked,
         ambiguous, wrong-lock, and durable recovery cases remains pending.
+
+11. [x] Implement adapter-side generated-definition translation for
+        representative typed and modular assets, including copy-chain
+        resolution and semantic option-name tests. Controlled-room and
+        malformed/missing-definition qualification remains pending.
+12. [ ] Run Bunny restraint staging with the switch disabled and enabled, then
+        compare requested, local, confirmed, and persisted projections. Verify
+        one operation owner, rollback to legacy, and no duplicate item adds.
+13. [x] Add local release qualification coverage for unlocked, locked,
+        ambiguous, and action-path ownership cases. Real-room staging for
+        wrong-lock, changed-group, confirmation latency, and rollback remains
+        pending.
+14. [ ] Run release staging for unlocked, locked, ambiguous, wrong-lock, and
+        changed-group cases. Record confirmation latency, preserved items,
+        durable removal attempts, and rollback behavior.
+15. [ ] Add durable restart/reconnect recovery for active Bunny and release
+        operations before enabling either switch in production.
+16. [ ] Extend the workload harness into the 30-minute 19-character soak and
+        25-character headroom qualification with hard-threshold enforcement.
 
 No step in this sequence should modify `bin/games/**` until the real adapter,
 confirmation semantics, failure tests, and rollback control are ready.

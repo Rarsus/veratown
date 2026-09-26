@@ -191,6 +191,38 @@ test("applies extended type, color, craft, and safeword lock metadata", async ()
     });
 });
 
+test("normalizes official typed BC records to semantic option names", async () => {
+    const adapter = new BCAppearanceActionAdapter({ now: () => 500 });
+    const runtime = {
+        Appearance: {
+            MakeAppearanceBundle: () => [
+                {
+                    Group: "ItemFeet",
+                    Name: "HeavySpreaderMetal",
+                    Property: { TypeRecord: { typed: 1 } },
+                },
+            ],
+        },
+    };
+
+    const result = await adapter.observe(runtime as never, {
+        operationId: "typed-observation",
+        memberNumber: 11,
+        source: "feature",
+        reason: "typed definition test",
+        deadlineAt: 1_000,
+    });
+
+    assert.equal(result.status, "completed");
+    assert.deepEqual(result.value?.items, [
+        {
+            group: "ItemFeet",
+            asset: "HeavySpreaderMetal",
+            extendedType: "Wide",
+        },
+    ]);
+});
+
 test("blocks locked and ambiguous removal targets", async () => {
     const runtime = makeCharacter([
         {
