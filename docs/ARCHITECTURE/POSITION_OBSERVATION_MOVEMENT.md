@@ -3,7 +3,7 @@ title: "Position Observation and Movement"
 subtitle: "IST/SOLL design for observed position, reconnect epochs, and movement actions"
 date: "September 27, 2026"
 version: "1.0"
-status: "Position observation design; movement and teleport migration are not implemented"
+status: "Position observation runtime slice implemented; movement and teleport migration are not implemented"
 ---
 
 # Position Observation and Movement
@@ -13,10 +13,11 @@ architecture. The first slice is **observation**, not teleportation. A movement
 request and an observed arrival are different facts and must remain different
 in the domain, diagnostics, persistence, and workflow state.
 
-The immediate owner is `LiveCharacterStateSync`. It already receives live map
-position events and reconciles them into the Veratown character projection.
-The action-layer `MovementActionAdapter` is currently only a transport-neutral
-contract. No production movement caller is migrated to it.
+The immediate owner is `LiveCharacterStateSync`. It receives live map position
+events and room snapshots, applies reconnect-epoch and sequence guards, and
+reconciles accepted observations into the Veratown character projection. The
+action-layer `MovementActionAdapter` is still only a transport-neutral contract;
+no production movement command caller is migrated to it.
 
 ## Scope and invariants
 
@@ -339,21 +340,23 @@ migration target.
 
 ### Iteration 1: Observation contract and diagnostics
 
-- Add a transport-neutral position observation type with epoch, order, source,
-  and observed timestamp.
-- Add a guard that rejects prior-epoch and out-of-order observations.
-- Route accepted observations to `LiveCharacterStateSync` using observed
-  coordinates.
-- Extend self-position diagnostics with epoch, ordering, and stale status.
+- [x] Add a transport-neutral position observation type with epoch, order,
+      source, and observed timestamp.
+- [x] Add a guard that rejects prior-epoch and out-of-order observations.
+- [x] Route accepted observations to `LiveCharacterStateSync` using observed
+      coordinates.
+- [x] Extend self-position diagnostics with epoch, ordering, and stale status.
 
 ### Iteration 2: Focused verification
 
-- Test a requested destination that differs from the observed position.
-- Test a newer observation followed by an older observation in the same epoch.
-- Test an observation from a prior reconnect epoch arriving after reconnect.
-- Test that rejected observations do not call persistence.
-- Test that accepted observations remain serialized per character.
-- Test reconnect invalidation and diagnostic visibility.
+- [x] Test a requested destination that differs from the observed position.
+- [x] Test a newer observation followed by an older observation in the same
+      epoch.
+- [x] Test an observation from a prior reconnect epoch arriving after
+      reconnect.
+- [x] Test that rejected observations do not call persistence.
+- [x] Test that accepted observations remain serialized per character.
+- [x] Test reconnect invalidation and diagnostic visibility.
 
 ### Iteration 3: Movement adapter qualification
 
@@ -372,7 +375,7 @@ migration target.
 
 ## Acceptance criteria
 
-Position observation is ready for its first runtime slice when:
+Position observation has its first runtime slice when:
 
 - requested, observed, and persisted positions are distinct in types and tests;
 - observations carry a connector reconnect epoch and deterministic ordering;

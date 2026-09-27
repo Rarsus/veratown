@@ -1275,8 +1275,10 @@ Migration is incremental and should preserve existing behavior after each step.
       teleport boundary in
       [POSITION_OBSERVATION_MOVEMENT.md](POSITION_OBSERVATION_MOVEMENT.md).
 - [ ] Migrate remaining `messageSender` callers and connector movement calls.
-- [ ] Return observed-position results for movement actions.
-- [ ] Integrate reconnect epochs and stale-confirmation handling.
+- [x] Return accepted/stale observed-position results from the position sync
+      boundary; movement actions still need an arrival-confirmation contract.
+- [x] Integrate reconnect epochs and stale-confirmation handling for position
+      observations.
 - [ ] Migrate low-risk callers first: narration, notifications, and position
       sync.
 
