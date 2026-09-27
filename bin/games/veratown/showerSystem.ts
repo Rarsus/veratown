@@ -36,6 +36,11 @@ import type {
     CommunicationActionService,
 } from "../../action-layer";
 
+interface ShowerTimingOptions {
+    stepDelayMs?: number;
+    singDelayMs?: number;
+}
+
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
 // their original clothing at the end - unless they leave the shower tile
@@ -48,6 +53,8 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
     private readonly showerTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
+    private readonly stepDelayMs: number;
+    private readonly singDelayMs: number;
     private releaseSystem?: ReleaseSystem;
     private showerNotificationSequence = 0;
 
@@ -58,8 +65,11 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
         private readonly allowStaticFallbacks = true,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
+        timing: ShowerTimingOptions = {},
     ) {
         super(conn, "shower", "Showers");
+        this.stepDelayMs = timing.stepDelayMs ?? SHOWER_STEP_DELAY_MS;
+        this.singDelayMs = timing.singDelayMs ?? SHOWER_SING_DELAY_MS;
         this.showerTrigger = this.guardTileHandler(this.onCharacterEnterShower);
     }
 
@@ -211,14 +221,12 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     `*${character} is taking a shower*`,
                 );
 
-                const clothingItems =
-                    character.Appearance.getAppearanceData().filter(isClothing);
-                for (const item of clothingItems) {
+                for (const item of savedClothingItems) {
                     if (!isInShower()) return await abortShower();
                     await this.syncMutation(character, () => {
                         character.Appearance.RemoveItem(item.Group);
                     });
-                    await wait(SHOWER_STEP_DELAY_MS);
+                    await wait(this.stepDelayMs);
                 }
 
                 if (!isInShower()) return await abortShower();
@@ -228,7 +236,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     `*${character} turns on the shower*`,
                 );
 
-                await wait(SHOWER_STEP_DELAY_MS);
+                await wait(this.stepDelayMs);
                 if (!isInShower()) return await abortShower();
 
                 const song =
@@ -241,7 +249,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     `*${character} sings: ${song}*`,
                 );
 
-                await wait(SHOWER_SING_DELAY_MS);
+                await wait(this.singDelayMs);
                 if (!isInShower()) return await abortShower();
 
                 narrator.sayAt(
@@ -250,7 +258,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     `*${character} dries off with a towel*`,
                 );
 
-                await wait(SHOWER_STEP_DELAY_MS);
+                await wait(this.stepDelayMs);
                 if (!isInShower()) return await abortShower();
 
                 for (const item of savedClothingItems) {
@@ -258,7 +266,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     await this.syncMutation(character, () => {
                         character.Appearance.AddItem(item);
                     });
-                    await wait(SHOWER_STEP_DELAY_MS);
+                    await wait(this.stepDelayMs);
                 }
 
                 await this.sendShowerNotification(
