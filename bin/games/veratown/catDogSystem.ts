@@ -13,6 +13,10 @@
  */
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
@@ -63,6 +67,7 @@ interface CatDogTile {
 
 export class CatDogSystem extends AbstractTileFeatureSystem {
     private tiles: CatDogTile[] = [];
+    private catDogNotificationSequence = 0;
     private readonly petTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -74,6 +79,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private botConn?: API_Connector,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "catDog", "Cat/Dog tiles");
         this.logger?.info("[CatDogSystem] Initializing CatDogSystem");
@@ -355,7 +362,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                     } else if (action.type === "bondage") {
                         this.performBondageAction(character, action);
                     } else if (action.type === "vibrator") {
-                        this.performVibratorAction(
+                        await this.performVibratorAction(
                             character,
                             action,
                             tile.petType,
@@ -521,6 +528,68 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    private async sendCatDogNotification(
+        character: API_Character,
+        text: string,
+    ): Promise<void> {
+        const operationId = `catdog-notification:${character.MemberNumber}:${++this.catDogNotificationSequence}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
+        );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                const result = await this.communicationService.send(
+                    {
+                        channel: "whisper",
+                        text,
+                        targetMemberNumber: character.MemberNumber,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "catdog vibrator notification",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+                if (result.status !== "completed") {
+                    this.logger.warn(
+                        "CatDog communication action did not complete",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            deliveryStatus:
+                                result.value?.deliveryStatus ?? "unknown",
+                            reason: result.reason,
+                        },
+                    );
+                }
+            } else {
+                const result = this.messageSender.whisperToCharacter(
+                    character,
+                    text,
+                );
+                if (!result.success) {
+                    this.logger.warn(
+                        "CatDog notification failed on legacy path",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            reason: result.message,
+                        },
+                    );
+                }
+            }
+        } finally {
+            lease?.release();
+        }
+    }
+
     private performBondageAction(
         character: API_Character,
         action: CatDogBondageAction,
@@ -559,11 +628,11 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         }
     }
 
-    private performVibratorAction(
+    private async performVibratorAction(
         character: API_Character,
         action: CatDogVibratorAction,
         petType: "cat" | "dog",
-    ): void {
+    ): Promise<void> {
         try {
             // Find vibrator items in character's appearance
             // Vibrators can have many custom names, so we detect by:
@@ -663,7 +732,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
 
             if (vibrators.length > 0) {
                 // Send whisper with custom message
-                this.messageSender.whisperToCharacter(
+                await this.sendCatDogNotification(
                     character,
                     `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`,
                 );

@@ -3,7 +3,7 @@ title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
 version: "2.3"
-status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, and ShowerSystem callers implemented; real delivery and broader migration pending"
+status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, ShowerSystem, FurnitureBondageSystem, and CatDogSystem callers implemented; real delivery and broader migration pending"
 ---
 
 # Communication Actions
@@ -339,6 +339,10 @@ evidence.
       helper with stable operation keys, rollout leases, legacy fallback, and
       focused coverage; retain public narration and admin messages outside this
       notification slice.
+- [x] Migrate CatDogSystem vibrator-triggered player whispers through a shared
+      helper with stable operation keys, rollout leases, legacy fallback, and
+      focused coverage; retain public pet emotes, bot movement, and bondage
+      mutation outside this notification slice.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -378,6 +382,8 @@ The first communication slice is locally qualified by:
   recovery tests; and
 - `bin/games/veratown/__tests__/furnitureBondageSystem.test.ts`, including
   enabled action and legacy notification paths.
+- `bin/games/veratown/__tests__/catDogSystem.test.ts`, including enabled action
+  and legacy vibrator notification paths.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The

@@ -831,6 +831,18 @@ export class Veratown {
                 new CatDogSystem(
                     this.conn,
                     this.conn2, // Optional: shower bot for emote delivery (if configured)
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    )
+                        ? this.container.get<CommunicationActionService>(
+                              DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                          )
+                        : undefined,
+                    this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                        ? this.container.get<ActionLayerRolloutController>(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          )
+                        : undefined,
                 ),
         );
         this.furnitureBondageSystem = this.initFeature(
