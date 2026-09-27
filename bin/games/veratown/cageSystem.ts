@@ -843,10 +843,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 authoritativeExpiryMs: cage.authoritativeExpiry,
                 detectedExpiryAtMs: now,
             });
+            let crateRemovalVerified = true;
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name ===
                 "FuturisticCrate"
             ) {
+                crateRemovalVerified = false;
                 this.releasingCharacters.add(memberNumber);
                 try {
                     await syncAppearanceMutation(
@@ -864,17 +866,32 @@ export class CageSystem extends AbstractTileFeatureSystem {
                                 !appearance.some(
                                     (item) => item.Group === "ItemDevices",
                                 ),
-                            throwOnSyncFailure: false,
+                            throwOnSyncFailure: true,
                         },
                     );
-                    character.Appearance.MakeAppearanceBundle();
+                    crateRemovalVerified = verifyAppearance(
+                        character,
+                        (appearance) =>
+                            !appearance.some(
+                                (item) =>
+                                    item.Group === "ItemDevices" &&
+                                    item.Name === "FuturisticCrate",
+                            ),
+                    ).verified;
+                } catch (error) {
+                    this.logger.error("Cage crate removal failed", error, {
+                        memberNumber,
+                        cageName,
+                        authoritativeExpiryMs: cage.authoritativeExpiry,
+                    });
                 } finally {
                     this.releasingCharacters.delete(memberNumber);
                 }
             }
             if (
+                !crateRemovalVerified ||
                 character.Appearance.getItemData("ItemDevices")?.Name ===
-                "FuturisticCrate"
+                    "FuturisticCrate"
             ) {
                 this.logger.error("Cage release is pending crate removal", {
                     memberNumber,

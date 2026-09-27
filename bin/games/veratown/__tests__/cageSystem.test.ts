@@ -307,6 +307,35 @@ test("CageSystem leaves release pending when crate removal fails", async () => {
     assert.equal(character.messages.length, 0);
 });
 
+test("CageSystem does not report release when authoritative appearance retains the crate", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const character = createCharacter();
+    const expiry = 300_000;
+    character.setCrate({
+        Name: "FuturisticCrate",
+        Property: { LockedBy: "SafewordPadlock" },
+    });
+    character.character.Appearance.RemoveItem = () => {
+        character.setCrate(undefined);
+    };
+    character.character.Appearance.MakeAppearanceBundle = () =>
+        [
+            {
+                Group: "ItemDevices",
+                Name: "FuturisticCrate",
+                Property: { LockedBy: "SafewordPadlock" },
+            },
+        ] as any;
+    void startRelease(timer, mutations, character, expiry);
+
+    await timer.advance(expiry + 50);
+    await new Promise((resolve) => setTimeout(resolve, 75));
+
+    assert.deepEqual(mutations.exits, []);
+    assert.equal(character.messages.length, 0);
+});
+
 test("CageSystem recovers a persisted cage expiry without duplicate entry notice", async () => {
     const timer = new FakeTimer();
     const mutations = Object.assign(createMutationService(), {
