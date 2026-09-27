@@ -45,12 +45,27 @@ function connectorWithMessageHandler(
     onSend: (type: string, text: string) => void,
 ): {
     connector: object;
+    emitMessage: (message: unknown) => Promise<void>;
 } {
+    let messageHandler:
+        ((message: unknown) => void | Promise<void>) | undefined;
     const connector = {
-        on: () => {},
+        on: (
+            event: string,
+            handler: (message: unknown) => void | Promise<void>,
+        ) => {
+            if (event === "Message") messageHandler = handler;
+        },
         SendMessage: onSend,
     };
-    return { connector };
+    return {
+        connector,
+        emitMessage: async (message) => {
+            if (!messageHandler)
+                throw new Error("Message handler not registered");
+            await messageHandler(message);
+        },
+    };
 }
 
 function searchMessage() {
@@ -71,9 +86,11 @@ test("trashcan notifications use communication actions when enabled", async () =
         communicationNotificationsEnabled: true,
     });
     const sent: string[] = [];
-    const { connector } = connectorWithMessageHandler((_type, text) => {
-        sent.push(text);
-    });
+    const { connector, emitMessage } = connectorWithMessageHandler(
+        (_type, text) => {
+            sent.push(text);
+        },
+    );
     const system = new TrashcanSystem(
         connector as any,
         false,
@@ -96,7 +113,8 @@ test("trashcan notifications use communication actions when enabled", async () =
         },
     ]);
     system.registerTriggers();
-    await system.handleMessage(searchMessage());
+    await emitMessage(searchMessage());
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     assert.deepEqual(sent, []);
     assert.equal(adapter.requests.length, 1);

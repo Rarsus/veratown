@@ -64,7 +64,10 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     }
 
     public registerTriggers(): void {
-        this.conn.on("Message", guardHandler(this.key, this.handleMessage));
+        this.conn.on(
+            "Message",
+            guardHandler(this.key, this.handleMessage.bind(this)),
+        );
     }
 
     public shutdown(): void {
