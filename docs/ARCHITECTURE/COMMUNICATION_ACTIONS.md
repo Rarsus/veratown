@@ -2,7 +2,7 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.8"
+version: "1.9"
 status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, and BunnyParkSystem callers implemented; real delivery and broader migration pending"
 ---
 
@@ -321,9 +321,10 @@ evidence.
 - [x] Migrate the CageSystem unavailable-containment whispers as a low-risk
       targeted caller with a shared helper, explicit operation key, rollout
       lease, legacy fallback, and focused coverage.
-- [x] Migrate the BunnyParkSystem park-entry warning as a low-risk targeted
-      caller with an explicit operation key, rollout lease, legacy fallback,
-      and focused coverage.
+- [x] Migrate the BunnyParkSystem park-entry and pre-punishment warnings as
+      low-risk targeted callers with explicit operation keys, rollout leases,
+      legacy fallbacks, and focused coverage; retain punishment-failure
+      messages as workflow-owned legacy notifications.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before

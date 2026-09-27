@@ -319,6 +319,36 @@ test("Bunny Park uses communication actions for the park-entry notice when enabl
     service.close();
 });
 
+test("Bunny Park uses communication actions for the pre-punishment warning when enabled", async () => {
+    const created = createCharacter(78);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new BunnyParkSystem(
+        createMessageConnection(created.character) as any,
+        { punish: async () => ({ success: true }) } as any,
+        true,
+        true,
+        service,
+        rollout,
+    );
+
+    await (system as any).onCharacterStepOnBunny(created.character);
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text: "(Please do not step on the park's bunnies. You will be restrained as punishment.)",
+            targetMemberNumber: 78,
+            deduplicationKey: "bunny-step-warning:78",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    service.close();
+});
+
 test("secondary Bunny Park does not use a static park region", async () => {
     const tileCallbacks: Array<(character: any) => void | Promise<void>> = [];
     const regionCallbacks: Array<(character: any) => void | Promise<void>> = [];

@@ -134,17 +134,22 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 memberNumber: character.MemberNumber,
             });
         }
-        await this.sendParkEntryNotification(character);
+        await this.sendBunnyNotification(
+            character,
+            "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
+                "it is forbidden to step on the bunnies. Anyone caught doing so will be bound " +
+                "on the spot as punishment. Please watch your step.",
+            `bunny-park-entry:${character.MemberNumber}`,
+            "bunny park entry notification",
+        );
     };
 
-    private async sendParkEntryNotification(
+    private async sendBunnyNotification(
         character: API_Character,
+        text: string,
+        operationId: string,
+        reason: string,
     ): Promise<void> {
-        const text =
-            "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
-            "it is forbidden to step on the bunnies. Anyone caught doing so will be bound " +
-            "on the spot as punishment. Please watch your step.";
-        const operationId = `bunny-park-entry:${character.MemberNumber}`;
         const lease = this.rollout?.begin(
             "communication-notifications",
             operationId,
@@ -165,7 +170,7 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                         operationId,
                         memberNumber: character.MemberNumber,
                         source: "feature",
-                        reason: "bunny park entry notification",
+                        reason,
                         deadlineAt: Date.now() + 5000,
                     },
                 );
@@ -181,9 +186,11 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         if (!this.enabled) return;
         await this.monitor.run(character, async () => {
             try {
-                this.messageSender.whisperToCharacter(
+                await this.sendBunnyNotification(
                     character,
                     "(Please do not step on the park's bunnies. You will be restrained as punishment.)",
+                    `bunny-step-warning:${character.MemberNumber}`,
+                    "bunny step warning",
                 );
                 const result = await this.punishmentService.punish(character);
                 if (!result.success) {
