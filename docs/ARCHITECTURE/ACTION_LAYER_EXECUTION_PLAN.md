@@ -2,7 +2,7 @@
 title: "Action-Layer Execution Plan"
 subtitle: "Current state, next gates, and one-cycle verification plan"
 date: "September 27, 2026"
-version: "1.3"
+version: "1.4"
 status: "Pilot slices implemented; operational qualification and broader migration remain pending"
 ---
 
@@ -189,15 +189,18 @@ CatDogSystem, and TrashcanSystem notification paths.
 
 1. Verify real `SendMessage` behavior for whisper, chat, emote, connector
    exception, disconnect, and reconnect.
-2. Decide whether a queued local dispatch is sufficient for each caller; do not
+2. Implement the opt-in connector-first test-bot harness in
+   [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md); it must
+   join an existing room only and reject unsafe commands.
+3. Decide whether a queued local dispatch is sufficient for each caller; do not
    call it delivery without a receipt contract.
-3. Preserve the local WindowSystem rollback record and legacy/action comparison
+4. Preserve the local WindowSystem rollback record and legacy/action comparison
    tests while qualifying the same behavior against a real connector.
-4. Continue migrating one low-risk caller at a time with explicit ownership,
+5. Continue migrating one low-risk caller at a time with explicit ownership,
    rollback, and legacy comparison evidence.
-5. Define reply correlation and durable replay protection before migrating
+6. Define reply correlation and durable replay protection before migrating
    replies or workflow-critical notifications.
-6. Treat the targeted Veratown notification inventory as the current migration
+7. Treat the targeted Veratown notification inventory as the current migration
    boundary; public narration, command replies, casino/hub messages, and
    workflow-critical durable notifications require separate contracts.
 
@@ -216,10 +219,9 @@ CatDogSystem, and TrashcanSystem notification paths.
 `bin/games/veratown/__tests__/catDogSystem.test.ts`,
 `bin/games/veratown/__tests__/trashcanSystem.test.ts`, and the
 `pnpm test:communication` gate. The remaining promotion evidence is simulated
-connector qualification, real connector qualification, caller rollback,
-durable replay decision, and the separate reply contract. The Cage recovery
-tests still require the pre-existing `recoverCagedCharacter` method.
-The Cage recovery tests still require the pre-existing
+connector qualification through the proposed test-bot harness, real connector
+qualification, caller rollback, durable replay decision, and the separate
+reply contract. The Cage recovery tests still require the pre-existing
 `recoverCagedCharacter` method.
 
 ### 5. Position observation and movement

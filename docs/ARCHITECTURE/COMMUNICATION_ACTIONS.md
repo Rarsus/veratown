@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "2.4"
-status: "Targeted Veratown notification slice implemented behind opt-in rollout; BC delivery receipts, replies, durable replay protection, and real-room qualification remain pending"
+version: "2.5"
+status: "Targeted Veratown notification slice implemented behind opt-in rollout; real-room test-bot qualification is proposed, while BC delivery receipts, replies, and durable replay protection remain pending"
 ---
 
 # Communication Actions
@@ -386,6 +386,9 @@ evidence.
 - [x] Migrate TrashcanSystem found-item emotes through the shared action path
       with a stable operation key, rollout lease, legacy fallback, focused
       coverage, and a regression test for generic Message event registration.
+- [ ] Implement the opt-in real-room test-bot harness described in
+      [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md) before
+      migrating another caller.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -444,6 +447,13 @@ implementation is complete, but production enablement is blocked until the
 controlled-room record, rollback evidence, and an explicit decision on durable
 replay protection are accepted. Reply migration is a separate phase.
 
+The next implementation slice is the standalone test-bot harness. It must join
+an existing room with `ChatRoomJoin` only, use a dedicated account, reject
+unsafe commands, and retain redacted observations. Once Phase 1 protocol smoke
+tests pass, use the harness for the WindowSystem connector record and one
+action/legacy rollback comparison. Do not migrate another notification caller
+until that evidence exists.
+
 ## Controlled-room Playwright qualification
 
 VS Code's Playwright browser tooling can exercise the real Bondage Club room
@@ -451,6 +461,10 @@ without adding browser automation to the bot runtime. The qualification should
 be opt-in and use a locally configured room URL plus an already-authenticated
 browser profile; credentials and session tokens must not be passed through the
 assistant or committed to the repository.
+
+The complete proposal, including the connector-first harness and its safety
+rules, is maintained in
+[REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md).
 
 The first controlled run should be non-destructive and cover whisper, chat,
 emote, duplicate operation keys, connector disconnect/reconnect, one migrated
