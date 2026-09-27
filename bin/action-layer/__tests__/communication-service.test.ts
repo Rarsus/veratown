@@ -136,6 +136,25 @@ test("coalesces duplicate deduplication keys", async () => {
     assert.equal(adapter.requests.length, 1);
 });
 
+test("suppresses sequential duplicate requests for the retention window", async () => {
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter, {
+        deduplicationTtlMs: 1000,
+    });
+    const request = {
+        channel: "chat" as const,
+        text: "once",
+        deduplicationKey: "retained-notice",
+    };
+
+    await service.send(request, context("first"));
+    const duplicate = await service.send(request, context("second"));
+
+    assert.equal(duplicate.metadata.operationId, "first");
+    assert.equal(adapter.requests.length, 1);
+    assert.equal(service.snapshot().recentDeduplicationCount, 1);
+});
+
 test("keeps different character queues independent", async () => {
     const adapter = new RecordingCommunicationAdapter();
     const service = new CommunicationActionService(adapter);

@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.0"
-status: "Designed; implementation is being introduced behind the legacy MessageSender boundary"
+version: "1.1"
+status: "First communication action slice implemented and opt-in qualified; legacy MessageSender remains the default compatibility path"
 ---
 
 # Communication Actions
@@ -255,6 +255,12 @@ when the connector contract proves no dispatch occurred; otherwise it is
 `unknown` and must not be blindly replayed. `sent` is reserved for a future
 connector delivery signal or an explicitly documented transport guarantee.
 
+The service's deduplication cache is bounded and process-local. A stable
+operation ID or deduplication key can be reused after a retry or reconnect, but
+the action layer does not claim duplicate suppression across process restart;
+a durable workflow must own that obligation when restart protection is
+required.
+
 ## Incremental Implementation Plan
 
 Each iteration must leave the legacy path working and produce executable
@@ -262,34 +268,36 @@ evidence.
 
 ### Iteration 1: Design and domain contract
 
-- Add `CommunicationDeliveryStatus` and `CommunicationObservation`.
-- Define validation rules for channel, target, normalized text, and length.
-- Add domain tests for valid and invalid requests.
-- Register the design in the action-layer overview.
+- [x] Add `CommunicationDeliveryStatus` and `CommunicationObservation`.
+- [x] Define validation rules for channel, target, normalized text, and length.
+- [x] Add domain tests for valid and invalid requests.
+- [x] Register the design in the action-layer overview.
 
 ### Iteration 2: Service and transport adapter
 
-- Implement `CommunicationActionService` using the existing scheduler.
-- Implement `BCCommunicationActionAdapter` as the only `bc-bot` import in the
-  new communication slice.
-- Preserve `MessageSender` as a compatibility facade for existing callers.
-- Add contract tests for channel mapping, queued results, exceptions, and
-  operation-keyed duplicate suppression.
+- [x] Implement `CommunicationActionService` using the existing scheduler.
+- [x] Implement `BCCommunicationActionAdapter` as the only `bc-bot` import in the
+      new communication slice.
+- [x] Preserve `MessageSender` as a compatibility facade for existing callers.
+- [x] Add contract tests for channel mapping, queued results, exceptions, and
+      operation-keyed duplicate suppression.
 
 ### Iteration 3: DI and observability
 
-- Register one communication service per connector/container lifecycle.
-- Expose queue and recent-deduplication diagnostics.
-- Include operation ID, action ID, member number, channel, target, outcome,
-  and attempt in structured logs.
-- Verify shutdown closes the action scheduler.
+- [x] Register one communication service per connector/container lifecycle.
+- [x] Expose queue and recent-deduplication diagnostics.
+- [x] Include operation ID, action ID, member number, channel, target, outcome,
+      and attempt in structured logs.
+- [x] Provide a close path that shuts down the action scheduler and clears
+      process-local deduplication state.
 
 ### Iteration 4: First low-risk caller
 
-- Route location-monitor notifications or narration through the service.
-- Compare legacy and action results without changing business transitions.
-- Keep the action path disabled or explicitly injected in controlled tests until
-  connector behavior is qualified.
+- [x] Route location-monitor notifications through the service.
+- [x] Compare legacy and action results without changing business transitions.
+- [x] Keep the action path disabled by default and explicitly inject it in
+      controlled tests until connector behavior is qualified.
+      connector behavior is qualified.
 
 ### Iteration 5: Broader migration
 
@@ -314,6 +322,10 @@ Communication implementation is complete for the first action slice when:
 - existing `MessageSender` callers remain behavior-compatible;
 - focused tests, strict TypeScript, formatting, and the import boundary pass;
 - at least one low-risk caller has a controlled adapter integration test.
+
+The first action slice meets these criteria through the communication service,
+BC adapter, Veratown DI registration, and opt-in `LocationMonitorSystem`
+integration. This does not constitute full communication-family migration.
 
 Full communication-family migration additionally requires real connector
 qualification, failure-injection evidence, caller-by-caller rollback, and

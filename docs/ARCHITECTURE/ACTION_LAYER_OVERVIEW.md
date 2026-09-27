@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.20"
-status: "Bunny remains the first migration candidate; communication action design is complete and implementation is proceeding behind the legacy boundary"
+version: "1.21"
+status: "Bunny remains the first migration candidate; the first communication action slice is implemented and opt-in behind the legacy boundary"
 ---
 
 # Headless Bondage Club Action Layer
@@ -70,8 +70,9 @@ remaining evidence is limited to controlled-room qualification gates.
 - Communication action design, IST/SOLL UML diagrams, and the three-scope state
   management model are documented in
   [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
-  intentionally incremental and does not yet claim communication runtime
-  migration.
+  incrementally implemented and qualified through the service, BC adapter, DI
+  registration, and opt-in location-monitor caller. It does not yet claim
+  communication-family migration.
 
 ### Migration status answer
 
@@ -1252,8 +1253,16 @@ Migration is incremental and should preserve existing behavior after each step.
 - [x] Document communication action ownership, IST/SOLL UML diagrams, delivery
       states, and request/transport/business state management in
       [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md).
-- [ ] Wrap `messageSender` and connector movement calls.
-- [ ] Return delivery and observed-position results.
+- [x] Implement and test normalized communication requests, bounded
+      operation-keyed deduplication, structured delivery observations, and BC
+      channel translation.
+- [x] Register the communication action service in Veratown DI and preserve
+      `MessageSender` as the default compatibility path.
+- [x] Route location-monitor notifications through the action path under a
+      disabled-by-default rollout operation, with a no-duplicate integration
+      test.
+- [ ] Migrate remaining `messageSender` callers and connector movement calls.
+- [ ] Return observed-position results for movement actions.
 - [ ] Integrate reconnect epochs and stale-confirmation handling.
 - [ ] Migrate low-risk callers first: narration, notifications, and position
       sync.
