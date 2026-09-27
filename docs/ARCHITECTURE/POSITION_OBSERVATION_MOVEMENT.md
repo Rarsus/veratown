@@ -68,7 +68,12 @@ epoch per connector, assigns or accepts observation sequences, rejects prior
 epochs and non-newer same-epoch observations, persists only accepted observed
 coordinates, and records accepted/stale diagnostics. `Connected` and
 `Disconnected` events advance the epoch. This is a Veratown synchronization
-slice, not a production `MovementActionAdapter` implementation.
+slice, not a production `MovementActionAdapter` implementation. Position-only
+observations persist coordinates and derive restraint state from the existing
+profile appearance; they do not overwrite an existing appearance projection
+from the local BC cache. A character with no stored appearance still receives
+the initial cache bootstrap, while fresh appearance-sync callbacks continue to
+persist authoritative appearance observations.
 
 ### IST UML
 

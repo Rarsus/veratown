@@ -272,6 +272,73 @@ test("does not replace an occupied group during add", async () => {
     ]);
 });
 
+test("plans a fresh add from the authoritative snapshot and preserves clothing", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "ItemArms", Name: "StaleGloves" },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+    });
+
+    const pending = adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        {
+            ...makePolicy("fresh-add"),
+            requireFreshObservation: true,
+        },
+    );
+    runtime.items.splice(0, runtime.items.length, {
+        Group: "Cloth",
+        Name: "Dress",
+    });
+    connector.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: 11,
+        timestamp: 100,
+        appearance: runtime.Appearance.MakeAppearanceBundle(),
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "in_progress");
+    assert.deepEqual(
+        runtime.items.map(({ Group, Name }) => ({ Group, Name })),
+        [
+            { Group: "Cloth", Name: "Dress" },
+            { Group: "ItemArms", Name: "Gloves" },
+        ],
+    );
+});
+
+test("does not mutate when a required fresh observation times out", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector);
+    let addCalls = 0;
+    runtime.Appearance.AddItem = () => {
+        addCalls += 1;
+        return {};
+    };
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 5,
+    });
+
+    const result = await adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        {
+            ...makePolicy("fresh-timeout"),
+            requireFreshObservation: true,
+        },
+    );
+
+    assert.equal(result.status, "timed_out");
+    assert.equal(addCalls, 0);
+    assert.equal(connector.listenerCount(), 0);
+});
+
 test("accepts a matching inbound appearance snapshot and cleans up listeners", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);

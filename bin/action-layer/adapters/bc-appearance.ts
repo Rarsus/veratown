@@ -61,6 +61,19 @@ type ConfirmationWaitResult =
     | { readonly outcome: "disconnected"; readonly reason: string }
     | { readonly outcome: "unavailable"; readonly reason: string };
 
+type FreshObservationWaitResult =
+    | {
+          readonly outcome: "accepted";
+          readonly observation: AppearanceObservation;
+          readonly items: readonly BC_AppearanceItem[];
+      }
+    | Exclude<ConfirmationWaitResult, { readonly outcome: "accepted" }>;
+
+interface FreshObservationWaiter {
+    readonly promise: Promise<FreshObservationWaitResult>;
+    readonly cancel: () => void;
+}
+
 function propertyOf(item: BC_AppearanceItem): BCProperty {
     return (item.Property ?? {}) as BCProperty;
 }
@@ -465,6 +478,159 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         };
     }
 
+    private waitForFreshObservation(
+        character: API_Character,
+        startedAt: number,
+        timeoutMs: number,
+    ): FreshObservationWaiter {
+        const connector = this.connectorFor(character);
+        if (!connector) {
+            return {
+                promise: Promise.resolve({
+                    outcome: "unavailable",
+                    reason: "BC connector events are unavailable",
+                }),
+                cancel: () => undefined,
+            };
+        }
+
+        this.epochFor(connector);
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let resolveWaiter!: (result: FreshObservationWaitResult) => void;
+        const promise = new Promise<FreshObservationWaitResult>((resolve) => {
+            resolveWaiter = resolve;
+        });
+
+        const finish = (result: FreshObservationWaitResult): void => {
+            if (settled) return;
+            settled = true;
+            if (timer !== undefined) clearTimeout(timer);
+            connector.off("AppearanceSyncReceived", onAppearancePacket);
+            connector.off("CharacterSync", onCharacterSync);
+            connector.off("Connected", onConnected);
+            connector.off("Disconnected", onDisconnected);
+            connector.off("ReconnectFailed", onReconnectFailed);
+            resolveWaiter(result);
+        };
+
+        const accept = (
+            items: readonly BC_AppearanceItem[],
+            observedAt: number,
+        ): void => {
+            if (observedAt < startedAt) return;
+            finish({
+                outcome: "accepted",
+                observation: toObservation(items, observedAt),
+                items: [...items],
+            });
+        };
+
+        const onAppearancePacket = (diagnostic: any): void => {
+            if (
+                diagnostic?.direction !== "inbound" ||
+                diagnostic.memberNumber !== character.MemberNumber ||
+                !Array.isArray(diagnostic.appearance)
+            ) {
+                return;
+            }
+            accept(
+                diagnostic.appearance as BC_AppearanceItem[],
+                Number.isFinite(diagnostic.timestamp)
+                    ? diagnostic.timestamp
+                    : this.now(),
+            );
+        };
+
+        const onCharacterSync = (syncedCharacter: API_Character): void => {
+            if (syncedCharacter?.MemberNumber !== character.MemberNumber)
+                return;
+            accept(
+                syncedCharacter.Appearance.MakeAppearanceBundle(),
+                this.now(),
+            );
+        };
+
+        const onConnected = (): void => {
+            const state = this.connectorEpochs.get(connector as object);
+            if (state) state.disconnected = false;
+        };
+
+        const onDisconnected = (): void => {
+            const state = this.connectorEpochs.get(connector as object);
+            if (state && !state.disconnected) {
+                state.epoch += 1;
+                state.disconnected = true;
+            }
+            finish({
+                outcome: "disconnected",
+                reason: "BC connector disconnected before fresh observation",
+            });
+        };
+
+        const onReconnectFailed = (): void => {
+            onDisconnected();
+        };
+
+        connector.on("AppearanceSyncReceived", onAppearancePacket);
+        connector.on("CharacterSync", onCharacterSync);
+        connector.on("Connected", onConnected);
+        connector.on("Disconnected", onDisconnected);
+        connector.on("ReconnectFailed", onReconnectFailed);
+        timer = setTimeout(() => {
+            finish({
+                outcome: "timed_out",
+                reason: `Fresh appearance observation exceeded ${timeoutMs}ms`,
+            });
+        }, timeoutMs);
+
+        return {
+            promise,
+            cancel: () =>
+                finish({
+                    outcome: "unavailable",
+                    reason: "Fresh appearance observation cancelled",
+                }),
+        };
+    }
+
+    private freshObservationFailure(
+        context: ActionContext,
+        actionId: string,
+        startedAt: number,
+        result: FreshObservationWaitResult,
+    ): ActionResult<AppearanceObservation> {
+        if (result.outcome === "accepted") {
+            return failedMutation(
+                context,
+                actionId,
+                startedAt,
+                "Fresh appearance observation was unexpectedly accepted as a failure",
+                "transient",
+                true,
+            );
+        }
+        if (result.outcome === "timed_out") {
+            return createActionResult(
+                "timed_out",
+                createActionMetadata(context, actionId, startedAt),
+                {
+                    reason: result.reason,
+                    failureKind: "timeout",
+                    retryable: true,
+                },
+            );
+        }
+        return failedMutation(
+            context,
+            actionId,
+            startedAt,
+            result.reason,
+            "transient",
+            true,
+        );
+    }
+
     private async dispatchMutation(
         character: API_Character,
         item: AppearanceItemIdentity,
@@ -582,68 +748,92 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
     ): Promise<ActionResult<AppearanceObservation>> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
-        const before = character.Appearance.MakeAppearanceBundle();
-        const plan = planAppearanceAdditions(before.map(toObservedItem), [
-            item,
-        ]);
-        const completedAt = this.now();
-        if (plan.status === "blocked") {
-            return Promise.resolve(
-                blocked(
-                    context,
-                    "appearance.add",
-                    plan.conflicts[0]?.reason ?? "Appearance addition blocked",
-                    completedAt,
-                ),
-            );
-        }
-        if (plan.status === "already_satisfied") {
-            return Promise.resolve(
-                createActionResult(
-                    "already_satisfied",
-                    createActionMetadata(
+        const execute = (
+            before: readonly BC_AppearanceItem[],
+        ): Promise<ActionResult<AppearanceObservation>> => {
+            const plan = planAppearanceAdditions(before.map(toObservedItem), [
+                item,
+            ]);
+            const completedAt = this.now();
+            if (plan.status === "blocked") {
+                return Promise.resolve(
+                    blocked(
                         context,
                         "appearance.add",
+                        plan.conflicts[0]?.reason ??
+                            "Appearance addition blocked",
                         completedAt,
                     ),
-                    { value: toObservation(before, completedAt) },
-                ),
+                );
+            }
+            if (plan.status === "already_satisfied") {
+                return Promise.resolve(
+                    createActionResult(
+                        "already_satisfied",
+                        createActionMetadata(
+                            context,
+                            "appearance.add",
+                            completedAt,
+                        ),
+                        { value: toObservation(before, completedAt) },
+                    ),
+                );
+            }
+
+            return this.dispatchMutation(
+                character,
+                item,
+                policy,
+                "add",
+                () => {
+                    const asset = AssetGet(
+                        item.group as never,
+                        item.asset as never,
+                    );
+                    if (!asset)
+                        throw new Error(
+                            `Appearance asset unavailable: ${item.group}/${item.asset}`,
+                        );
+                    if (
+                        typeof (character as any).IsItemPermissionAccessible ===
+                            "function" &&
+                        !(character as any).IsItemPermissionAccessible(asset)
+                    ) {
+                        throw new Error(
+                            `Appearance permission denied: ${item.group}/${item.asset}`,
+                        );
+                    }
+                    const added = character.Appearance.AddItem(asset as never);
+                    if (!added)
+                        throw new Error(
+                            `Appearance asset could not be added: ${item.group}/${item.asset}`,
+                        );
+                    configureAddedItem(added, item, policy);
+                },
+                context,
+                startedAt,
             );
+        };
+
+        if (!policy.requireFreshObservation) {
+            return execute(character.Appearance.MakeAppearanceBundle());
         }
 
-        return this.dispatchMutation(
+        return this.waitForFreshObservation(
             character,
-            item,
-            policy,
-            "add",
-            () => {
-                const asset = AssetGet(
-                    item.group as never,
-                    item.asset as never,
-                );
-                if (!asset)
-                    throw new Error(
-                        `Appearance asset unavailable: ${item.group}/${item.asset}`,
-                    );
-                if (
-                    typeof (character as any).IsItemPermissionAccessible ===
-                        "function" &&
-                    !(character as any).IsItemPermissionAccessible(asset)
-                ) {
-                    throw new Error(
-                        `Appearance permission denied: ${item.group}/${item.asset}`,
-                    );
-                }
-                const added = character.Appearance.AddItem(asset as never);
-                if (!added)
-                    throw new Error(
-                        `Appearance asset could not be added: ${item.group}/${item.asset}`,
-                    );
-                configureAddedItem(added, item, policy);
-            },
-            context,
             startedAt,
-        );
+            Math.min(this.confirmationTimeoutMs, Math.max(1, policy.timeoutMs)),
+        ).promise.then((freshResult) => {
+            if (freshResult.outcome !== "accepted") {
+                return this.freshObservationFailure(
+                    context,
+                    "appearance.add",
+                    startedAt,
+                    freshResult,
+                );
+            }
+            return execute(freshResult.items);
+        });
     }
 
     public remove(
@@ -653,78 +843,102 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
     ): Promise<ActionResult<AppearanceObservation>> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
-        const before = character.Appearance.MakeAppearanceBundle();
-        const plan = planAppearanceRemovals(
-            before.map(toObservedItem),
-            [item],
-            policy.preserveLockedItems !== false,
-        );
-        const completedAt = this.now();
-        if (plan.status === "blocked") {
-            return Promise.resolve(
-                blocked(
-                    context,
-                    "appearance.remove",
-                    plan.conflicts[0]?.reason ?? "Appearance removal blocked",
-                    completedAt,
-                ),
+        const execute = (
+            before: readonly BC_AppearanceItem[],
+        ): Promise<ActionResult<AppearanceObservation>> => {
+            const plan = planAppearanceRemovals(
+                before.map(toObservedItem),
+                [item],
+                policy.preserveLockedItems !== false,
             );
-        }
-        if (plan.status === "already_satisfied") {
-            return Promise.resolve(
-                createActionResult(
-                    "already_satisfied",
-                    createActionMetadata(
+            const completedAt = this.now();
+            if (plan.status === "blocked") {
+                return Promise.resolve(
+                    blocked(
                         context,
                         "appearance.remove",
+                        plan.conflicts[0]?.reason ??
+                            "Appearance removal blocked",
                         completedAt,
                     ),
-                    { value: toObservation(before, completedAt) },
-                ),
-            );
-        }
+                );
+            }
+            if (plan.status === "already_satisfied") {
+                return Promise.resolve(
+                    createActionResult(
+                        "already_satisfied",
+                        createActionMetadata(
+                            context,
+                            "appearance.remove",
+                            completedAt,
+                        ),
+                        { value: toObservation(before, completedAt) },
+                    ),
+                );
+            }
 
-        const latest = character.Appearance.MakeAppearanceBundle();
-        const latestPlan = planAppearanceRemovals(
-            latest.map(toObservedItem),
-            [item],
-            policy.preserveLockedItems !== false,
-        );
-        if (latestPlan.status === "blocked") {
-            return Promise.resolve(
-                blocked(
-                    context,
-                    "appearance.remove",
-                    latestPlan.conflicts[0]?.reason ??
-                        "Appearance removal blocked",
-                    this.now(),
-                ),
+            const latest = character.Appearance.MakeAppearanceBundle();
+            const latestPlan = planAppearanceRemovals(
+                latest.map(toObservedItem),
+                [item],
+                policy.preserveLockedItems !== false,
             );
-        }
-        if (latestPlan.status === "already_satisfied") {
-            return Promise.resolve(
-                createActionResult(
-                    "already_satisfied",
-                    createActionMetadata(
+            if (latestPlan.status === "blocked") {
+                return Promise.resolve(
+                    blocked(
                         context,
                         "appearance.remove",
+                        latestPlan.conflicts[0]?.reason ??
+                            "Appearance removal blocked",
                         this.now(),
                     ),
-                    { value: toObservation(latest, this.now()) },
-                ),
+                );
+            }
+            if (latestPlan.status === "already_satisfied") {
+                return Promise.resolve(
+                    createActionResult(
+                        "already_satisfied",
+                        createActionMetadata(
+                            context,
+                            "appearance.remove",
+                            this.now(),
+                        ),
+                        { value: toObservation(latest, this.now()) },
+                    ),
+                );
+            }
+
+            return this.dispatchMutation(
+                character,
+                item,
+                policy,
+                "remove",
+                () => {
+                    character.Appearance.RemoveItem(item.group as never);
+                },
+                context,
+                startedAt,
             );
+        };
+
+        if (!policy.requireFreshObservation) {
+            return execute(character.Appearance.MakeAppearanceBundle());
         }
 
-        return this.dispatchMutation(
+        return this.waitForFreshObservation(
             character,
-            item,
-            policy,
-            "remove",
-            () => {
-                character.Appearance.RemoveItem(item.group as never);
-            },
-            context,
             startedAt,
-        );
+            Math.min(this.confirmationTimeoutMs, Math.max(1, policy.timeoutMs)),
+        ).promise.then((freshResult) => {
+            if (freshResult.outcome !== "accepted") {
+                return this.freshObservationFailure(
+                    context,
+                    "appearance.remove",
+                    startedAt,
+                    freshResult,
+                );
+            }
+            return execute(freshResult.items);
+        });
     }
 }

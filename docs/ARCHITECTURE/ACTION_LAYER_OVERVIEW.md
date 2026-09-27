@@ -355,6 +355,14 @@ dispatch, accepts only an inbound appearance snapshot matching the requested
 post-state, and returns `completed` only after that observation. Without the
 policy flag it retains the prior `in_progress` local-dispatch behavior.
 
+Appearance mutations may also set
+`AppearanceMutationPolicy.requireFreshObservation`. The BC adapter then waits
+for the next inbound `AppearanceSyncReceived` or `CharacterSync` snapshot
+before planning, so Bunny can preserve unrelated clothing without inspecting
+or mutating clothing itself. BC does not expose a separate read-request API;
+when no fresh snapshot arrives before the bounded timeout, the operation fails
+retryably without dispatching a local mutation.
+
 Confirmation cleanup is performed on accepted confirmation, timeout,
 cancellation, connector disconnect, and reconnect failure. Connector epochs
 advance on disconnect or connection identity change; stale pending registry

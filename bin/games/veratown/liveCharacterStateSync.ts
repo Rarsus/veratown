@@ -199,6 +199,7 @@ export class LiveCharacterStateSync {
         forcePositionPersistence = false,
         mutationContext?: AppearanceMutationContext,
         observedAppearance?: readonly BC_AppearanceItem[],
+        includeCachedAppearance = true,
     ): Promise<boolean> {
         if (
             !mutationContext &&
@@ -219,9 +220,6 @@ export class LiveCharacterStateSync {
                 );
             },
         );
-        const appearance = observedAppearance
-            ? filterValidAppearanceItems([...observedAppearance])
-            : this.normalizedAppearance(character);
         const memberNumber = character.MemberNumber;
         const previous = this.syncChains.get(memberNumber) ?? Promise.resolve();
         const next = previous
@@ -232,6 +230,12 @@ export class LiveCharacterStateSync {
                 const previousAppearance = filterValidAppearanceItems(
                     persisted.currentAppearance ?? [],
                 );
+                const appearance = observedAppearance
+                    ? filterValidAppearanceItems([...observedAppearance])
+                    : includeCachedAppearance ||
+                        persisted.currentAppearance === undefined
+                      ? this.normalizedAppearance(character)
+                      : previousAppearance;
                 const activeMutationContext =
                     mutationContext ??
                     takeAppearanceMutationContext(character) ??
@@ -433,6 +437,9 @@ export class LiveCharacterStateSync {
             character,
             { ...position },
             true,
+            undefined,
+            undefined,
+            false,
         );
         const result: PositionObservationResult = {
             status: "accepted",

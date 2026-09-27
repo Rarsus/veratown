@@ -280,6 +280,32 @@ test("LiveCharacterStateSync serializes overlapping observations by arrival orde
     ]);
 });
 
+test("position-only observations do not overwrite a persisted appearance", async () => {
+    const snapshots: unknown[][] = [];
+    const character = createCharacter(4, { X: 1, Y: 1 }, []);
+    const connector: any = {
+        chatRoom: { characters: [character] },
+        on: () => {},
+    };
+    const store: any = {
+        getVeratownView: async () => ({
+            currentAppearance: [{ Group: "Cloth", Name: "PersistedDress" }],
+            currentRestraints: [],
+        }),
+        syncVeratownState: async (...args: unknown[]) => {
+            snapshots.push(args);
+            return true;
+        },
+    };
+    const sync = new LiveCharacterStateSync(connector, store, 60_000);
+
+    await sync.observePosition(connector, 4, { X: 8, Y: 9 });
+
+    assert.deepEqual(snapshots[0]?.[2], [
+        { Group: "Cloth", Name: "PersistedDress" },
+    ]);
+});
+
 test("LiveCharacterStateSync ignores ambient snapshots during an active appearance scope", async () => {
     const character = createCharacter(5, { X: 1, Y: 1 }, []);
     let persisted = 0;

@@ -94,6 +94,7 @@ export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
     readonly lockMode?: AppearanceLockMode;
     readonly itemOptions?: AppearanceItemMutationOptions;
     readonly cleanupAllowed?: boolean;
+    readonly requireFreshObservation?: boolean;
 }
 
 export interface AppearanceObservation {
