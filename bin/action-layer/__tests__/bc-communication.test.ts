@@ -79,3 +79,39 @@ test("does not claim delivery when the BC call throws", async () => {
     assert.equal(result.retryable, true);
     assert.match(result.reason ?? "", /could not be established/);
 });
+
+test("classifies a disconnect as unknown and resumes queued dispatch after reconnect", async () => {
+    const connector = new FakeConnector();
+    const adapter = new BCCommunicationActionAdapter(connector, {
+        now: () => 300,
+    });
+
+    connector.error = new Error("socket disconnected");
+    const disconnected = await adapter.send(
+        {
+            channel: "whisper",
+            text: "during disconnect",
+            targetMemberNumber: 7,
+        },
+        context("disconnect"),
+    );
+
+    connector.error = undefined;
+    const reconnected = await adapter.send(
+        { channel: "emote", text: "after reconnect" },
+        context("reconnect"),
+    );
+
+    assert.equal(disconnected.value?.deliveryStatus, "unknown");
+    assert.equal(disconnected.retryable, true);
+    assert.equal(reconnected.status, "completed");
+    assert.equal(reconnected.value?.deliveryStatus, "queued");
+    assert.deepEqual(connector.calls, [
+        {
+            type: "Whisper",
+            text: "during disconnect",
+            target: 7,
+        },
+        { type: "Emote", text: "after reconnect" },
+    ]);
+});

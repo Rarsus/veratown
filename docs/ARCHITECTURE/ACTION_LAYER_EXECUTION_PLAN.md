@@ -174,9 +174,8 @@ and the opt-in LocationMonitor and WindowSystem notification paths.
    exception, disconnect, and reconnect.
 2. Decide whether a queued local dispatch is sufficient for each caller; do not
    call it delivery without a receipt contract.
-3. Qualify the WindowSystem caller with an explicit rollback record and
-   comparison of legacy/action outcomes before enabling it outside a
-   controlled room.
+3. Preserve the local WindowSystem rollback record and legacy/action comparison
+   tests while qualifying the same behavior against a real connector.
 4. Define reply correlation and durable replay protection before migrating
    replies or workflow-critical notifications.
 
@@ -184,8 +183,10 @@ and the opt-in LocationMonitor and WindowSystem notification paths.
 `bin/action-layer/__tests__/bc-communication.test.ts`,
 `bin/action-layer/__tests__/rollout.test.ts`,
 `bin/games/veratown/__tests__/locationMonitorSystem.test.ts`,
-`bin/games/veratown/__tests__/windowSystem.test.ts`, the one-cycle command,
-real connector qualification, and caller rollback evidence.
+`bin/games/veratown/__tests__/windowSystem.test.ts`,
+`bin/games/veratown/__tests__/windowSystemRollback.test.ts`, the one-cycle
+command, simulated connector qualification, real connector qualification, and
+caller rollback evidence.
 
 ### 5. Position observation and movement
 

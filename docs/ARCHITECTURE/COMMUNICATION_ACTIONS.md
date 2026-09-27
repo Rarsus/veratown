@@ -313,8 +313,10 @@ evidence.
 - [x] Migrate the WindowSystem public peep notification as an additional
       low-risk caller with an explicit operation key, rollout lease, legacy
       fallback, and focused integration coverage.
-- [ ] Qualify the WindowSystem caller against a real connector and retain
-      action/legacy comparison evidence plus a caller rollback record.
+- [x] Retain local action/legacy comparison evidence and an in-flight caller
+      rollback record for the WindowSystem notification.
+- [ ] Qualify the WindowSystem caller against a real connector and retain the
+      corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
       migrating replies or workflow-critical notifications.
 - [ ] Add durable replay protection where a notification is part of a
@@ -332,11 +334,15 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/locationMonitorSystem.test.ts`, including the
   enabled rollout path; and
 - `bin/games/veratown/__tests__/windowSystem.test.ts`, including action and
-  legacy paths.
+  legacy paths; and
+- `bin/games/veratown/__tests__/windowSystemRollback.test.ts`, including the
+  in-flight rollback path.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The
-communication switch remains disabled until that evidence is accepted.
+local disconnect/reconnect and rollback tests cover the simulated connector
+and caller contracts; the communication switch remains disabled until the
+controlled-room evidence is accepted.
 
 ## Acceptance Criteria
 
