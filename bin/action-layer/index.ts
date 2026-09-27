@@ -3,6 +3,7 @@ export * from "./executor";
 export * from "./appearance-planner";
 export * from "./appearance-confirmation";
 export * from "./appearance-service";
+export * from "./communication-service";
 export * from "./policy";
 export * from "./workflow";
 export * from "./rollout";

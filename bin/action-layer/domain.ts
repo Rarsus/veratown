@@ -147,11 +147,22 @@ export interface MessageRequest {
     readonly deduplicationKey?: string;
 }
 
+export type CommunicationDeliveryStatus =
+    "queued" | "sent" | "rejected" | "unknown";
+
+export interface CommunicationObservation {
+    readonly channel: MessageChannel;
+    readonly deliveryStatus: CommunicationDeliveryStatus;
+    readonly targetMemberNumber?: number;
+    readonly textLength: number;
+    readonly observedAt: number;
+}
+
 export interface CommunicationActionAdapter {
     send(
         request: MessageRequest,
         context: ActionContext,
-    ): Promise<ActionResult<{ delivered: boolean }>>;
+    ): Promise<ActionResult<CommunicationObservation>>;
 }
 
 export interface MapPosition {
