@@ -18,6 +18,11 @@ export interface BunnyPunishmentRepository {
         artifact: BunnyPunishmentArtifact,
         expectedArtifactVersion?: number,
     ): Promise<void>;
+    recordPunishment?(
+        artifact: BunnyPunishmentArtifact,
+        details: BunnyPunishmentAuditDetails,
+        expectedArtifactVersion?: number,
+    ): Promise<void>;
     updateArtifact?(
         artifact: BunnyPunishmentArtifact,
         expectedArtifactVersion?: number,
@@ -34,6 +39,7 @@ export class UnifiedBunnyPunishmentRepository implements BunnyPunishmentReposito
         private readonly store: Pick<
             UnifiedCharacterStore,
             | "recordBunnyPunishmentArtifact"
+            | "recordBunnyPunishment"
             | "incrementBunnyPunishmentCount"
             | "getVeratownView"
         >,
@@ -49,6 +55,18 @@ export class UnifiedBunnyPunishmentRepository implements BunnyPunishmentReposito
     ): Promise<void> {
         await this.store.recordBunnyPunishmentArtifact(
             artifact,
+            expectedArtifactVersion,
+        );
+    }
+
+    public async recordPunishment(
+        artifact: BunnyPunishmentArtifact,
+        details: BunnyPunishmentAuditDetails,
+        expectedArtifactVersion?: number,
+    ): Promise<void> {
+        await this.store.recordBunnyPunishment(
+            artifact,
+            details,
             expectedArtifactVersion,
         );
     }

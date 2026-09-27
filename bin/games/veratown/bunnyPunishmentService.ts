@@ -788,33 +788,47 @@ export class BunnyPunishmentWorkflow {
             restraintPieces: attemptedPieces,
             appliedPieces,
         };
-        await this.runPersistenceStage(
-            "artifact.record",
-            () =>
-                this.repository.recordArtifact(
-                    artifact,
-                    artifact.artifactVersion > 1
-                        ? artifact.artifactVersion - 1
-                        : 0,
-                ),
-            context,
-        );
-        await Promise.all([
-            this.runPersistenceStage(
-                "count.increment",
-                () => this.repository.incrementCount(character.MemberNumber),
-                context,
-            ),
-            this.runPersistenceStage(
-                "audit.record",
+        const expectedArtifactVersion =
+            artifact.artifactVersion > 1 ? artifact.artifactVersion - 1 : 0;
+        if (this.repository.recordPunishment) {
+            await this.runPersistenceStage(
+                "projection.commit",
                 () =>
-                    this.repository.recordAudit(
-                        character.MemberNumber,
+                    this.repository.recordPunishment!(
+                        artifact,
                         auditDetails,
+                        expectedArtifactVersion,
                     ),
                 context,
-            ),
-        ]);
+            );
+        } else {
+            await this.runPersistenceStage(
+                "artifact.record",
+                () =>
+                    this.repository.recordArtifact(
+                        artifact,
+                        expectedArtifactVersion,
+                    ),
+                context,
+            );
+            await Promise.all([
+                this.runPersistenceStage(
+                    "count.increment",
+                    () =>
+                        this.repository.incrementCount(character.MemberNumber),
+                    context,
+                ),
+                this.runPersistenceStage(
+                    "audit.record",
+                    () =>
+                        this.repository.recordAudit(
+                            character.MemberNumber,
+                            auditDetails,
+                        ),
+                    context,
+                ),
+            ]);
+        }
         this.logger.debug("Bunny punishment persistence stages completed", {
             ...context,
             appliedPieces,

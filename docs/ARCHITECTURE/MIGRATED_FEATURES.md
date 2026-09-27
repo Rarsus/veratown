@@ -2,7 +2,7 @@
 title: "Action-Layer Migrated Features"
 subtitle: "Maintained registry of feature slices, ownership, rollout, and evidence"
 date: "September 26, 2026"
-version: "1.1"
+version: "1.2"
 status: "Partial migration; production rollout disabled"
 ---
 
@@ -33,12 +33,12 @@ For the architecture, layer responsibilities, and overall migration plan, see
 
 ## Feature Registry
 
-| Feature                                                          | Current status                        | Action-layer runtime slice                                                                                                                                                       | Default switch                                 | Still legacy-owned                                                                                                                                                    | Evidence and next gate                                                                                                                                                                   |
-| ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bunny punishment                                                 | **Partial / opt-in workflow**         | Versioned Bunny workflow owns apply, confirmation, persistence stages, expiry timers, release cleanup, and journal recovery; action results must be confirmed before projection. | `action_layer_bunny_restraints_enabled: false` | Configuration selection and validation remain workflow-owned; atomic artifact/count/audit commit and controlled-room evidence remain open.                            | Mongo journal restart/CAS tests, runtime injection, local Bunny tests, and startup restoration pass. Run reconnect/rollback and controlled-room confirmation before enabling by default. |
-| Release appearance removal                                       | **Partial / selected target removal** | Eligible selected targets can be removed through the action appearance coordinator with authoritative confirmation and fail-closed lock classification.                          | `action_layer_release_removal_enabled: false`  | Release confirmation, teleport, cage/kennel release, nudity verification, keypad access, parole monitoring, release persistence, and remaining cleanup orchestration. | Local lock/ambiguity matrix and rollback tests pass. Real-room confirmation and durable restart/reconnect evidence remain open.                                                          |
-| Bunny WoodenSign behavior                                        | **Removed**                           | None.                                                                                                                                                                            | N/A                                            | No Bunny sign application, artifact, verification, or cleanup path remains.                                                                                           | Removal is complete; other features may still use `WoodenSign` independently.                                                                                                            |
-| Communication, movement, map, inventory, and permission families | **Not migrated**                      | No production action-layer ownership is claimed.                                                                                                                                 | N/A                                            | Existing feature systems and BC helpers.                                                                                                                              | Define contracts, adapters, contract tests, and rollback ownership one family at a time.                                                                                                 |
+| Feature                                                          | Current status                        | Action-layer runtime slice                                                                                                                                                      | Default switch                                 | Still legacy-owned                                                                                                                                                    | Evidence and next gate                                                                                                                                                                                        |
+| ---------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bunny punishment                                                 | **Partial / opt-in workflow**         | Versioned Bunny workflow owns apply, confirmation, atomic projection, expiry timers, release cleanup, and journal recovery; action results must be confirmed before projection. | `action_layer_bunny_restraints_enabled: false` | Configuration selection and validation remain workflow-owned; controlled-room reconnect, rollback, and qualification evidence remain open.                            | Mongo journal restart/CAS tests, runtime injection, atomic projection tests, startup restoration, and one live apply/expiry cleanup pass. Run the remaining controlled-room gates before enabling by default. |
+| Release appearance removal                                       | **Partial / selected target removal** | Eligible selected targets can be removed through the action appearance coordinator with authoritative confirmation and fail-closed lock classification.                         | `action_layer_release_removal_enabled: false`  | Release confirmation, teleport, cage/kennel release, nudity verification, keypad access, parole monitoring, release persistence, and remaining cleanup orchestration. | Local lock/ambiguity matrix and rollback tests pass. Real-room confirmation and durable restart/reconnect evidence remain open.                                                                               |
+| Bunny WoodenSign behavior                                        | **Removed**                           | None.                                                                                                                                                                           | N/A                                            | No Bunny sign application, artifact, verification, or cleanup path remains.                                                                                           | Removal is complete; other features may still use `WoodenSign` independently.                                                                                                                                 |
+| Communication, movement, map, inventory, and permission families | **Not migrated**                      | No production action-layer ownership is claimed.                                                                                                                                | N/A                                            | Existing feature systems and BC helpers.                                                                                                                              | Define contracts, adapters, contract tests, and rollback ownership one family at a time.                                                                                                                      |
 
 ## What “Bunny Migrated” Means
 
@@ -57,16 +57,25 @@ The production `Veratown` wiring injects the action appearance service, rollout
 controller, Mongo-backed workflow journal, and `VeratownWorkflowRecovery`.
 Startup restores non-terminal journal records and reconciles active Bunny
 artifacts for characters already in the room; shutdown disposes timers and
-event subscriptions. This proves the runtime boundary, but not live controlled
-room behavior.
+event subscriptions. The projection boundary now commits the profile
+artifact, punishment count, audit record, and durable event transactionally,
+with operation-keyed retry idempotency.
 
-Full Bunny migration requires all of the following:
+The deployed service also completed one opt-in live qualification operation:
+Railway deployment `fd050056...` was healthy and running; operation
+`bunny-250927-1790448380357-1` completed at journal version 6 with Heavy Yoke
+and Heavy Spreader applied, then recorded expiry cleanup with `status: expired`,
+`cleanedAt`, and `cleanupReason: expired`. This is evidence for the bounded
+apply/expiry path, not full migration or default rollout.
 
-- complete atomic artifact/count/audit persistence with idempotent recovery;
+Full Bunny migration still requires all of the following:
+
 - rehearse authoritative confirmation across room reconnect and process
   restart in the controlled room;
-- retain an operation-keyed rollback path until the new workflow proves
-  equivalent behavior in a controlled room and under the performance gates.
+- rehearse the operation-keyed rollback path while preserving one owner per
+  operation;
+- complete the 30-minute, 19-character qualification and record the required
+  latency, retry, queue, and failure thresholds before changing the switch.
 
 ## Current Ownership Model
 
@@ -120,8 +129,8 @@ classDiagram
 ```
 
 The workflow recovery relationship is now production-injected. The remaining
-gate is evidence: atomic projection semantics, reconnect/rollback rehearsal,
-and controlled-room confirmation are still required before the switch changes.
+gates are controlled-room reconnect/restart and rollback rehearsals plus the
+required qualification workload; both rollout switches remain disabled.
 
 ## Bunny Restraint Slice
 
@@ -195,7 +204,8 @@ stateDiagram-v2
 ```
 
 The workflow now records these stages through the production-injected journal.
-Atomic projection semantics and live controlled-room confirmation remain open
+Successful projection is transactional and idempotent by operation ID. Live
+controlled-room reconnect, rollback, and qualification evidence remain open
 gates.
 
 ## Release Removal Slice
@@ -267,14 +277,16 @@ Current facts represented by this diagram:
 
 ## Evidence Ledger
 
-| Evidence                                 | Current result                            | What it proves                                                                                                           | What it does not prove                                        |
-| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| Action-layer and adapter tests           | Passing                                   | Pure contracts, BC translation, confirmation lifecycle, lock protection, and failure classification behave as tested.    | Real-room packet behavior or production restart recovery.     |
-| Bunny/release staging harnesses          | Passing for local deterministic scenarios | Requested, local, confirmed, persisted projections and rollout ownership agree in the harness.                           | Live connector timing, room reconnect, or production storage. |
-| Workflow journal tests                   | Passing                                   | Optimistic versions, idempotent keys, terminal-state protection, and restart restoration work against the test storage.  | Runtime injection or a durable production backend.            |
-| Mongo workflow journal integration       | Passing                                   | Production storage indexes, restart restoration, stale-writer CAS rejection, and terminal protection work against Mongo. | Live process failure timing or controlled-room recovery.      |
-| TypeScript and formatting checks         | Passing                                   | Current source and documentation edits meet static checks.                                                               | Operational readiness.                                        |
-| 19/25-character short qualification runs | Passing                                   | The short deterministic workload stays within configured thresholds.                                                     | The required 30-minute production qualification.              |
+| Evidence                                 | Current result                            | What it proves                                                                                                           | What it does not prove                                               |
+| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Action-layer and adapter tests           | Passing                                   | Pure contracts, BC translation, confirmation lifecycle, lock protection, and failure classification behave as tested.    | Real-room packet behavior or production restart recovery.            |
+| Bunny/release staging harnesses          | Passing for local deterministic scenarios | Requested, local, confirmed, persisted projections and rollout ownership agree in the harness.                           | Live connector timing, room reconnect, or production failure timing. |
+| Workflow journal tests                   | Passing                                   | Optimistic versions, idempotent keys, terminal-state protection, and restart restoration work against the test storage.  | Live process failure timing or controlled-room recovery.             |
+| Mongo workflow journal integration       | Passing                                   | Production storage indexes, restart restoration, stale-writer CAS rejection, and terminal protection work against Mongo. | Live process failure timing or controlled-room recovery.             |
+| Bunny projection transaction integration | Passing                                   | Replica-set tests prove one count/audit/event on retry and rollback on event persistence failure.                        | Production failure injection and the controlled-room qualification.  |
+| Live Bunny apply/expiry qualification    | One bounded operation completed           | Railway and Atlas evidence show journal completion, Heavy Yoke/Heavy Spreader application, and expiry cleanup.           | Reconnect, rollback, 30-minute workload, and default rollout.        |
+| TypeScript and formatting checks         | Passing                                   | Current source and documentation edits meet static checks.                                                               | Operational readiness.                                               |
+| 19/25-character short qualification runs | Passing                                   | The short deterministic workload stays within configured thresholds.                                                     | The required 30-minute production qualification.                     |
 
 ## Maintenance Rules
 

@@ -3024,6 +3024,191 @@ export class UnifiedCharacterStore {
         await this.eventBus.publish(event);
     }
 
+    public async recordBunnyPunishment(
+        artifact: BunnyPunishmentArtifact,
+        details: {
+            operationId: string;
+            configuration: string;
+            restraintPieces: readonly string[];
+            appliedPieces: readonly string[];
+        },
+        expectedArtifactVersion?: number,
+    ): Promise<void> {
+        this.assertMemberNumber(artifact.memberNumber);
+        await this.init();
+        await this.auditLogService.init();
+        await this.getProfile(artifact.memberNumber);
+
+        let eventToPublish: GameEvent | undefined;
+        await this.withTransaction(async (session) => {
+            const profile = await this.profiles.findOne(
+                { _id: artifact.memberNumber },
+                { session },
+            );
+            if (!profile)
+                throw new Error("Bunny punishment profile is missing");
+
+            const currentArtifact = profile.veratown.bunnyPunishmentArtifact;
+            const isRetry =
+                currentArtifact?.operationId === artifact.operationId;
+            const auditId = `audit:bunny:${artifact.operationId}`;
+            const now = Date.now();
+            const auditDetails = {
+                ...details,
+                auditId,
+            };
+
+            if (!isRetry) {
+                const filter = {
+                    _id: artifact.memberNumber,
+                    ...(expectedArtifactVersion === undefined
+                        ? {}
+                        : {
+                              $or: [
+                                  {
+                                      "veratown.bunnyPunishmentArtifact.artifactVersion":
+                                          expectedArtifactVersion,
+                                  },
+                                  {
+                                      "veratown.bunnyPunishmentArtifact.status":
+                                          {
+                                              $ne: "active",
+                                          },
+                                  },
+                              ],
+                          }),
+                };
+                const result = await this.profiles.updateOne(
+                    filter,
+                    [
+                        {
+                            $set: {
+                                "veratown.bunnyPunishmentArtifact": {
+                                    $literal: artifact,
+                                },
+                                "veratown.bunnyPunishmentCount": {
+                                    $add: [
+                                        {
+                                            $ifNull: [
+                                                "$veratown.bunnyPunishmentCount",
+                                                0,
+                                            ],
+                                        },
+                                        1,
+                                    ],
+                                },
+                                "veratown.auditLog": {
+                                    $slice: [
+                                        {
+                                            $concatArrays: [
+                                                {
+                                                    $cond: [
+                                                        {
+                                                            $isArray:
+                                                                "$veratown.auditLog",
+                                                        },
+                                                        "$veratown.auditLog",
+                                                        [],
+                                                    ],
+                                                },
+                                                [
+                                                    {
+                                                        $literal: {
+                                                            action: "bunny_punishment_applied",
+                                                            performedBy:
+                                                                artifact.memberNumber,
+                                                            performedAt: now,
+                                                            details:
+                                                                auditDetails,
+                                                        },
+                                                    },
+                                                ],
+                                            ],
+                                        },
+                                        -10,
+                                    ],
+                                },
+                                "veratown.auditSummary": {
+                                    lastAction: "bunny_punishment_applied",
+                                    lastActionAt: now,
+                                    lastActionBy: artifact.memberNumber,
+                                    totalAuditEvents: {
+                                        $add: [
+                                            {
+                                                $ifNull: [
+                                                    "$veratown.auditSummary.totalAuditEvents",
+                                                    0,
+                                                ],
+                                            },
+                                            1,
+                                        ],
+                                    },
+                                },
+                                "veratown.updatedAt": now,
+                                updatedAt: now,
+                                lastAccessedAt: now,
+                                lastAccessedBy: "veratown",
+                                "veratown.version": {
+                                    $add: [
+                                        { $ifNull: ["$veratown.version", 0] },
+                                        1,
+                                    ],
+                                },
+                                version: {
+                                    $add: [{ $ifNull: ["$version", 0] }, 1],
+                                },
+                            },
+                        },
+                    ],
+                    { session },
+                );
+                if (result.matchedCount === 0) {
+                    throw new Error(
+                        "Bunny punishment artifact version conflict",
+                    );
+                }
+            }
+
+            await this.auditLogService.record(
+                {
+                    auditId,
+                    timestamp: now,
+                    action: "bunny_punishment_applied",
+                    source: "veratown",
+                    targetMemberNumber: artifact.memberNumber,
+                    actorMemberNumber: artifact.memberNumber,
+                    operationId: artifact.operationId,
+                    details,
+                    retentionClass: "standard",
+                },
+                session,
+            );
+
+            if (!isRetry) {
+                eventToPublish = {
+                    timestamp: artifact.appliedAt,
+                    type: "audit_trail",
+                    source: "veratown",
+                    actor: artifact.memberNumber,
+                    target: artifact.memberNumber,
+                    data: {
+                        operationId: artifact.operationId,
+                        appliedAt: artifact.appliedAt,
+                        cleanupPolicy: artifact.cleanupPolicy,
+                        reason: "bunny_punishment_applied",
+                        event: "bunny_punishment_applied",
+                    },
+                    processed: false,
+                    correlationId: artifact.operationId,
+                    deliveryId: `bunny-punishment:${artifact.operationId}`,
+                };
+                await this.events.insertOne(eventToPublish, { session });
+            }
+        });
+
+        if (eventToPublish) await this.eventBus.publish(eventToPublish);
+    }
+
     /**
      * Reports stale or incomplete live-state projections without mutating
      * profiles, so an operator can safely run it during incident recovery.

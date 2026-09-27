@@ -1,4 +1,4 @@
-import { Collection, Db } from "mongodb";
+import { ClientSession, Collection, Db } from "mongodb";
 import { AuditLogDocument } from "./unifiedCharacterTypes";
 
 export const AUDIT_RETENTION_DAYS = {
@@ -68,7 +68,10 @@ export class AuditLogService {
         this.initialized = true;
     }
 
-    async record(input: RecordAuditLogInput): Promise<string> {
+    async record(
+        input: RecordAuditLogInput,
+        session?: ClientSession,
+    ): Promise<string> {
         await this.init();
         const retentionClass = input.retentionClass ?? "standard";
         const expiresAt =
@@ -81,7 +84,7 @@ export class AuditLogService {
         await this.audits.updateOne(
             { auditId: document.auditId },
             { $setOnInsert: document },
-            { upsert: true },
+            { upsert: true, ...(session ? { session } : {}) },
         );
         return document.auditId;
     }

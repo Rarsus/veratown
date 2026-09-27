@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 26, 2026"
-version: "1.17"
-status: "Proposed - local Bunny/release qualification and durable recovery boundaries implemented behind disabled switches; live evidence pending"
+version: "1.18"
+status: "Proposed - Bunny durable recovery and one bounded live qualification complete behind disabled switches; full migration gates remain open"
 ---
 
 # Headless Bondage Club Action Layer
@@ -55,9 +55,17 @@ still pending.
   observation and is wired to the production Mongo workflow journal. Startup
   restores journal records and active artifacts; shutdown disposes workflow
   timers and subscriptions.
-- Live-room confirmation, reconnect/rollback rehearsal, atomic projection
-  validation, and the actual 30-minute 19-character qualification remain open
-  evidence gates.
+- One bounded live Bunny apply/expiry operation is complete: Railway deployment
+  `fd050056...` was healthy and running, operation
+  `bunny-250927-1790448380357-1` reached journal version 6, Heavy Yoke and
+  Heavy Spreader were applied, and expiry cleanup recorded `status: expired`,
+  `cleanedAt`, and `cleanupReason: expired` in Atlas.
+- The Bunny projection boundary is transaction-aware and idempotent by
+  operation ID; replica-set tests cover duplicate retry and rollback after an
+  event persistence failure.
+- Controlled-room confirmation across reconnect/restart, rollback rehearsal,
+  and the actual 30-minute 19-character qualification remain open evidence
+  gates. Both runtime switches remain disabled.
 
 ### Migration status answer
 
@@ -75,7 +83,7 @@ orchestration. `BunnyPunishmentService` remains a compatibility facade, and
 See [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md) for the maintained registry,
 ownership tables, UML diagrams, evidence ledger, and documentation maintenance
 rules. Do not describe Bunny as fully migrated until that registry's remaining
-workflow, durable-storage, live-confirmation, restart/reconnect, and cleanup
+live-confirmation, restart/reconnect, rollback, qualification, and rollout
 gates are closed.
 
 ### Completed groundwork
@@ -149,8 +157,8 @@ gates are closed.
       idempotent operation keys, restart restoration, terminal-state protection,
       and persistence-failure tests.
 - [x] Veratown recovery boundary implemented and tested as an optional Bunny
-      and release migration interface; runtime injection and production journal
-      storage remain pending.
+      and release migration interface; runtime injection and production Mongo
+      journal storage are active.
 - [x] Soak runner with retained samples, hard threshold evaluation, a
       19-character qualification command, and a 25-character headroom mode.
 
@@ -161,9 +169,9 @@ gates are closed.
       `requireServerConfirmation` is enabled, but real-room evidence and live
       reconnect qualification remain pending.
 - [ ] Movement, communication, map, permission, and inventory adapters.
-- [ ] Production storage implementation and live restart/reconnect rehearsal
-      for the journal. Existing artifact/profile stores remain the source of
-      truth until that rehearsal passes.
+- [ ] Live restart/reconnect rehearsal for the production journal and Bunny
+      artifact recovery. The Mongo journal is active in production, while the
+      controlled-room rehearsal remains pending.
 - [ ] Full Bunny or release migration. Feature flags, DI registration, and
       rollback switching exist only for the narrow migrated slices.
 - [ ] The actual 30-minute 19-character soak and production performance gate.
@@ -173,10 +181,10 @@ gates are closed.
 - [ ] Feature-system migration. The inventory found approximately 129 direct
       appearance operations, 2 lock applications, 333 message or reply calls,
       49 map mutations, and 5 teleport calls in non-test feature code.
-- [ ] Full Bunny punishment migration. The restraint-only action path and
-      journal boundary exist behind a disabled switch, but legacy remains
-      default until production storage, expiry recovery rehearsal, and live
-      qualification are complete.
+- [ ] Full Bunny punishment migration. The restraint-only action path,
+      transaction-aware projection, and journal boundary exist behind a
+      disabled switch, but legacy remains default until reconnect/restart,
+      rollback, and live qualification are complete.
 - [ ] Full release workflow migration. The action path covers selected live
       removal targets, while classification, nudity, teleport, parole, and
       durable release transitions remain legacy-owned.
@@ -1273,8 +1281,9 @@ Each step has a completion gate and preserves the new/old boundary:
        rollout controller stops new action-path starts, preserves operation
        ownership, and routes new work to legacy during rollback.
 9. [x] Implement the opt-in Bunny restraint adapter path with asset, lock,
-       permission, metadata, and authoritative-confirmation contracts. Live
-       room, persistence, and rollback qualification remain pending.
+       permission, metadata, and authoritative-confirmation contracts. One
+       bounded live apply/expiry operation and transactional persistence pass;
+       reconnect, rollback, and full qualification remain pending.
 10. [x] Add the release-removal action branch for selected live targets. It
         requires authoritative confirmation and never falls back to legacy for
         the same operation. Full release qualification for unlocked, locked,
@@ -1296,9 +1305,10 @@ Each step has a completion gate and preserves the new/old boundary:
         persisted projections and rollback ownership; real-room confirmation
         latency and durable-store evidence remain pending.
 15. [x] Add the durable workflow journal, optimistic versions, idempotent
-        operation keys, persistence-failure handling, and restart restoration
-        boundary for active Bunny and release operations. Production storage
-        and live reconnect rehearsal remain pending.
+        operation keys, persistence-failure handling, restart restoration, and
+        transaction-aware Bunny projection boundary for active Bunny and
+        release operations. Production live reconnect rehearsal remains
+        pending.
 16. [x] Extend the workload harness into a repeated soak with retained samples
         and hard-threshold enforcement. The repository provides runnable
         19-character and 25-character headroom commands; the actual 30-minute
@@ -1398,7 +1408,9 @@ been added behind disabled rollout switches:
 6. [x] Implement initial opt-in authoritative behavior in a real `bc-bot`
        adapter with lifecycle cleanup and epoch-aware recovery.
 7. [ ] Validate server confirmation, persistence, restart recovery, and
-       rollback.
+       rollback in the controlled room. The Bunny persistence boundary and one
+       bounded apply/expiry operation are now validated; the full gate remains
+       open.
 8. [ ] Use the proven appearance adapter shape for movement, communication,
        and map actions.
 
