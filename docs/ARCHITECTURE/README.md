@@ -8,6 +8,7 @@ This section contains the system design, architectural decisions, and design pat
 - **[Communication Actions](COMMUNICATION_ACTIONS.md)** - Communication delivery semantics and opt-in migration slice
 - **[Position Observation and Movement](POSITION_OBSERVATION_MOVEMENT.md)** - Position state ownership, reconnect epochs, and movement boundary
 - **[Map Trigger Lifecycle](MAP_TRIGGER_LIFECYCLE.md)** - Scoped trigger registration, cleanup handles, and room/map lifecycle
+- **[Door Management](DOOR_MANAGEMENT.md)** - Keypad door map mutations, trigger lifecycle, and workflow ownership
 - **[Unified State Architecture](UNIFIED_STATE_ARCHITECTURE.md)** - Character store and unified state management
 - **[Architectural Decisions](ARCHITECTURAL_DECISIONS.md)** - Key design choices and rationale
 - **[Pluggable Architecture Pattern](PLUGGABLE_ARCHITECTURE_PATTERN.md)** - How the system extends with new games

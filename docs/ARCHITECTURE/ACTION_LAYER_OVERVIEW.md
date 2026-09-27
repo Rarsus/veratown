@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.22"
-status: "Bunny remains the first migration candidate; communication and position observation have partial slices, and map trigger lifecycle has a qualified LocationMonitorSystem pilot"
+version: "1.23"
+status: "Bunny remains the first migration candidate; communication and position observation have partial slices, map trigger lifecycle has a qualified LocationMonitorSystem pilot, and Door management is in incremental implementation"
 ---
 
 # Headless Bondage Club Action Layer
@@ -82,6 +82,11 @@ remaining evidence is limited to controlled-room qualification gates.
   [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md). The
   `LocationMonitorSystem` pilot uses the registry and BC adapter; broader map
   and tile-family migration remains pending.
+- Door management design, including the `KeypadDoorSystem` IST/SOLL boundary,
+  map-object mutation adapter, trigger lifecycle, and workflow state ownership,
+  actual state, and required action sequence is documented in
+  [DOOR_MANAGEMENT.md](DOOR_MANAGEMENT.md). The runtime pilot is not yet
+  qualified; access policy and unlock timers remain above the map action layer.
 
 ### Migration status answer
 
@@ -876,6 +881,7 @@ Planned actions:
 - `observeMap()`
 - `getTile(position)`
 - `setTile(position, asset, metadata)`
+- `setObject(position, objectName, context)`
 - `addTileTrigger(position, trigger)`
 - `removeTileTrigger(position, trigger)`
 - `addRegionTrigger(region, trigger)`
@@ -886,7 +892,10 @@ Map actions should preserve the distinction between static configuration,
 runtime trigger registration, and observed character location. Trigger
 registration must be scoped to a room/map instance, idempotent by stable key,
 and reversible during reload, room replacement, feature disablement, and
-shutdown. See [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md).
+shutdown. Door object mutations follow the same adapter boundary but leave
+access policy, codes, permissions, and unlock timers in the door workflow. See
+[MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md) and
+[DOOR_MANAGEMENT.md](DOOR_MANAGEMENT.md).
 
 Existing `AbstractTileFeatureSystem`, Bunny park registration, and map
 position synchronization provide the migration seams.
