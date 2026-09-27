@@ -2,8 +2,8 @@
 title: "Position Observation and Movement"
 subtitle: "IST/SOLL design for observed position, reconnect epochs, and movement actions"
 date: "September 27, 2026"
-version: "1.0"
-status: "Position observation runtime slice implemented; movement and teleport migration are not implemented"
+version: "1.1"
+status: "Position observation runtime slice implemented and locally qualified; movement and teleport migration are not implemented"
 ---
 
 # Position Observation and Movement
@@ -36,7 +36,7 @@ The position design has these invariants:
 - Teleportation remains deferred until an authoritative arrival confirmation
   contract exists.
 
-## IST: current ownership and behavior
+## IST: pre-observation-slice ownership and behavior
 
 ### Current flow
 
@@ -56,10 +56,19 @@ rejection. The per-member `syncChains` map preserves arrival order of async
 persistence work, but it does not establish that the event being persisted is
 newer than the last accepted observation.
 
-There is also a known boundary defect: when `syncSelfPosition` receives a
-requested position, it records the live `observedPosition` in the diagnostic
-but currently passes the requested position to `syncCharacter`. The target
-architecture must remove that ambiguity before movement callers migrate.
+The pre-slice behavior had a boundary defect: when `syncSelfPosition` received
+a requested position, it could persist the requested position rather than the
+observed position. The observation slice now routes observed coordinates to
+the persistence boundary and records the distinction in diagnostics.
+
+## Actual implementation state
+
+`LiveCharacterStateSync` now owns the observation guard. It tracks a connection
+epoch per connector, assigns or accepts observation sequences, rejects prior
+epochs and non-newer same-epoch observations, persists only accepted observed
+coordinates, and records accepted/stale diagnostics. `Connected` and
+`Disconnected` events advance the epoch. This is a Veratown synchronization
+slice, not a production `MovementActionAdapter` implementation.
 
 ### IST UML
 
@@ -360,11 +369,12 @@ migration target.
 
 ### Iteration 3: Movement adapter qualification
 
-- Define the arrival event and operation-correlation contract.
-- Implement `observePosition` first and qualify it with connector doubles and a
-  controlled room.
-- Add `moveCharacter` only after dispatch-versus-arrival behavior is proven.
-- Keep all movement rollout switches disabled by default.
+- [ ] Define the arrival event and operation-correlation contract.
+- [x] Implement and test `observePosition` with connector doubles.
+- [ ] Qualify observation epochs and delayed events in a controlled room.
+- [ ] Add `moveCharacter` only after dispatch-versus-arrival behavior is
+      proven.
+- [ ] Keep all movement rollout switches disabled by default.
 
 ### Iteration 4: Teleport decision
 
@@ -372,6 +382,15 @@ migration target.
   server rejection semantics have executable tests and live evidence.
 - Migrate one low-risk caller with rollback ownership and no direct persistence
   of requested coordinates.
+
+### Next-phase gate
+
+The observation slice is covered by
+`bin/games/veratown/__tests__/liveCharacterStateSync.test.ts` and the unified
+action-layer cycle. Movement cannot progress until controlled reconnect and
+room-recreation evidence exists, followed by tests for arrival correlation,
+server denial or clamping, timeout, cancellation, stale epochs, and
+already-at-destination idempotency.
 
 ## Acceptance criteria
 

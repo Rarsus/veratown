@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.3"
-status: "First communication action slice implemented and opt-in qualified; legacy MessageSender remains the default compatibility path"
+version: "1.4"
+status: "Communication service, BC adapter, DI wiring, and opt-in LocationMonitor caller implemented; real delivery and broader migration pending"
 ---
 
 # Communication Actions
@@ -304,11 +304,31 @@ evidence.
 
 ### Iteration 5: Broader migration
 
-- Migrate additional low-risk notification callers.
-- Add reply and authoritative delivery contracts only when their semantics are
-  defined.
-- Retire direct `SendMessage` calls after caller ownership and rollback are
-  documented.
+- [ ] Qualify whisper, chat, emote, disconnect, reconnect, and thrown-connector
+      outcomes against a real connector. `queued` is still local dispatch, not
+      delivery.
+- [ ] Migrate one additional low-risk notification caller with an explicit
+      operation key, rollout lease, comparison evidence, and rollback path.
+- [ ] Define reply correlation and authoritative delivery semantics before
+      migrating replies or workflow-critical notifications.
+- [ ] Add durable replay protection where a notification is part of a
+      recoverable workflow.
+- [ ] Retire direct `SendMessage` calls only after caller ownership, rollback,
+      and delivery semantics are documented.
+
+### Current gate
+
+The first communication slice is locally qualified by:
+
+- `bin/action-layer/__tests__/communication-service.test.ts`;
+- `bin/action-layer/__tests__/bc-communication.test.ts`;
+- `bin/action-layer/__tests__/rollout.test.ts`; and
+- `bin/games/veratown/__tests__/locationMonitorSystem.test.ts`, including the
+  enabled rollout path.
+
+The next phase requires those tests plus a controlled-room connector record for
+queued and unknown outcomes, reconnect behavior, and one caller rollback. The
+communication switch remains disabled until that evidence is accepted.
 
 ## Acceptance Criteria
 

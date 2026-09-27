@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.24"
-status: "Bunny remains the first migration candidate; communication and position observation have partial slices, map trigger lifecycle has a qualified LocationMonitorSystem pilot, and Door management has a qualified focused pilot slice"
+version: "1.25"
+status: "Foundation plus opt-in appearance, communication, position-observation, map-trigger, and Door pilot slices; operational qualification and broader migration remain pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -33,11 +33,16 @@ dependency surface.
 
 This document describes both the target architecture and the current delivery
 state. The completed work spans the isolated package at `bin/action-layer/`
-and two narrow, opt-in integration slices for Bunny restraint application and
-release target removal. No broad feature-system migration has occurred. Both
-runtime switches remain disabled by default. Bunny has completed the local,
-durable, atomicity, and one bounded live apply/expiry validation cycle; the
-remaining evidence is limited to controlled-room qualification gates.
+and narrow pilot slices for Bunny restraint application, release target
+removal, communication notifications, position observation, map-trigger
+lifecycle, and Door map interaction. No broad feature-family migration has
+occurred. Appearance and communication rollout switches remain disabled by
+default. Bunny has completed local, durable, atomicity, and one bounded live
+apply/expiry validation cycle; operational qualification remains open.
+
+The executable next-step order, per-area gates, and one-cycle verification
+command are maintained in
+[ACTION_LAYER_EXECUTION_PLAN.md](ACTION_LAYER_EXECUTION_PLAN.md).
 
 ### Current snapshot
 
@@ -45,8 +50,8 @@ remaining evidence is limited to controlled-room qualification gates.
   [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md). It is the source of truth for
   which slices are action-layer enabled, which responsibilities remain legacy,
   and which evidence gates are still open.
-- Qualification, recovery, and soak tests pass, with strict TypeScript and
-  formatting checks passing.
+- Focused contract, adapter, lifecycle, workflow, and pilot tests pass, with
+  strict TypeScript and formatting checks passing after each validated slice.
 - Generated BC typed and modular definitions are translated only at the BC
   adapter boundary, including copy-chain resolution.
 - Bunny restraint application and selected release removal have action paths,
@@ -88,6 +93,14 @@ remaining evidence is limited to controlled-room qualification gates.
   [DOOR_MANAGEMENT.md](DOOR_MANAGEMENT.md). The focused adapter, registry, and
   Door workflow tests pass, but this is not a family-wide migration. Access
   policy and unlock timers remain above the map action layer.
+
+### Actual status rule
+
+The action layer currently has pilots, not production-migrated feature
+families. “Implemented” means the code path and focused evidence exist;
+“enabled” means a runtime switch selects it for new operations; “qualified”
+requires controlled-room connector evidence; and “production migrated” also
+requires recovery, rollback, performance, and an accepted go/no-go record.
 
 ### Migration status answer
 
@@ -212,6 +225,14 @@ rollout; it did not prevent restraint application or expiry cleanup.
       journal storage are active.
 - [x] Soak runner with retained samples, hard threshold evaluation, a
       19-character qualification command, and a 25-character headroom mode.
+- [x] Scoped map-trigger registry, BC trigger adapter, and LocationMonitorSystem
+      pilot with stale-callback and lifecycle tests.
+- [x] Map-object adapter and KeypadDoorSystem pilot with duplicate mutation and
+      trigger lifecycle tests.
+- [x] Position observation guard in `LiveCharacterStateSync` with reconnect
+      epochs, sequence rejection, observed-coordinate persistence, and tests.
+- [x] Communication service, BC adapter, DI registration, and opt-in
+      LocationMonitorSystem caller with queue/deduplication tests.
 
 ### Explicitly not complete
 
@@ -219,7 +240,10 @@ rollout; it did not prevent restraint application or expiry cleanup.
       The manually validated live Bunny run confirmed the applied restraint
       projection and authoritative expiry cleanup. Controlled-room
       reconnect/restart evidence remains open.
-- [ ] Movement, communication, map, permission, and inventory adapters.
+- [ ] Movement dispatch/teleport adapter and authoritative arrival contract.
+- [ ] Inventory and permission adapters with explicit authorization and
+      confirmation contracts.
+- [ ] Family-wide communication, map-trigger, map-object, and Door migration.
 - [ ] Live restart/reconnect rehearsal for the production journal and Bunny
       artifact recovery. The Mongo journal is active in production, while the
       controlled-room rehearsal remains pending.
@@ -240,8 +264,9 @@ rollout; it did not prevent restraint application or expiry cleanup.
       removal targets, while classification, nudity, teleport, parole, and
       durable release transitions remain legacy-owned.
 
-The action layer is therefore a testable foundation with two narrow pilot
-integration slices, not production-ready action infrastructure. The BC adapter
+The action layer is therefore a testable foundation with appearance,
+communication, observation, map-trigger, and Door pilot slices, not
+production-ready action infrastructure. The BC adapter
 can await an inbound authoritative appearance snapshot, but broad feature
 callers remain on legacy paths until live connector evidence, durable workflow
 integration, and rollback controls are complete.

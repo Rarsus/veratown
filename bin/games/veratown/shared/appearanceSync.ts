@@ -98,11 +98,15 @@ function sameAppliedItem(
 }
 
 function createAppliedItemsPredicate(
-    before: readonly BC_AppearanceItem[],
-    expected: readonly BC_AppearanceItem[],
-): (appearance: readonly BC_AppearanceItem[]) => boolean {
-    const beforeByGroup = new Map(before.map((item) => [item.Group, item]));
-    const expectedByGroup = new Map(expected.map((item) => [item.Group, item]));
+    before: readonly unknown[],
+    expected: readonly unknown[],
+): (appearance: readonly unknown[]) => boolean {
+    const beforeByGroup = new Map(
+        filterValidAppearanceItems(before).map((item) => [item.Group, item]),
+    );
+    const expectedByGroup = new Map(
+        filterValidAppearanceItems(expected).map((item) => [item.Group, item]),
+    );
     const changedGroups = [...expectedByGroup.entries()].filter(
         ([group, item]) => {
             const previous = beforeByGroup.get(group);
@@ -112,7 +116,10 @@ function createAppliedItemsPredicate(
 
     return (observed) => {
         const observedByGroup = new Map(
-            observed.map((item) => [item.Group, item]),
+            filterValidAppearanceItems(observed).map((item) => [
+                item.Group,
+                item,
+            ]),
         );
         return changedGroups.every(([group, expectedItem]) => {
             const observedItem = observedByGroup.get(group);
@@ -129,8 +136,8 @@ function createAppliedItemsPredicate(
     };
 }
 
-function summarizeAppearance(appearance: readonly BC_AppearanceItem[]) {
-    return appearance.map((item) => {
+function summarizeAppearance(appearance: readonly unknown[]) {
+    return filterValidAppearanceItems(appearance).map((item) => {
         const property = (item.Property ?? {}) as Record<string, unknown>;
         return {
             key: `${item.Group}/${item.Name}`,
@@ -432,14 +439,18 @@ async function executeAppearanceMutation(
 
         // Execute the mutation
         await mutation();
-        context.expectedAppearance =
-            character.Appearance.MakeAppearanceBundle();
-        const appliedItemsPredicate = createAppliedItemsPredicate(
-            beforeAppearance,
-            context.expectedAppearance,
+        const validBeforeAppearance =
+            filterValidAppearanceItems(beforeAppearance);
+        const validExpectedAppearance = filterValidAppearanceItems(
+            character.Appearance.MakeAppearanceBundle(),
         );
-        const changedItemGroups = context.expectedAppearance.filter((item) => {
-            const previous = beforeAppearance.find(
+        context.expectedAppearance = validExpectedAppearance;
+        const appliedItemsPredicate = createAppliedItemsPredicate(
+            validBeforeAppearance,
+            validExpectedAppearance,
+        );
+        const changedItemGroups = validExpectedAppearance.filter((item) => {
+            const previous = validBeforeAppearance.find(
                 (candidate) => candidate.Group === item.Group,
             );
             return previous === undefined || !sameAppliedItem(previous, item);
@@ -965,7 +976,7 @@ export function isValidAppearanceItem(
 }
 
 export function filterValidAppearanceItems(
-    items: unknown[],
+    items: readonly unknown[],
 ): BC_AppearanceItem[] {
     return items.filter(isValidAppearanceItem);
 }

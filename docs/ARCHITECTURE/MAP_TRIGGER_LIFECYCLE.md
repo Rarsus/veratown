@@ -2,8 +2,8 @@
 title: "Map Trigger Lifecycle"
 subtitle: "Scoped registration, lifecycle handles, and map-trigger state management"
 date: "September 27, 2026"
-version: "1.0"
-status: "LocationMonitorSystem pilot implemented and qualified; broader feature migration pending"
+version: "1.1"
+status: "LocationMonitorSystem pilot implemented and locally qualified; broader feature migration and controlled-room evidence pending"
 ---
 
 # Map Trigger Lifecycle
@@ -302,10 +302,22 @@ transport-level registration results.
 
 ### Iteration 5: Qualification and expansion
 
-- Run focused map-trigger, location-monitor, TypeScript, formatting, and import
-  boundary checks.
-- Compare trigger counts and callback behavior before and after the pilot.
-- Migrate additional tile/region features one at a time.
+- [x] Run focused map-trigger, location-monitor, TypeScript, formatting, and
+      whitespace checks.
+- [ ] Compare trigger counts and callback behavior in a controlled room before
+      and after each new caller migration.
+- [ ] Rehearse reconnect, room recreation, reload, disablement, and shutdown
+      for each new caller.
+- [ ] Migrate additional callers one at a time with an explicit rollback owner.
+
+### Next-phase gate
+
+The current pilot gate is covered by
+`bc-map-trigger.test.ts`, `map-trigger-registry.test.ts`, and
+`bin/games/veratown/__tests__/locationMonitorSystem.test.ts`, plus the unified
+action-layer cycle. It proves local lifecycle behavior only. The next caller
+requires a controlled-room lifecycle record and a caller-specific rollback
+test before its direct registrations are removed.
 
 ## Acceptance criteria
 

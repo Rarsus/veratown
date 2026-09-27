@@ -2,8 +2,8 @@
 title: "Door Management"
 subtitle: "Layered map mutation, trigger lifecycle, and keypad workflow ownership"
 date: "September 27, 2026"
-version: "1.0"
-status: "Pilot slice implemented and focused evidence passing; broader map migration pending"
+version: "1.1"
+status: "KeypadDoorSystem pilot implemented and locally qualified; controlled-room evidence and broader map migration pending"
 ---
 
 # Door Management
@@ -74,14 +74,14 @@ pilot. The verified state is:
 The implementation is intentionally incremental. Each action above should be
 kept independently reviewable and committed after its focused validation.
 
-## IST: current architecture
+## IST: pre-pilot architecture
 
 `KeypadDoorSystem` loads definitions through `KeypadDefinitionService`, asks
 `KeypadAccessService` for access decisions, delegates admin commands to
 `KeypadCommandDispatcher`, and owns unlock, notification, and auto-open timers.
 Those boundaries are useful and remain stable.
 
-The current map boundary is still feature-local:
+Before the pilot, the map boundary was feature-local:
 
 - `registerMapTriggers()` directly calls `API_Map.addTileTrigger()` and stores
   `{ map, x, y, callback }` bindings;
@@ -89,9 +89,9 @@ The current map boundary is still feature-local:
 - `setDoorTile()` directly calls `boundMap.setObject()`; and
 - reload and room replacement depend on the feature's local binding array.
 
-The risks are duplicate or stale trigger callbacks during repeated definition
-reloads, direct BC coupling in the workflow, and no reusable map-object action
-contract. Existing door behavior and timer policy are not the problem boundary.
+Those risks motivated the pilot. They are no longer an accurate description of
+the current runtime path; the current implementation is recorded in the
+actual-state table above.
 
 ### IST UML
 
@@ -336,45 +336,52 @@ that reaches `setObject` has already made the workflow decision.
 
 ### Iteration 2: Map-object action contract and BC adapter
 
-- Add transport-neutral object mutation types and structured observations.
-- Implement the BC adapter around `API_Map.setObject`.
-- Add validation and adapter tests for position/object translation and failures.
+- [x] Add transport-neutral object mutation types and structured observations.
+- [x] Implement the BC adapter around `API_Map.setObject`.
+- [x] Add validation and adapter tests for position/object translation and
+      failures.
 
 ### Iteration 3: KeypadDoorSystem trigger lifecycle
 
-- Replace local tile binding arrays with `MapTriggerRegistry` handles.
-- Preserve definition loading, access checks, command dispatch, and timers.
-- Add repeated attach, definition reload, room replacement, duplicate-trigger,
-  stale-callback, disablement, and shutdown tests.
+- [x] Replace local tile binding arrays with `MapTriggerRegistry` handles.
+- [x] Preserve definition loading, access checks, command dispatch, and timers.
+- [x] Add repeated attach, definition reload, room replacement, duplicate-trigger,
+      stale-callback, disablement, and shutdown tests.
 
 ### Iteration 4: Door workflow mutation integration
 
-- Inject the map action port/adapter into `KeypadDoorSystem`.
-- Route open and close mutations through the adapter.
-- Preserve existing timer and manual-open behavior and prove no duplicate map
-  mutation on duplicate open requests.
+- [x] Inject the map action port/adapter into `KeypadDoorSystem`.
+- [x] Route open and close mutations through the adapter.
+- [x] Preserve existing timer and manual-open behavior and prove no duplicate
+      map mutation on duplicate open requests.
 
 ### Iteration 5: Qualification and expansion
 
-- Run focused door, registry, adapter, TypeScript, formatting, and whitespace
-  checks.
-- Compare map trigger counts and open/close object mutations before and after
-  the pilot.
-- Keep Bunny park and other map systems outside this phase until each has its
-  own lifecycle and rollback evidence.
+- [x] Run focused door, registry, adapter, TypeScript, formatting, and
+      whitespace checks.
+- [ ] Compare map trigger counts and open/close object mutations in a controlled
+      room across reconnect and room replacement.
+- [ ] Define rollback ownership for an in-flight Door operation before adding a
+      Door rollout switch.
+- [ ] Keep Bunny park and other map systems outside this phase until each has
+      its own lifecycle and rollback evidence.
 
 ## Acceptance criteria
 
 The Door management phase is complete for the `KeypadDoorSystem` pilot when:
 
-- [ ] `setObject` is reachable only through the map action adapter;
-- [ ] door definitions, access policy, codes, permissions, command handling,
+- [x] `setObject` is reachable only through the map action adapter;
+- [x] door definitions, access policy, codes, permissions, command handling,
       and unlock timers remain workflow/service-owned;
-- [ ] keypad and auto-open registrations use scoped idempotent handles;
-- [ ] duplicate registration and definition reload do not leave duplicate
+- [x] keypad and auto-open registrations use scoped idempotent handles;
+- [x] duplicate registration and definition reload do not leave duplicate
       callbacks;
-- [ ] old room/map callbacks cannot execute door behavior;
-- [ ] disablement and shutdown remove active callbacks;
-- [ ] open and close preserve existing timer and manual override behavior;
-- [ ] adapter tests cover object translation and failure behavior; and
-- [ ] focused tests, strict TypeScript, formatting, and whitespace checks pass.
+- [x] old room/map callbacks cannot execute door behavior;
+- [x] disablement and shutdown remove active callbacks;
+- [x] open and close preserve existing timer and manual override behavior;
+- [x] adapter tests cover object translation and failure behavior; and
+- [x] focused tests, strict TypeScript, formatting, and whitespace checks pass.
+
+The pilot is locally complete. The next phase is controlled-room lifecycle and
+rollback qualification; it is not a wholesale keypad rewrite and it does not
+claim authoritative server confirmation for `setObject`.
