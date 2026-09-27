@@ -421,11 +421,92 @@ test("self synchronization persists observed position and diagnostics", async ()
     };
     const sync = new LiveCharacterStateSync(connector, store, 60_000);
 
-    const diagnostic = await sync.syncSelfPosition(connector, { X: 10, Y: 8 });
+    const diagnostic = await sync.syncSelfPosition(
+        connector,
+        { X: 20, Y: 21 },
+        { X: 10, Y: 8 },
+    );
 
     assert.deepEqual(calls[0]?.[1], { X: 10, Y: 8 });
     assert.equal(calls[0]?.[4], true);
+    assert.deepEqual(diagnostic?.requestedPosition, { X: 20, Y: 21 });
     assert.deepEqual(diagnostic?.observedPosition, { X: 10, Y: 8 });
     assert.deepEqual(diagnostic?.persistedPosition, { X: 10, Y: 8 });
     assert.equal(diagnostic?.verificationSource, "reposition-command");
+});
+
+test("position observation rejects stale sequence and reconnect epochs", async () => {
+    const connector = new EventEmitter() as EventEmitter & {
+        Player: any;
+        chatRoom: any;
+    };
+    const character = createCharacter(43, { X: 1, Y: 1 }, []);
+    connector.Player = character;
+    connector.chatRoom = {
+        characters: [character],
+        getCharacter: () => character,
+        findMember: () => character,
+    };
+    const persisted: Array<{ X: number; Y: number }> = [];
+    const sync = new LiveCharacterStateSync(
+        connector as any,
+        {
+            getVeratownView: async () => ({
+                currentRestraints: [],
+                lastPosition: persisted.at(-1),
+                lastPositionAt: Date.now(),
+            }),
+            syncVeratownState: async (
+                _memberNumber: number,
+                position: { X: number; Y: number },
+            ) => {
+                persisted.push(position);
+                return true;
+            },
+        } as any,
+    );
+    sync.start();
+
+    const accepted = await sync.observePosition(
+        connector as any,
+        43,
+        { X: 2, Y: 2 },
+        { epoch: 0, sequence: 2, observedAt: 20, source: "map-position" },
+    );
+    const staleSequence = await sync.observePosition(
+        connector as any,
+        43,
+        { X: 1, Y: 1 },
+        { epoch: 0, sequence: 1, observedAt: 30, source: "map-position" },
+    );
+    const generatedSequence = await sync.observePosition(
+        connector as any,
+        43,
+        { X: 3, Y: 3 },
+        { epoch: 0, observedAt: 35, source: "map-position" },
+    );
+
+    connector.emit("Disconnected", "transport close");
+    connector.emit("Connected");
+    const staleEpoch = await sync.observePosition(
+        connector as any,
+        43,
+        { X: 9, Y: 9 },
+        { epoch: 0, sequence: 99, observedAt: 40, source: "map-position" },
+    );
+
+    assert.equal(accepted?.status, "accepted");
+    assert.equal(staleSequence?.status, "stale");
+    assert.equal(staleSequence?.reason, "stale-sequence");
+    assert.equal(generatedSequence?.sequence, 3);
+    assert.equal(staleEpoch?.status, "stale");
+    assert.equal(staleEpoch?.reason, "stale-epoch");
+    assert.deepEqual(persisted, [
+        { X: 2, Y: 2 },
+        { X: 3, Y: 3 },
+    ]);
+    assert.equal(
+        sync.getSelfPositionDiagnostics()[0]?.staleReason,
+        "stale-epoch",
+    );
 });

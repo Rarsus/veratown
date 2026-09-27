@@ -44,6 +44,31 @@ export type CharacterObservationHandler = (
     character: API_Character,
 ) => void | Promise<void>;
 
+export type PositionObservationSource =
+    | "map-position"
+    | "chatRoom.findMember"
+    | "Player.MapPos"
+    | "reposition-command";
+
+export interface PositionObservationOptions {
+    readonly epoch?: number;
+    readonly sequence?: number;
+    readonly observedAt?: number;
+    readonly source?: PositionObservationSource;
+    readonly requestedPosition?: { X: number; Y: number };
+}
+
+export interface PositionObservationResult {
+    readonly status: "accepted" | "stale";
+    readonly memberNumber: number;
+    readonly observedPosition: { X: number; Y: number };
+    readonly epoch: number;
+    readonly sequence: number;
+    readonly observedAt: number;
+    readonly reason?: "stale-epoch" | "stale-sequence";
+    readonly persisted?: boolean;
+}
+
 export interface SelfPositionSyncDiagnostic {
     memberNumber: number;
     requestedPosition?: { X: number; Y: number };
@@ -54,6 +79,16 @@ export interface SelfPositionSyncDiagnostic {
     verificationSource:
         "chatRoom.findMember" | "Player.MapPos" | "reposition-command";
     persisted: boolean;
+    epoch?: number;
+    sequence?: number;
+    observationStatus?: "accepted" | "stale";
+    staleReason?: "stale-epoch" | "stale-sequence";
+}
+
+interface AcceptedPositionObservation {
+    readonly epoch: number;
+    readonly sequence: number;
+    readonly observedAt: number;
 }
 
 /**
@@ -68,6 +103,12 @@ export class LiveCharacterStateSync {
     private readonly selfPositionDiagnostics = new Map<
         number,
         SelfPositionSyncDiagnostic
+    >();
+    private readonly connectionEpochs = new Map<API_Connector, number>();
+    private readonly observationSequences = new Map<API_Connector, number>();
+    private readonly acceptedPositions = new Map<
+        API_Connector,
+        Map<number, AcceptedPositionObservation>
     >();
 
     public constructor(
@@ -87,6 +128,12 @@ export class LiveCharacterStateSync {
             connection.on("MapPosition", (memberNumber, position) =>
                 this.onMovement(connection, memberNumber, position),
             );
+            connection.on("Connected", () =>
+                this.advanceConnectionEpoch(connection),
+            );
+            connection.on("Disconnected", () =>
+                this.advanceConnectionEpoch(connection),
+            );
         }
         this.reconciliationTimer = setInterval(() => {
             void this.reconcile();
@@ -95,21 +142,37 @@ export class LiveCharacterStateSync {
     }
 
     public async reconcile(): Promise<void> {
-        const characters = new Map<number, API_Character>();
+        const characters = new Map<
+            number,
+            { connection: API_Connector; character: API_Character }
+        >();
         for (const connection of this.ownedConnections) {
             const self = this.observedSelf(connection);
-            if (self) characters.set(self.MemberNumber, self);
+            if (self) {
+                characters.set(self.MemberNumber, {
+                    connection,
+                    character: self,
+                });
+            }
         }
         for (const connection of this.ownedConnections) {
             for (const character of connection.chatRoom?.characters ?? []) {
                 if (!characters.has(character.MemberNumber)) {
-                    characters.set(character.MemberNumber, character);
+                    characters.set(character.MemberNumber, {
+                        connection,
+                        character,
+                    });
                 }
             }
         }
         await Promise.all(
-            [...characters.values()].map((character) =>
-                this.observeCharacter(character).catch((error) => {
+            [...characters.values()].map(({ connection, character }) =>
+                this.observePosition(
+                    connection,
+                    character.MemberNumber,
+                    character.MapPos,
+                    { source: "chatRoom.findMember" },
+                ).catch((error) => {
                     logger.error(
                         "Failed to reconcile live character state",
                         error,
@@ -258,43 +321,23 @@ export class LiveCharacterStateSync {
         if (!character) return undefined;
 
         const observed = observedPosition ?? character.MapPos;
-        const position = requestedPosition ?? observed;
-        const observedAt = new Date();
         const verificationSource = connection.chatRoom?.findMember?.(
             connection.Player.MemberNumber,
         )
             ? "chatRoom.findMember"
             : "Player.MapPos";
-        const persisted = await this.syncCharacter(
-            character,
-            { ...position },
-            true,
+        await this.observePosition(
+            connection,
+            character.MemberNumber,
+            observed,
+            {
+                requestedPosition,
+                source: requestedPosition
+                    ? "reposition-command"
+                    : verificationSource,
+            },
         );
-        const view = await this.store.getVeratownView(
-            connection.Player.MemberNumber,
-        );
-        const diagnostic: SelfPositionSyncDiagnostic = {
-            memberNumber: connection.Player.MemberNumber,
-            requestedPosition,
-            observedPosition: { ...observed },
-            persistedPosition: view.lastPosition
-                ? { ...view.lastPosition }
-                : undefined,
-            observedAt,
-            persistedAt:
-                typeof view.lastPositionAt === "number"
-                    ? new Date(view.lastPositionAt)
-                    : undefined,
-            verificationSource: requestedPosition
-                ? "reposition-command"
-                : verificationSource,
-            persisted,
-        };
-        this.selfPositionDiagnostics.set(
-            connection.Player.MemberNumber,
-            diagnostic,
-        );
-        return diagnostic;
+        return this.selfPositionDiagnostics.get(character.MemberNumber);
     }
 
     public getSelfPositionDiagnostics(): SelfPositionSyncDiagnostic[] {
@@ -314,18 +357,148 @@ export class LiveCharacterStateSync {
         memberNumber: number,
         position: { X: number; Y: number },
     ): void => {
-        const character =
-            connection.chatRoom?.getCharacter?.(memberNumber) ??
-            (connection.Player?.MemberNumber === memberNumber
-                ? connection.Player
-                : undefined);
-        if (!character) return;
-        void this.observeCharacter(character, position).catch((error) => {
+        void this.observePosition(connection, memberNumber, position, {
+            source: "map-position",
+        }).catch((error) => {
             logger.error("Failed to synchronize movement state", error, {
                 memberNumber,
             });
         });
     };
+
+    public async observePosition(
+        connection: API_Connector = this.conn,
+        memberNumber: number,
+        position: { X: number; Y: number },
+        options: PositionObservationOptions = {},
+    ): Promise<PositionObservationResult | undefined> {
+        const character =
+            connection.chatRoom?.getCharacter?.(memberNumber) ??
+            connection.chatRoom?.characters?.find(
+                (candidate) => candidate.MemberNumber === memberNumber,
+            ) ??
+            (connection.Player?.MemberNumber === memberNumber
+                ? connection.Player
+                : undefined);
+        if (!character) return undefined;
+
+        const epoch = options.epoch ?? this.connectionEpoch(connection);
+        const sequence =
+            options.sequence ?? this.nextObservationSequence(connection);
+        if (options.sequence !== undefined) {
+            this.observationSequences.set(
+                connection,
+                Math.max(
+                    this.observationSequences.get(connection) ?? 0,
+                    options.sequence,
+                ),
+            );
+        }
+        const observedAt = options.observedAt ?? Date.now();
+        const last = this.acceptedPositions.get(connection)?.get(memberNumber);
+        const staleReason =
+            epoch < this.connectionEpoch(connection)
+                ? "stale-epoch"
+                : last &&
+                    (epoch < last.epoch ||
+                        (epoch === last.epoch && sequence <= last.sequence))
+                  ? "stale-sequence"
+                  : undefined;
+
+        if (staleReason) {
+            const result: PositionObservationResult = {
+                status: "stale",
+                memberNumber,
+                observedPosition: { ...position },
+                epoch,
+                sequence,
+                observedAt,
+                reason: staleReason,
+            };
+            await this.recordSelfPositionDiagnostic(
+                connection,
+                result,
+                options,
+            );
+            return result;
+        }
+
+        let memberPositions = this.acceptedPositions.get(connection);
+        if (!memberPositions) {
+            memberPositions = new Map();
+            this.acceptedPositions.set(connection, memberPositions);
+        }
+        memberPositions.set(memberNumber, { epoch, sequence, observedAt });
+        const persisted = await this.syncCharacter(
+            character,
+            { ...position },
+            true,
+        );
+        const result: PositionObservationResult = {
+            status: "accepted",
+            memberNumber,
+            observedPosition: { ...position },
+            epoch,
+            sequence,
+            observedAt,
+            persisted,
+        };
+        await this.recordSelfPositionDiagnostic(connection, result, options);
+        await this.onCharacterObserved?.(character);
+        return result;
+    }
+
+    private async recordSelfPositionDiagnostic(
+        connection: API_Connector,
+        result: PositionObservationResult,
+        options: PositionObservationOptions,
+    ): Promise<void> {
+        if (connection.Player?.MemberNumber !== result.memberNumber) return;
+        const view = await this.store.getVeratownView(result.memberNumber);
+        const verificationSource =
+            options.source === "reposition-command"
+                ? "reposition-command"
+                : options.source === "map-position"
+                  ? "Player.MapPos"
+                  : (options.source ?? "Player.MapPos");
+        this.selfPositionDiagnostics.set(result.memberNumber, {
+            memberNumber: result.memberNumber,
+            requestedPosition: options.requestedPosition,
+            observedPosition: { ...result.observedPosition },
+            persistedPosition: view.lastPosition
+                ? { ...view.lastPosition }
+                : undefined,
+            observedAt: new Date(result.observedAt),
+            persistedAt:
+                typeof view.lastPositionAt === "number"
+                    ? new Date(view.lastPositionAt)
+                    : undefined,
+            verificationSource,
+            persisted: result.persisted === true,
+            epoch: result.epoch,
+            sequence: result.sequence,
+            observationStatus: result.status,
+            ...(result.reason ? { staleReason: result.reason } : {}),
+        });
+    }
+
+    private connectionEpoch(connection: API_Connector): number {
+        return this.connectionEpochs.get(connection) ?? 0;
+    }
+
+    private nextObservationSequence(connection: API_Connector): number {
+        const sequence = (this.observationSequences.get(connection) ?? 0) + 1;
+        this.observationSequences.set(connection, sequence);
+        return sequence;
+    }
+
+    private advanceConnectionEpoch(connection: API_Connector): void {
+        this.connectionEpochs.set(
+            connection,
+            this.connectionEpoch(connection) + 1,
+        );
+        this.observationSequences.set(connection, 0);
+    }
 
     private observedSelf(connection: API_Connector): API_Character | undefined {
         if (!connection.Player) return undefined;
