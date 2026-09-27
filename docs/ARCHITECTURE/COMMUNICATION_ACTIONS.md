@@ -2,7 +2,7 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "2.2"
+version: "2.3"
 status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, and ShowerSystem callers implemented; real delivery and broader migration pending"
 ---
 
@@ -335,6 +335,10 @@ evidence.
       helper with stable operation keys, rollout leases, legacy fallback, and
       focused coverage; retain the long entrance warning as legacy-owned until
       message chunking or a contract revision exists.
+- [x] Migrate FurnitureBondageSystem player-facing whispers through a shared
+      helper with stable operation keys, rollout leases, legacy fallback, and
+      focused coverage; retain public narration and admin messages outside this
+      notification slice.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -371,7 +375,9 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/cageSystem.test.ts`, including the enabled
   unavailable-containment and short-entry action paths. The complete Cage
   suite still has a pre-existing missing `recoverCagedCharacter` method in
-  recovery tests.
+  recovery tests; and
+- `bin/games/veratown/__tests__/furnitureBondageSystem.test.ts`, including
+  enabled action and legacy notification paths.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The

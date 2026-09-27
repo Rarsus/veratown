@@ -14,6 +14,10 @@
 
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import { wait } from "../../hub/utils";
+import {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared";
@@ -86,6 +90,7 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
     private tiles: FurnitureTile[] = [];
     private activeTimers = new Map<number, CharacterTimerState>();
     private notifiedPlayers = new Set<number>();
+    private furnitureNotificationSequence = 0;
     private readonly furnitureTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -98,6 +103,8 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly stateSync?: AppearanceStateSynchronizer,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "furnitureBondage", "Bondage furniture");
         this.furnitureTrigger = this.guardTileHandler(
@@ -111,7 +118,7 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
         this.conn.on("Message", (msg) => this.onMessage(msg));
     }
 
-    private onMessage = (msg: any): void => {
+    private onMessage = async (msg: any): Promise<void> => {
         if (!this.enabled) return;
 
         const sender = msg.Sender;
@@ -130,7 +137,7 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
             );
 
             if (!tile) {
-                this.messageSender.whisperToCharacter(
+                await this.sendFurnitureNotification(
                     character,
                     "(You are not standing on any bondage furniture.)",
                 );
@@ -139,18 +146,18 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
 
             // Notify player once per session about this feature
             if (!this.notifiedPlayers.has(sender)) {
-                this.messageSender.whisperToCharacter(
+                await this.sendFurnitureNotification(
                     character,
                     `(You can use !bindme to manually activate bondage furniture instead of automatic triggering.)`,
                 );
                 this.notifiedPlayers.add(sender);
             }
 
-            this.messageSender.whisperToCharacter(
+            await this.sendFurnitureNotification(
                 character,
                 `(Activating ${tile.location.name}...)`,
             );
-            this.activateFurniture(character, tile);
+            await this.activateFurniture(character, tile);
         }
     };
 
@@ -312,7 +319,7 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
 
             // Notify player once per session about !bindme option
             if (!this.notifiedPlayers.has(character.MemberNumber)) {
-                this.messageSender.whisperToCharacter(
+                await this.sendFurnitureNotification(
                     character,
                     `(Tip: You can use !bindme to manually activate ${tile.location.name} or use other bondage furniture. Type !bindme when standing on furniture to activate it.)`,
                 );
@@ -400,8 +407,8 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
                 const timer = setTimeout(() => {
                     void syncAppearanceMutation(
                         character,
-                        () => {
-                            this.removeRestraints(character, tile.config);
+                        async () => {
+                            await this.removeRestraints(character, tile.config);
                         },
                         50,
                         this.stateSync,
@@ -470,10 +477,10 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
         }
     }
 
-    private removeRestraints(
+    private async removeRestraints(
         character: API_Character,
         config: FurnitureActionConfig,
-    ): void {
+    ): Promise<void> {
         try {
             // Remove furniture item by group (safe to remove as it's the only ItemDevices-like item typically)
             try {
@@ -495,7 +502,7 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
                 }
             }
 
-            this.messageSender.whisperToCharacter(
+            await this.sendFurnitureNotification(
                 character,
                 `(Your time with the ${config.furnitureAsset} has ended. Restraints removed.)`,
             );
@@ -504,6 +511,68 @@ export class FurnitureBondageSystem extends AbstractTileFeatureSystem {
                 "[FurnitureBondageSystem] Error removing restraints:",
                 e,
             );
+        }
+    }
+
+    private async sendFurnitureNotification(
+        character: API_Character,
+        text: string,
+    ): Promise<void> {
+        const operationId = `furniture-notification:${character.MemberNumber}:${++this.furnitureNotificationSequence}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
+        );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                const result = await this.communicationService.send(
+                    {
+                        channel: "whisper",
+                        text,
+                        targetMemberNumber: character.MemberNumber,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "furniture notification",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+                if (result.status !== "completed") {
+                    this.logger.warn(
+                        "Furniture communication action did not complete",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            deliveryStatus:
+                                result.value?.deliveryStatus ?? "unknown",
+                            reason: result.reason,
+                        },
+                    );
+                }
+            } else {
+                const result = this.messageSender.whisperToCharacter(
+                    character,
+                    text,
+                );
+                if (!result.success) {
+                    this.logger.warn(
+                        "Furniture notification failed on legacy path",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            reason: result.message,
+                        },
+                    );
+                }
+            }
+        } finally {
+            lease?.release();
         }
     }
 }
