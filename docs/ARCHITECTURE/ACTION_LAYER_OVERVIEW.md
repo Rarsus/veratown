@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.19"
-status: "Bunny is the first migration candidate; durable recovery, atomic projection, and one bounded live qualification are validated behind a disabled switch"
+version: "1.20"
+status: "Bunny remains the first migration candidate; communication action design is complete and implementation is proceeding behind the legacy boundary"
 ---
 
 # Headless Bondage Club Action Layer
@@ -67,6 +67,11 @@ remaining evidence is limited to controlled-room qualification gates.
 - Controlled-room confirmation across reconnect/restart, rollback rehearsal,
   and the actual 30-minute 19-character qualification remain open evidence
   gates. Both runtime switches remain disabled.
+- Communication action design, IST/SOLL UML diagrams, and the three-scope state
+  management model are documented in
+  [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
+  intentionally incremental and does not yet claim communication runtime
+  migration.
 
 ### Migration status answer
 
@@ -1244,6 +1249,9 @@ Migration is incremental and should preserve existing behavior after each step.
 
 ### Phase 2: Communication and movement
 
+- [x] Document communication action ownership, IST/SOLL UML diagrams, delivery
+      states, and request/transport/business state management in
+      [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md).
 - [ ] Wrap `messageSender` and connector movement calls.
 - [ ] Return delivery and observed-position results.
 - [ ] Integrate reconnect epochs and stale-confirmation handling.
