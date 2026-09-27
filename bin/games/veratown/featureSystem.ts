@@ -49,17 +49,17 @@ export interface VeratownFeatureSystem {
     registerTriggers(): void | Promise<void>;
     // Rebind room/map handlers after a room or map instance is replaced.
     attachToRoom?(): void | Promise<void>;
-    // Remove every handler installed by attachToRoom().
+    // Remove every handler installed by attachToRoom(), including when the
+    // feature is disabled or the room/map instance is replaced.
     detachFromRoom?(): void;
     // Refreshes database-backed positions and replaces any dynamic triggers.
     // Features without location-backed triggers may omit this method.
     reloadLocations?(locations: readonly VeratownLocationDoc[]): Promise<void>;
     isReady?(): boolean;
     getDiagnostics?(): Record<string, unknown>;
-    // Whether this feature is currently active. Handlers should check this
-    // and no-op (optionally telling the character it's disabled) when
-    // false, rather than the orchestrator trying to physically add/remove
-    // map triggers at runtime.
+    // Whether this feature is currently active. Implementations should make
+    // disablement idempotent and dispose feature-owned registrations while
+    // handlers also guard against stale callbacks.
     enabled: boolean;
 }
 

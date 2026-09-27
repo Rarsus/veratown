@@ -13,6 +13,7 @@ import type {
 } from "../../../action-layer/domain";
 import {
     BotHelpMonitorProvider,
+    CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
 } from "../locationMonitorSystem";
@@ -211,4 +212,73 @@ test("enabled communication rollout routes monitor notifications through actions
             deduplicationKey: "location-monitor:help:4",
         },
     ]);
+});
+
+test("location monitor lifecycle replaces and cleans up scoped registrations", async () => {
+    function mapWithTracking() {
+        const active = new Set<(...args: any[]) => void>();
+        const callbacks: Array<(...args: any[]) => void> = [];
+        const map = {
+            addEnterRegionTrigger: (_region: unknown, callback: any) => {
+                active.add(callback);
+                callbacks.push(callback);
+            },
+            removeEnterRegionTrigger: (callback: any) => {
+                active.delete(callback);
+            },
+        };
+        return { active, callbacks, map };
+    }
+
+    const first = mapWithTracking();
+    const second = mapWithTracking();
+    const room = { map: first.map };
+    const connector = {
+        chatRoom: room,
+        SendMessage: () => {},
+    } as any;
+    let displays = 0;
+    const system = new LocationMonitorSystem(
+        connector,
+        [
+            new CallbackMonitorProvider("test", () => {
+                displays += 1;
+                return `Display ${displays}`;
+            }),
+        ],
+        0,
+    );
+
+    await system.reloadLocations([location("first", "test")]);
+    system.attachToRoom();
+    assert.equal(first.active.size, 1);
+    assert.equal(system.getDiagnostics().registeredTriggerCount, 1);
+
+    await system.reloadLocations([location("second", "test")]);
+    assert.equal(first.active.size, 1);
+    first.callbacks[0]({ MemberNumber: 10 });
+    first.callbacks.at(-1)!({ MemberNumber: 11 });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(displays, 1);
+
+    connector.chatRoom = { map: second.map };
+    system.attachToRoom();
+    assert.equal(first.active.size, 0);
+    assert.equal(second.active.size, 1);
+    second.callbacks[0]({ MemberNumber: 12 });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(displays, 2);
+
+    system.enabled = false;
+    assert.equal(second.active.size, 0);
+    second.callbacks[0]({ MemberNumber: 13 });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(displays, 2);
+
+    system.enabled = true;
+    assert.equal(second.active.size, 1);
+    system.shutdown();
+    system.shutdown();
+    assert.equal(second.active.size, 0);
+    assert.equal(system.getDiagnostics().registeredTriggerCount, 0);
 });

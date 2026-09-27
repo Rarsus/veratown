@@ -170,6 +170,50 @@ export interface MapPosition {
     readonly y: number;
 }
 
+export interface MapRegion {
+    readonly topLeft: MapPosition;
+    readonly bottomRight: MapPosition;
+}
+
+export type MapTriggerKind = "tile" | "enter_region" | "leave_region";
+
+export type MapTriggerCallback = (...args: never[]) => void;
+
+export interface MapTriggerScope {
+    readonly scopeId: string;
+    readonly room: object;
+    readonly map: object;
+}
+
+export interface MapTriggerRegistrationRequest {
+    readonly scope: MapTriggerScope;
+    readonly key: string;
+    readonly kind: MapTriggerKind;
+    readonly position?: MapPosition;
+    readonly region?: MapRegion;
+    readonly callback: MapTriggerCallback;
+}
+
+export interface MapTriggerAdapterRegistration {
+    readonly registrationId: string;
+}
+
+export interface MapTriggerActionAdapter {
+    register(
+        request: MapTriggerRegistrationRequest,
+    ): MapTriggerAdapterRegistration;
+
+    unregister(registration: MapTriggerAdapterRegistration): void;
+}
+
+export interface MapTriggerRegistrationHandle {
+    readonly registrationId: string;
+    readonly scopeId: string;
+    readonly key: string;
+    readonly disposed: boolean;
+    dispose(): void;
+}
+
 export interface MapActionAdapter {
     observeTile(
         position: MapPosition,

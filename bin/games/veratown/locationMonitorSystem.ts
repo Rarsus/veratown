@@ -9,12 +9,23 @@ import { createLogger } from "../../logging";
 import type {
     ActionLayerRolloutController,
     CommunicationActionService,
+    MapRegion as ActionMapRegion,
+    MapTriggerCallback,
+    MapTriggerScope,
+} from "../../action-layer";
+import {
+    BCMapTriggerActionAdapter,
+    MapTriggerRegistry,
 } from "../../action-layer";
 import {
     AbstractMessageFeatureSystem,
     ParsedCommand,
 } from "../shared/abstractMessageFeatureSystem";
-import { VeratownFeatureSystem, guardHandler } from "./featureSystem";
+import {
+    VeratownFeatureSystem,
+    getLifecycleObjectId,
+    guardHandler,
+} from "./featureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 
 export interface LocationMonitorProviderContext {
@@ -60,11 +71,6 @@ export class CallbackMonitorProvider implements LocationMonitorProvider {
     }
 }
 
-interface MonitorBinding {
-    map: API_Map;
-    callback: (...args: any[]) => void;
-}
-
 const DEFAULT_MONITOR_COOLDOWN_MS = 3000;
 
 export class LocationMonitorSystem
@@ -73,15 +79,29 @@ export class LocationMonitorSystem
 {
     public readonly key = "locationMonitor";
     public readonly label = "Location monitors";
-    public enabled = true;
+    private enabledState = true;
 
     private readonly providers = new Map<string, LocationMonitorProvider>();
-    private readonly bindings: MonitorBinding[] = [];
+    private readonly triggerRegistry = new MapTriggerRegistry(
+        new BCMapTriggerActionAdapter(),
+    );
     private readonly lastDisplayedAt = new Map<string, number>();
     private readonly activeDisplays = new Set<string>();
     private monitorLocations: VeratownLocationDoc[] = [];
     private boundMap?: API_Map;
     private boundRoom?: API_Connector["chatRoom"];
+    private boundScope?: MapTriggerScope;
+
+    public get enabled(): boolean {
+        return this.enabledState;
+    }
+
+    public set enabled(value: boolean) {
+        if (this.enabledState === value) return;
+        this.enabledState = value;
+        if (value) this.attachToRoom();
+        else this.detachFromRoom();
+    }
 
     public constructor(
         conn: API_Connector,
@@ -107,6 +127,7 @@ export class LocationMonitorSystem
     ): Promise<void> {}
 
     public registerTriggers(): void {
+        if (!this.enabled) return;
         this.attachToRoom();
     }
 
@@ -121,18 +142,25 @@ export class LocationMonitorSystem
             this.detachFromRoom();
             this.boundRoom = room;
             this.boundMap = room.map;
+            this.boundScope = {
+                scopeId: `location-monitor:${this.getObjectId(room)}:${this.getObjectId(room.map)}`,
+                room,
+                map: room.map,
+            };
+            this.triggerRegistry.bind(this.boundScope);
         }
         this.registerMapTriggers();
     }
 
     public detachFromRoom(): void {
-        for (const binding of this.bindings) {
-            binding.map.removeEnterRegionTrigger(binding.callback as any);
+        if (this.boundScope) {
+            this.triggerRegistry.disposeScope(this.boundScope.scopeId);
         }
-        this.bindings.length = 0;
         this.boundRoom = undefined;
         this.boundMap = undefined;
+        this.boundScope = undefined;
         this.lastDisplayedAt.clear();
+        this.activeDisplays.clear();
     }
 
     public async reloadLocations(
@@ -144,29 +172,31 @@ export class LocationMonitorSystem
                 (location.type === "help_monitor" ||
                     location.type === "cage_info_region"),
         );
-        this.attachToRoom();
+        if (this.enabled) this.attachToRoom();
     }
 
     public isReady(): boolean {
         return this.boundMap !== undefined;
     }
 
+    public shutdown(): void {
+        this.detachFromRoom();
+        this.triggerRegistry.close();
+    }
+
     public getDiagnostics(): Record<string, unknown> {
         return {
             monitorCount: this.monitorLocations.length,
-            registeredTriggerCount: this.bindings.length,
+            registeredTriggerCount: this.triggerRegistry.size,
             providerKeys: [...this.providers.keys()],
         };
     }
 
     private registerMapTriggers(): void {
-        const map = this.boundMap;
-        if (!map) return;
+        if (!this.boundMap || !this.boundScope || !this.enabled) return;
 
-        for (const binding of this.bindings) {
-            binding.map.removeEnterRegionTrigger(binding.callback as any);
-        }
-        this.bindings.length = 0;
+        this.triggerRegistry.disposeScope(this.boundScope.scopeId);
+        this.triggerRegistry.bind(this.boundScope);
 
         for (const location of this.monitorLocations) {
             const providerKey = this.getProviderKey(location);
@@ -191,9 +221,27 @@ export class LocationMonitorSystem
                 (character: API_Character) =>
                     this.displayMonitor(character, location, providerKey),
             );
-            map.addEnterRegionTrigger(region, callback as any);
-            this.bindings.push({ map, callback });
+            this.triggerRegistry.register({
+                key: `${this.key}:${location.key}`,
+                kind: "enter_region",
+                region: this.toActionRegion(region),
+                callback: callback as MapTriggerCallback,
+            });
         }
+    }
+
+    private getObjectId(value: object): number {
+        return getLifecycleObjectId(value) ?? 0;
+    }
+
+    private toActionRegion(region: MapRegion): ActionMapRegion {
+        return {
+            topLeft: { x: region.TopLeft.X, y: region.TopLeft.Y },
+            bottomRight: {
+                x: region.BottomRight.X,
+                y: region.BottomRight.Y,
+            },
+        };
     }
 
     private async displayMonitor(
