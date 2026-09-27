@@ -444,6 +444,25 @@ implementation is complete, but production enablement is blocked until the
 controlled-room record, rollback evidence, and an explicit decision on durable
 replay protection are accepted. Reply migration is a separate phase.
 
+## Controlled-room Playwright qualification
+
+VS Code's Playwright browser tooling can exercise the real Bondage Club room
+without adding browser automation to the bot runtime. The qualification should
+be opt-in and use a locally configured room URL plus an already-authenticated
+browser profile; credentials and session tokens must not be passed through the
+assistant or committed to the repository.
+
+The first controlled run should be non-destructive and cover whisper, chat,
+emote, duplicate operation keys, connector disconnect/reconnect, one migrated
+caller, and one disabled-rollout legacy fallback. Retain the room URL label,
+operation key, observed UI/room result, connector observation, and rollback
+result. A visible message is useful evidence but still does not promote
+`queued` to `sent` without an authoritative receipt.
+
+No real-room result is claimed until a reachable test room, safe test
+characters, an authenticated browser session, and an approved observation
+window are available.
+
 ## Acceptance Criteria
 
 Communication implementation is complete for the first action slice when:
