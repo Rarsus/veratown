@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../../action-layer";
+import type {
+    ActionContext,
+    ActionResult,
+    CommunicationActionAdapter,
+    CommunicationObservation,
+    MessageRequest,
+} from "../../../action-layer/domain";
 import { BunnyParkSystem } from "../bunnyParkSystem";
 import {
     BunnyPunishmentService,
@@ -8,6 +19,35 @@ import {
 } from "../bunnyPunishmentService";
 import { BUNNY_POSITIONS, BUNNY_RESTRAINT_CONFIGS } from "../veratownConfig";
 import { getAppearanceMutationContext } from "../shared/appearanceSync";
+
+class RecordingCommunicationAdapter implements CommunicationActionAdapter {
+    public readonly requests: MessageRequest[] = [];
+
+    public async send(
+        request: MessageRequest,
+        context: ActionContext,
+    ): Promise<ActionResult<CommunicationObservation>> {
+        this.requests.push(request);
+        return {
+            status: "completed",
+            metadata: {
+                operationId: context.operationId,
+                actionId: "communication.test",
+                memberNumber: context.memberNumber,
+                attempt: 1,
+                startedAt: 1,
+                completedAt: 2,
+            },
+            value: {
+                channel: request.channel,
+                deliveryStatus: "queued",
+                targetMemberNumber: request.targetMemberNumber,
+                textLength: request.text.length,
+                observedAt: 2,
+            },
+        };
+    }
+}
 
 function createCharacter(
     memberNumber = 42,
@@ -244,6 +284,39 @@ test("Bunny Park reports a disabled release worker without disabling locations",
         status: "disabled",
     });
     assert.equal(regionCallbacks.length, 1);
+});
+
+test("Bunny Park uses communication actions for the park-entry notice when enabled", async () => {
+    const created = createCharacter(77);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new BunnyParkSystem(
+        createMessageConnection(created.character) as any,
+        { recover: async () => {} } as any,
+        true,
+        true,
+        service,
+        rollout,
+    );
+
+    await (system as any).onCharacterEnterPark(created.character);
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text:
+                "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
+                "it is forbidden to step on the bunnies. Anyone caught doing so will be bound " +
+                "on the spot as punishment. Please watch your step.",
+            targetMemberNumber: 77,
+            deduplicationKey: "bunny-park-entry:77",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    service.close();
 });
 
 test("secondary Bunny Park does not use a static park region", async () => {

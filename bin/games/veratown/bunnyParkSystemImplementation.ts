@@ -5,6 +5,10 @@ import { guardHandler } from "./featureSystem";
 import { BUNNY_POSITIONS, PARK } from "./veratownConfig";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import type { BunnyPunishmentService } from "./bunnyPunishmentService";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 
 export class BunnyParkSystem extends AbstractTileFeatureSystem {
     private bunnyPositions: Array<{ X: number; Y: number }> = [];
@@ -21,6 +25,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
         private readonly punishmentService: BunnyPunishmentService,
         private readonly allowStaticFallbacks = true,
         private readonly managedReleaseWorkersEnabled = true,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "bunnyPark", "Bunny park");
         this.bunnyTrigger = this.guardTileHandler(this.onCharacterStepOnBunny);
@@ -128,13 +134,48 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 memberNumber: character.MemberNumber,
             });
         }
-        this.messageSender.whisperToCharacter(
-            character,
-            "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
-                "it is forbidden to step on the bunnies. Anyone caught doing so will be bound " +
-                "on the spot as punishment. Please watch your step.",
-        );
+        await this.sendParkEntryNotification(character);
     };
+
+    private async sendParkEntryNotification(
+        character: API_Character,
+    ): Promise<void> {
+        const text =
+            "NOTICE: You are entering Veratown Park. The park's rabbits are strictly protected: " +
+            "it is forbidden to step on the bunnies. Anyone caught doing so will be bound " +
+            "on the spot as punishment. Please watch your step.";
+        const operationId = `bunny-park-entry:${character.MemberNumber}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
+        );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                await this.communicationService.send(
+                    {
+                        channel: "whisper",
+                        text,
+                        targetMemberNumber: character.MemberNumber,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "bunny park entry notification",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+            } else {
+                this.messageSender.whisperToCharacter(character, text);
+            }
+        } finally {
+            lease?.release();
+        }
+    }
 
     private onCharacterStepOnBunny = async (character: API_Character) => {
         if (!this.enabled) return;
