@@ -3,7 +3,7 @@ title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
 version: "1.22"
-status: "Bunny remains the first migration candidate; communication and position observation have partial slices, and map trigger lifecycle design is complete"
+status: "Bunny remains the first migration candidate; communication and position observation have partial slices, and map trigger lifecycle has a qualified LocationMonitorSystem pilot"
 ---
 
 # Headless Bondage Club Action Layer
@@ -80,7 +80,8 @@ remaining evidence is limited to controlled-room qualification gates.
 - Map trigger lifecycle design, scoped registration handles, room/map cleanup,
   IST/SOLL UML, and state management are documented in
   [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md). The
-  `LocationMonitorSystem` pilot implementation remains pending.
+  `LocationMonitorSystem` pilot uses the registry and BC adapter; broader map
+  and tile-family migration remains pending.
 
 ### Migration status answer
 
@@ -543,25 +544,25 @@ from becoming coupled to a large generated browser-oriented API.
 The following assumptions must be verified by adapter tests or live connector
 evidence before a caller is migrated:
 
-| Assumption                                                                       | Current evidence                                                                          | Required treatment                                                                                                                        |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `MakeAppearanceBundle()` is a usable pre-action local projection                 | Used by legacy sync, release, Bunny, and the isolated adapter                             | Re-observe immediately before every mutation; never call it authoritative server confirmation                                             |
-| `AddItem()` dispatches an item update and returns a usable runtime item          | `src/appearance.ts` exposes `AddItem(BC_AppearanceItem)`                                  | Verify asset/property normalization, server acceptance, and post-update observation; raw bundle construction is not yet proven sufficient |
-| `RemoveItem(group)` removes only the intended target                             | BC removal is group-based                                                                 | Re-observe the group, require exact identity match, preserve locked or ambiguous items, then verify absence                               |
-| `Property.LockedBy` and `Property.LockMemberNumber` identify effective ownership | Connector diagnostics expose these fields                                                 | Treat explicit ownership as locked; do not infer unlocked from missing fields alone                                                       |
-| `LockSet` or a password without ownership is safe to remove                      | Legacy data can contain incomplete lock shapes                                            | Classify as ambiguous and fail closed when preservation is enabled                                                                        |
-| `Property.TypeRecord` can be represented by one string                           | The adapter resolves typed/modular records through official copy-chain definitions        | Keep semantic option names in the domain; retain raw BC records only at the adapter boundary                                              |
-| `AssetGet(group, name)` is available and returns a valid BC asset                | The BC adapter now resolves assets before add dispatch                                    | Keep lookup and missing-asset rejection in the adapter; add asset-definition contract tests                                               |
-| Local mutation completion implies server acceptance                              | Legacy code often observes local appearance after dispatch                                | Explicitly false; mutating results remain `in_progress` until connector confirmation                                                      |
-| Connector appearance events can be correlated to one operation                   | The adapter serializes one operation per member and matches the exact expected post-state | Keep member, operation ID, epoch, timestamp, and predicate checks; do not treat an uncorrelated packet as confirmation                    |
-| Connector connection identity is a reconnect epoch                               | The adapter advances an epoch on disconnect or connection identity change                 | Keep lifecycle tests and qualify the mapping against real reconnect behavior before durable retries                                       |
-| `flushUpdates()` or `sendAppearanceUpdate()` is safe to repeat                   | Legacy appearance sync uses both paths                                                    | Keep behind the adapter; prove idempotency and avoid retrying a mutation without re-observation                                           |
-| Map and room objects remain valid across room recreation                         | Feature systems retain map and connector references                                       | Add lifecycle-owned handles and invalidate them on disconnect or room replacement                                                         |
-| `MapPos` is authoritative after teleport                                         | Release and CatDog poll or observe it after `mapTeleport()`                               | Treat dispatch and arrival as separate results; direct `MapPos` assignment is not a supported fallback                                    |
-| `SendMessage()` means delivered message                                          | `MessageSender` reports a boolean-style send result                                       | Expose queued, sent, rejected, and unknown delivery; do not make durable workflow success depend on queueing alone                        |
-| Map trigger registration is idempotent                                           | Features add and remove tile and region callbacks directly                                | Return stable registration handles and guarantee cleanup on disable, reload, room recreation, and shutdown                                |
-| `setMapFromData()` is a safe tile update                                         | Admin code uses it for full map replacement                                               | Treat as a separate privileged map-replacement operation with validation and rollback; it is not covered by tile actions                  |
-| Item permission changes affect only the intended room state                      | Casino calls `setItemPermission()` directly                                               | Add room-scoped observe/update permission actions with authorization and confirmation                                                     |
+| Assumption                                                                       | Current evidence                                                                                                      | Required treatment                                                                                                                        |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `MakeAppearanceBundle()` is a usable pre-action local projection                 | Used by legacy sync, release, Bunny, and the isolated adapter                                                         | Re-observe immediately before every mutation; never call it authoritative server confirmation                                             |
+| `AddItem()` dispatches an item update and returns a usable runtime item          | `src/appearance.ts` exposes `AddItem(BC_AppearanceItem)`                                                              | Verify asset/property normalization, server acceptance, and post-update observation; raw bundle construction is not yet proven sufficient |
+| `RemoveItem(group)` removes only the intended target                             | BC removal is group-based                                                                                             | Re-observe the group, require exact identity match, preserve locked or ambiguous items, then verify absence                               |
+| `Property.LockedBy` and `Property.LockMemberNumber` identify effective ownership | Connector diagnostics expose these fields                                                                             | Treat explicit ownership as locked; do not infer unlocked from missing fields alone                                                       |
+| `LockSet` or a password without ownership is safe to remove                      | Legacy data can contain incomplete lock shapes                                                                        | Classify as ambiguous and fail closed when preservation is enabled                                                                        |
+| `Property.TypeRecord` can be represented by one string                           | The adapter resolves typed/modular records through official copy-chain definitions                                    | Keep semantic option names in the domain; retain raw BC records only at the adapter boundary                                              |
+| `AssetGet(group, name)` is available and returns a valid BC asset                | The BC adapter now resolves assets before add dispatch                                                                | Keep lookup and missing-asset rejection in the adapter; add asset-definition contract tests                                               |
+| Local mutation completion implies server acceptance                              | Legacy code often observes local appearance after dispatch                                                            | Explicitly false; mutating results remain `in_progress` until connector confirmation                                                      |
+| Connector appearance events can be correlated to one operation                   | The adapter serializes one operation per member and matches the exact expected post-state                             | Keep member, operation ID, epoch, timestamp, and predicate checks; do not treat an uncorrelated packet as confirmation                    |
+| Connector connection identity is a reconnect epoch                               | The adapter advances an epoch on disconnect or connection identity change                                             | Keep lifecycle tests and qualify the mapping against real reconnect behavior before durable retries                                       |
+| `flushUpdates()` or `sendAppearanceUpdate()` is safe to repeat                   | Legacy appearance sync uses both paths                                                                                | Keep behind the adapter; prove idempotency and avoid retrying a mutation without re-observation                                           |
+| Map and room objects remain valid across room recreation                         | Feature systems retain map and connector references                                                                   | Add lifecycle-owned handles and invalidate them on disconnect or room replacement                                                         |
+| `MapPos` is authoritative after teleport                                         | Release and CatDog poll or observe it after `mapTeleport()`                                                           | Treat dispatch and arrival as separate results; direct `MapPos` assignment is not a supported fallback                                    |
+| `SendMessage()` means delivered message                                          | `MessageSender` reports a boolean-style send result                                                                   | Expose queued, sent, rejected, and unknown delivery; do not make durable workflow success depend on queueing alone                        |
+| Map trigger registration is idempotent                                           | `LocationMonitorSystem` uses a scoped registry and BC adapter; other features still add and remove callbacks directly | Return stable registration handles and guarantee cleanup on disable, reload, room recreation, and shutdown                                |
+| `setMapFromData()` is a safe tile update                                         | Admin code uses it for full map replacement                                                                           | Treat as a separate privileged map-replacement operation with validation and rollback; it is not covered by tile actions                  |
+| Item permission changes affect only the intended room state                      | Casino calls `setItemPermission()` directly                                                                           | Add room-scoped observe/update permission actions with authorization and confirmation                                                     |
 
 #### Unsupported BC operations in the current action layer
 
@@ -580,8 +581,9 @@ return:
   deduplication;
 - movement commands, teleportation, arrival confirmation, and stale position
   rejection;
-- map object updates, full map replacement, tile triggers, enter-region
-  triggers, leave-region triggers, and trigger lifecycle handles;
+- map object updates and full map replacement; tile, enter-region, and
+  leave-region trigger lifecycle is implemented for the `LocationMonitorSystem`
+  pilot but is not yet a family-wide migration;
 - inventory semantics beyond identity observation, including inventory
   ownership, permission, and asset-specific property inspection;
 - `CommandParser`, room serialization, and other command or room bootstrap
@@ -1292,10 +1294,13 @@ Migration is incremental and should preserve existing behavior after each step.
 
 - [x] Define idempotent map registration handles in
       [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md).
-- [ ] Implement the scoped trigger registry and BC adapter.
+- [x] Implement the scoped trigger registry and BC adapter for the
+      `LocationMonitorSystem` pilot.
 - [ ] Migrate Bunny park and other tile systems.
-- [ ] Ensure reload and shutdown remove old registrations.
-- [ ] Test room recreation and duplicate trigger registration.
+- [x] Ensure pilot reload, disablement, room replacement, and shutdown remove
+      old registrations.
+- [x] Test pilot room recreation, stale callbacks, repeated attach, and
+      duplicate trigger registration.
 
 ### Phase 4: Workflow extraction
 

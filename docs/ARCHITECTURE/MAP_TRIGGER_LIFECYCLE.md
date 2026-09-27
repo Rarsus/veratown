@@ -3,15 +3,16 @@ title: "Map Trigger Lifecycle"
 subtitle: "Scoped registration, lifecycle handles, and map-trigger state management"
 date: "September 27, 2026"
 version: "1.0"
-status: "Design complete; LocationMonitorSystem pilot implementation pending"
+status: "LocationMonitorSystem pilot implemented and qualified; broader feature migration pending"
 ---
 
 # Map Trigger Lifecycle
 
 This document defines the map-trigger action family for the headless action
 architecture. The first pilot is `LocationMonitorSystem`, whose enter-region
-notifications already have room attachment, room replacement, location reload,
-cooldown, and diagnostics behavior.
+notifications now use the scoped registry and BC adapter while preserving room
+attachment, room replacement, location reload, cooldown, and diagnostics
+behavior.
 
 The lifecycle boundary is deliberately narrower than map editing. It owns
 registration and cleanup of runtime tile and region callbacks. Static map
@@ -39,7 +40,7 @@ A trigger firing is not durable game state. The registry records runtime
 ownership and diagnostics only. A feature may persist a consequence after its
 own guarded handler decides that the event is valid.
 
-## IST: current LocationMonitorSystem behavior
+## IST: pre-pilot LocationMonitorSystem behavior
 
 `LocationMonitorSystem` stores callback/map pairs in a local `bindings` array.
 `attachToRoom()` compares the current room and map references, and
@@ -119,6 +120,11 @@ stateDiagram-v2
 
 The target architecture introduces a reusable `MapTriggerRegistry` behind a
 workflow-facing `MapTriggerActionService` and a BC-specific adapter.
+
+The first implementation increment delivers the registry and BC adapter
+directly. A separate workflow service wrapper is not required for the pilot:
+`MapTriggerRegistry` is the lifecycle owner, and feature systems depend on its
+small registration/cleanup surface.
 
 1. A feature creates a `MapTriggerScope` from the current room and map
    identity.
@@ -271,24 +277,28 @@ transport-level registration results.
 
 ### Iteration 2: Domain contracts and registry
 
-- Define transport-neutral trigger request, scope, registration, and handle
-  contracts.
-- Implement idempotent scoped registration and disposal.
-- Add tests for duplicate keys, replacement, stale scopes, and close behavior.
+- [x] Define transport-neutral trigger request, scope, registration, and handle
+      contracts.
+- [x] Implement idempotent scoped registration and disposal.
+- [x] Add tests for duplicate keys, replacement, stale scopes, and close
+      behavior.
 
 ### Iteration 3: BC adapter
 
-- Translate tile, enter-region, and leave-region registration to `API_Map`.
-- Return structured registration observations and retryable transport failures.
-- Add adapter tests for exact callback identity and coordinate cleanup.
+- [x] Translate tile, enter-region, and leave-region registration to `API_Map`.
+- [x] Keep adapter cleanup idempotent and preserve exact callback identity and
+      tile coordinates.
+- [x] Add adapter tests for all trigger kinds and geometry validation.
 
 ### Iteration 4: LocationMonitorSystem pilot
 
-- Replace local `bindings` with the registry service.
-- Preserve cooldown, provider, communication, and diagnostics behavior.
-- Dispose registrations on attach, reload, disablement, room replacement, and
-  shutdown.
-- Add room replacement and repeated attach integration tests.
+- [x] Replace local `bindings` with the registry.
+- [x] Preserve cooldown, provider, communication, and diagnostics behavior.
+- [x] Dispose registrations on attach, reload, disablement, room replacement,
+      and
+      shutdown.
+- [x] Add room replacement, repeated attach, stale callback, disablement, and
+      shutdown integration tests.
 
 ### Iteration 5: Qualification and expansion
 
@@ -299,14 +309,18 @@ transport-level registration results.
 
 ## Acceptance criteria
 
-The first map-trigger action slice is complete when:
+The `LocationMonitorSystem` map-trigger action slice is complete when:
 
-- registration is scoped to room/map identity;
-- stable keys are idempotent and replacement disposes the old callback;
-- every registration returns an idempotent cleanup handle;
-- old room/map callbacks cannot execute feature behavior;
-- reload removes stale configuration registrations;
-- disablement and shutdown clean up callbacks;
-- tile, enter-region, and leave-region adapters have contract coverage;
-- `LocationMonitorSystem` retains cooldown and provider behavior; and
-- focused tests, strict TypeScript, formatting, and import-boundary checks pass.
+- [x] registration is scoped to room/map identity;
+- [x] stable keys are idempotent and replacement disposes the old callback;
+- [x] every registration returns an idempotent cleanup handle;
+- [x] old room/map callbacks cannot execute feature behavior;
+- [x] reload removes stale configuration registrations;
+- [x] disablement and shutdown clean up callbacks;
+- [x] tile, enter-region, and leave-region adapters have contract coverage;
+- [x] `LocationMonitorSystem` retains cooldown and provider behavior; and
+- [x] focused tests, strict TypeScript, formatting, and whitespace checks pass.
+
+The pilot remains an architecture slice rather than a claim that all map and
+tile features have migrated. Bunny park, cage, kennel, furniture, shower,
+window, and other direct `API_Map` callers remain follow-up work.
