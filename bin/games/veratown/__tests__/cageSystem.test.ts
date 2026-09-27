@@ -217,12 +217,18 @@ function startRelease(
     mutations: ReturnType<typeof createMutationService>,
     character: ReturnType<typeof createCharacter>,
     expiry: number,
+    communicationService?: CommunicationActionService,
+    rollout?: ActionLayerRolloutController,
 ) {
     const system = new CageSystem(
         character.connection as any,
         mutations as any,
         undefined,
         timer,
+        true,
+        true,
+        communicationService,
+        rollout,
     );
     (system as any).cagedCharacters.set(character.character.MemberNumber, {
         character: character.character,
@@ -540,6 +546,82 @@ test("CageSystem uses communication actions for unavailable containment when ena
         },
     ]);
     assert.deepEqual(created.messages, []);
+    service.close();
+});
+
+test("CageSystem routes short entry status notifications through actions", async () => {
+    const created = createCharacter(19);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new CageSystem(
+        created.connection as any,
+        undefined,
+        undefined,
+        undefined,
+        true,
+        true,
+        service,
+        rollout,
+    );
+
+    await (system as any).sendCageNotification(
+        created.character,
+        "(You are locked in the Futuristic Crate for 1 minute.)",
+        "cage-entry:19",
+        "cage entry notification",
+    );
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text: "(You are locked in the Futuristic Crate for 1 minute.)",
+            targetMemberNumber: 19,
+            deduplicationKey: "cage-entry:19",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    assert.deepEqual(rollout.snapshot().activeOperationIds, []);
+    service.close();
+});
+
+test("CageSystem routes release status notifications through actions", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const created = createCharacter(20);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    created.setCrate({
+        Name: "FuturisticCrate",
+        Property: { LockedBy: "SafewordPadlock" },
+    });
+
+    const pending = startRelease(
+        timer,
+        mutations,
+        created,
+        300_000,
+        service,
+        rollout,
+    );
+    await timer.advance(300_050);
+    await pending;
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text: "(The Futuristic Crate unlocks and releases you.",
+            targetMemberNumber: 20,
+            deduplicationKey: "cage-release:20",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    assert.deepEqual(rollout.snapshot().activeOperationIds, []);
     service.close();
 });
 

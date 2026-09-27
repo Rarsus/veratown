@@ -754,9 +754,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
             });
 
             if (persisted !== false) {
-                this.messageSender.whisperToCharacter(
+                await this.sendCageNotification(
                     character,
                     `(You are locked in the Futuristic Crate for ${durationString(durationMs)}.`,
+                    `cage-entry:${character.MemberNumber}`,
+                    "cage entry notification",
                 );
                 this.logger.info("Cage entry notified", {
                     memberNumber: character.MemberNumber,
@@ -774,9 +776,20 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private async sendUnavailableContainmentNotification(
         character: API_Character,
     ): Promise<void> {
-        const text =
-            "(Cage containment is currently unavailable. Please contact staff.)";
-        const operationId = `cage-unavailable:${character.MemberNumber}`;
+        await this.sendCageNotification(
+            character,
+            "(Cage containment is currently unavailable. Please contact staff.)",
+            `cage-unavailable:${character.MemberNumber}`,
+            "cage containment unavailable",
+        );
+    }
+
+    private async sendCageNotification(
+        character: API_Character,
+        text: string,
+        operationId: string,
+        reason: string,
+    ): Promise<void> {
         const lease = this.rollout?.begin(
             "communication-notifications",
             operationId,
@@ -797,7 +810,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         operationId,
                         memberNumber: character.MemberNumber,
                         source: "feature",
-                        reason: "cage containment unavailable",
+                        reason,
                         deadlineAt: Date.now() + 5000,
                     },
                 );
@@ -892,9 +905,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     persistedAtMs,
                     authoritativeExpiryMs: cage.authoritativeExpiry,
                 });
-                this.messageSender.whisperToCharacter(
+                await this.sendCageNotification(
                     character,
                     "(The Futuristic Crate unlocks and releases you.",
+                    `cage-release:${memberNumber}`,
+                    "cage release notification",
                 );
                 this.logger.info("Cage release notified", {
                     memberNumber,
