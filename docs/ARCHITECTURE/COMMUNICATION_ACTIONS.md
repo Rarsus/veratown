@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "2.5"
-status: "Targeted Veratown notification slice implemented behind opt-in rollout; real-room test-bot qualification is proposed, while BC delivery receipts, replies, and durable replay protection remain pending"
+version: "2.6"
+status: "Targeted Veratown notification slice and local real-room harness implemented behind opt-in rollout; live-room qualification, BC delivery receipts, replies, and durable replay protection remain pending"
 ---
 
 # Communication Actions
@@ -386,9 +386,10 @@ evidence.
 - [x] Migrate TrashcanSystem found-item emotes through the shared action path
       with a stable operation key, rollout lease, legacy fallback, focused
       coverage, and a regression test for generic Message event registration.
-- [ ] Implement the opt-in real-room test-bot harness described in
-      [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md) before
-      migrating another caller.
+- [x] Implement the opt-in real-room test-bot harness described in
+      [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md), including
+      configuration validation, safe-command rejection, dry-run mode, bounded
+      response waits, and cleanup tests.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -435,6 +436,8 @@ The first communication slice is locally qualified by:
   generic Message event handler; and
 - `pnpm test:communication`, which runs the complete local communication slice
   with concurrency one.
+- `pnpm test:qualification:real-room`, which runs the local real-room harness
+  contract without opening a connector.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The
@@ -447,10 +450,10 @@ implementation is complete, but production enablement is blocked until the
 controlled-room record, rollback evidence, and an explicit decision on durable
 replay protection are accepted. Reply migration is a separate phase.
 
-The next implementation slice is the standalone test-bot harness. It must join
-an existing room with `ChatRoomJoin` only, use a dedicated account, reject
-unsafe commands, and retain redacted observations. Once Phase 1 protocol smoke
-tests pass, use the harness for the WindowSystem connector record and one
+The next implementation slice is Phase 1 protocol smoke qualification. Run the
+implemented harness in a dedicated existing room with `ChatRoomJoin` only,
+using a dedicated account and an approved read-only command. Once that record
+passes, use the harness for the WindowSystem connector record and one
 action/legacy rollback comparison. Do not migrate another notification caller
 until that evidence exists.
 

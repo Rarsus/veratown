@@ -2,7 +2,7 @@
 title: "Action-Layer Execution Plan"
 subtitle: "Current state, next gates, and one-cycle verification plan"
 date: "September 27, 2026"
-version: "1.4"
+version: "1.5"
 status: "Pilot slices implemented; operational qualification and broader migration remain pending"
 ---
 
@@ -187,11 +187,11 @@ CatDogSystem, and TrashcanSystem notification paths.
 
 **Next steps:**
 
-1. Verify real `SendMessage` behavior for whisper, chat, emote, connector
+1. Run the Phase 1 approved-room protocol smoke test through the implemented
+   opt-in harness in
+   [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md).
+2. Verify real `SendMessage` behavior for whisper, chat, emote, connector
    exception, disconnect, and reconnect.
-2. Implement the opt-in connector-first test-bot harness in
-   [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md); it must
-   join an existing room only and reject unsafe commands.
 3. Decide whether a queued local dispatch is sufficient for each caller; do not
    call it delivery without a receipt contract.
 4. Preserve the local WindowSystem rollback record and legacy/action comparison

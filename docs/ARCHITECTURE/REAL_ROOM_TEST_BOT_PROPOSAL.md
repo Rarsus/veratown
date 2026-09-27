@@ -2,8 +2,8 @@
 title: "Real-Room Test Bot Proposal"
 subtitle: "Opt-in end-to-end qualification for Ropeybot communication and Veratown command paths"
 date: "September 27, 2026"
-version: "1.0"
-status: "Proposal; implementation not started"
+version: "1.1"
+status: "Phase 0 implemented locally; live-room qualification pending"
 ---
 
 # Real-Room Test Bot Proposal
@@ -80,6 +80,12 @@ normal production `createBotConnections` pool. This prevents the test account
 from silently becoming a production Veratown role and keeps test lifecycle and
 cleanup explicit.
 
+Phase 0 is implemented in
+`scripts/qualification/real-room-test-bot.ts`, with focused tests in
+`scripts/qualification/real-room-test-bot.test.ts`. The runner uses the
+connector's no-room-creation-on-reconnect option, so a reconnect cannot turn a
+mistyped room name into a newly created room.
+
 The runner must call `ChatRoomJoin` only. It must never use
 `joinOrCreateRoom`, because a wrong room name must fail rather than create a
 room.
@@ -99,6 +105,7 @@ these values in tracked configuration, test snapshots, logs, or chat messages.
 | `BC_TEST_ROOM`                 | Exact existing room name.                                        |
 | `BC_TEST_TARGET_MEMBER_NUMBER` | Expected bot member number for command targeting.                |
 | `BC_TEST_TIMEOUT_MS`           | Bounded wait for join, response, and reconnect assertions.       |
+| `BC_TEST_DRY_RUN`              | Validate enabled configuration without opening a connector.      |
 
 The harness should reject startup unless the opt-in switch, server URL, room,
 account, and target member number are all present. It should redact usernames,
@@ -184,10 +191,11 @@ authoritative delivery receipt exists.
 
 ## Implementation sequence
 
-1. Add a standalone `scripts/qualification/real-room-test-bot.ts` runner.
-2. Add focused local tests for configuration, safety, timeout, and cleanup.
-3. Add a package script such as `qualification:real-room` that requires the
-   explicit opt-in switch.
+1. [x] Add a standalone `scripts/qualification/real-room-test-bot.ts` runner.
+2. [x] Add focused local tests for configuration, safety, timeout, and cleanup.
+3. [x] Add `qualification:real-room` and
+       `test:qualification:real-room` package scripts; both require the explicit
+       opt-in switch for live connection.
 4. Run Phase 1 in a dedicated room with a dedicated account.
 5. Run Phase 2 against the communication slices, starting with WindowSystem or
    another low-risk notification caller.

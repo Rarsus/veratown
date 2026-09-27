@@ -279,6 +279,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         public username: string,
         private password: string,
         env: "live" | "test",
+        private allowRoomCreationOnReconnect = true,
     ) {
         super();
 
@@ -455,7 +456,13 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
             Password: this.password,
         });
         if (!this.started) await this.start();
-        if (this.roomJoined) await this.joinOrCreateRoom(this.roomJoined);
+        if (this.roomJoined) {
+            if (this.allowRoomCreationOnReconnect) {
+                await this.joinOrCreateRoom(this.roomJoined);
+            } else {
+                await this.ChatRoomJoin(this.roomJoined.Name);
+            }
+        }
         this.emit("Connected");
     };
 
