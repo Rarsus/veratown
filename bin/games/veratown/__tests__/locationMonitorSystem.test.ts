@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../../action-layer";
+import type {
+    ActionContext,
+    ActionResult,
+    CommunicationActionAdapter,
+    CommunicationObservation,
+    MessageRequest,
+} from "../../../action-layer/domain";
+import {
     BotHelpMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
@@ -132,4 +143,72 @@ test("legacy cage information locations resolve to cage occupancy", async () => 
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.deepEqual(sent, ["Cages: 1"]);
+});
+
+test("enabled communication rollout routes monitor notifications through actions", async () => {
+    let callback: ((character: unknown) => void) | undefined;
+    const map = {
+        addEnterRegionTrigger: (_region: unknown, next: any) => {
+            callback = next;
+        },
+        removeEnterRegionTrigger: () => {},
+    };
+    const legacyMessages: string[] = [];
+    const requests: MessageRequest[] = [];
+    const adapter: CommunicationActionAdapter = {
+        async send(
+            request: MessageRequest,
+            context: ActionContext,
+        ): Promise<ActionResult<CommunicationObservation>> {
+            requests.push(request);
+            return {
+                status: "completed",
+                metadata: {
+                    operationId: context.operationId,
+                    actionId: "communication.test",
+                    memberNumber: context.memberNumber,
+                    attempt: 1,
+                    startedAt: 1,
+                    completedAt: 2,
+                },
+                value: {
+                    channel: request.channel,
+                    deliveryStatus: "queued",
+                    targetMemberNumber: request.targetMemberNumber,
+                    textLength: request.text.length,
+                    observedAt: 2,
+                },
+            };
+        },
+    };
+    const communicationService = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new LocationMonitorSystem(
+        {
+            chatRoom: { map },
+            SendMessage: (_type: string, message: string) =>
+                legacyMessages.push(message),
+        } as any,
+        [new BotHelpMonitorProvider(() => "Bot help")],
+        undefined,
+        communicationService,
+        rollout,
+    );
+
+    system.registerTriggers();
+    await system.reloadLocations([location("help", "bot_help")]);
+    callback!({ MemberNumber: 4 });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(legacyMessages, []);
+    assert.deepEqual(requests, [
+        {
+            channel: "whisper",
+            text: "Bot help",
+            targetMemberNumber: 4,
+            deduplicationKey: "location-monitor:help:4",
+        },
+    ]);
 });

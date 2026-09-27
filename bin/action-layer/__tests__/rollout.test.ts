@@ -48,3 +48,11 @@ test("disabled operations default to legacy and can be enabled explicitly", () =
         "action",
     );
 });
+
+test("communication notifications default to legacy", () => {
+    const rollout = new ActionLayerRolloutController();
+    assert.equal(
+        rollout.begin("communication-notifications", "location-1").path,
+        "legacy",
+    );
+});

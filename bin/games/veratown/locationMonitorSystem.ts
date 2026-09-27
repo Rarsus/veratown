@@ -6,6 +6,10 @@ import {
     MapRegion,
 } from "bc-bot";
 import { createLogger } from "../../logging";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 import {
     AbstractMessageFeatureSystem,
     ParsedCommand,
@@ -83,6 +87,8 @@ export class LocationMonitorSystem
         conn: API_Connector,
         providers: readonly LocationMonitorProvider[],
         private readonly defaultCooldownMs = DEFAULT_MONITOR_COOLDOWN_MS,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "locationMonitor", "Location monitors");
         for (const provider of providers) {
@@ -212,7 +218,49 @@ export class LocationMonitorSystem
             if (!message.trim()) return;
 
             this.lastDisplayedAt.set(cooldownKey, Date.now());
-            await this.sendMessage(character.MemberNumber, message);
+            const operationId = `location-monitor:${location.key}:${character.MemberNumber}`;
+            const lease = this.rollout?.begin(
+                "communication-notifications",
+                operationId,
+            );
+            try {
+                if (
+                    lease?.path === "action" &&
+                    this.communicationService !== undefined
+                ) {
+                    const result = await this.communicationService.send(
+                        {
+                            channel: "whisper",
+                            text: message,
+                            targetMemberNumber: character.MemberNumber,
+                            deduplicationKey: operationId,
+                        },
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            source: "feature",
+                            reason: `location monitor ${location.key}`,
+                            deadlineAt: Date.now() + 5000,
+                        },
+                    );
+                    if (result.status !== "completed") {
+                        this.logger.warn(
+                            "Communication action did not complete",
+                            {
+                                operationId,
+                                locationKey: location.key,
+                                deliveryStatus:
+                                    result.value?.deliveryStatus ?? "unknown",
+                                reason: result.reason,
+                            },
+                        );
+                    }
+                } else {
+                    await this.sendMessage(character.MemberNumber, message);
+                }
+            } finally {
+                lease?.release();
+            }
         } finally {
             this.activeDisplays.delete(cooldownKey);
         }
