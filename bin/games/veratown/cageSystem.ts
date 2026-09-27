@@ -41,6 +41,10 @@ import {
     readLegacyRemoveTimer,
 } from "../shared/managedLockLifecycle";
 import type { CageSession } from "../shared/unifiedCharacterTypes";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 
 export interface CageTimer {
     now(): number;
@@ -226,6 +230,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
         private readonly timer: CageTimer = systemTimer,
         private readonly allowStaticFallbacks = true,
         private readonly managedReleaseWorkersEnabled = true,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -608,10 +614,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterCageEntry = async (character: API_Character) => {
         if (!this.enabled) {
-            this.messageSender.whisperToCharacter(
-                character,
-                "(Cage containment is currently unavailable. Please contact staff.)",
-            );
+            await this.sendUnavailableContainmentNotification(character);
             return;
         }
 
@@ -646,10 +649,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterCage = async (character: API_Character) => {
         if (!this.enabled) {
-            this.messageSender.whisperToCharacter(
-                character,
-                "(Cage containment is currently unavailable. Please contact staff.)",
-            );
+            await this.sendUnavailableContainmentNotification(character);
             return;
         }
 
@@ -770,6 +770,44 @@ export class CageSystem extends AbstractTileFeatureSystem {
             await this.releaseWhenExpired(character, cageName);
         });
     };
+
+    private async sendUnavailableContainmentNotification(
+        character: API_Character,
+    ): Promise<void> {
+        const text =
+            "(Cage containment is currently unavailable. Please contact staff.)";
+        const operationId = `cage-unavailable:${character.MemberNumber}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
+        );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                await this.communicationService.send(
+                    {
+                        channel: "whisper",
+                        text,
+                        targetMemberNumber: character.MemberNumber,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "cage containment unavailable",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+            } else {
+                this.messageSender.whisperToCharacter(character, text);
+            }
+        } finally {
+            lease?.release();
+        }
+    }
 
     private async releaseWhenExpired(
         character: API_Character,

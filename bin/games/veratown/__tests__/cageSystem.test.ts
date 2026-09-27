@@ -3,10 +3,50 @@ import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import { durationString } from "../../../utils";
 import {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../../action-layer";
+import type {
+    ActionContext,
+    ActionResult,
+    CommunicationActionAdapter,
+    CommunicationObservation,
+    MessageRequest,
+} from "../../../action-layer/domain";
+import {
     CageSystem,
     classifyContainmentRecovery,
     type CageTimer,
 } from "../cageSystem";
+
+class RecordingCommunicationAdapter implements CommunicationActionAdapter {
+    public readonly requests: MessageRequest[] = [];
+
+    public async send(
+        request: MessageRequest,
+        context: ActionContext,
+    ): Promise<ActionResult<CommunicationObservation>> {
+        this.requests.push(request);
+        return {
+            status: "completed",
+            metadata: {
+                operationId: context.operationId,
+                actionId: "communication.test",
+                memberNumber: context.memberNumber,
+                attempt: 1,
+                startedAt: 1,
+                completedAt: 2,
+            },
+            value: {
+                channel: request.channel,
+                deliveryStatus: "queued",
+                targetMemberNumber: request.targetMemberNumber,
+                textLength: request.text.length,
+                observedAt: 2,
+            },
+        };
+    }
+}
 
 class FakeTimer implements CageTimer {
     public nowMs = 0;
@@ -468,6 +508,39 @@ test("CageSystem reports when containment is unavailable", async () => {
         created.messages[0],
         /Cage containment is currently unavailable/,
     );
+});
+
+test("CageSystem uses communication actions for unavailable containment when enabled", async () => {
+    const created = createCharacter(18);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new CageSystem(
+        created.connection as any,
+        undefined,
+        undefined,
+        undefined,
+        true,
+        true,
+        service,
+        rollout,
+    );
+    system.enabled = false;
+
+    await (system as any).onCharacterEnterCage(created.character);
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text: "(Cage containment is currently unavailable. Please contact staff.)",
+            targetMemberNumber: 18,
+            deduplicationKey: "cage-unavailable:18",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    service.close();
 });
 
 test("CageSystem allows a targeted item when full wardrobe access is disabled", async () => {

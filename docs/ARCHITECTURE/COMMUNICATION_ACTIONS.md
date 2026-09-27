@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.6"
-status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor and WindowSystem callers implemented; real delivery and broader migration pending"
+version: "1.7"
+status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, and CageSystem callers implemented; real delivery and broader migration pending"
 ---
 
 # Communication Actions
@@ -318,6 +318,9 @@ evidence.
 - [x] Migrate the KennelSystem unavailable-containment whisper as a low-risk
       targeted caller with an explicit operation key, rollout lease, legacy
       fallback, and focused coverage.
+- [x] Migrate the CageSystem unavailable-containment whispers as a low-risk
+      targeted caller with a shared helper, explicit operation key, rollout
+      lease, legacy fallback, and focused coverage.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -341,6 +344,8 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/windowSystemRollback.test.ts`, including the
   in-flight rollback path; and
 - `bin/games/veratown/__tests__/kennelSystem.test.ts`, including action and
+  legacy unavailable-containment paths.
+- `bin/games/veratown/__tests__/cageSystem.test.ts`, including action and
   legacy unavailable-containment paths.
 
 The next phase requires those tests plus a controlled-room connector record for

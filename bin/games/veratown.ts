@@ -580,6 +580,18 @@ export class Veratown {
                     undefined,
                     this.roomKey === "main",
                     this.managedReleaseWorkersEnabled,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    )
+                        ? this.container.get<CommunicationActionService>(
+                              DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                          )
+                        : undefined,
+                    this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                        ? this.container.get<ActionLayerRolloutController>(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          )
+                        : undefined,
                 ),
         );
         this.kennelSystem = this.initFeature(
