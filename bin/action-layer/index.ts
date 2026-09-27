@@ -10,5 +10,6 @@ export * from "./rollout";
 export * from "./scheduler";
 export * from "./adapters/in-memory-appearance";
 export * from "./adapters/bc-appearance";
+export * from "./adapters/bc-communication";
 export * from "./benchmark/workload";
 export * from "./qualification";
