@@ -1,9 +1,9 @@
 ---
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
-date: "September 26, 2026"
-version: "1.18"
-status: "Proposed - Bunny durable recovery and one bounded live qualification complete behind disabled switches; full migration gates remain open"
+date: "September 27, 2026"
+version: "1.19"
+status: "Bunny is the first migration candidate; durable recovery, atomic projection, and one bounded live qualification are validated behind a disabled switch"
 ---
 
 # Headless Bondage Club Action Layer
@@ -35,8 +35,9 @@ This document describes both the target architecture and the current delivery
 state. The completed work spans the isolated package at `bin/action-layer/`
 and two narrow, opt-in integration slices for Bunny restraint application and
 release target removal. No broad feature-system migration has occurred. Both
-runtime switches remain disabled by default, and live production evidence is
-still pending.
+runtime switches remain disabled by default. Bunny has completed the local,
+durable, atomicity, and one bounded live apply/expiry validation cycle; the
+remaining evidence is limited to controlled-room qualification gates.
 
 ### Current snapshot
 
@@ -85,6 +86,35 @@ ownership tables, UML diagrams, evidence ledger, and documentation maintenance
 rules. Do not describe Bunny as fully migrated until that registry's remaining
 live-confirmation, restart/reconnect, rollback, qualification, and rollout
 gates are closed.
+
+### Bunny first-feature evaluation
+
+Bunny is the correct first feature for the new system. Its bounded restraint
+operation has a clear action contract, authoritative confirmation, one-owner
+rollout lease, durable workflow journal, transaction-aware projection, expiry
+cleanup, and a compatibility facade for existing callers. The manually
+validated checks also confirm that duplicate projection retries do not
+increment the offence count twice and that an event-write failure rolls back
+the projection.
+
+The feature is therefore **migration-ready behind the switch**, but it is not
+yet **production migrated**. Full migration requires closing the three
+operational gates below, then enabling the switch deliberately:
+
+1. Reconnect/restart rehearsal: interrupt an active confirmed workflow and
+   verify journal restoration, artifact reconciliation, no duplicate restraint,
+   and expiry cleanup after recovery.
+2. Rollback rehearsal: switch new operations to legacy while an action-owned
+   operation finishes, and verify that one operation ID has exactly one owner
+   throughout the handoff.
+3. Production qualification: complete the 30-minute, 19-character workload,
+   record latency, queue, retry, timeout, memory, and failure thresholds, and
+   retain the evidence with the rollout decision.
+
+The rollout flag must remain `false` until all three gates pass. The known
+non-blocking `Emoticon` appearance-group warning from the bounded live run
+should be tracked separately and resolved or explicitly accepted before broad
+rollout; it did not prevent restraint application or expiry cleanup.
 
 ### Completed groundwork
 
@@ -164,10 +194,10 @@ gates are closed.
 
 ### Explicitly not complete
 
-- [ ] Production qualification of authoritative connector confirmation. The
-      adapter and recovery boundary support it when
-      `requireServerConfirmation` is enabled, but real-room evidence and live
-      reconnect qualification remain pending.
+- [x] Bounded production qualification of authoritative connector confirmation.
+      The manually validated live Bunny run confirmed the applied restraint
+      projection and authoritative expiry cleanup. Controlled-room
+      reconnect/restart evidence remains open.
 - [ ] Movement, communication, map, permission, and inventory adapters.
 - [ ] Live restart/reconnect rehearsal for the production journal and Bunny
       artifact recovery. The Mongo journal is active in production, while the
@@ -182,9 +212,9 @@ gates are closed.
       appearance operations, 2 lock applications, 333 message or reply calls,
       49 map mutations, and 5 teleport calls in non-test feature code.
 - [ ] Full Bunny punishment migration. The restraint-only action path,
-      transaction-aware projection, and journal boundary exist behind a
-      disabled switch, but legacy remains default until reconnect/restart,
-      rollback, and live qualification are complete.
+      transaction-aware projection, and journal boundary are validated behind
+      a disabled switch, but legacy remains default until the three operational
+      gates in the Bunny first-feature evaluation are complete.
 - [ ] Full release workflow migration. The action path covers selected live
       removal targets, while classification, nudity, teleport, parole, and
       durable release transitions remain legacy-owned.
@@ -1229,7 +1259,10 @@ Migration is incremental and should preserve existing behavior after each step.
 
 ### Phase 4: Workflow extraction
 
-- [ ] Extract Bunny punishment as the reference workflow.
+- [x] Extract Bunny punishment as the reference workflow. The workflow,
+      durable journal boundary, atomic projection, expiry cleanup, and
+      compatibility facade are implemented; controlled operational gates remain
+      in the Bunny first-feature evaluation above.
 - [ ] Extract release stages around shared appearance actions.
 - [ ] Migrate kennel, cage, furniture, and other high-risk systems one at a
       time.
@@ -1260,7 +1293,8 @@ Each step has a completion gate and preserves the new/old boundary:
        `AppearanceActionAdapter` and `AppearanceActionService`. Translate BC item
        and lock metadata into domain values without leaking BC types into domain,
        planner, workflow, or test modules. Confirmation is now opt-in and
-       lifecycle-managed; durable integration remains pending.
+       lifecycle-managed; the production-injected journal and recovery
+       integration are complete for Bunny.
 4. [x] Add adapter contract tests with mocked character and connector
        behavior. The current tests cover missing slots, unlocked devices,
        ambiguous lock metadata, occupied groups, authoritative post-state,
@@ -1272,7 +1306,8 @@ Each step has a completion gate and preserves the new/old boundary:
 6. [x] Add adapter-level failure-injection and recovery tests for delayed and
        missing confirmations, disconnect/reconnect, changed group occupancy,
        adapter exceptions, and duplicate delivery. Process-recovery state
-       handoff and durable workflow recovery remain pending.
+       handoff is implemented through the production-injected journal; the
+       controlled process-recovery rehearsal remains pending.
 7. [x] Extend the workload harness with event-loop delay, queue wait, heap,
        timers/listeners, CPU, retries, confirmation-timeout, and GC metrics.
        The required 30-minute 19-character qualification and 25-character
@@ -1307,8 +1342,8 @@ Each step has a completion gate and preserves the new/old boundary:
 15. [x] Add the durable workflow journal, optimistic versions, idempotent
         operation keys, persistence-failure handling, restart restoration, and
         transaction-aware Bunny projection boundary for active Bunny and
-        release operations. Production live reconnect rehearsal remains
-        pending.
+        release operations. Controlled-room live reconnect/restart rehearsal
+        remains pending.
 16. [x] Extend the workload harness into a repeated soak with retained samples
         and hard-threshold enforcement. The repository provides runnable
         19-character and 25-character headroom commands; the actual 30-minute
@@ -1318,19 +1353,21 @@ Each step has a completion gate and preserves the new/old boundary:
 
 The next migration sequence is intentionally evidence-driven:
 
-1. Run the controlled-room Bunny and release rehearsals with both switches
-   disabled, then enabled, and retain confirmation, rollback, and journal
-   records.
-2. Run the 30-minute 19-character qualification and the 25-character
-   headroom command. Do not enable either switch until the hard thresholds and
-   restart/reconnect checks pass.
-3. Migrate communication and movement adapters, starting with narration,
+1. Run the controlled-room Bunny reconnect/restart rehearsal with the Bunny
+   switch disabled, then in a controlled enabled window; retain confirmation,
+   journal, artifact, and cleanup records.
+2. Run the Bunny rollback rehearsal, proving that new operations route to
+   legacy while an action-owned operation finishes without mixed ownership.
+3. Run the 30-minute 19-character qualification and the 25-character
+   headroom command. Do not enable the Bunny switch until the hard thresholds
+   and restart/reconnect checks pass.
+4. Migrate communication and movement adapters, starting with narration,
    notifications, and position synchronization.
-4. Migrate map operations and trigger lifecycle, including room recreation and
+5. Migrate map operations and trigger lifecycle, including room recreation and
    duplicate registration cleanup.
-5. Extract the full Bunny and release workflows around the durable recovery
-   boundary, then migrate kennel, cage, and furniture workflows one at a time.
-6. Add enforcement checks for direct BC mutations in migrated workflows and
+6. Complete the release workflow around the durable recovery boundary, then
+   migrate kennel, cage, and furniture workflows one at a time.
+7. Add enforcement checks for direct BC mutations in migrated workflows and
    remove legacy mutation paths only after rollback evidence is retained.
 
 Steps 9 through 13 intentionally modify only the explicitly scoped Bunny and
