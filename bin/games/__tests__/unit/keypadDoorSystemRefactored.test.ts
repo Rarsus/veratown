@@ -425,4 +425,128 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
         expect(sent[0]).toContain("!door help");
         await system.shutdown();
     });
+
+    it("replaces duplicate trigger registrations and rejects retained callbacks", async () => {
+        const activeCallbacks = new Set<Function>();
+        const retainedCallbacks: Function[] = [];
+        const tileUpdates: string[] = [];
+        const map = {
+            addTileTrigger: (_position: unknown, callback: Function) => {
+                activeCallbacks.add(callback);
+                retainedCallbacks.push(callback);
+            },
+            removeTileTrigger: (_x: number, _y: number, callback: Function) => {
+                activeCallbacks.delete(callback);
+            },
+            setObject: (_position: unknown, tile: string) =>
+                tileUpdates.push(tile),
+        };
+        const { system } = createSystem(map);
+        await system.init();
+        system.attachToRoom();
+
+        expect(activeCallbacks.size).toBe(2);
+        expect(retainedCallbacks.length).toBe(4);
+
+        retainedCallbacks[0]({
+            MemberNumber: 1,
+            Name: "Stale",
+            MapPos: { X: 13, Y: 9 },
+            IsRoomAdmin: () => false,
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(tileUpdates).toEqual([]);
+
+        retainedCallbacks[2]({
+            MemberNumber: 1,
+            Name: "Current",
+            MapPos: { X: 13, Y: 9 },
+            IsRoomAdmin: () => false,
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(tileUpdates).toContain("SteelDoorOpen");
+        await system.shutdown();
+    });
+
+    it("cleans old room callbacks on replacement, disablement, and shutdown", async () => {
+        function createLifecycleMap() {
+            const activeCallbacks = new Set<Function>();
+            const retainedCallbacks: Function[] = [];
+            const tileUpdates: string[] = [];
+            return {
+                activeCallbacks,
+                retainedCallbacks,
+                tileUpdates,
+                map: {
+                    addTileTrigger: (
+                        _position: unknown,
+                        callback: Function,
+                    ) => {
+                        activeCallbacks.add(callback);
+                        retainedCallbacks.push(callback);
+                    },
+                    removeTileTrigger: (
+                        _x: number,
+                        _y: number,
+                        callback: Function,
+                    ) => activeCallbacks.delete(callback),
+                    setObject: (_position: unknown, tile: string) =>
+                        tileUpdates.push(tile),
+                },
+            };
+        }
+
+        const first = createLifecycleMap();
+        const second = createLifecycleMap();
+        const connection = {
+            chatRoom: { map: first.map },
+            on: () => {},
+            SendMessage: () => {},
+        };
+        const { system } = createSystem(connection.chatRoom.map);
+        (system as any).conn = connection;
+        await system.init();
+        const staleCallback = first.retainedCallbacks[0];
+
+        connection.chatRoom = { map: second.map };
+        system.attachToRoom();
+        expect(first.activeCallbacks.size).toBe(0);
+        expect(second.activeCallbacks.size).toBe(2);
+
+        staleCallback({
+            MemberNumber: 1,
+            Name: "Old room",
+            MapPos: { X: 13, Y: 9 },
+            IsRoomAdmin: () => false,
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(first.tileUpdates).toEqual([]);
+
+        system.enabled = false;
+        expect(second.activeCallbacks.size).toBe(0);
+        system.enabled = true;
+        expect(second.activeCallbacks.size).toBe(2);
+        await system.shutdown();
+        expect(second.activeCallbacks.size).toBe(0);
+    });
+
+    it("does not dispatch duplicate open or close mutations", async () => {
+        const tileUpdates: string[] = [];
+        const { system } = createSystem({
+            addTileTrigger: () => {},
+            removeTileTrigger: () => {},
+            setObject: (_position: unknown, tile: string) =>
+                tileUpdates.push(tile),
+        });
+        await system.init();
+        const door = createDoor();
+
+        (system as any).openDoor(door, 0);
+        (system as any).openDoor(door, 0);
+        (system as any).closeDoor(door);
+        (system as any).closeDoor(door);
+
+        expect(tileUpdates).toEqual(["SteelDoorOpen", "MetalDown"]);
+        await system.shutdown();
+    });
 });

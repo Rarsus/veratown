@@ -3,7 +3,7 @@ title: "Door Management"
 subtitle: "Layered map mutation, trigger lifecycle, and keypad workflow ownership"
 date: "September 27, 2026"
 version: "1.0"
-status: "Design complete; implementation pending"
+status: "Pilot slice implemented and focused evidence passing; broader map migration pending"
 ---
 
 # Door Management
@@ -38,38 +38,38 @@ door, how long it stays open, or which tile/object asset is valid for policy.
 
 ## Actual state and required actions
 
-The Door management phase has a complete design boundary, but no Door runtime
-caller has crossed the action-layer boundary yet. The verified state is:
+The Door management phase has a complete design boundary and a focused runtime
+pilot. The verified state is:
 
-| Area                 | Actual state                                                                                                                                                                                                                              | Consequence                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Workflow ownership   | `KeypadDoorSystem` already delegates definitions, access policy, and admin commands to their services and owns timers and open/close decisions.                                                                                           | Preserve these responsibilities during migration.                                                 |
-| Object mutation      | `setDoorTile()` directly calls `boundMap.setObject()`; no `setObject` action contract or BC object adapter exists.                                                                                                                        | Implement the focused object action first, then replace this one direct call.                     |
-| Trigger registration | `registerMapTriggers()` directly calls `addTileTrigger()` and stores callbacks in `tileTriggerBindings`; cleanup calls `removeTileTrigger()`.                                                                                             | Replace local bindings with `MapTriggerRegistry` and stable keys.                                 |
-| Lifecycle            | Room replacement and reload perform local cleanup, but disablement is a public boolean and does not own callback cleanup.                                                                                                                 | Add idempotent disablement cleanup and preserve `shutdown()` compatibility.                       |
-| Reuse available      | `MapTriggerRegistry` and `BCMapTriggerActionAdapter` already provide scoped handles, duplicate-key replacement, stale-callback rejection, and adapter cleanup.                                                                            | Reuse the qualified lifecycle boundary instead of creating Door-specific callback infrastructure. |
-| Tests                | Existing unit tests cover unlock, relock, admin commands, reload, and access behavior. They do not prove duplicate registration, stale callbacks, room replacement, disablement cleanup, shutdown cleanup, or adapter object translation. | Add focused lifecycle and adapter tests before claiming a Door pilot.                             |
-| Production status    | No Door runtime migration, rollout switch, or Door adapter wiring is claimed.                                                                                                                                                             | Keep the registry status at design/implementation-in-progress until executable gates pass.        |
+| Area                 | Actual state                                                                                                                                                                                                 | Consequence                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Workflow ownership   | `KeypadDoorSystem` already delegates definitions, access policy, and admin commands to their services and owns timers and open/close decisions.                                                              | Preserve these responsibilities during migration.                                                           |
+| Object mutation      | `setDoorTile()` delegates to `MapObjectActionAdapter`; `BCMapObjectActionAdapter` translates to `API_Map.setObject()` and reports local dispatch only.                                                       | Keep authoritative server confirmation out of this contract until BC provides a usable confirmation event.  |
+| Trigger registration | `registerMapTriggers()` uses `MapTriggerRegistry` with stable keypad and auto-open keys; local `tileTriggerBindings` storage is gone.                                                                        | Reuse this lifecycle boundary for later Door-family expansions, without claiming family-wide map migration. |
+| Lifecycle            | Room replacement, reload, disablement, and shutdown dispose scoped handles; registry guards invalidate retained stale callbacks before adapter cleanup.                                                      | Preserve repeated `shutdown()`/`init()` compatibility and add production reconnect evidence later.          |
+| Reuse available      | `MapTriggerRegistry` and `BCMapTriggerActionAdapter` already provide scoped handles, duplicate-key replacement, stale-callback rejection, and adapter cleanup.                                               | Reuse the qualified lifecycle boundary instead of creating Door-specific callback infrastructure.           |
+| Tests                | The focused suites cover unlock/relock, admin commands, reload, access behavior, object translation/rejection/failure, duplicate registration, stale callbacks, room replacement, disablement, and shutdown. | Add controlled-room reconnect and rollback evidence before any broader rollout claim.                       |
+| Production status    | The `KeypadDoorSystem` pilot is implemented and has no rollout switch; broader Door and map-family migration is not claimed.                                                                                 | Keep the migration registry at partial/pilot status until operational evidence exists.                      |
 
 ### Required action sequence
 
-1. Add transport-neutral map-object mutation types with validated position and
-   object-name inputs, operation metadata, and local-dispatch semantics.
-2. Implement and export a BC map-object adapter that calls
-   `API_Map.setObject()` without claiming server confirmation.
-3. Add adapter tests for translation, invalid input, and adapter failure
-   behavior.
-4. Inject the map-object port into `KeypadDoorSystem` and route `openDoor()`
-   and `closeDoor()` through it without moving access policy or timers.
-5. Replace local Door tile bindings with a registry bound to the current
-   room/map scope and stable keypad/auto-open keys.
-6. Make repeated attach, definition reload, room replacement, disablement, and
-   shutdown dispose active registrations and reject retained stale callbacks.
-7. Add duplicate-trigger and duplicate open/close mutation regression tests,
-   then run the focused Door suite, strict TypeScript, formatting, and
-   whitespace checks.
-8. Update the migration registry only after the runtime slice and lifecycle
-   evidence pass; do not claim family-wide map migration.
+1. [x] Add transport-neutral map-object mutation types with validated position and
+       object-name inputs, operation metadata, and local-dispatch semantics.
+2. [x] Implement and export a BC map-object adapter that calls
+       `API_Map.setObject()` without claiming server confirmation.
+3. [x] Add adapter tests for translation, invalid input, and adapter failure
+       behavior.
+4. [x] Inject the map-object port into `KeypadDoorSystem` and route `openDoor()`
+       and `closeDoor()` through it without moving access policy or timers.
+5. [x] Replace local Door tile bindings with a registry bound to the current
+       room/map scope and stable keypad/auto-open keys.
+6. [x] Make repeated attach, definition reload, room replacement, disablement, and
+       shutdown dispose active registrations and reject retained stale callbacks.
+7. [x] Add duplicate-trigger and duplicate open/close mutation regression tests,
+       then run the focused Door suite, strict TypeScript, formatting, and
+       whitespace checks.
+8. [x] Update the migration registry only after the runtime slice and lifecycle
+       evidence pass; do not claim family-wide map migration.
 
 The implementation is intentionally incremental. Each action above should be
 kept independently reviewable and committed after its focused validation.

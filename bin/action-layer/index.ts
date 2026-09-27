@@ -13,5 +13,6 @@ export * from "./adapters/in-memory-appearance";
 export * from "./adapters/bc-appearance";
 export * from "./adapters/bc-communication";
 export * from "./adapters/bc-map-trigger";
+export * from "./adapters/bc-map-object";
 export * from "./benchmark/workload";
 export * from "./qualification";

@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.23"
-status: "Bunny remains the first migration candidate; communication and position observation have partial slices, map trigger lifecycle has a qualified LocationMonitorSystem pilot, and Door management is in incremental implementation"
+version: "1.24"
+status: "Bunny remains the first migration candidate; communication and position observation have partial slices, map trigger lifecycle has a qualified LocationMonitorSystem pilot, and Door management has a qualified focused pilot slice"
 ---
 
 # Headless Bondage Club Action Layer
@@ -85,8 +85,9 @@ remaining evidence is limited to controlled-room qualification gates.
 - Door management design, including the `KeypadDoorSystem` IST/SOLL boundary,
   map-object mutation adapter, trigger lifecycle, and workflow state ownership,
   actual state, and required action sequence is documented in
-  [DOOR_MANAGEMENT.md](DOOR_MANAGEMENT.md). The runtime pilot is not yet
-  qualified; access policy and unlock timers remain above the map action layer.
+  [DOOR_MANAGEMENT.md](DOOR_MANAGEMENT.md). The focused adapter, registry, and
+  Door workflow tests pass, but this is not a family-wide migration. Access
+  policy and unlock timers remain above the map action layer.
 
 ### Migration status answer
 

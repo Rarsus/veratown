@@ -28,6 +28,15 @@ import { KeypadAccessService } from "./services/keypadAccessService";
 import { KeypadCommandDispatcher } from "./handlers/keypadCommandDispatcher";
 import { KeypadDoorDefinitionDoc } from "./keypadTypes";
 import { MessageSender } from "../shared/messageSender";
+import {
+    BCMapObjectActionAdapter,
+    BCMapTriggerActionAdapter,
+    MapTriggerRegistry,
+    type MapObjectActionAdapter,
+    type MapTriggerCallback,
+    type MapTriggerScope,
+} from "../../action-layer";
+import { getLifecycleObjectId } from "./featureSystem";
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
 const AUTO_OPEN_TRIGGER_DELAY_MS = 1000;
@@ -54,7 +63,7 @@ const AUTO_OPEN_TRIGGER_DELAY_MS = 1000;
 export class KeypadDoorSystem implements VeratownFeatureSystem {
     public readonly key = "keypadDoor";
     public readonly label = "Keypad doors";
-    public enabled = true;
+    private enabledState = true;
 
     private doors: Map<string, KeypadDoorDefinitionDoc> = new Map();
     private readonly manuallyOpenDoors = new Set<string>();
@@ -69,14 +78,13 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     );
     private readonly logger = createLogger("KeypadDoorSystem");
     private readonly messageSender: MessageSender;
-    private readonly tileTriggerBindings: Array<{
-        map: API_Map;
-        x: number;
-        y: number;
-        callback: (...args: any[]) => void;
-    }> = [];
+    private triggerRegistry?: MapTriggerRegistry;
+    private readonly injectedMapObjectAdapter?: MapObjectActionAdapter;
     private boundMap?: API_Map;
     private boundRoom?: API_Connector["chatRoom"];
+    private boundScope?: MapTriggerScope;
+    private mapObjectAdapter?: MapObjectActionAdapter;
+    private nextMapMutationId = 1;
     private messageTriggerRegistered = false;
     private messageTrigger?: (...args: any[]) => void;
 
@@ -86,8 +94,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private accessService: KeypadAccessService,
         private commandDispatcher: KeypadCommandDispatcher,
         private commandParser?: CommandParser,
+        mapObjectAdapter?: MapObjectActionAdapter,
     ) {
         this.messageSender = new MessageSender(conn);
+        this.injectedMapObjectAdapter = mapObjectAdapter;
         // Register code command with CommandParser
         this.commandParser?.register(
             "code",
@@ -99,10 +109,25 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         );
     }
 
+    public get enabled(): boolean {
+        return this.enabledState;
+    }
+
+    public set enabled(value: boolean) {
+        if (this.enabledState === value) return;
+        this.enabledState = value;
+        if (value) this.attachToRoom();
+        else this.detachFromRoom();
+    }
+
     /**
      * Register triggers for this system (required by VeratownFeatureSystem)
      */
     registerTriggers(): void | Promise<void> {
+        if (!this.enabled) {
+            this.detachFromRoom();
+            return;
+        }
         this.attachToRoom();
         if (!this.messageTriggerRegistered) {
             this.messageTrigger = guardHandler(this.key, this.onMessage);
@@ -113,6 +138,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     attachToRoom(): void {
         const room = this.conn.chatRoom;
+        if (!this.enabled) {
+            this.detachFromRoom();
+            return;
+        }
         if (room && this.boundRoom === room && this.boundMap === room.map) {
             this.registerMapTriggers();
             return;
@@ -123,6 +152,15 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         this.boundRoom = room;
         this.boundMap = room.map;
+        this.boundScope = {
+            scopeId: `keypad-door:${this.getObjectId(room)}:${this.getObjectId(room.map)}`,
+            room,
+            map: room.map,
+        };
+        this.getTriggerRegistry().bind(this.boundScope);
+        this.mapObjectAdapter =
+            this.injectedMapObjectAdapter ??
+            new BCMapObjectActionAdapter(room.map);
         this.definitionService.on("doorChanged", this.onDoorChanged);
         this.registerMapTriggers();
     }
@@ -135,6 +173,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
         this.boundMap = undefined;
         this.boundRoom = undefined;
+        this.boundScope = undefined;
+        if (!this.injectedMapObjectAdapter) this.mapObjectAdapter = undefined;
         this.messageTriggerRegistered = false;
         this.messageTrigger = undefined;
     }
@@ -178,25 +218,22 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
     private onDoorChanged = async (): Promise<void> => {
         await this.reloadDoors();
-        this.registerMapTriggers();
+        if (this.enabled) this.registerMapTriggers();
     };
 
     private unregisterMapTriggers(): void {
-        for (const binding of this.tileTriggerBindings) {
-            binding.map.removeTileTrigger(
-                binding.x,
-                binding.y,
-                binding.callback,
-            );
+        if (this.boundScope) {
+            this.getTriggerRegistry().disposeScope(this.boundScope.scopeId);
         }
-        this.tileTriggerBindings.length = 0;
     }
 
     private registerMapTriggers(): void {
-        const map = this.boundMap;
-        if (!map) return;
+        const scope = this.boundScope;
+        if (!scope || !this.enabled) return;
 
-        this.unregisterMapTriggers();
+        const registry = this.getTriggerRegistry();
+        registry.disposeScope(scope.scopeId);
+        registry.bind(scope);
         for (const door of this.doors.values()) {
             const keypadTiles = this.uniquePositions([
                 ...(door.keypadTiles ?? []),
@@ -207,32 +244,32 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             ]);
 
             for (const position of keypadTiles) {
+                const key = `${this.key}:keypad:${door.doorKey}:${position.X}:${position.Y}`;
                 const keypadCallback = guardHandler(
-                    `${this.key}:keypad:${door.doorKey}:${position.X}:${position.Y}`,
+                    key,
                     (character: API_Character) =>
                         this.onCharacterAtKeypad(character, door),
                 );
-                map.addTileTrigger(position, keypadCallback);
-                this.tileTriggerBindings.push({
-                    map,
-                    x: position.X,
-                    y: position.Y,
-                    callback: keypadCallback,
+                registry.register({
+                    key,
+                    kind: "tile",
+                    position: { x: position.X, y: position.Y },
+                    callback: keypadCallback as MapTriggerCallback,
                 });
             }
 
             for (const position of autoOpenTiles) {
+                const key = `${this.key}:auto-open:${door.doorKey}:${position.X}:${position.Y}`;
                 const autoOpenCallback = guardHandler(
-                    `${this.key}:auto-open:${door.doorKey}:${position.X}:${position.Y}`,
+                    key,
                     (character: API_Character) =>
                         this.onCharacterAtAutoOpenTile(character, door),
                 );
-                map.addTileTrigger(position, autoOpenCallback);
-                this.tileTriggerBindings.push({
-                    map,
-                    x: position.X,
-                    y: position.Y,
-                    callback: autoOpenCallback,
+                registry.register({
+                    key,
+                    kind: "tile",
+                    position: { x: position.X, y: position.Y },
+                    callback: autoOpenCallback as MapTriggerCallback,
                 });
             }
         }
@@ -521,8 +558,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     private closeDoor(door: KeypadDoorDefinitionDoc): void {
+        const wasOpen = this.isDoorOpen(door.doorKey);
         this.doorUnlockTimers.clear(door.doorKey);
         this.manuallyOpenDoors.delete(door.doorKey);
+        if (!wasOpen) return;
         this.setDoorTile(door, door.lockedTile);
     }
 
@@ -531,7 +570,34 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     }
 
     private setDoorTile(door: KeypadDoorDefinitionDoc, tile: string): void {
-        this.boundMap?.setObject({ X: door.doorX, Y: door.doorY }, tile);
+        const adapter = this.mapObjectAdapter;
+        if (!adapter) return;
+
+        const operationId = `keypad-door:map-object:${this.nextMapMutationId++}`;
+        void adapter
+            .setObject({ x: door.doorX, y: door.doorY }, tile, {
+                operationId,
+                memberNumber: 0,
+                source: "feature",
+                reason: `door ${door.doorKey} object mutation`,
+                deadlineAt: Date.now() + 5000,
+            })
+            .then((result) => {
+                if (result.status === "completed") return;
+                this.logger.warn("Door map object mutation did not complete", {
+                    doorKey: door.doorKey,
+                    tile,
+                    status: result.status,
+                    reason: result.reason,
+                });
+            })
+            .catch((error: unknown) => {
+                this.logger.error(
+                    "Door map object mutation failed",
+                    error instanceof Error ? error : new Error(String(error)),
+                    { doorKey: door.doorKey, tile },
+                );
+            });
     }
 
     /**
@@ -583,10 +649,22 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
      */
     async shutdown(): Promise<void> {
         this.detachFromRoom();
+        this.getTriggerRegistry().close();
+        this.triggerRegistry = undefined;
         await this.definitionService.unwatchDoorDefinitions?.();
         this.doorUnlockTimers.clearAll();
         this.manuallyOpenDoors.clear();
         this.notificationTimers.clearAll();
         this.autoOpenTimers.clearAll();
+    }
+
+    private getTriggerRegistry(): MapTriggerRegistry {
+        return (this.triggerRegistry ??= new MapTriggerRegistry(
+            new BCMapTriggerActionAdapter(),
+        ));
+    }
+
+    private getObjectId(value: object): number {
+        return getLifecycleObjectId(value) ?? 0;
     }
 }

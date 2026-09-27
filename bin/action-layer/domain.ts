@@ -175,6 +175,13 @@ export interface MapRegion {
     readonly bottomRight: MapPosition;
 }
 
+export interface MapObjectObservation {
+    readonly position: MapPosition;
+    readonly objectName: string;
+    readonly dispatchStatus: "local_dispatch";
+    readonly observedAt: number;
+}
+
 export type MapTriggerKind = "tile" | "enter_region" | "leave_region";
 
 export type MapTriggerCallback = (...args: never[]) => void;
@@ -214,7 +221,15 @@ export interface MapTriggerRegistrationHandle {
     dispose(): void;
 }
 
-export interface MapActionAdapter {
+export interface MapObjectActionAdapter {
+    setObject(
+        position: MapPosition,
+        objectName: string,
+        context: ActionContext,
+    ): Promise<ActionResult<MapObjectObservation>>;
+}
+
+export interface MapActionAdapter extends MapObjectActionAdapter {
     observeTile(
         position: MapPosition,
         context: ActionContext,
