@@ -194,9 +194,11 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                 );
                 const result = await this.punishmentService.punish(character);
                 if (!result.success) {
-                    this.messageSender.whisperToCharacter(
+                    await this.sendBunnyNotification(
                         character,
                         "(The bunny punishment could not be applied safely. Please notify an operator.)",
+                        `bunny-punishment-failure:${character.MemberNumber}`,
+                        "bunny punishment failure notification",
                     );
                 }
             } catch (error) {
@@ -211,9 +213,11 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     reasons: [],
                     finalVerification: false,
                 });
-                this.messageSender.whisperToCharacter(
+                await this.sendBunnyNotification(
                     character,
                     "(The bunny punishment could not be applied safely. Please notify an operator.)",
+                    `bunny-punishment-failure:${character.MemberNumber}`,
+                    "bunny punishment failure notification",
                 );
             }
         });

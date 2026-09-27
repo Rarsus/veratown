@@ -349,6 +349,57 @@ test("Bunny Park uses communication actions for the pre-punishment warning when 
     service.close();
 });
 
+test("Bunny Park uses communication actions for punishment failure notices", async () => {
+    const created = createCharacter(79);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new BunnyParkSystem(
+        createMessageConnection(created.character) as any,
+        { punish: async () => ({ success: false }) } as any,
+        true,
+        true,
+        service,
+        rollout,
+    );
+
+    await (system as any).onCharacterStepOnBunny(created.character);
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text: "(Please do not step on the park's bunnies. You will be restrained as punishment.)",
+            targetMemberNumber: 79,
+            deduplicationKey: "bunny-step-warning:79",
+        },
+        {
+            channel: "whisper",
+            text: "(The bunny punishment could not be applied safely. Please notify an operator.)",
+            targetMemberNumber: 79,
+            deduplicationKey: "bunny-punishment-failure:79",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    service.close();
+});
+
+test("Bunny Park retains the legacy path for punishment failure notices", async () => {
+    const created = createCharacter(80);
+    const system = new BunnyParkSystem(
+        createMessageConnection(created.character) as any,
+        { punish: async () => ({ success: false }) } as any,
+    );
+
+    await (system as any).onCharacterStepOnBunny(created.character);
+
+    assert.deepEqual(created.messages, [
+        "(Please do not step on the park's bunnies. You will be restrained as punishment.)",
+        "(The bunny punishment could not be applied safely. Please notify an operator.)",
+    ]);
+});
+
 test("secondary Bunny Park does not use a static park region", async () => {
     const tileCallbacks: Array<(character: any) => void | Promise<void>> = [];
     const regionCallbacks: Array<(character: any) => void | Promise<void>> = [];

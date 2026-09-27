@@ -321,10 +321,10 @@ evidence.
 - [x] Migrate the CageSystem unavailable-containment whispers as a low-risk
       targeted caller with a shared helper, explicit operation key, rollout
       lease, legacy fallback, and focused coverage.
-- [x] Migrate the BunnyParkSystem park-entry and pre-punishment warnings as
-      low-risk targeted callers with explicit operation keys, rollout leases,
-      legacy fallbacks, and focused coverage; retain punishment-failure
-      messages as workflow-owned legacy notifications.
+- [x] Migrate the BunnyParkSystem park-entry, pre-punishment, and
+      punishment-failure notifications as low-risk targeted callers with
+      explicit operation keys, rollout leases, legacy fallbacks, and focused
+      coverage; retain punishment execution as workflow-owned behavior.
 - [x] Migrate the KeypadDoorSystem notification helper as a low-risk targeted
       caller with throttling, unique operation keys, rollout leases, legacy
       fallback, and focused coverage.
@@ -370,8 +370,8 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/cageSystem.test.ts`, including action and
   legacy unavailable-containment paths.
 - `bin/games/veratown/__tests__/bunnyParkSystem.test.ts`, including the
-  enabled park-entry and pre-punishment notification paths and existing
-  punishment coverage; and
+  enabled park-entry, pre-punishment, and punishment-failure notification
+  paths and existing punishment coverage; and
 - `bin/games/__tests__/unit/keypadDoorSystemRefactored.test.ts`, including
   enabled action and legacy notification paths; and
 - `bin/games/veratown/__tests__/showerSystem.test.ts`, including enabled action
