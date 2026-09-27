@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "2.3"
-status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, ShowerSystem, FurnitureBondageSystem, and CatDogSystem callers implemented; real delivery and broader migration pending"
+version: "2.4"
+status: "Targeted Veratown notification slice implemented behind opt-in rollout; BC delivery receipts, replies, durable replay protection, and real-room qualification remain pending"
 ---
 
 # Communication Actions
@@ -34,6 +34,46 @@ The first communication slice covers:
 Replies to a specific inbound chat message, delivery receipts, notification
 policies, and durable narrative workflows remain explicit follow-up contracts.
 They must not be inferred from a successful `SendMessage` call.
+
+## Finalized Iteration 5 Boundary
+
+The current communication domain claims the targeted notification slice in the
+Veratown feature systems. The migrated callers are LocationMonitor, Window,
+Kennel, Cage, BunnyPark, KeypadDoor, Shower, FurnitureBondage, CatDog, and
+Trashcan. Each caller retains a legacy fallback and uses the disabled-by-default
+`communication-notifications` rollout lease.
+
+The transport contract is deliberately conservative:
+
+- `queued` means `SendMessage` returned without throwing. It is local dispatch,
+  not proof that Bondage Club delivered or displayed the message.
+- `unknown` means the connector threw or the outcome could not be established.
+  It is retryable only under an explicit caller policy.
+- `sent` is reserved for a future authoritative connector receipt.
+- `rejected` is reserved for a future connector result that proves no dispatch
+  occurred.
+- `reply(message, text)` remains outside this contract until inbound-message
+  correlation, reply failure semantics, and retry ownership are specified.
+
+### Caller inventory
+
+| Caller                 | Migrated operation                              | Channel | Remaining boundary                                      |
+| ---------------------- | ----------------------------------------------- | ------- | ------------------------------------------------------- |
+| LocationMonitor        | Help/monitor response                           | whisper | Real connector qualification                            |
+| WindowSystem           | Peep notification                               | emote   | Real connector qualification and rollback record        |
+| KennelSystem           | Unavailable-containment whisper                 | whisper | Real connector qualification                            |
+| CageSystem             | Unavailable and short entry/release status      | whisper | Long warning and recovery remain legacy-owned           |
+| BunnyParkSystem        | Park-entry, pre-punishment, and failure notices | whisper | Punishment workflow remains separate                    |
+| KeypadDoorSystem       | Throttled notification helper                   | whisper | Door workflow remains legacy-owned                      |
+| ShowerSystem           | Player-facing status/error notices              | whisper | NarratorBot emotes remain workflow output               |
+| FurnitureBondageSystem | Player-facing notices                           | whisper | Public narration and admin messages remain legacy-owned |
+| CatDogSystem           | Vibrator-triggered notice                       | whisper | Pet emotes, movement, and bondage remain legacy-owned   |
+| TrashcanSystem         | Found-item notification                         | emote   | Message-event trigger remains feature-owned             |
+
+Direct command replies, casino/hub/adventure narration, and transport calls
+outside this inventory are explicitly excluded from this iteration. They are
+not evidence that the targeted notification slice is incomplete; they require
+their own reply or public-narration contracts.
 
 ## IST: Current Communication Architecture
 
@@ -343,6 +383,9 @@ evidence.
       helper with stable operation keys, rollout leases, legacy fallback, and
       focused coverage; retain public pet emotes, bot movement, and bondage
       mutation outside this notification slice.
+- [x] Migrate TrashcanSystem found-item emotes through the shared action path
+      with a stable operation key, rollout lease, legacy fallback, focused
+      coverage, and a regression test for generic Message event registration.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -381,15 +424,25 @@ The first communication slice is locally qualified by:
   suite still has a pre-existing missing `recoverCagedCharacter` method in
   recovery tests; and
 - `bin/games/veratown/__tests__/furnitureBondageSystem.test.ts`, including
-  enabled action and legacy notification paths.
+  enabled action and legacy notification paths; and
 - `bin/games/veratown/__tests__/catDogSystem.test.ts`, including enabled action
-  and legacy vibrator notification paths.
+  and legacy vibrator notification paths; and
+- `bin/games/veratown/__tests__/trashcanSystem.test.ts`, including enabled
+  action and legacy found-item notification paths through the registered
+  generic Message event handler; and
+- `pnpm test:communication`, which runs the complete local communication slice
+  with concurrency one.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The
 local disconnect/reconnect and rollback tests cover the simulated connector
 and caller contracts; the communication switch remains disabled until the
 controlled-room evidence is accepted.
+
+The current promotion decision is therefore: local targeted-notification
+implementation is complete, but production enablement is blocked until the
+controlled-room record, rollback evidence, and an explicit decision on durable
+replay protection are accepted. Reply migration is a separate phase.
 
 ## Acceptance Criteria
 
