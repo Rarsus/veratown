@@ -3,7 +3,7 @@ title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
 version: "1.22"
-status: "Bunny remains the first migration candidate; communication has a partial opt-in slice and position observation is the next design boundary"
+status: "Bunny remains the first migration candidate; communication and position observation have partial slices, and map trigger lifecycle design is complete"
 ---
 
 # Headless Bondage Club Action Layer
@@ -77,6 +77,10 @@ remaining evidence is limited to controlled-room qualification gates.
   observed versus persisted state, reconnect epochs, stale-event rejection,
   and the deferred teleport boundary, is documented in
   [POSITION_OBSERVATION_MOVEMENT.md](POSITION_OBSERVATION_MOVEMENT.md).
+- Map trigger lifecycle design, scoped registration handles, room/map cleanup,
+  IST/SOLL UML, and state management are documented in
+  [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md). The
+  `LocationMonitorSystem` pilot implementation remains pending.
 
 ### Migration status answer
 
@@ -878,7 +882,9 @@ Planned actions:
 
 Map actions should preserve the distinction between static configuration,
 runtime trigger registration, and observed character location. Trigger
-registration must be idempotent and reversible during reload and shutdown.
+registration must be scoped to a room/map instance, idempotent by stable key,
+and reversible during reload, room replacement, feature disablement, and
+shutdown. See [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md).
 
 Existing `AbstractTileFeatureSystem`, Bunny park registration, and map
 position synchronization provide the migration seams.
@@ -1284,7 +1290,9 @@ Migration is incremental and should preserve existing behavior after each step.
 
 ### Phase 3: Map operations and trigger lifecycle
 
-- [ ] Define idempotent map registration handles.
+- [x] Define idempotent map registration handles in
+      [MAP_TRIGGER_LIFECYCLE.md](MAP_TRIGGER_LIFECYCLE.md).
+- [ ] Implement the scoped trigger registry and BC adapter.
 - [ ] Migrate Bunny park and other tile systems.
 - [ ] Ensure reload and shutdown remove old registrations.
 - [ ] Test room recreation and duplicate trigger registration.
