@@ -31,6 +31,10 @@ import { createIdempotentMonitor } from "./shared";
 import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { beginAppearanceScope } from "./shared/appearanceLifecycle";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 
 // Owns the shower tiles: strips the character, narrates a short sequence
 // (optionally via a dedicated second "narrator" bot), and redresses them in
@@ -45,12 +49,15 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
     private releaseSystem?: ReleaseSystem;
+    private showerNotificationSequence = 0;
 
     public constructor(
         conn: API_Connector,
         private conn2?: API_Connector,
         private readonly stateSync?: AppearanceStateSynchronizer,
         private readonly allowStaticFallbacks = true,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "shower", "Showers");
         this.showerTrigger = this.guardTileHandler(this.onCharacterEnterShower);
@@ -153,7 +160,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                             error: e,
                         });
                         // If parole check fails, abort shower to be safe
-                        this.messageSender.whisperToCharacter(
+                        await this.sendShowerNotification(
                             character,
                             "(Unable to enter shower due to system error. Please contact staff.)",
                         );
@@ -184,7 +191,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
 
                 const abortShower = async () => {
                     await this.syncMutation(character, () => undefined, 0);
-                    this.messageSender.whisperToCharacter(
+                    await this.sendShowerNotification(
                         character,
                         "(You left the shower before finishing! Your clothes will not be returned to you.",
                     );
@@ -193,7 +200,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                 const savedOutfit = character.Appearance.MakeAppearanceBundle();
                 const savedClothingItems = savedOutfit.filter(isClothing);
 
-                this.messageSender.whisperToCharacter(
+                await this.sendShowerNotification(
                     character,
                     "(Enjoy your shower! Note: if you leave before the sequence finishes, your clothes will not be returned to you.",
                 );
@@ -254,7 +261,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                     await wait(SHOWER_STEP_DELAY_MS);
                 }
 
-                this.messageSender.whisperToCharacter(
+                await this.sendShowerNotification(
                     character,
                     "(You finish your shower and get dressed again, feeling refreshed.",
                 );
@@ -263,4 +270,66 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
             endAppearanceScope();
         }
     };
+
+    private async sendShowerNotification(
+        character: API_Character,
+        text: string,
+    ): Promise<void> {
+        const operationId = `shower-notification:${character.MemberNumber}:${++this.showerNotificationSequence}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
+        );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                const result = await this.communicationService.send(
+                    {
+                        channel: "whisper",
+                        text,
+                        targetMemberNumber: character.MemberNumber,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "shower notification",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+                if (result.status !== "completed") {
+                    this.logger.warn(
+                        "Shower communication action did not complete",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            deliveryStatus:
+                                result.value?.deliveryStatus ?? "unknown",
+                            reason: result.reason,
+                        },
+                    );
+                }
+            } else {
+                const result = this.messageSender.whisperToCharacter(
+                    character,
+                    text,
+                );
+                if (!result.success) {
+                    this.logger.warn(
+                        "Shower notification failed on legacy path",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            reason: result.message,
+                        },
+                    );
+                }
+            }
+        } finally {
+            lease?.release();
+        }
+    }
 }

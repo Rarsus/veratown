@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "2.0"
-status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, and KeypadDoorSystem callers implemented; real delivery and broader migration pending"
+version: "2.1"
+status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, and ShowerSystem callers implemented; real delivery and broader migration pending"
 ---
 
 # Communication Actions
@@ -328,6 +328,9 @@ evidence.
 - [x] Migrate the KeypadDoorSystem notification helper as a low-risk targeted
       caller with throttling, unique operation keys, rollout leases, legacy
       fallback, and focused coverage.
+- [x] Migrate ShowerSystem player-facing status/error whispers through a shared
+      helper with unique operation keys, rollout leases, legacy fallback, and
+      focused coverage; retain NarratorBot emotes as public workflow output.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -358,7 +361,9 @@ The first communication slice is locally qualified by:
   enabled park-entry and pre-punishment notification paths and existing
   punishment coverage; and
 - `bin/games/__tests__/unit/keypadDoorSystemRefactored.test.ts`, including
-  enabled action and legacy notification paths.
+  enabled action and legacy notification paths; and
+- `bin/games/veratown/__tests__/showerSystem.test.ts`, including enabled action
+  and legacy notification paths.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The

@@ -648,6 +648,18 @@ export class Veratown {
                             )
                             .then(() => undefined) ?? Promise.resolve(),
                     this.roomKey === "main",
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    )
+                        ? this.container.get<CommunicationActionService>(
+                              DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                          )
+                        : undefined,
+                    this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                        ? this.container.get<ActionLayerRolloutController>(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          )
+                        : undefined,
                 ),
         );
         this.bedSystem = this.initFeature(
