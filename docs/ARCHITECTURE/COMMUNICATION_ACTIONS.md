@@ -315,6 +315,9 @@ evidence.
       fallback, and focused integration coverage.
 - [x] Retain local action/legacy comparison evidence and an in-flight caller
       rollback record for the WindowSystem notification.
+- [x] Migrate the KennelSystem unavailable-containment whisper as a low-risk
+      targeted caller with an explicit operation key, rollout lease, legacy
+      fallback, and focused coverage.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -336,7 +339,9 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/windowSystem.test.ts`, including action and
   legacy paths; and
 - `bin/games/veratown/__tests__/windowSystemRollback.test.ts`, including the
-  in-flight rollback path.
+  in-flight rollback path; and
+- `bin/games/veratown/__tests__/kennelSystem.test.ts`, including action and
+  legacy unavailable-containment paths.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The

@@ -35,6 +35,10 @@ import {
 } from "./shared/appearanceSync";
 import { getLifecycleObjectId } from "./featureSystem";
 import { KennelCommandController } from "./kennelCommands";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 import { applyConsentPadlock } from "../shared/consentPadlock";
 import {
     classifyContainmentRemoval,
@@ -85,6 +89,8 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         private readonly delay: (milliseconds: number) => Promise<void> = wait,
         private readonly allowStaticFallbacks = true,
         private readonly managedReleaseWorkersEnabled = true,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
@@ -314,10 +320,39 @@ export class KennelSystem extends AbstractTileFeatureSystem {
 
     private onCharacterEnterKennel = async (character: API_Character) => {
         if (!this.enabled) {
-            this.messageSender.whisperToCharacter(
-                character,
-                "(Kennel containment is currently unavailable. Please contact staff.)",
+            const text =
+                "(Kennel containment is currently unavailable. Please contact staff.)";
+            const operationId = `kennel-unavailable:${character.MemberNumber}`;
+            const lease = this.rollout?.begin(
+                "communication-notifications",
+                operationId,
             );
+            try {
+                if (
+                    lease?.path === "action" &&
+                    this.communicationService !== undefined
+                ) {
+                    await this.communicationService.send(
+                        {
+                            channel: "whisper",
+                            text,
+                            targetMemberNumber: character.MemberNumber,
+                            deduplicationKey: operationId,
+                        },
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            source: "feature",
+                            reason: "kennel containment unavailable",
+                            deadlineAt: Date.now() + 5000,
+                        },
+                    );
+                } else {
+                    this.messageSender.whisperToCharacter(character, text);
+                }
+            } finally {
+                lease?.release();
+            }
             return;
         }
 

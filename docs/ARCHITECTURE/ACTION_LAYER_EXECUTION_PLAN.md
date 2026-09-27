@@ -166,7 +166,8 @@ workflow regression evidence.
 **Already implemented:** request normalization, channel translation, bounded
 per-character scheduling, operation-keyed process-local deduplication,
 structured queued/unknown outcomes, DI registration, room shutdown closure,
-and the opt-in LocationMonitor and WindowSystem notification paths.
+and the opt-in LocationMonitor, WindowSystem, and KennelSystem notification
+paths.
 
 **Next steps:**
 
@@ -176,7 +177,9 @@ and the opt-in LocationMonitor and WindowSystem notification paths.
    call it delivery without a receipt contract.
 3. Preserve the local WindowSystem rollback record and legacy/action comparison
    tests while qualifying the same behavior against a real connector.
-4. Define reply correlation and durable replay protection before migrating
+4. Continue migrating one low-risk caller at a time with explicit ownership,
+   rollback, and legacy comparison evidence.
+5. Define reply correlation and durable replay protection before migrating
    replies or workflow-critical notifications.
 
 **Tests and gates:** `bin/action-layer/__tests__/communication-service.test.ts`,
@@ -185,8 +188,9 @@ and the opt-in LocationMonitor and WindowSystem notification paths.
 `bin/games/veratown/__tests__/locationMonitorSystem.test.ts`,
 `bin/games/veratown/__tests__/windowSystem.test.ts`,
 `bin/games/veratown/__tests__/windowSystemRollback.test.ts`, the one-cycle
-command, simulated connector qualification, real connector qualification, and
-caller rollback evidence.
+`bin/games/veratown/__tests__/kennelSystem.test.ts`, the one-cycle command,
+simulated connector qualification, real connector qualification, and caller
+rollback evidence.
 
 ### 5. Position observation and movement
 

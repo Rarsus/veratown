@@ -1,7 +1,47 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
+import {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../../action-layer";
+import type {
+    ActionContext,
+    ActionResult,
+    CommunicationActionAdapter,
+    CommunicationObservation,
+    MessageRequest,
+} from "../../../action-layer/domain";
 import { KennelSystem } from "../kennelSystem";
+
+class RecordingCommunicationAdapter implements CommunicationActionAdapter {
+    public readonly requests: MessageRequest[] = [];
+
+    public async send(
+        request: MessageRequest,
+        context: ActionContext,
+    ): Promise<ActionResult<CommunicationObservation>> {
+        this.requests.push(request);
+        return {
+            status: "completed",
+            metadata: {
+                operationId: context.operationId,
+                actionId: "communication.test",
+                memberNumber: context.memberNumber,
+                attempt: 1,
+                startedAt: 1,
+                completedAt: 2,
+            },
+            value: {
+                channel: request.channel,
+                deliveryStatus: "queued",
+                targetMemberNumber: request.targetMemberNumber,
+                textLength: request.text.length,
+                observedAt: 2,
+            },
+        };
+    }
+}
 
 function createCharacter(
     memberNumber = 7,
@@ -728,4 +768,40 @@ test("KennelSystem reports when containment is unavailable", async () => {
         created.messages[0],
         /Kennel containment is currently unavailable/,
     );
+});
+
+test("KennelSystem uses communication actions for unavailable containment when enabled", async () => {
+    const created = createCharacter(17);
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+    });
+    const system = new KennelSystem(
+        {
+            SendMessage: (_type: string, message: string) =>
+                created.messages.push(message),
+        } as any,
+        undefined,
+        undefined,
+        undefined,
+        true,
+        true,
+        service,
+        rollout,
+    );
+    system.enabled = false;
+
+    await (system as any).onCharacterEnterKennel(created.character);
+
+    assert.deepEqual(adapter.requests, [
+        {
+            channel: "whisper",
+            text: "(Kennel containment is currently unavailable. Please contact staff.)",
+            targetMemberNumber: 17,
+            deduplicationKey: "kennel-unavailable:17",
+        },
+    ]);
+    assert.deepEqual(created.messages, []);
+    service.close();
 });
