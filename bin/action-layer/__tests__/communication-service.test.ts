@@ -172,3 +172,35 @@ test("keeps different character queues independent", async () => {
 
     assert.equal(adapter.requests.length, 2);
 });
+
+test("closes the scheduler and clears retained deduplication state", async () => {
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+
+    await service.send(
+        {
+            channel: "chat",
+            text: "retained",
+            deduplicationKey: "close-test",
+        },
+        context("close-operation"),
+    );
+    assert.equal(service.snapshot().recentDeduplicationCount, 1);
+
+    service.close();
+
+    assert.deepEqual(service.snapshot(), {
+        closed: true,
+        characterCount: 0,
+        pendingByCharacter: {},
+        recentDeduplicationCount: 0,
+    });
+    assert.throws(
+        () =>
+            service.send(
+                { channel: "chat", text: "after close" },
+                context("after-close"),
+            ),
+        /Action scheduler is closed/,
+    );
+});

@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.4"
-status: "Communication service, BC adapter, DI wiring, and opt-in LocationMonitor caller implemented; real delivery and broader migration pending"
+version: "1.6"
+status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor and WindowSystem callers implemented; real delivery and broader migration pending"
 ---
 
 # Communication Actions
@@ -45,16 +45,16 @@ duplicate, or distinguish local queueing from server delivery.
 
 ### IST ownership
 
-| Concern           | Current owner                      | Current behavior                       | Risk                                                   |
-| ----------------- | ---------------------------------- | -------------------------------------- | ------------------------------------------------------ |
-| Message intent    | Feature system                     | Text and channel are selected inline   | Business and transport concerns are mixed              |
-| Target validation | Individual caller or BC connector  | Often implicit                         | Invalid or missing targets fail late                   |
-| Dispatch          | `MessageSender` or `API_Connector` | Synchronous `SendMessage`/`reply` call | Direct BC dependency spreads through feature code      |
-| Delivery result   | `MessageSendResult`                | Boolean success or thrown error        | Queued is mistaken for delivered                       |
-| Duplicate control | Individual feature                 | Usually absent                         | Retries and repeated triggers can spam characters      |
-| Retry policy      | Individual feature                 | Inconsistent                           | Unsafe replay or hot retry loops are possible          |
-| Durable state     | Feature workflow/store             | Separate from message dispatch         | No shared correlation between action and workflow      |
-| Lifecycle         | Connector and feature instances    | No action-level close contract         | Pending communication work is not centrally observable |
+| Concern           | Current owner                               | Current behavior                                                                        | Risk                                                                               |
+| ----------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Message intent    | Feature system                              | Text and channel are selected inline                                                    | Business and transport concerns are mixed                                          |
+| Target validation | Individual caller or BC connector           | Often implicit                                                                          | Invalid or missing targets fail late                                               |
+| Dispatch          | `MessageSender` or `API_Connector`          | Synchronous `SendMessage`/`reply` call                                                  | Direct BC dependency spreads through feature code                                  |
+| Delivery result   | `MessageSendResult`                         | Boolean success or thrown error                                                         | Queued is mistaken for delivered                                                   |
+| Duplicate control | Individual feature                          | Usually absent                                                                          | Retries and repeated triggers can spam characters                                  |
+| Retry policy      | Individual feature                          | Inconsistent                                                                            | Unsafe replay or hot retry loops are possible                                      |
+| Durable state     | Feature workflow/store                      | Separate from message dispatch                                                          | No shared correlation between action and workflow                                  |
+| Lifecycle         | Communication service and room orchestrator | Service closes its scheduler and process-local deduplication state during room shutdown | In-flight transport and connector lifecycle still require controlled-room evidence |
 
 ### IST UML
 
@@ -292,6 +292,9 @@ evidence.
       and attempt in structured logs.
 - [x] Provide a close path that shuts down the action scheduler and clears
       process-local deduplication state.
+- [x] Close the room-scoped communication service at the start of
+      `Veratown.shutdown()` so later room cleanup cannot leave communication
+      admission active.
 - [x] Expose the communication rollout operation through validated file and
       environment configuration with a disabled default.
 
@@ -307,8 +310,11 @@ evidence.
 - [ ] Qualify whisper, chat, emote, disconnect, reconnect, and thrown-connector
       outcomes against a real connector. `queued` is still local dispatch, not
       delivery.
-- [ ] Migrate one additional low-risk notification caller with an explicit
-      operation key, rollout lease, comparison evidence, and rollback path.
+- [x] Migrate the WindowSystem public peep notification as an additional
+      low-risk caller with an explicit operation key, rollout lease, legacy
+      fallback, and focused integration coverage.
+- [ ] Qualify the WindowSystem caller against a real connector and retain
+      action/legacy comparison evidence plus a caller rollback record.
 - [ ] Define reply correlation and authoritative delivery semantics before
       migrating replies or workflow-critical notifications.
 - [ ] Add durable replay protection where a notification is part of a
@@ -324,7 +330,9 @@ The first communication slice is locally qualified by:
 - `bin/action-layer/__tests__/bc-communication.test.ts`;
 - `bin/action-layer/__tests__/rollout.test.ts`; and
 - `bin/games/veratown/__tests__/locationMonitorSystem.test.ts`, including the
-  enabled rollout path.
+  enabled rollout path; and
+- `bin/games/veratown/__tests__/windowSystem.test.ts`, including action and
+  legacy paths.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The
@@ -347,8 +355,9 @@ Communication implementation is complete for the first action slice when:
 - at least one low-risk caller has a controlled adapter integration test.
 
 The first action slice meets these criteria through the communication service,
-BC adapter, Veratown DI registration, and opt-in `LocationMonitorSystem`
-integration. This does not constitute full communication-family migration.
+BC adapter, Veratown DI registration, and opt-in `LocationMonitorSystem` and
+`WindowSystem` integrations. This does not constitute full communication-family
+migration.
 
 Full communication-family migration additionally requires real connector
 qualification, failure-injection evidence, caller-by-caller rollback, and

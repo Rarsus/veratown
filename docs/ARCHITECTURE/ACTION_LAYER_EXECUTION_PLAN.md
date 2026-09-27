@@ -2,7 +2,7 @@
 title: "Action-Layer Execution Plan"
 subtitle: "Current state, next gates, and one-cycle verification plan"
 date: "September 27, 2026"
-version: "1.0"
+version: "1.2"
 status: "Pilot slices implemented; operational qualification and broader migration remain pending"
 ---
 
@@ -22,17 +22,17 @@ connector behavior, and performance are separate gates.
 
 ## Current position
 
-| Area                       | Actual state                                                                                                                                                   | Runtime default                                                  | Next meaningful gate                                                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Action-layer foundation    | Domain contracts, scheduler, executor, workflow model, policy validation, appearance planner, confirmation registry, rollout leases, and boundary tests exist. | N/A                                                              | Keep the import boundary and regression cycle green while adding slices.                              |
-| Bunny punishment           | Restraint-only action path, confirmed appearance observation, journal recovery, transactional projection, expiry cleanup, and rollout lease are implemented.   | Legacy; `action_layer_bunny_restraints_enabled=false`            | Controlled-room restart/reconnect, rollback rehearsal, then the 30-minute 19-character qualification. |
-| Release appearance removal | Selected eligible target removal can use the action service with fail-closed lock classification and authoritative confirmation.                               | Legacy; `action_layer_release_removal_enabled=false`             | Real-room confirmation, restart/reconnect recovery, rollback, and release-stage regression cycle.     |
-| Communication              | Normalized requests, bounded per-character scheduling, process-local deduplication, BC translation, and the LocationMonitor caller are implemented.            | Legacy; `action_layer_communication_notifications_enabled=false` | Real connector outcome qualification, then one caller migration at a time.                            |
-| Position observation       | `LiveCharacterStateSync` accepts observed positions with connection epochs and sequence guards and persists accepted observations.                             | Active observation slice; no movement rollout                    | Reconnect and room-recreation evidence; do not add movement dispatch yet.                             |
-| Map trigger lifecycle      | `MapTriggerRegistry` and BC adapter are qualified through LocationMonitorSystem.                                                                               | Active pilot                                                     | Migrate another caller only after lifecycle and rollback evidence.                                    |
-| Door management            | Keypad and auto-open triggers use scoped registry handles; object mutations use `BCMapObjectActionAdapter`; policy and timers remain workflow-owned.           | Active pilot; no rollout switch                                  | Controlled-room reconnect/rollback evidence and authoritative object-state decision.                  |
-| Movement and teleport      | Domain adapter shape exists, but no production movement or teleport action path exists.                                                                        | Legacy                                                           | Define arrival correlation, timeout, denial, reconnect, and idempotency semantics first.              |
-| Inventory and permissions  | No action-layer production ownership is claimed. Existing BC callers remain in feature systems.                                                                | Legacy                                                           | Define separate contracts and authorization/confirmation boundaries.                                  |
+| Area                       | Actual state                                                                                                                                                                                    | Runtime default                                                  | Next meaningful gate                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Action-layer foundation    | Domain contracts, scheduler, executor, workflow model, policy validation, appearance planner, confirmation registry, rollout leases, and boundary tests exist.                                  | N/A                                                              | Keep the import boundary and regression cycle green while adding slices.                                   |
+| Bunny punishment           | Restraint-only action path, confirmed appearance observation, journal recovery, transactional projection, expiry cleanup, and rollout lease are implemented.                                    | Legacy; `action_layer_bunny_restraints_enabled=false`            | Controlled-room restart/reconnect, rollback rehearsal, then the 30-minute 19-character qualification.      |
+| Release appearance removal | Selected eligible target removal can use the action service with fail-closed lock classification and authoritative confirmation.                                                                | Legacy; `action_layer_release_removal_enabled=false`             | Real-room confirmation, restart/reconnect recovery, rollback, and release-stage regression cycle.          |
+| Communication              | Normalized requests, bounded per-character scheduling, process-local deduplication, BC translation, room shutdown closure, and opt-in LocationMonitor and WindowSystem callers are implemented. | Legacy; `action_layer_communication_notifications_enabled=false` | Real connector outcome qualification, WindowSystem rollback evidence, then one caller migration at a time. |
+| Position observation       | `LiveCharacterStateSync` accepts observed positions with connection epochs and sequence guards and persists accepted observations.                                                              | Active observation slice; no movement rollout                    | Reconnect and room-recreation evidence; do not add movement dispatch yet.                                  |
+| Map trigger lifecycle      | `MapTriggerRegistry` and BC adapter are qualified through LocationMonitorSystem.                                                                                                                | Active pilot                                                     | Migrate another caller only after lifecycle and rollback evidence.                                         |
+| Door management            | Keypad and auto-open triggers use scoped registry handles; object mutations use `BCMapObjectActionAdapter`; policy and timers remain workflow-owned.                                            | Active pilot; no rollout switch                                  | Controlled-room reconnect/rollback evidence and authoritative object-state decision.                       |
+| Movement and teleport      | Domain adapter shape exists, but no production movement or teleport action path exists.                                                                                                         | Legacy                                                           | Define arrival correlation, timeout, denial, reconnect, and idempotency semantics first.                   |
+| Inventory and permissions  | No action-layer production ownership is claimed. Existing BC callers remain in feature systems.                                                                                                 | Legacy                                                           | Define separate contracts and authorization/confirmation boundaries.                                       |
 
 ## One-cycle pilot verification
 
@@ -46,6 +46,7 @@ node --import tsx --test --test-concurrency=1 \
   bin/action-layer/__tests__/*.test.ts \
   bin/games/veratown/__tests__/liveCharacterStateSync.test.ts \
   bin/games/veratown/__tests__/locationMonitorSystem.test.ts \
+   bin/games/veratown/__tests__/windowSystem.test.ts \
   bin/games/veratown/__tests__/bunnyParkSystem.test.ts \
   bin/games/veratown/__tests__/veratownReleaseSystem.test.ts \
   bin/games/veratown/__tests__/bunnyPunishmentProjection.integration.test.ts \
@@ -164,8 +165,8 @@ workflow regression evidence.
 
 **Already implemented:** request normalization, channel translation, bounded
 per-character scheduling, operation-keyed process-local deduplication,
-structured queued/unknown outcomes, DI registration, and the opt-in
-LocationMonitor notification path.
+structured queued/unknown outcomes, DI registration, room shutdown closure,
+and the opt-in LocationMonitor and WindowSystem notification paths.
 
 **Next steps:**
 
@@ -173,16 +174,18 @@ LocationMonitor notification path.
    exception, disconnect, and reconnect.
 2. Decide whether a queued local dispatch is sufficient for each caller; do not
    call it delivery without a receipt contract.
-3. Migrate the next low-risk notification caller only with an explicit rollout
-   lease and comparison of legacy/action outcomes.
+3. Qualify the WindowSystem caller with an explicit rollback record and
+   comparison of legacy/action outcomes before enabling it outside a
+   controlled room.
 4. Define reply correlation and durable replay protection before migrating
    replies or workflow-critical notifications.
 
 **Tests and gates:** `bin/action-layer/__tests__/communication-service.test.ts`,
 `bin/action-layer/__tests__/bc-communication.test.ts`,
 `bin/action-layer/__tests__/rollout.test.ts`,
-`bin/games/veratown/__tests__/locationMonitorSystem.test.ts`, the one-cycle
-command, real connector qualification, and caller rollback evidence.
+`bin/games/veratown/__tests__/locationMonitorSystem.test.ts`,
+`bin/games/veratown/__tests__/windowSystem.test.ts`, the one-cycle command,
+real connector qualification, and caller rollback evidence.
 
 ### 5. Position observation and movement
 

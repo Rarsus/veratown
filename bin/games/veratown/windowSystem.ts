@@ -14,6 +14,10 @@
 
 import { API_Connector, API_Character } from "bc-bot";
 import { wait } from "../../hub/utils";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { NarratorBot } from "./veratownNarrationUtils";
 import { WINDOW_LOCATIONS, WINDOW_PEEP_DELAY_MS } from "./veratownConfig";
@@ -37,6 +41,9 @@ export class WindowSystem extends AbstractTileFeatureSystem {
     public constructor(
         conn: API_Connector,
         private readonly allowStaticFallbacks = true,
+        private readonly peepDelayMs = WINDOW_PEEP_DELAY_MS,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         super(conn, "window", "Windows");
         this.windowTrigger = this.guardTileHandler(
@@ -97,10 +104,62 @@ export class WindowSystem extends AbstractTileFeatureSystem {
             const stillThere = () =>
                 character.MapPos.X === pos.X && character.MapPos.Y === pos.Y;
 
-            await wait(WINDOW_PEEP_DELAY_MS);
+            await wait(this.peepDelayMs);
             if (!stillThere()) return;
 
-            this.messageSender.emote(`*Peeping Tom detected: ${character}`);
+            const text = `*Peeping Tom detected: ${character}`;
+            const operationId = `window-peep:${pos.X}:${pos.Y}:${character.MemberNumber}`;
+            const lease = this.rollout?.begin(
+                "communication-notifications",
+                operationId,
+            );
+            try {
+                if (
+                    lease?.path === "action" &&
+                    this.communicationService !== undefined
+                ) {
+                    const result = await this.communicationService.send(
+                        {
+                            channel: "emote",
+                            text,
+                            deduplicationKey: operationId,
+                        },
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            source: "feature",
+                            reason: "window peep notification",
+                            deadlineAt: Date.now() + 5000,
+                        },
+                    );
+                    if (result.status !== "completed") {
+                        this.logger.warn(
+                            "Window communication action did not complete",
+                            {
+                                operationId,
+                                memberNumber: character.MemberNumber,
+                                deliveryStatus:
+                                    result.value?.deliveryStatus ?? "unknown",
+                                reason: result.reason,
+                            },
+                        );
+                    }
+                } else {
+                    const result = this.messageSender.emote(text);
+                    if (!result.success) {
+                        this.logger.warn(
+                            "Window notification failed on legacy path",
+                            {
+                                operationId,
+                                memberNumber: character.MemberNumber,
+                                reason: result.message,
+                            },
+                        );
+                    }
+                }
+            } finally {
+                lease?.release();
+            }
             this.logger.info("Peeping detected", {
                 memberNumber: character.MemberNumber,
                 location: "window",

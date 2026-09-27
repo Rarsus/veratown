@@ -130,7 +130,6 @@ export {
     VERATOWN_LOCATIONS_FALLBACK,
 };
 
-export type { VeratownRegion } from "./veratown/regionManager";
 export { RegionManager } from "./veratown/regionManager";
 export type {
     CageSession,
@@ -702,7 +701,18 @@ export class Veratown {
             );
         });
         this.windowSystem = this.initFeature(
-            () => new WindowSystem(this.conn, this.roomKey === "main"),
+            () =>
+                new WindowSystem(
+                    this.conn,
+                    this.roomKey === "main",
+                    undefined,
+                    this.container.get<CommunicationActionService>(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    ),
+                    this.container.get<ActionLayerRolloutController>(
+                        DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                    ),
+                ),
         );
         this.trashcanSystem = this.initFeature(
             () => new TrashcanSystem(this.conn, this.roomKey === "main"),
@@ -1107,6 +1117,15 @@ export class Veratown {
     }
 
     public async shutdown(): Promise<void> {
+        if (
+            this.container.has(DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE)
+        ) {
+            this.container
+                .get<CommunicationActionService>(
+                    DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                )
+                .close();
+        }
         await this.bunnyPunishmentService?.shutdown();
         await this.locationStore?.unwatchLocations();
         this.locationStore?.removeAllListeners("locationChanged");
