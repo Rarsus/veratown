@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import { expect } from "../../../testUtils";
+import { ActionLayerRolloutController } from "../../../action-layer";
 import { KeypadDoorSystem } from "../../veratown/keypadDoorSystemRefactored";
 import { KeypadDoorDefinitionDoc } from "../../veratown/keypadTypes";
 
@@ -340,11 +341,64 @@ describe("KeypadDoorSystem (definition authoritative)", () => {
             Name: "Shopper",
         };
 
-        (system as any).sendNotification(character, "Incorrect code.");
+        await (system as any).sendNotification(character, "Incorrect code.");
 
         expect(sent).toEqual([
             { type: "Whisper", message: "Incorrect code.", memberNumber: 1 },
         ]);
+        await system.shutdown();
+    });
+
+    it("routes notifications through communication actions when enabled", async () => {
+        const requests: any[] = [];
+        const communicationService = {
+            send: async (request: any) => {
+                requests.push(request);
+                return {
+                    status: "completed",
+                    value: { deliveryStatus: "queued" },
+                };
+            },
+        };
+        const sent: string[] = [];
+        const rollout = new ActionLayerRolloutController({
+            communicationNotificationsEnabled: true,
+        });
+        const system = new KeypadDoorSystem(
+            {
+                on: () => {},
+                SendMessage: (_type: string, message: string) =>
+                    sent.push(message),
+            } as any,
+            {
+                init: async () => {},
+                on: () => {},
+                off: () => {},
+                getAllDoorDefinitions: async () => [],
+            } as any,
+            { init: async () => {} } as any,
+            {} as any,
+            undefined,
+            undefined,
+            communicationService as any,
+            rollout,
+        );
+
+        await (system as any).sendNotification(
+            { MemberNumber: 78, Name: "Shopper" },
+            "Incorrect code.",
+        );
+
+        expect(requests).toEqual([
+            {
+                channel: "whisper",
+                text: "Incorrect code.",
+                targetMemberNumber: 78,
+                deduplicationKey: "keypad-notification:78:1",
+            },
+        ]);
+        expect(sent).toEqual([]);
+        expect(rollout.snapshot().activeOperationIds).toEqual([]);
         await system.shutdown();
     });
 

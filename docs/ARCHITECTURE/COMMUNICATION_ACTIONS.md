@@ -2,8 +2,8 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.9"
-status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, and BunnyParkSystem callers implemented; real delivery and broader migration pending"
+version: "2.0"
+status: "Communication service, BC adapter, DI wiring, room shutdown ownership, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, and KeypadDoorSystem callers implemented; real delivery and broader migration pending"
 ---
 
 # Communication Actions
@@ -325,6 +325,9 @@ evidence.
       low-risk targeted callers with explicit operation keys, rollout leases,
       legacy fallbacks, and focused coverage; retain punishment-failure
       messages as workflow-owned legacy notifications.
+- [x] Migrate the KeypadDoorSystem notification helper as a low-risk targeted
+      caller with throttling, unique operation keys, rollout leases, legacy
+      fallback, and focused coverage.
 - [ ] Qualify the WindowSystem caller against a real connector and retain the
       corresponding action/legacy comparison evidence.
 - [ ] Define reply correlation and authoritative delivery semantics before
@@ -352,7 +355,10 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/cageSystem.test.ts`, including action and
   legacy unavailable-containment paths.
 - `bin/games/veratown/__tests__/bunnyParkSystem.test.ts`, including the
-  enabled park-entry notification path and existing punishment coverage.
+  enabled park-entry and pre-punishment notification paths and existing
+  punishment coverage; and
+- `bin/games/__tests__/unit/keypadDoorSystemRefactored.test.ts`, including
+  enabled action and legacy notification paths.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The

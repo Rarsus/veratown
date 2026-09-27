@@ -36,6 +36,10 @@ import {
     type MapTriggerCallback,
     type MapTriggerScope,
 } from "../../action-layer";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 import { getLifecycleObjectId } from "./featureSystem";
 
 const KEYPAD_NOTIFICATION_DELAY_MS = 1500;
@@ -87,6 +91,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     private nextMapMutationId = 1;
     private messageTriggerRegistered = false;
     private messageTrigger?: (...args: any[]) => void;
+    private notificationSequence = 0;
 
     constructor(
         private conn: API_Connector,
@@ -95,6 +100,8 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         private commandDispatcher: KeypadCommandDispatcher,
         private commandParser?: CommandParser,
         mapObjectAdapter?: MapObjectActionAdapter,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
     ) {
         this.messageSender = new MessageSender(conn);
         this.injectedMapObjectAdapter = mapObjectAdapter;
@@ -298,7 +305,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Check if already unlocked
         if (this.isDoorOpen(doorKey)) {
-            this.sendNotification(character, "The door is already unlocked.");
+            await this.sendNotification(
+                character,
+                "The door is already unlocked.",
+            );
             return;
         }
 
@@ -311,7 +321,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         if (canAccess) {
             this.unlockDoor(door);
-            this.sendNotification(
+            await this.sendNotification(
                 character,
                 "Access granted. The door unlocks.",
             );
@@ -319,7 +329,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         // Request code entry
-        this.sendNotification(
+        await this.sendNotification(
             character,
             `Enter the access code to unlock the door.`,
         );
@@ -365,7 +375,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         // Check if door is in unlock cooldown
         if (this.isDoorOpen(doorDef.doorKey)) {
-            this.sendNotification(character, "The door is already unlocked.");
+            await this.sendNotification(
+                character,
+                "The door is already unlocked.",
+            );
             return true;
         }
 
@@ -379,9 +392,12 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
 
         if (canAccessWithCode) {
             this.unlockDoor(doorDef);
-            this.sendNotification(character, "Correct code. The door unlocks.");
+            await this.sendNotification(
+                character,
+                "Correct code. The door unlocks.",
+            );
         } else {
-            this.sendNotification(character, "Incorrect code.");
+            await this.sendNotification(character, "Incorrect code.");
         }
 
         return true; // Command was handled
@@ -414,7 +430,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         args: string,
     ): Promise<boolean> => {
         if (!args.trim() || args.trim().toLowerCase() === "help") {
-            this.sendNotification(
+            await this.sendNotification(
                 character,
                 this.commandDispatcher.getHelpText(),
             );
@@ -422,7 +438,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         }
 
         if (!character.IsRoomAdmin()) {
-            this.sendNotification(
+            await this.sendNotification(
                 character,
                 "Permission denied. Door management commands require room administrator access. Use !door help for usage.",
             );
@@ -432,7 +448,7 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
         try {
             const runtimeResult = await this.handleRuntimeDoorCommand(args);
             if (runtimeResult !== undefined) {
-                this.sendNotification(character, runtimeResult);
+                await this.sendNotification(character, runtimeResult);
                 return true;
             }
 
@@ -446,10 +462,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
                 ? `✓ ${result.message}`
                 : `✗ ${result.message}`;
 
-            this.sendNotification(character, message);
+            await this.sendNotification(character, message);
             return true;
         } catch (error) {
-            this.sendNotification(
+            await this.sendNotification(
                 character,
                 `Command error: ${error instanceof Error ? error.message : String(error)}`,
             );
@@ -603,7 +619,10 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
     /**
      * Send notification to character
      */
-    private sendNotification(character: API_Character, message: string): void {
+    private async sendNotification(
+        character: API_Character,
+        message: string,
+    ): Promise<void> {
         const timerId = `notification_${character.MemberNumber}`;
 
         // Throttle notifications
@@ -617,7 +636,62 @@ export class KeypadDoorSystem implements VeratownFeatureSystem {
             KEYPAD_NOTIFICATION_DELAY_MS,
         );
 
-        this.messageSender.whisperToCharacter(character, message);
+        const operationId = `keypad-notification:${character.MemberNumber}:${++this.notificationSequence}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
+        );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                const result = await this.communicationService.send(
+                    {
+                        channel: "whisper",
+                        text: message,
+                        targetMemberNumber: character.MemberNumber,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "keypad door notification",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+                if (result.status !== "completed") {
+                    this.logger.warn(
+                        "Keypad communication action did not complete",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            deliveryStatus:
+                                result.value?.deliveryStatus ?? "unknown",
+                            reason: result.reason,
+                        },
+                    );
+                }
+            } else {
+                const result = this.messageSender.whisperToCharacter(
+                    character,
+                    message,
+                );
+                if (!result.success) {
+                    this.logger.warn(
+                        "Keypad notification failed on legacy path",
+                        {
+                            operationId,
+                            memberNumber: character.MemberNumber,
+                            reason: result.message,
+                        },
+                    );
+                }
+            }
+        } finally {
+            lease?.release();
+        }
         this.logger.info(`Notification to ${character.Name}: ${message}`);
     }
 

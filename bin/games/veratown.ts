@@ -793,6 +793,13 @@ export class Veratown {
                     this.unifiedCharacterStore,
                 ),
                 this.commandParser,
+                undefined,
+                this.container.get<CommunicationActionService>(
+                    DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                ),
+                this.container.get<ActionLayerRolloutController>(
+                    DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                ),
             );
             this.pendingFeatureRegistrations.push(
                 system.init().catch((error) => {
