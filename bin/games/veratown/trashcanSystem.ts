@@ -25,6 +25,10 @@ import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createTimerManager } from "./shared";
 import { createLogger } from "../../logging";
 import { MessageSender } from "../shared/messageSender";
+import type {
+    ActionLayerRolloutController,
+    CommunicationActionService,
+} from "../../action-layer";
 
 // The trashcan easter egg: searching the trash (an "Emote" containing both
 // "search" and "trash") while standing at one of the trashcan tiles finds a
@@ -47,16 +51,24 @@ export class TrashcanSystem implements VeratownFeatureSystem {
     private readonly logger = createLogger("TrashcanSystem");
     private readonly messageSender: MessageSender;
     private readonly COOLDOWN_MS = 7000; // 7 second cooldown between searches
+    private searchOperationSequence = 0;
 
     public constructor(
         private conn: API_Connector,
         private readonly allowStaticFallbacks = true,
+        private readonly communicationService?: CommunicationActionService,
+        private readonly rollout?: ActionLayerRolloutController,
+        private readonly searchDelayMs = 1500,
     ) {
         this.messageSender = new MessageSender(conn);
     }
 
     public registerTriggers(): void {
-        this.conn.on("Message", guardHandler(this.key, this.onMessage));
+        this.conn.on("Message", guardHandler(this.key, this.handleMessage));
+    }
+
+    public shutdown(): void {
+        this.searchCooldown.clearAll();
     }
 
     public async reloadLocations(
@@ -84,7 +96,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
         }
     }
 
-    private onMessage = async (msg: API_Message) => {
+    public async handleMessage(msg: API_Message): Promise<void> {
         if (!this.enabled) return;
         if (msg.message.Type !== "Emote") return;
 
@@ -95,7 +107,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
             return;
 
         await this.onCharacterSearchTrash(msg.sender);
-    };
+    }
 
     private onCharacterSearchTrash = async (character: API_Character) => {
         const memberNumber = character.MemberNumber;
@@ -123,7 +135,7 @@ export class TrashcanSystem implements VeratownFeatureSystem {
             memberNumber,
         });
 
-        await wait(1500);
+        await wait(this.searchDelayMs);
 
         const item =
             TRASHCAN_FOUND_ITEMS[
@@ -135,8 +147,55 @@ export class TrashcanSystem implements VeratownFeatureSystem {
             item,
         });
 
-        this.messageSender.emote(
-            `*${character} found ${item} while digging through the trash!*`,
+        const text = `*${character} found ${item} while digging through the trash!*`;
+        const operationId = `trashcan-search:${memberNumber}:${++this.searchOperationSequence}`;
+        const lease = this.rollout?.begin(
+            "communication-notifications",
+            operationId,
         );
+        try {
+            if (
+                lease?.path === "action" &&
+                this.communicationService !== undefined
+            ) {
+                const result = await this.communicationService.send(
+                    {
+                        channel: "emote",
+                        text,
+                        deduplicationKey: operationId,
+                    },
+                    {
+                        operationId,
+                        memberNumber,
+                        source: "feature",
+                        reason: "trashcan search notification",
+                        deadlineAt: Date.now() + 5000,
+                    },
+                );
+                if (result.status !== "completed") {
+                    this.logger.warn(
+                        "Trashcan communication action did not complete",
+                        {
+                            operationId,
+                            memberNumber,
+                            deliveryStatus:
+                                result.value?.deliveryStatus ?? "unknown",
+                            reason: result.reason,
+                        },
+                    );
+                }
+            } else {
+                const result = this.messageSender.emote(text);
+                if (!result.success) {
+                    this.logger.warn("Trashcan notification failed", {
+                        operationId,
+                        memberNumber,
+                        reason: result.message,
+                    });
+                }
+            }
+        } finally {
+            lease?.release();
+        }
     };
 }

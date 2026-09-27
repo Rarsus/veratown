@@ -715,7 +715,17 @@ export class Veratown {
                 ),
         );
         this.trashcanSystem = this.initFeature(
-            () => new TrashcanSystem(this.conn, this.roomKey === "main"),
+            () =>
+                new TrashcanSystem(
+                    this.conn,
+                    this.roomKey === "main",
+                    this.container.get<CommunicationActionService>(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    ),
+                    this.container.get<ActionLayerRolloutController>(
+                        DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                    ),
+                ),
         );
         const keypadDefinitionService =
             this.container.get<KeypadDefinitionService>(
@@ -1131,6 +1141,7 @@ export class Veratown {
         this.locationStore?.removeAllListeners("locationChanged");
         this.detachContainmentFeatures();
         this.locationMonitorSystem?.detachFromRoom?.();
+        this.trashcanSystem?.shutdown();
     }
 
     public async reloadLocations(): Promise<void> {
