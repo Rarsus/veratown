@@ -25,6 +25,19 @@ test("configuration applies deterministic safe defaults", () => {
     assert.equal(config.mongo_tls, true);
     assert.equal(config.discord_enabled, false);
     assert.equal(config.managed_release_workers_enabled, true);
+    assert.equal(
+        config.action_layer_communication_notifications_enabled,
+        false,
+    );
+});
+
+test("configuration accepts enabling communication notifications explicitly", () => {
+    const config = validateConfig({
+        ...validConfig(),
+        action_layer_communication_notifications_enabled: true,
+    });
+
+    assert.equal(config.action_layer_communication_notifications_enabled, true);
 });
 
 test("configuration accepts disabling managed release workers", () => {

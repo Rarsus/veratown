@@ -2,7 +2,7 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.2"
+version: "1.3"
 status: "First communication action slice implemented and opt-in qualified; legacy MessageSender remains the default compatibility path"
 ---
 
@@ -292,6 +292,8 @@ evidence.
       and attempt in structured logs.
 - [x] Provide a close path that shuts down the action scheduler and clears
       process-local deduplication state.
+- [x] Expose the communication rollout operation through validated file and
+      environment configuration with a disabled default.
 
 ### Iteration 4: First low-risk caller
 
