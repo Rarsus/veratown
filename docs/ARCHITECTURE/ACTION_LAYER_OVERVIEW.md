@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.21"
-status: "Bunny remains the first migration candidate; the first communication action slice is implemented and opt-in behind the legacy boundary"
+version: "1.22"
+status: "Bunny remains the first migration candidate; communication has a partial opt-in slice and position observation is the next design boundary"
 ---
 
 # Headless Bondage Club Action Layer
@@ -73,6 +73,10 @@ remaining evidence is limited to controlled-room qualification gates.
   incrementally implemented and qualified through the service, BC adapter, DI
   registration, and opt-in location-monitor caller. It does not yet claim
   communication-family migration.
+- Position observation and movement design, including requested versus
+  observed versus persisted state, reconnect epochs, stale-event rejection,
+  and the deferred teleport boundary, is documented in
+  [POSITION_OBSERVATION_MOVEMENT.md](POSITION_OBSERVATION_MOVEMENT.md).
 
 ### Migration status answer
 
@@ -809,6 +813,11 @@ must remain fail-closed.
 
 ### Movement actions
 
+The observation-first design and current `LiveCharacterStateSync` ownership
+are documented in [POSITION_OBSERVATION_MOVEMENT.md](POSITION_OBSERVATION_MOVEMENT.md).
+The document is the source of truth for the position IST/SOLL boundary until
+the observation contract is implemented.
+
 Planned actions:
 
 - `observePosition(character)`
@@ -1248,7 +1257,7 @@ Migration is incremental and should preserve existing behavior after each step.
 - [x] Extend release qualification coverage for locked and ambiguous target
       preservation under the action rollout path.
 
-### Phase 2: Communication and movement
+### Phase 2: Communication and position observation
 
 - [x] Document communication action ownership, IST/SOLL UML diagrams, delivery
       states, and request/transport/business state management in
@@ -1261,6 +1270,10 @@ Migration is incremental and should preserve existing behavior after each step.
 - [x] Route location-monitor notifications through the action path under a
       disabled-by-default rollout operation, with a no-duplicate integration
       test.
+- [x] Document position observation ownership, requested/observed/persisted
+      state, reconnect epochs, stale-event rejection, and the deferred
+      teleport boundary in
+      [POSITION_OBSERVATION_MOVEMENT.md](POSITION_OBSERVATION_MOVEMENT.md).
 - [ ] Migrate remaining `messageSender` callers and connector movement calls.
 - [ ] Return observed-position results for movement actions.
 - [ ] Integrate reconnect epochs and stale-confirmation handling.

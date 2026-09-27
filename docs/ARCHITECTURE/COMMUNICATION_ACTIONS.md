@@ -2,7 +2,7 @@
 title: "Communication Actions"
 subtitle: "IST/SOLL design, delivery semantics, and state management for the layered action architecture"
 date: "September 27, 2026"
-version: "1.1"
+version: "1.2"
 status: "First communication action slice implemented and opt-in qualified; legacy MessageSender remains the default compatibility path"
 ---
 
@@ -249,11 +249,13 @@ stateDiagram-v2
     end note
 ```
 
-The first BC adapter will normally return `queued` after `SendMessage` returns
-without throwing. A thrown connector call is classified as `rejected` only
-when the connector contract proves no dispatch occurred; otherwise it is
-`unknown` and must not be blindly replayed. `sent` is reserved for a future
-connector delivery signal or an explicitly documented transport guarantee.
+The current BC adapter returns `queued` after `SendMessage` returns without
+throwing. When the connector call throws, the adapter returns `unknown` with a
+transient, retryable failure because it cannot prove whether the underlying
+transport dispatched the message. `rejected` remains available for a future
+connector contract that proves no dispatch occurred. `sent` is reserved for a
+future connector delivery signal or an explicitly documented transport
+guarantee.
 
 The service's deduplication cache is bounded and process-local. A stable
 operation ID or deduplication key can be reused after a retry or reconnect, but
@@ -297,7 +299,6 @@ evidence.
 - [x] Compare legacy and action results without changing business transitions.
 - [x] Keep the action path disabled by default and explicitly inject it in
       controlled tests until connector behavior is qualified.
-      connector behavior is qualified.
 
 ### Iteration 5: Broader migration
 

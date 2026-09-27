@@ -4,6 +4,9 @@ This section contains the system design, architectural decisions, and design pat
 
 ## Core Architecture
 
+- **[Headless Action Layer](ACTION_LAYER_OVERVIEW.md)** - Layered action contracts, adapters, workflows, and migration status
+- **[Communication Actions](COMMUNICATION_ACTIONS.md)** - Communication delivery semantics and opt-in migration slice
+- **[Position Observation and Movement](POSITION_OBSERVATION_MOVEMENT.md)** - Position state ownership, reconnect epochs, and movement boundary
 - **[Unified State Architecture](UNIFIED_STATE_ARCHITECTURE.md)** - Character store and unified state management
 - **[Architectural Decisions](ARCHITECTURAL_DECISIONS.md)** - Key design choices and rationale
 - **[Pluggable Architecture Pattern](PLUGGABLE_ARCHITECTURE_PATTERN.md)** - How the system extends with new games
