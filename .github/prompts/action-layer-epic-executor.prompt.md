@@ -19,7 +19,7 @@ Use [ACTION_LAYER_EXECUTION_PLAN.md](../../docs/ARCHITECTURE/ACTION_LAYER_EXECUT
 
 ## Mission
 
-Complete the selected epic end to end by structurally addressing every open descendant issue in dependency order. A child issue is not complete because code exists or a unit test passes. Complete it only when its acceptance criteria, focused tests, lifecycle behavior, operational evidence, documentation, rollback behavior, and issue metadata are satisfied.
+Complete the selected epic end to end by structurally addressing every open descendant issue in dependency order. A child issue is not complete because code exists or a unit test passes. Complete it only when its acceptance criteria, focused tests, lifecycle behavior, operational evidence, documentation, rollback behavior, and issue metadata are satisfied. Performance evidence is required when scheduled by the roadmap; the current priority is stability, recovery, and failure isolation.
 
 Work independently and continue through the whole epic. Ask the user only when a destructive live action, missing credential, irreversible production change, or genuinely ambiguous product decision requires human authorization. Otherwise investigate, implement, test, document, and report the result yourself.
 
@@ -28,16 +28,16 @@ Work independently and continue through the whole epic. Ask the user only when a
 1. Read the parent issue and all nested sub-issues, including their `Roadmap Metadata` comments.
 2. Read the dependency and iteration index in #309.
 3. Build a working table with one row per issue containing:
-   - issue number and title;
-   - iteration and dates;
-   - `Depends on`, `Blocks`, and dependency type;
-   - acceptance criteria;
-   - affected files, symbols, adapters, workflows, and configuration;
-   - focused validation command;
-   - required REAL ROOM TEST BOT scenario;
-   - required MongoDB evidence;
-   - required Railway log/console evidence;
-   - current status and blocker.
+    - issue number and title;
+    - iteration and dates;
+    - `Depends on`, `Blocks`, and dependency type;
+    - acceptance criteria;
+    - affected files, symbols, adapters, workflows, and configuration;
+    - focused validation command;
+    - required REAL ROOM TEST BOT scenario;
+    - required MongoDB evidence;
+    - required Railway log/console evidence;
+    - current status and blocker.
 4. Check for missing, contradictory, or cyclic dependencies. Repair the plan locally by following the repository architecture and record the discrepancy in the parent issue; do not invent completion.
 5. Work only on the selected epic and its descendants unless a prerequisite issue is explicitly required. Do not rewrite unrelated systems or historical documentation.
 
@@ -52,17 +52,23 @@ For each ready child issue:
 3. Form one local hypothesis about the controlling behavior and one focused check that can disconfirm it.
 4. Make the smallest root-cause edit consistent with the existing architecture.
 5. Keep domain, persistence, feature-system, and Bondage Club adapter boundaries intact:
-   - domain contracts remain transport-neutral;
-   - BC imports stay in adapters or integration boundaries;
-   - durable state changes use the existing mutation/workflow ownership;
-   - operations retain stable IDs, correlation IDs, epochs, versions, audit records, and idempotency keys;
-   - action and legacy paths never both own one operation.
+    - domain contracts remain transport-neutral;
+    - BC imports stay in adapters or integration boundaries;
+    - durable state changes use the existing mutation/workflow ownership;
+    - operations retain stable IDs, correlation IDs, epochs, versions, audit records, and idempotency keys;
+    - action and legacy paths never both own one operation.
 6. Immediately run the cheapest focused validation after each substantive edit. Repair the same slice and rerun it before widening scope.
 7. Add or update tests before claiming the issue is complete. Preserve failure cases; never weaken an assertion to make a test green.
 8. Update documentation, migration notes, rollback instructions, and issue evidence while the behavior is fresh.
 9. Do not close the child issue until its acceptance criteria and evidence are complete. If GitHub issue updates are available, add a concise completion comment with commands, results, artifacts, and remaining risks.
 
 When an issue is blocked, leave it open with a precise blocker, evidence, prerequisite issue, and next executable action. Do not mark a blocked task complete.
+
+Stability takes precedence over optimization during the early and middle
+iterations. A bounded, slightly slower action path is acceptable when it has
+substantially better recovery and failure isolation. The full 30-minute soak
+and broad performance-threshold suite are late-track work for the final
+qualification and cutover iterations; do not block stability work on them.
 
 ## 3. REAL ROOM TEST BOT is a required local capability
 
@@ -86,15 +92,15 @@ For every epic that changes an externally observable behavior, define, implement
 
 Each scenario must specify:
 
-| Part | Required content |
-|---|---|
-| Setup | Dedicated account/room, environment, rollout state, target identity, starting state, and bounded timeout |
-| Stimulus | Real connector command, message, movement, appearance, inventory, permission, map, or workflow action |
-| Connector evidence | Login/join, operation ID, request channel, server observation, response, timeout, disconnect, or reconnect |
-| Application evidence | Action/legacy path, result status, ownership, retries, confirmation, and cleanup |
-| MongoDB evidence | Redacted persisted journal, projection, audit, version, idempotency, or absence-of-write result |
-| Railway evidence | Redacted service log lines correlated by operation ID, run ID, or timestamp |
-| Cleanup | Release/expiry, rollback, disconnect, waiter/timer cleanup, and room/account safety |
+| Part                 | Required content                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Setup                | Dedicated account/room, environment, rollout state, target identity, starting state, and bounded timeout   |
+| Stimulus             | Real connector command, message, movement, appearance, inventory, permission, map, or workflow action      |
+| Connector evidence   | Login/join, operation ID, request channel, server observation, response, timeout, disconnect, or reconnect |
+| Application evidence | Action/legacy path, result status, ownership, retries, confirmation, and cleanup                           |
+| MongoDB evidence     | Redacted persisted journal, projection, audit, version, idempotency, or absence-of-write result            |
+| Railway evidence     | Redacted service log lines correlated by operation ID, run ID, or timestamp                                |
+| Cleanup              | Release/expiry, rollback, disconnect, waiter/timer cleanup, and room/account safety                        |
 
 Add scenario selection through the existing `BC_TEST_SCENARIO` contract or a compatible explicit scenario mechanism. Add deterministic local tests for configuration, safety, timeout, cleanup, response correlation, and failure paths.
 
@@ -160,7 +166,7 @@ Run only the commands relevant to the selected slice, but finish with the broade
 5. `pnpm types`.
 6. Prettier check on changed files and `docs/ARCHITECTURE`.
 7. `git diff --check`.
-8. `pnpm qualification:action-layer` when the epic changes action-layer performance or workload behavior.
+8. The late-track `pnpm qualification:action-layer` performance run when the roadmap schedules it or the epic changes workload behavior.
 9. Approved real-room end-to-end scenario.
 10. Redacted MongoDB and Railway evidence review.
 
@@ -188,4 +194,4 @@ Use one of these final statuses:
 - `PARTIAL`: implementation is safe and tested, but one or more operational gates remain;
 - `BLOCKED`: a prerequisite, credential, environment, authorization, or failing quality gate prevents safe completion.
 
-Never claim a feature is production migrated from local tests alone. Never close an epic while a required child issue, end-to-end scenario, database verification, Railway verification, rollback result, or acceptance criterion remains unresolved.
+Never claim a feature is production migrated from local tests alone. Never close an epic while a required child issue, end-to-end scenario, database verification, Railway verification, rollback result, scheduled performance gate, or acceptance criterion remains unresolved.

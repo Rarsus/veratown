@@ -2,7 +2,7 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.25"
+version: "1.26"
 status: "Foundation plus opt-in appearance, communication, position-observation, map-trigger, and Door pilot slices; operational qualification and broader migration remain pending"
 ---
 
@@ -74,10 +74,11 @@ The approved Bunny promotion attempt is tracked in
 - The Bunny projection boundary is transaction-aware and idempotent by
   operation ID; replica-set tests cover duplicate retry and rollback after an
   event persistence failure.
-- Controlled-room confirmation across reconnect/restart, rollback rehearsal,
-  and the actual 30-minute 15-character qualification remain open evidence
-  gates. Explicit promotion approval has been recorded, but both runtime
-  switches remain disabled until those gates pass.
+- Controlled-room confirmation across reconnect/restart and rollback rehearsal
+  remain open stability gates. The full performance suite has moved to the
+  late track; bounded performance degradation is acceptable while stability and
+  recovery improve. Explicit promotion approval has been recorded, but both
+  runtime switches remain disabled until the active stability gates pass.
 - Communication action design, IST/SOLL UML diagrams, and the three-scope state
   management model are documented in
   [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
@@ -147,9 +148,10 @@ operational gates below, then enabling the switch deliberately:
 2. Rollback rehearsal: switch new operations to legacy while an action-owned
    operation finishes, and verify that one operation ID has exactly one owner
    throughout the handoff.
-3. Production qualification: complete the 30-minute, 15-character workload,
-   record latency, queue, retry, timeout, memory, and failure thresholds, and
-   retain the evidence with the rollout decision.
+3. Late-track performance qualification: after the stability gates and broader
+   family work, run the 15-character workload, record latency, queue, retry,
+   timeout, memory, and failure thresholds, and retain the evidence with the
+   final rollout decision. This is no longer an early hard requirement.
 
 The rollout flag must remain `false` until all three gates pass. The known
 non-blocking `Emoticon` appearance-group warning from the bounded live run
@@ -256,10 +258,11 @@ rollout; it did not prevent restraint application or expiry cleanup.
       controlled-room rehearsal remains pending.
 - [ ] Full Bunny or release migration. Feature flags, DI registration, and
       rollback switching exist only for the narrow migrated slices.
-- [ ] The actual 30-minute 15-character soak and production performance gate.
-      Run `pnpm qualification:action-layer` and
-      `pnpm qualification:action-layer -- --headroom` in the qualification
-      environment; short deterministic command runs are covered by tests.
+- [ ] Late-track performance and capacity evidence. Run
+      `pnpm qualification:action-layer` and
+      `pnpm qualification:action-layer -- --headroom` near final cutover with
+      retained artifacts. Slightly degraded but bounded performance is
+      acceptable when stability and recovery are materially improved.
 - [ ] Feature-system migration. The inventory found approximately 129 direct
       appearance operations, 2 lock applications, 333 message or reply calls,
       49 map mutations, and 5 teleport calls in non-test feature code.
@@ -389,9 +392,10 @@ values are currently zero because the synthetic harness does not yet create
 those dependency events; the adapter tests cover the corresponding lifecycle
 paths.
 
-This phase does not prove 30-minute stability, real-room packet behavior,
-durable restart recovery, or persistence correctness. Those remain explicit
-gates before feature migration.
+This phase does not prove long-run performance, real-room packet behavior,
+durable restart recovery, or persistence correctness. Stability and recovery
+remain explicit gates before feature migration; long-run performance is
+scheduled for the late track.
 
 ### Rollout and migration implementation result
 
@@ -1123,10 +1127,12 @@ single real-room population or treated as supported room capacity. Real-room
 15/25-character bot qualification is deferred until enough dedicated test
 accounts exist for the real test-bot mechanism.
 
-### Hard targets
+### Late-track performance targets
 
-Hard targets are release gates. A build or configuration that violates one of
-these targets under the defined baseline workload is not production-ready.
+These targets are evaluated near the end of the migration track rather than as
+an early promotion gate. A slightly slower but stable and recoverable system
+may proceed with an explicit residual-risk record. Unbounded resource growth,
+event-loop blockage, or cross-character failure remains a release blocker.
 
 | Area                      | Hard target                                                                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1200,8 +1206,8 @@ visible, measured, and explained.
 
 ### Performance test workload
 
-The performance suite should simulate a realistic mixed workload for at least
-30 minutes: 15 active characters, bursty movement and map events, periodic
+The late-track performance suite should simulate a realistic mixed workload,
+optionally including a 30-minute run: 15 active characters, bursty movement and map events, periodic
 whispers and room messages, appearance reads, serialized appearance mutations,
 scheduled workflow timers, durable writes, audit events, duplicate triggers,
 reconnects, confirmation delays, and selected failures.
@@ -1408,8 +1414,8 @@ Each step has a completion gate and preserves the new/old boundary:
        controlled process-recovery rehearsal remains pending.
 7. [x] Extend the workload harness with event-loop delay, queue wait, heap,
        timers/listeners, CPU, retries, confirmation-timeout, and GC metrics.
-       The required 30-minute 15-character qualification and 25-character
-       headroom run remain pending.
+       The late-track 15-character qualification and 25-character headroom
+       run remain pending.
 8. [x] Add DI and feature-flag selection with rollback before migration. The
        rollout controller stops new action-path starts, preserves operation
        ownership, and routes new work to legacy during rollback.
@@ -1443,9 +1449,9 @@ Each step has a completion gate and preserves the new/old boundary:
         release operations. Controlled-room live reconnect/restart rehearsal
         remains pending.
 16. [x] Extend the workload harness into a repeated soak with retained samples
-        and hard-threshold enforcement. The repository provides runnable
-        15-character and 25-character headroom commands; the actual 30-minute
-        qualification run remains an external gate.
+        and threshold reporting. The repository provides runnable 15-character
+        and 25-character headroom commands; the full performance qualification
+        is intentionally scheduled for the late track.
 
 ### Next Course to Full Layered Model
 
@@ -1456,9 +1462,9 @@ The next migration sequence is intentionally evidence-driven:
    journal, artifact, and cleanup records.
 2. Run the Bunny rollback rehearsal, proving that new operations route to
    legacy while an action-owned operation finishes without mixed ownership.
-3. Run the 30-minute 15-character qualification and the 25-character
-   headroom command. Do not enable the Bunny switch until the hard thresholds
-   and restart/reconnect checks pass.
+3. Keep short bounded performance checks available, but defer the full
+   15-character and 25-character performance suite toward final-track
+   qualification. Do not block stability work on latency optimization.
 4. Migrate communication and movement adapters, starting with narration,
    notifications, and position synchronization.
 5. Migrate map operations and trigger lifecycle, including room recreation and
@@ -1480,8 +1486,8 @@ so the old path can remain available during validation. Rollout gates should
 include:
 
 - focused unit and integration tests;
-- the 15-character performance baseline with all hard targets satisfied;
-- failure-injection performance results showing bounded queue and memory use;
+- late-track performance and capacity evidence with accepted residual risk;
+- failure-injection results showing bounded queue and memory use;
 - reconnect and restart recovery evidence;
 - no increase in confirmation timeout or partial-operation rates;
 - verified persistence and audit records;
@@ -1517,7 +1523,7 @@ The action layer is ready for production use when:
 - lock, consent, and release policies are covered by tests;
 - duplicate delivery, reconnect, restart, stale version, and partial failure
   cases are exercised;
-- the 15-character workload passes all hard performance targets;
+- late-track performance evidence is retained with accepted residual risk;
 - failure-injection tests demonstrate per-character isolation and bounded
   degradation;
 - p95 and p99 latency, event-loop delay, queue depth, memory, and retry metrics

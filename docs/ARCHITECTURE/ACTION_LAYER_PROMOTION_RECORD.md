@@ -8,8 +8,10 @@ status: "Template"
 # Action-Layer Promotion and Rollback Record
 
 Copy this record for each promotion or rollback decision. A missing required
-gate is an explicit **NO-GO**; do not infer approval from a passing local test
-or a queued connector result.
+stability or connector gate is an explicit **NO-GO**; do not infer approval
+from a passing local test or a queued connector result. The performance gate
+may be marked `DEFERRED` before the late-track qualification; it remains
+required before final cutover.
 
 ## Decision Identity
 
@@ -32,23 +34,23 @@ or a queued connector result.
 
 Use `PASS`, `FAIL`, or `MISSING`. `MISSING` prevents promotion.
 
-| Gate                                                | Status | Evidence artifact / query | Notes and residual risk |
-| --------------------------------------------------- | ------ | ------------------------- | ----------------------- |
-| Contract and adapter tests                          |        |                           |                         |
-| Caller integration and action/legacy ownership test |        |                           |                         |
-| TypeScript and formatting                           |        |                           |                         |
-| Whitespace / diff check                             |        |                           |                         |
-| Real-room whisper observation                       |        |                           |                         |
-| Real-room chat observation                          |        |                           |                         |
-| Real-room emote observation                         |        |                           |                         |
-| Connector exception / fail-closed cleanup           |        |                           |                         |
-| Disconnect and waiter cleanup                       |        |                           |                         |
-| Reconnect and exact room identity                   |        |                           |                         |
-| MongoDB durable state                               |        |                           |                         |
-| Railway deployment health                           |        |                           |                         |
-| Railway logs / runtime evidence                     |        |                           |                         |
-| Performance and queue thresholds                    |        |                           |                         |
-| Redacted evidence retained                          |        |                           |                         |
+| Gate                                                | Status | Evidence artifact / query | Notes and residual risk                                                                        |
+| --------------------------------------------------- | ------ | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| Contract and adapter tests                          |        |                           |                                                                                                |
+| Caller integration and action/legacy ownership test |        |                           |                                                                                                |
+| TypeScript and formatting                           |        |                           |                                                                                                |
+| Whitespace / diff check                             |        |                           |                                                                                                |
+| Real-room whisper observation                       |        |                           |                                                                                                |
+| Real-room chat observation                          |        |                           |                                                                                                |
+| Real-room emote observation                         |        |                           |                                                                                                |
+| Connector exception / fail-closed cleanup           |        |                           |                                                                                                |
+| Disconnect and waiter cleanup                       |        |                           |                                                                                                |
+| Reconnect and exact room identity                   |        |                           |                                                                                                |
+| MongoDB durable state                               |        |                           |                                                                                                |
+| Railway deployment health                           |        |                           |                                                                                                |
+| Railway logs / runtime evidence                     |        |                           |                                                                                                |
+| Performance and queue thresholds                    |        |                           | Late-track evidence; bounded degradation may be accepted with an explicit residual-risk record |
+| Redacted evidence retained                          |        |                           |                                                                                                |
 
 ## Connector Result
 
@@ -91,8 +93,8 @@ Do not paste Railway variables, tokens, cookies, or authentication headers.
 
 ## Go / No-Go
 
-- [ ] Every required gate above is `PASS`.
-- [ ] No required gate is `MISSING`.
+- [ ] Every active stability and connector gate above is `PASS`.
+- [ ] No active required gate is `MISSING`; performance is either `PASS` or explicitly `DEFERRED` before final-track qualification.
 - [ ] The caller registry names exactly one owner for each operation ID.
 - [ ] Recovery and rollback are tested for the selected owner.
 - [ ] Redacted evidence is retained and secret scanning passes.

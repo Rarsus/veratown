@@ -251,6 +251,10 @@ test("dry-run validates enabled configuration without constructing a connector",
     );
 });
 
+test("live qualification refuses to connect without an evidence destination", async () => {
+    assert.equal(await main(baseEnvironment), 1);
+});
+
 test("safe command allowlist rejects destructive commands", () => {
     assert.equal(validateSafeCommand("!help"), "!help");
     assert.throws(

@@ -2,7 +2,7 @@
 title: "Action-Layer Execution Plan"
 subtitle: "Current state, next gates, and one-cycle verification plan"
 date: "September 27, 2026"
-version: "1.5"
+version: "1.6"
 status: "Pilot slices implemented; operational qualification and broader migration remain pending"
 ---
 
@@ -17,8 +17,12 @@ operational questions:
 3. Which tests and gates must pass before the next phase can begin?
 
 The plan is deliberately conservative. A passing contract test does not make a
-feature production-migrated. Runtime enablement, recovery, rollback, live
-connector behavior, and performance are separate gates.
+feature production-migrated. Runtime enablement, recovery, rollback, and live
+connector behavior remain the early hard gates. Performance qualification is
+intentionally moved toward the end of the track: slightly degraded but bounded
+performance is acceptable when stability and recovery are substantially better.
+Unbounded queue, timer, listener, memory, or event-loop growth remains a safety
+blocker at every stage.
 
 The production caller and ownership source of truth is
 [ACTION_LAYER_CALLER_REGISTRY.md](ACTION_LAYER_CALLER_REGISTRY.md). Any new
@@ -31,7 +35,7 @@ go/no-go and rollback evidence.
 | Area                       | Actual state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Runtime default                                                  | Next meaningful gate                                                                                                  |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Action-layer foundation    | Domain contracts, scheduler, executor, workflow model, policy validation, appearance planner, confirmation registry, rollout leases, and boundary tests exist.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | N/A                                                              | Keep the import boundary and regression cycle green while adding slices.                                              |
-| Bunny punishment           | Restraint-only action path, confirmed appearance observation, journal recovery, transactional projection, expiry cleanup, and rollout lease are implemented.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Legacy; `action_layer_bunny_restraints_enabled=false`            | Controlled-room restart/reconnect, rollback rehearsal, then the 30-minute 15-character qualification.                 |
+| Bunny punishment           | Restraint-only action path, confirmed appearance observation, journal recovery, transactional projection, expiry cleanup, and rollout lease are implemented.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Legacy; `action_layer_bunny_restraints_enabled=false`            | Controlled-room restart/reconnect and rollback rehearsal; late-track performance evidence follows.                    |
 | Release appearance removal | Selected eligible target removal can use the action service with fail-closed lock classification and authoritative confirmation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Legacy; `action_layer_release_removal_enabled=false`             | Real-room confirmation, restart/reconnect recovery, rollback, and release-stage regression cycle.                     |
 | Communication              | Normalized requests, bounded per-character scheduling, process-local deduplication, BC translation, room shutdown closure, and opt-in LocationMonitor, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, ShowerSystem, FurnitureBondageSystem, CatDogSystem, and TrashcanSystem callers are implemented; Bunny covers park-entry, pre-punishment, and punishment-failure notifications while punishment execution remains workflow-owned, Cage covers short entry/release statuses while the long entrance warning remains legacy-owned, KeypadDoorSystem covers its throttled notification helper, ShowerSystem covers player-facing whispers while NarratorBot emotes remain public workflow output, FurnitureBondageSystem covers player-facing whispers while public narration and admin messages remain outside this slice, CatDogSystem covers vibrator-triggered player whispers while public pet emotes, bot movement, and bondage mutation remain legacy-owned, and TrashcanSystem covers found-item emotes through the registered Message event. | Legacy; `action_layer_communication_notifications_enabled=false` | Real connector outcome qualification, caller rollback evidence, durable replay decision, and explicit reply contract. |
 | Position observation       | `LiveCharacterStateSync` accepts observed positions with connection epochs and sequence guards and persists accepted observations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Active observation slice; no movement rollout                    | Reconnect and room-recreation evidence; do not add movement dispatch yet.                                             |
@@ -84,20 +88,23 @@ controlled-room and deployment evidence gates separate from this local cycle.
 The cycle is a promotion gate for local implementation, not a production
 qualification. The following evidence is intentionally outside the fast
 cycle: controlled-room reconnect/restart, rollback during an in-flight
-operation, real connector packet semantics, and the 30-minute workload.
+operation, real connector packet semantics, and the late-track performance
+workload.
 
-For the performance gate, run the existing qualification command in the
-qualification environment. The default profile is the required workload; the
-headroom profile is informative:
+For late-track performance evidence, run the existing qualification command in
+the qualification environment. The default profile is the supported workload;
+the headroom profile is informative:
 
 ```sh
 pnpm qualification:action-layer
 pnpm qualification:action-layer -- --headroom
 ```
 
-The default qualification must retain latency, queue wait, event-loop delay,
-failure, retry, timeout, memory, and queue-drain evidence. A short deterministic
-run is not a substitute for the 30-minute gate.
+When the late-track performance gate is scheduled, retain latency, queue wait,
+event-loop delay, failure, retry, timeout, memory, and queue-drain evidence.
+Short deterministic runs remain useful regression checks. The full 30-minute
+run is no longer an early hard requirement; bounded degradation is acceptable
+when stability and recovery improve materially.
 
 ## Gate vocabulary
 
@@ -110,7 +117,7 @@ run is not a substitute for the 30-minute gate.
 | Durable workflow        | External observations drive durable state only through the workflow owner.                                    | Journal/CAS, idempotency, transaction rollback, restart restoration, and projection tests pass.                                       |
 | Rollback                | One operation has one implementation owner while new work can move back to legacy.                            | In-flight lease rehearsal and persisted operation evidence.                                                                           |
 | Connector qualification | The local adapter result matches real BC behavior.                                                            | Controlled-room logs or retained observations for success, denial, timeout, reconnect, and duplicate events.                          |
-| Performance             | The action path remains bounded under representative load.                                                    | Required 30-minute 15-character qualification and retained thresholds.                                                                |
+| Performance             | The action path remains bounded under representative load; detailed optimization is a late-track activity.    | Late-track qualification and retained thresholds; not an early blocker when stability, recovery, and resource bounds are green.       |
 | Promotion               | The feature may move to the next migration phase.                                                             | All family-specific gates above are green, the default remains deliberately controlled, and the go/no-go record names residual risks. |
 
 ## Area-by-area action plan
@@ -148,7 +155,8 @@ and compatibility facade.
    expiry cleanup.
 2. Rehearse rollback while an action-owned operation is in flight; verify one
    lease and one owner for the operation ID.
-3. Run and retain the 30-minute 15-character qualification.
+3. Keep short bounded performance checks green and schedule the full
+   performance suite for the late-track qualification phase.
 4. Review residual connector warnings and make an explicit rollout decision;
    leave the switch disabled until the evidence is accepted.
 
@@ -157,7 +165,7 @@ and compatibility facade.
 tests, `bin/games/veratown/__tests__/bunnyParkSystem.test.ts`,
 `bin/games/veratown/__tests__/bunnyPunishmentProjection.integration.test.ts`,
 journal/recovery/projection tests, the one-cycle command, controlled-room
-recovery, rollback, and performance qualification.
+recovery, rollback, and late-track performance qualification.
 
 ### 3. Release appearance removal
 

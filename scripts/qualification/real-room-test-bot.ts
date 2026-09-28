@@ -981,11 +981,22 @@ export async function main(
         return 0;
     }
 
+    const evidenceDirectory = requiredValue(
+        environment,
+        "QUALIFICATION_EVIDENCE_DIR",
+    );
+    if (!evidenceDirectory) {
+        logger.error(
+            "Real-room qualification refused; evidence destination is required before connecting",
+        );
+        return 1;
+    }
+
     try {
         const evidence = await runRealRoomTestBot(config);
         const evidencePath = await writeQualificationEvidence(
             evidence,
-            environment.QUALIFICATION_EVIDENCE_DIR,
+            evidenceDirectory,
             [config.password, config.username, config.serverUrl],
         );
         logger.info("Real-room qualification completed", {

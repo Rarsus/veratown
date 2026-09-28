@@ -2,7 +2,7 @@
 title: "Bunny Action-Layer Promotion Record"
 subtitle: "Explicitly approved promotion preparation and current go/no-go decision"
 date: "September 28, 2026"
-version: "1.0"
+version: "1.1"
 status: "Promotion initiated with explicit approval; NO-GO until required gates pass"
 ---
 
@@ -26,18 +26,19 @@ the documented evidence is complete.
 
 ## Gate status
 
-| Gate                                           | Status               | Evidence / note                                                                                                         |
-| ---------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Bunny action ownership and rollback unit tests | `PASS`               | 55 focused tests passed, including action ownership and rollback contracts                                              |
-| TypeScript, formatting, and whitespace         | `PASS`               | `pnpm types`, Prettier, and `git diff --check` passed                                                                   |
-| Short 15-character workload                    | `PASS`               | 150/150 actions completed; zero failures; queues empty; retained redacted artifact                                      |
-| Full 30-minute 15-character qualification      | `MISSING`            | Long run was stopped before a final result; do not claim this gate                                                      |
-| Controlled-room Bunny confirmation             | `MISSING`            | Real-room 15/25-user qualification awaits dedicated test accounts                                                       |
-| Restart/reconnect recovery                     | `MISSING`            | Controlled-room rehearsal remains open                                                                                  |
-| In-flight rollback                             | `MISSING`            | Controlled-room rollback rehearsal remains open                                                                         |
-| MongoDB Bunny state cleanup                    | `PASS`               | TestVeraTown was guarded-deleted and recreated clean; zero active artifacts and zero artifact/restraint overlaps remain |
-| Railway health and runtime evidence            | `MISSING`            | Current promotion deployment evidence is not attached                                                                   |
-| Redacted evidence retained                     | `PASS` for short run | `out/qualification/action-layer-1790616811046.json`; full-soak evidence is absent                                       |
+| Gate                                           | Status                  | Evidence / note                                                                                                                                                         |
+| ---------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bunny action ownership and rollback unit tests | `PASS`                  | 55 focused tests passed, including action ownership and rollback contracts                                                                                              |
+| TypeScript, formatting, and whitespace         | `PASS`                  | `pnpm types`, Prettier, and `git diff --check` passed                                                                                                                   |
+| Short 15-character workload                    | `PASS`                  | 150/150 actions completed; zero failures; queues empty; retained redacted artifact                                                                                      |
+| Full 30-minute 15-character qualification      | `DEFERRED`              | No longer an early hard requirement; schedule with the late-track performance and cutover evidence                                                                      |
+| Controlled-room Bunny confirmation             | `PASS`                  | Live `bunny-step` completed in the configured dedicated test room; retained artifact `75dc9564-78bf-4ad1-b4f0-cdade436d164.json`                                        |
+| Controlled-room connector reconnect            | `PASS`                  | Live reconnect completed and rejoined `Veratown`; retained artifact `e5e20d99-bdad-4816-b7c6-23352070ebb7.json`                                                         |
+| Process-restart recovery                       | `MISSING`               | A controlled deployment/process restart with an in-flight Bunny operation remains open                                                                                  |
+| In-flight rollback                             | `MISSING`               | Controlled-room rollback rehearsal remains open                                                                                                                         |
+| MongoDB Bunny state cleanup                    | `PASS`                  | TestVeraTown was guarded-deleted and recreated clean; zero active artifacts and zero artifact/restraint overlaps remain                                                 |
+| Railway health and runtime evidence            | `PASS`                  | Deployment `3f846e2c-b191-4928-8828-1cca770346b6` is `SUCCESS`/`RUNNING`; filtered logs show Bunny persistence and release for operation `bunny-261407-1790620281528-2` |
+| Redacted evidence retained                     | `PASS` for current runs | Bunny-step and reconnect artifacts are retained under `out/qualification-evidence`; full-soak evidence is absent                                                        |
 
 ## Database cleanup
 
@@ -73,11 +74,15 @@ been recorded.
 
 ## Promotion decision
 
-**Current decision: `NO-GO`.** The action-layer implementation is
-promotion-ready, but production enablement remains blocked by the missing
-30-minute performance result, controlled-room restart/reconnect evidence,
-rollback rehearsal, live-room qualification, and current Railway evidence.
+**Current decision: `NO-GO`.** The action-layer implementation has passed the
+live Bunny-step, connector reconnect, and current Railway evidence gates, but
+production enablement remains blocked by process-restart recovery and the
+in-flight rollback rehearsal. The full performance suite is deferred to the
+late track; slightly degraded but bounded performance is acceptable when
+stability and recovery are materially better.
 
-The next decision may change to `GO` only after every required gate is recorded
-as `PASS` in this document and the rollout switch is changed deliberately in
-the approved production configuration.
+The next decision may change to `GO` after the active stability and connector
+gates are recorded as `PASS` in this document, residual performance risk is
+accepted, and the rollout switch is changed deliberately in the approved
+production configuration. Late-track performance evidence remains required
+before final cutover.
