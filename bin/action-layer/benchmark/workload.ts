@@ -123,7 +123,7 @@ function wait(delayMs: number, metrics: WorkloadRuntimeMetrics): Promise<void> {
 export async function runActionLayerWorkload(
     options: ActionLayerWorkloadOptions = {},
 ): Promise<ActionLayerWorkloadResult> {
-    const characterCount = options.characterCount ?? 19;
+    const characterCount = options.characterCount ?? 15;
     const actionsPerCharacter = options.actionsPerCharacter ?? 10;
     const actionDelayMs = options.actionDelayMs ?? 0;
     const failEvery = options.failEvery ?? 0;

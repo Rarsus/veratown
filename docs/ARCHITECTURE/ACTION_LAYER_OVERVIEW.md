@@ -46,6 +46,8 @@ command are maintained in
 Caller ownership and promotion/rollback records are maintained in
 [ACTION_LAYER_CALLER_REGISTRY.md](ACTION_LAYER_CALLER_REGISTRY.md) and
 [ACTION_LAYER_PROMOTION_RECORD.md](ACTION_LAYER_PROMOTION_RECORD.md).
+The approved Bunny promotion attempt is tracked in
+[ACTION_LAYER_BUNNY_PROMOTION_2026-09-28.md](ACTION_LAYER_BUNNY_PROMOTION_2026-09-28.md).
 
 ### Current snapshot
 
@@ -73,8 +75,9 @@ Caller ownership and promotion/rollback records are maintained in
   operation ID; replica-set tests cover duplicate retry and rollback after an
   event persistence failure.
 - Controlled-room confirmation across reconnect/restart, rollback rehearsal,
-  and the actual 30-minute 19-character qualification remain open evidence
-  gates. Both runtime switches remain disabled.
+  and the actual 30-minute 15-character qualification remain open evidence
+  gates. Explicit promotion approval has been recorded, but both runtime
+  switches remain disabled until those gates pass.
 - Communication action design, IST/SOLL UML diagrams, and the three-scope state
   management model are documented in
   [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
@@ -144,7 +147,7 @@ operational gates below, then enabling the switch deliberately:
 2. Rollback rehearsal: switch new operations to legacy while an action-owned
    operation finishes, and verify that one operation ID has exactly one owner
    throughout the handoff.
-3. Production qualification: complete the 30-minute, 19-character workload,
+3. Production qualification: complete the 30-minute, 15-character workload,
    record latency, queue, retry, timeout, memory, and failure thresholds, and
    retain the evidence with the rollout decision.
 
@@ -181,7 +184,7 @@ rollout; it did not prevent restraint application or expiry cleanup.
       protection, metadata, and failure behavior.
 - [x] Automated import-boundary test rejecting legacy, persistence, and
       `bc-bot` dependencies from action-layer TypeScript files.
-- [x] Deterministic 19-character workload harness with latency percentiles,
+- [x] Deterministic 15-character workload harness with latency percentiles,
       queue-drain checks, and failure injection.
 - [x] Runtime feature-system inventory of direct BC operations, grouped by
       appearance, locking, messaging, movement, map, permissions, and asset
@@ -227,7 +230,8 @@ rollout; it did not prevent restraint application or expiry cleanup.
       and release migration interface; runtime injection and production Mongo
       journal storage are active.
 - [x] Soak runner with retained samples, hard threshold evaluation, a
-      19-character qualification command, and a 25-character headroom mode.
+      15-character qualification command, and an optional 25-character
+      synthetic stress mode that is not a supported room-capacity claim.
 - [x] Scoped map-trigger registry, BC trigger adapter, and LocationMonitorSystem
       pilot with stale-callback and lifecycle tests.
 - [x] Map-object adapter and KeypadDoorSystem pilot with duplicate mutation and
@@ -252,7 +256,7 @@ rollout; it did not prevent restraint application or expiry cleanup.
       controlled-room rehearsal remains pending.
 - [ ] Full Bunny or release migration. Feature flags, DI registration, and
       rollback switching exist only for the narrow migrated slices.
-- [ ] The actual 30-minute 19-character soak and production performance gate.
+- [ ] The actual 30-minute 15-character soak and production performance gate.
       Run `pnpm qualification:action-layer` and
       `pnpm qualification:action-layer -- --headroom` in the qualification
       environment; short deterministic command runs are covered by tests.
@@ -1107,14 +1111,17 @@ preserve responsiveness while dependencies are slow or partially unavailable.
 
 ### Capacity baseline
 
-The supported baseline is **19 concurrent characters in one active room**. The
+The supported qualification baseline is **15 concurrent characters**. The
 baseline includes simultaneous movement events, chat activity, appearance
 observations, scheduled workflow timers, persistence callbacks, and recovery
-work. It is not sufficient to benchmark 19 idle character objects.
+work. It is not sufficient to benchmark 15 idle character objects.
 
-Capacity tests should exercise at least 19 active characters and report
-behavior at 25 concurrent characters as an early saturation signal. The
-25-character run is a planning guardrail, not a promise of supported capacity.
+Each real room has a hard **20-person limit including bots**. The required
+15-character workload therefore remains below the room limit. The optional
+25-character run is synthetic stress/headroom only and must not be run as a
+single real-room population or treated as supported room capacity. Real-room
+15/25-character bot qualification is deferred until enough dedicated test
+accounts exist for the real test-bot mechanism.
 
 ### Hard targets
 
@@ -1123,8 +1130,8 @@ these targets under the defined baseline workload is not production-ready.
 
 | Area                      | Hard target                                                                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Concurrent characters     | Sustain 19 active characters for at least 30 minutes without unbounded queue, timer, listener, or memory growth                                    |
-| Event-loop responsiveness | Event-loop delay p99 below 100 ms during the 19-character workload; no single action may block the event loop for more than 250 ms                 |
+| Concurrent characters     | Sustain 15 active characters for at least 30 minutes without unbounded queue, timer, listener, or memory growth                                    |
+| Event-loop responsiveness | Event-loop delay p99 below 100 ms during the 15-character workload; no single action may block the event loop for more than 250 ms                 |
 | Local action dispatch     | p95 below 100 ms and p99 below 250 ms for validation, queueing, and adapter dispatch, excluding remote confirmation latency                        |
 | Appearance reads          | p95 below 250 ms and p99 below 750 ms with a healthy connector                                                                                     |
 | Appearance mutations      | p95 below 1 second and p99 below 2 seconds through local completion; remote confirmation uses its explicit bounded timeout                         |
@@ -1194,7 +1201,7 @@ visible, measured, and explained.
 ### Performance test workload
 
 The performance suite should simulate a realistic mixed workload for at least
-30 minutes: 19 active characters, bursty movement and map events, periodic
+30 minutes: 15 active characters, bursty movement and map events, periodic
 whispers and room messages, appearance reads, serialized appearance mutations,
 scheduled workflow timers, durable writes, audit events, duplicate triggers,
 reconnects, confirmation delays, and selected failures.
@@ -1401,7 +1408,7 @@ Each step has a completion gate and preserves the new/old boundary:
        controlled process-recovery rehearsal remains pending.
 7. [x] Extend the workload harness with event-loop delay, queue wait, heap,
        timers/listeners, CPU, retries, confirmation-timeout, and GC metrics.
-       The required 30-minute 19-character qualification and 25-character
+       The required 30-minute 15-character qualification and 25-character
        headroom run remain pending.
 8. [x] Add DI and feature-flag selection with rollback before migration. The
        rollout controller stops new action-path starts, preserves operation
@@ -1437,7 +1444,7 @@ Each step has a completion gate and preserves the new/old boundary:
         remains pending.
 16. [x] Extend the workload harness into a repeated soak with retained samples
         and hard-threshold enforcement. The repository provides runnable
-        19-character and 25-character headroom commands; the actual 30-minute
+        15-character and 25-character headroom commands; the actual 30-minute
         qualification run remains an external gate.
 
 ### Next Course to Full Layered Model
@@ -1449,7 +1456,7 @@ The next migration sequence is intentionally evidence-driven:
    journal, artifact, and cleanup records.
 2. Run the Bunny rollback rehearsal, proving that new operations route to
    legacy while an action-owned operation finishes without mixed ownership.
-3. Run the 30-minute 19-character qualification and the 25-character
+3. Run the 30-minute 15-character qualification and the 25-character
    headroom command. Do not enable the Bunny switch until the hard thresholds
    and restart/reconnect checks pass.
 4. Migrate communication and movement adapters, starting with narration,
@@ -1473,7 +1480,7 @@ so the old path can remain available during validation. Rollout gates should
 include:
 
 - focused unit and integration tests;
-- the 19-character performance baseline with all hard targets satisfied;
+- the 15-character performance baseline with all hard targets satisfied;
 - failure-injection performance results showing bounded queue and memory use;
 - reconnect and restart recovery evidence;
 - no increase in confirmation timeout or partial-operation rates;
@@ -1510,7 +1517,7 @@ The action layer is ready for production use when:
 - lock, consent, and release policies are covered by tests;
 - duplicate delivery, reconnect, restart, stale version, and partial failure
   cases are exercised;
-- the 19-character workload passes all hard performance targets;
+- the 15-character workload passes all hard performance targets;
 - failure-injection tests demonstrate per-character isolation and bounded
   degradation;
 - p95 and p99 latency, event-loop delay, queue depth, memory, and retry metrics
@@ -1530,7 +1537,7 @@ been added behind disabled rollout switches:
        appearance adapter.
 3. [x] Add explicit tests for locked, ambiguous, unlocked, idempotent, and
        timeout behavior.
-4. [x] Add a dependency-boundary test and a short 19-character workload.
+4. [x] Add a dependency-boundary test and a short 15-character workload.
 5. [x] Add the workflow-facing appearance service and versioned workflow state
        model without persistence or legacy imports.
 6. [x] Implement initial opt-in authoritative behavior in a real `bc-bot`

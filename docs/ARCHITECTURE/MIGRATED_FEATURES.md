@@ -24,6 +24,8 @@ For the architecture, layer responsibilities, and overall migration plan, see
 [ACTION_LAYER_EXECUTION_PLAN.md](ACTION_LAYER_EXECUTION_PLAN.md).
 The production caller and ownership inventory is maintained in
 [ACTION_LAYER_CALLER_REGISTRY.md](ACTION_LAYER_CALLER_REGISTRY.md).
+The current approved Bunny promotion decision is recorded in
+[ACTION_LAYER_BUNNY_PROMOTION_2026-09-28.md](ACTION_LAYER_BUNNY_PROMOTION_2026-09-28.md).
 
 ## Status Legend
 
@@ -83,7 +85,7 @@ Full Bunny migration still requires all of the following:
   restart in the controlled room;
 - rehearse the operation-keyed rollback path while preserving one owner per
   operation;
-- complete the 30-minute, 19-character qualification and record the required
+- complete the 30-minute, 15-character qualification and record the required
   latency, retry, queue, and failure thresholds before changing the switch.
 
 ### Bunny feature evaluation
@@ -103,7 +105,7 @@ three operational gates remain:
    workflow, including duplicate prevention and expiry recovery.
 2. Controlled rollback rehearsal proving that action-owned work completes
    under one lease while new work routes to legacy.
-3. The 30-minute, 19-character qualification with retained latency, queue,
+3. The 30-minute, 15-character qualification with retained latency, queue,
    retry, timeout, memory, and failure-threshold evidence.
 
 Once those gates pass, enable `action_layer_bunny_restraints_enabled` in a
@@ -170,7 +172,7 @@ and required qualification workload; both rollout switches remain disabled.
 
 | Feature                          | Focused test set                                                                                                                                                                                                                                                   | Gate before the next phase                                                                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bunny punishment                 | Action-layer qualification, rollout, appearance adapter/service, Bunny Park, projection integration, journal/recovery tests                                                                                                                                        | Controlled-room restart/reconnect, in-flight rollback, 30-minute 19-character qualification, then deliberate switch decision.                                                                                                                                                                                                                                                                                                   |
+| Bunny punishment                 | Action-layer qualification, rollout, appearance adapter/service, Bunny Park, projection integration, journal/recovery tests                                                                                                                                        | Controlled-room restart/reconnect, in-flight rollback, 30-minute 15-character qualification, then deliberate switch decision.                                                                                                                                                                                                                                                                                                   |
 | Release removal                  | Release workflow, release policy, appearance planner/adapter/confirmation, rollout tests                                                                                                                                                                           | Real-room target matrix, restart/reconnect, rollback, and proof that wider release stages remain legacy-owned.                                                                                                                                                                                                                                                                                                                  |
 | Communication                    | Communication service/adapter/rollout, LocationMonitorSystem, WindowSystem, KennelSystem, CageSystem, BunnyParkSystem, KeypadDoorSystem, ShowerSystem, FurnitureBondageSystem, CatDogSystem, TrashcanSystem, simulated connector qualification, and rollback tests | Room shutdown closure, simulated disconnect/reconnect, all targeted action/legacy paths, Shower repeated-cycle appearance regression, and Trashcan Message-event registration are locally covered; the Cage recovery suite has a pre-existing missing-method failure. Implement [REAL_ROOM_TEST_BOT_PROPOSAL.md](REAL_ROOM_TEST_BOT_PROPOSAL.md), then retain real connector, delivery-semantics, and caller rollback evidence. |
 | Position observation             | `liveCharacterStateSync.test.ts` plus the one-cycle command                                                                                                                                                                                                        | Controlled reconnect/room recreation with delayed events; movement remains blocked until arrival semantics exist.                                                                                                                                                                                                                                                                                                               |
@@ -337,7 +339,7 @@ Current facts represented by this diagram:
 | Manual repository validation             | Confirmed                                 | Bunny unit/integration behavior, TypeScript, formatting, and qualification checks were manually validated after the interrupted command. | Controlled-room timing and production performance evidence.          |
 | Live Bunny apply/expiry qualification    | One bounded operation completed           | Railway and Atlas evidence show journal completion, Heavy Yoke/Heavy Spreader application, authoritative release, and expiry cleanup.    | Reconnect, rollback, 30-minute workload, and default rollout.        |
 | TypeScript and formatting checks         | Passing                                   | Current source and documentation edits meet static checks.                                                                               | Operational readiness.                                               |
-| 19/25-character short qualification runs | Passing                                   | The short deterministic workload stays within configured thresholds.                                                                     | The required 30-minute production qualification.                     |
+| 15/25-character short qualification runs | Passing                                   | The short deterministic workload stays within configured thresholds.                                                                     | The required 30-minute production qualification.                     |
 
 ## Maintenance Rules
 

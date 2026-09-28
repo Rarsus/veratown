@@ -97,6 +97,15 @@ The runner must call `ChatRoomJoin` only. It must never use
 `joinOrCreateRoom`, because a wrong room name must fail rather than create a
 room.
 
+## Room capacity and account prerequisites
+
+Bondage Club rooms have a hard limit of 20 occupants, including bots. The
+required synthetic qualification baseline is 15 concurrent characters, and the
+optional 25-character run is synthetic stress/headroom evidence only. Neither
+profile may be treated as a 25-character real-room test. Real-room 15/25-user
+qualification is deferred until enough dedicated test accounts exist for the
+real test-bot mechanism.
+
 ## Local configuration contract
 
 Use environment variables or the local, ignored `.env.real-room.local` file

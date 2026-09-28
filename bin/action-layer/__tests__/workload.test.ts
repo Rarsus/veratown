@@ -9,9 +9,9 @@ import {
 test("runs the default-sized character workload without residual queues", async () => {
     const result = await runActionLayerWorkload({ actionsPerCharacter: 4 });
 
-    assert.equal(result.characterCount, 19);
-    assert.equal(result.actionCount, 76);
-    assert.equal(result.completedCount, 76);
+    assert.equal(result.characterCount, 15);
+    assert.equal(result.actionCount, 60);
+    assert.equal(result.completedCount, 60);
     assert.equal(result.failedCount, 0);
     assert.deepEqual(result.pendingByCharacter, {});
     assert.ok(result.p95LatencyMs >= 0);

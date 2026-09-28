@@ -175,6 +175,8 @@ export class BunnyParkSystem extends AbstractTileFeatureSystem {
                     },
                 );
             } else {
+                // LEGACY-BUNNY-DELETE-NOTIFICATION-FALLBACK: Remove after
+                // communication rollout promotion and rollback retirement.
                 this.messageSender.whisperToCharacter(character, text);
             }
         } finally {

@@ -413,6 +413,8 @@ export class BunnyPunishmentWorkflow {
                 authoritativeAppearance =
                     character.Appearance.MakeAppearanceBundle();
             } else {
+                // LEGACY-BUNNY-DELETE-APPLICATION: Remove after the action
+                // path is promoted and the rollback window is closed.
                 await syncAppearanceMutation(
                     character,
                     () => {
@@ -682,6 +684,8 @@ export class BunnyPunishmentWorkflow {
         }
         let verified = false;
         for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
+            // LEGACY-BUNNY-DELETE-RELEASE: Replace with the action removal
+            // contract before deleting the legacy Bunny cleanup path.
             await syncAppearanceMutation(
                 character,
                 () => {
@@ -883,6 +887,8 @@ export class BunnyPunishmentWorkflow {
     }
 }
 
+// LEGACY-BUNNY-DELETE-FACADE: Remove after BunnyParkSystem accepts the
+// workflow directly and all compatibility callers have migrated.
 export class BunnyPunishmentService {
     private readonly workflow: BunnyPunishmentWorkflow;
 
