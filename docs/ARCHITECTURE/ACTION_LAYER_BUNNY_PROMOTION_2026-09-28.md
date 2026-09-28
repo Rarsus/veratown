@@ -2,7 +2,7 @@
 title: "Bunny Action-Layer Promotion Record"
 subtitle: "Explicitly approved promotion preparation and current go/no-go decision"
 date: "September 28, 2026"
-version: "1.1"
+version: "1.2"
 status: "Promotion initiated with explicit approval; NO-GO until required gates pass"
 ---
 
@@ -26,19 +26,19 @@ the documented evidence is complete.
 
 ## Gate status
 
-| Gate                                           | Status                  | Evidence / note                                                                                                                                                         |
-| ---------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bunny action ownership and rollback unit tests | `PASS`                  | 55 focused tests passed, including action ownership and rollback contracts                                                                                              |
-| TypeScript, formatting, and whitespace         | `PASS`                  | `pnpm types`, Prettier, and `git diff --check` passed                                                                                                                   |
-| Short 15-character workload                    | `PASS`                  | 150/150 actions completed; zero failures; queues empty; retained redacted artifact                                                                                      |
-| Full 30-minute 15-character qualification      | `DEFERRED`              | No longer an early hard requirement; schedule with the late-track performance and cutover evidence                                                                      |
-| Controlled-room Bunny confirmation             | `PASS`                  | Live `bunny-step` completed in the configured dedicated test room; retained artifact `75dc9564-78bf-4ad1-b4f0-cdade436d164.json`                                        |
-| Controlled-room connector reconnect            | `PASS`                  | Live reconnect completed and rejoined `Veratown`; retained artifact `e5e20d99-bdad-4816-b7c6-23352070ebb7.json`                                                         |
-| Process-restart recovery                       | `MISSING`               | A controlled deployment/process restart with an in-flight Bunny operation remains open                                                                                  |
-| In-flight rollback                             | `MISSING`               | Controlled-room rollback rehearsal remains open                                                                                                                         |
-| MongoDB Bunny state cleanup                    | `PASS`                  | TestVeraTown was guarded-deleted and recreated clean; zero active artifacts and zero artifact/restraint overlaps remain                                                 |
-| Railway health and runtime evidence            | `PASS`                  | Deployment `3f846e2c-b191-4928-8828-1cca770346b6` is `SUCCESS`/`RUNNING`; filtered logs show Bunny persistence and release for operation `bunny-261407-1790620281528-2` |
-| Redacted evidence retained                     | `PASS` for current runs | Bunny-step and reconnect artifacts are retained under `out/qualification-evidence`; full-soak evidence is absent                                                        |
+| Gate                                           | Status                  | Evidence / note                                                                                                                                                                                                                                      |
+| ---------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bunny action ownership and rollback unit tests | `PASS`                  | 55 focused tests passed, including action ownership and rollback contracts                                                                                                                                                                           |
+| TypeScript, formatting, and whitespace         | `PASS`                  | `pnpm types`, Prettier, and `git diff --check` passed                                                                                                                                                                                                |
+| Short 15-character workload                    | `PASS`                  | 150/150 actions completed; zero failures; queues empty; retained redacted artifact                                                                                                                                                                   |
+| Full 30-minute 15-character qualification      | `DEFERRED`              | No longer an early hard requirement; schedule with the late-track performance and cutover evidence                                                                                                                                                   |
+| Controlled-room Bunny confirmation             | `PASS`                  | Live `bunny-step` completed in the configured dedicated test room; retained artifact `75dc9564-78bf-4ad1-b4f0-cdade436d164.json`                                                                                                                     |
+| Controlled-room connector reconnect            | `PASS`                  | Live reconnect completed and rejoined `Veratown`; retained artifact `e5e20d99-bdad-4816-b7c6-23352070ebb7.json`                                                                                                                                      |
+| Process-restart recovery                       | `MISSING`               | A controlled deployment/process restart with an in-flight Bunny operation remains open                                                                                                                                                               |
+| In-flight rollback                             | `MISSING`               | Controlled-room rollback rehearsal remains open                                                                                                                                                                                                      |
+| MongoDB Bunny state cleanup                    | `PASS`                  | TestVeraTown was guarded-deleted and recreated clean; zero active artifacts and zero artifact/restraint overlaps remain                                                                                                                              |
+| Railway health and runtime evidence            | `PASS`                  | Deployment `e2173b02-a2c2-4550-afa1-5186ec8f2a4e` for `c5da0f0` is `SUCCESS`/`RUNNING`; startup readiness and room connectivity are present, with prior filtered logs showing Bunny persistence/release for operation `bunny-261407-1790620281528-2` |
+| Redacted evidence retained                     | `PASS` for current runs | Bunny-step and reconnect artifacts are retained under `out/qualification-evidence`; full-soak evidence is absent                                                                                                                                     |
 
 ## Database cleanup
 
