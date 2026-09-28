@@ -2,8 +2,8 @@
 title: "Real-Room Test Bot Proposal"
 subtitle: "Opt-in end-to-end qualification for Ropeybot communication and Veratown command paths"
 date: "September 27, 2026"
-version: "1.1"
-status: "Phase 0 implemented locally; live-room qualification pending"
+version: "1.2"
+status: "Phase 0 and bunny-step contract implemented locally; live-room qualification pending"
 ---
 
 # Real-Room Test Bot Proposal
@@ -86,26 +86,39 @@ Phase 0 is implemented in
 connector's no-room-creation-on-reconnect option, so a reconnect cannot turn a
 mistyped room name into a newly created room.
 
+The runner also has an explicit `bunny-step` scenario for a dedicated room. It
+moves the test account through a configured staging tile, the park entry, and
+one of the three configured bunny tiles (`29,6`, `28,7`, or `27,10`). It
+observes the warning, both expected restraint pieces, and their removal. This
+scenario requires `BC_TEST_ALLOW_BUNNY_PUNISHMENT=true` and a bounded expected
+release duration; it is never selected by default.
+
 The runner must call `ChatRoomJoin` only. It must never use
 `joinOrCreateRoom`, because a wrong room name must fail rather than create a
 room.
 
 ## Local configuration contract
 
-Use environment variables or a local, ignored qualification file. Never put
-these values in tracked configuration, test snapshots, logs, or chat messages.
+Use environment variables or the local, ignored `.env.real-room.local` file
+based on `.env.real-room.local.example`. Never put these values in tracked
+configuration, test snapshots, logs, or chat messages.
 
-| Variable                       | Purpose                                                          |
-| ------------------------------ | ---------------------------------------------------------------- |
-| `BC_REAL_ROOM_TEST_ENABLED`    | Explicit opt-in switch; must equal `true`.                       |
-| `BC_TEST_SERVER_URL`           | Socket.IO server endpoint.                                       |
-| `BC_TEST_ENV`                  | Connector environment, normally `live` only for an approved run. |
-| `BC_TEST_USERNAME`             | Dedicated test account name.                                     |
-| `BC_TEST_PASSWORD`             | Dedicated test account password.                                 |
-| `BC_TEST_ROOM`                 | Exact existing room name.                                        |
-| `BC_TEST_TARGET_MEMBER_NUMBER` | Expected bot member number for command targeting.                |
-| `BC_TEST_TIMEOUT_MS`           | Bounded wait for join, response, and reconnect assertions.       |
-| `BC_TEST_DRY_RUN`              | Validate enabled configuration without opening a connector.      |
+| Variable                         | Purpose                                                          |
+| -------------------------------- | ---------------------------------------------------------------- |
+| `BC_REAL_ROOM_TEST_ENABLED`      | Explicit opt-in switch; must equal `true`.                       |
+| `BC_TEST_SERVER_URL`             | Socket.IO server endpoint.                                       |
+| `BC_TEST_ENV`                    | Connector environment, normally `live` only for an approved run. |
+| `BC_TEST_USERNAME`               | Dedicated test account name.                                     |
+| `BC_TEST_PASSWORD`               | Dedicated test account password.                                 |
+| `BC_TEST_ROOM`                   | Exact existing room name.                                        |
+| `BC_TEST_TARGET_MEMBER_NUMBER`   | Expected bot member number for command targeting.                |
+| `BC_TEST_TIMEOUT_MS`             | Bounded wait for join, response, and reconnect assertions.       |
+| `BC_TEST_DRY_RUN`                | Validate enabled configuration without opening a connector.      |
+| `BC_TEST_SCENARIO`               | `help` by default, or explicit `bunny-step`.                     |
+| `BC_TEST_ALLOW_BUNNY_PUNISHMENT` | Must be `true` for `bunny-step`.                                 |
+| `BC_TEST_BUNNY_STAGING_POSITION` | Non-park staging coordinate in `X,Y` form.                       |
+| `BC_TEST_BUNNY_POSITION`         | One configured bunny coordinate: `29,6`, `28,7`, or `27,10`.     |
+| `BC_TEST_EXPECTED_RELEASE_MS`    | Bounded expected duration before restraint cleanup.              |
 
 The harness should reject startup unless the opt-in switch, server URL, room,
 account, and target member number are all present. It should redact usernames,
@@ -116,8 +129,13 @@ room details, and credentials from error output where practical.
 - Use a dedicated test account and a private test room.
 - Grant the test account only the permissions needed for the selected commands.
 - Maintain an explicit safe-command allowlist; deny all unknown commands.
-- Do not call room creation, room update, admin promotion, appearance, item,
-  movement, restraint, inventory, or permission APIs from the runner.
+- The default `help` scenario must not call appearance, item, movement,
+  restraint, inventory, or permission APIs.
+- The explicit `bunny-step` scenario may only use movement and appearance
+  observation for the configured bunny coordinates, and requires an explicit
+  punishment opt-in plus a dedicated room and a short release duration.
+- Never send a destructive command to trigger the bunny scenario; movement is
+  the only trigger and must use the connector's bounded movement primitive.
 - Abort if the joined room does not match the configured room identity.
 - Keep the communication rollout disabled unless a test explicitly enables it.
 - Disconnect in a `finally` block and leave no timers or sockets running.
@@ -145,6 +163,20 @@ Expected executable checks:
 Against an approved test room, verify login, `ChatRoomJoin`, room sync, a
 whispered read-only command, response observation, and clean disconnect. Retain
 the room label, connector observations, operation key, and timestamps.
+
+### Phase 1a: Bunny-step qualification
+
+In a dedicated room with the bot configured for a short
+`bunny_debug_unlock_duration_ms`, run the explicit `bunny-step` scenario. The
+promotion record must show:
+
+- staging, park-entry, and bunny movement completed in order;
+- the bunny warning was received;
+- `ItemArms/HeavyYoke` and `ItemFeet/HeavySpreaderMetal` were observed;
+- both restraint pieces were absent after the configured release window;
+- the test account disconnected and no waiters remained.
+
+Do not run this scenario against a shared or production room.
 
 ### Phase 2: Communication qualification
 
@@ -197,11 +229,12 @@ authoritative delivery receipt exists.
        `test:qualification:real-room` package scripts; both require the explicit
        opt-in switch for live connection.
 4. Run Phase 1 in a dedicated room with a dedicated account.
-5. Run Phase 2 against the communication slices, starting with WindowSystem or
+5. Run Phase 1a manually after configuring a short bunny release duration.
+6. Run Phase 2 against the communication slices, starting with WindowSystem or
    another low-risk notification caller.
-6. Add Playwright only if visual room evidence is needed after protocol evidence
+7. Add Playwright only if visual room evidence is needed after protocol evidence
    is green.
-7. Record the go/no-go result before enabling any rollout outside the test room.
+8. Record the go/no-go result before enabling any rollout outside the test room.
 
 ## Risks and mitigations
 

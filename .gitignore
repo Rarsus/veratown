@@ -6,5 +6,6 @@ out
 
 config*.json
 !config.sample.json
+.env.real-room.local
 
 .vscode/settings.json
