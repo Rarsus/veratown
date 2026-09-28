@@ -513,6 +513,30 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         this.sock.disconnect();
     }
 
+    public async reconnect(): Promise<void> {
+        this.shuttingDown = true;
+        this.sock.disconnect();
+        this.shuttingDown = false;
+
+        await new Promise<void>((resolve, reject) => {
+            const onConnected = () => {
+                cleanup();
+                resolve();
+            };
+            const onReconnectFailed = () => {
+                cleanup();
+                reject(new API_Error("ReconnectFailed", "reconnect failed"));
+            };
+            const cleanup = () => {
+                this.off("Connected", onConnected);
+                this.off("ReconnectFailed", onReconnectFailed);
+            };
+            this.once("Connected", onConnected);
+            this.once("ReconnectFailed", onReconnectFailed);
+            this.sock.connect();
+        });
+    }
+
     private onServerInfo = (info: ServerInfoMessage) => {
         // Fires frequently as a heartbeat; intentionally not logged.
     };

@@ -424,9 +424,8 @@ The first communication slice is locally qualified by:
 - `bin/games/veratown/__tests__/showerSystem.test.ts`, including enabled action
   and legacy notification paths; and
 - `bin/games/veratown/__tests__/cageSystem.test.ts`, including the enabled
-  unavailable-containment and short-entry action paths. The complete Cage
-  suite still has a pre-existing missing `recoverCagedCharacter` method in
-  recovery tests; and
+  unavailable-containment and short-entry action paths and the repaired
+  `recoverCagedCharacter` recovery entry point; and
 - `bin/games/veratown/__tests__/furnitureBondageSystem.test.ts`, including
   enabled action and legacy notification paths; and
 - `bin/games/veratown/__tests__/catDogSystem.test.ts`, including enabled action
@@ -437,7 +436,9 @@ The first communication slice is locally qualified by:
 - `pnpm test:communication`, which runs the complete local communication slice
   with concurrency one.
 - `pnpm test:qualification:real-room`, which runs the local real-room harness
-  contract without opening a connector.
+  contract without opening a connector. Its 16 local tests cover transport,
+  connector fault, disconnect, reconnect, room identity, cleanup, and redacted
+  evidence persistence.
 
 The next phase requires those tests plus a controlled-room connector record for
 queued and unknown outcomes, reconnect behavior, and one caller rollback. The

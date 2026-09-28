@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import type { API_Message, AppearancePacketDiagnostic, TellType } from "bc-bot";
 import {
     BUNNY_STEP_SCENARIO,
+    RECONNECT_SCENARIO,
+    TRANSPORT_MATRIX_SCENARIO,
     main,
     parseRealRoomTestConfig,
     runRealRoomTestBot,
@@ -12,6 +17,10 @@ import {
     type QualificationConnector,
     type RealRoomTestConfig,
 } from "./real-room-test-bot.ts";
+import {
+    redactQualificationEvidence,
+    writeQualificationEvidence,
+} from "./qualificationEvidence.ts";
 
 const baseEnvironment = {
     BC_REAL_ROOM_TEST_ENABLED: "true",
@@ -51,6 +60,9 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
     public joinResult = true;
     public roomName = "Ropeybot Qualification";
     public responseMode: "respond" | "timeout" = "respond";
+    public disconnectDuringResponse = false;
+    public throwOnSend = false;
+    public reconnectCalls = 0;
     public movementCalls: MapPosition[] = [];
     public releaseMode: "release" | "timeout" = "release";
     public Player = {
@@ -109,19 +121,40 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
     }
 
     public SendMessage(type: TellType, message: string, target?: number): void {
+        if (this.throwOnSend) throw new Error("connector send failed");
         this.sentMessages.push({ type, message, target });
+        if (this.disconnectDuringResponse) {
+            setImmediate(() => this.emit("Disconnected", "transport close"));
+            return;
+        }
         if (this.responseMode === "respond") {
             setImmediate(() => {
                 this.emit("Message", {
-                    sender: { MemberNumber: 4242 },
+                    sender: {
+                        MemberNumber:
+                            type === "Whisper"
+                                ? 4242
+                                : this.Player.MemberNumber,
+                    },
                     message: {
-                        Sender: 4242,
-                        Type: "Whisper",
-                        Content: "Qualification response",
+                        Sender:
+                            type === "Whisper"
+                                ? 4242
+                                : this.Player.MemberNumber,
+                        Type: type,
+                        Content:
+                            type === "Whisper"
+                                ? "Qualification response"
+                                : message,
                     },
                 } as unknown as API_Message);
             });
         }
+    }
+
+    public async reconnect(): Promise<void> {
+        this.reconnectCalls += 1;
+        setImmediate(() => this.emit("Connected"));
     }
 
     public disconnect(): void {
@@ -241,6 +274,62 @@ test("successful qualification observes the target response and disconnects", as
     assert.equal(connector.disconnectCalls, 1);
 });
 
+test("transport matrix observes whisper, chat, and emote", async () => {
+    const connector = new FakeConnector();
+    const parsed = parseRealRoomTestConfig({
+        ...baseEnvironment,
+        BC_TEST_SCENARIO: TRANSPORT_MATRIX_SCENARIO,
+    });
+    assert.equal(parsed.enabled, true);
+    const evidence = await runRealRoomTestBot(parsed, () => connector);
+
+    assert.equal(evidence.scenario, TRANSPORT_MATRIX_SCENARIO);
+    assert.deepEqual(
+        connector.sentMessages.map(({ type }) => type),
+        ["Whisper", "Chat", "Emote"],
+    );
+    assert.equal(
+        evidence.transports.every((transport) => transport.observed),
+        true,
+    );
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("reconnect qualification rejoins the configured room", async () => {
+    const connector = new FakeConnector();
+    const parsed = parseRealRoomTestConfig({
+        ...baseEnvironment,
+        BC_TEST_SCENARIO: RECONNECT_SCENARIO,
+    });
+    assert.equal(parsed.enabled, true);
+    const evidence = await runRealRoomTestBot(parsed, () => connector);
+
+    assert.equal(evidence.reconnectObserved, true);
+    assert.equal(evidence.roomAfterReconnect, "Ropeybot Qualification");
+    assert.equal(connector.reconnectCalls, 1);
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("connector failure and disconnect paths fail closed and clean up", async () => {
+    const failedConnector = new FakeConnector();
+    failedConnector.throwOnSend = true;
+    await assert.rejects(
+        runRealRoomTestBot(config(), () => failedConnector),
+        /connector send failed/,
+    );
+    assert.equal(failedConnector.disconnectCalls, 1);
+
+    const disconnectedConnector = new FakeConnector();
+    disconnectedConnector.disconnectDuringResponse = true;
+    await assert.rejects(
+        runRealRoomTestBot(config(), () => disconnectedConnector),
+        /disconnected while waiting for response/,
+    );
+    assert.equal(disconnectedConnector.listenerCount("Message"), 0);
+    assert.equal(disconnectedConnector.listenerCount("Disconnected"), 0);
+    assert.equal(disconnectedConnector.disconnectCalls, 1);
+});
+
 test("room mismatch aborts and disconnects", async () => {
     const connector = new FakeConnector();
     connector.roomName = "Unexpected Room";
@@ -311,4 +400,35 @@ test("bunny-step disconnects and disposes waiters when release is not observed",
     assert.equal(connector.listenerCount("Message"), 0);
     assert.equal(connector.listenerCount("AppearanceSyncReceived"), 0);
     assert.equal(connector.disconnectCalls, 1);
+});
+
+test("qualification evidence is redacted and persisted with operation IDs", async () => {
+    const destination = await mkdtemp(
+        join(tmpdir(), "qualification-evidence-"),
+    );
+    const evidence = {
+        runId: "run_123",
+        operationId: "qualification:run_123",
+        password: "do-not-persist",
+        response: "Bearer secret-token",
+    };
+    assert.deepEqual(redactQualificationEvidence(evidence, ["secret-token"]), {
+        runId: "run_123",
+        operationId: "qualification:run_123",
+        password: "[redacted]",
+        response: "Bearer [redacted]",
+    });
+
+    const outputPath = await writeQualificationEvidence(evidence, destination, [
+        "do-not-persist",
+        "secret-token",
+    ]);
+    const persisted = await readFile(outputPath, "utf8");
+    assert.match(persisted, /qualification-evidence\.v1/);
+    assert.match(persisted, /qualification:run_123/);
+    assert.doesNotMatch(persisted, /do-not-persist|secret-token/);
+    await assert.rejects(
+        writeQualificationEvidence(evidence, undefined),
+        /QUALIFICATION_EVIDENCE_DIR/,
+    );
 });

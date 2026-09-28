@@ -11,6 +11,7 @@ import {
     PARK,
 } from "../../bin/games/veratown/veratownConfig.ts";
 import { createLogger } from "../../bin/logging/index.ts";
+import { writeQualificationEvidence } from "./qualificationEvidence.ts";
 
 const logger = createLogger("RealRoomTestBot");
 
@@ -21,6 +22,8 @@ export const MAX_TIMEOUT_MS = 120_000;
 export const DRY_RUN_ENVIRONMENT_VARIABLE = "BC_TEST_DRY_RUN";
 export const DEFAULT_SCENARIO = "help";
 export const BUNNY_STEP_SCENARIO = "bunny-step";
+export const TRANSPORT_MATRIX_SCENARIO = "transport-matrix";
+export const RECONNECT_SCENARIO = "reconnect";
 export const BUNNY_RELEASE_MAX_WAIT_MS = MAX_TIMEOUT_MS;
 const BUNNY_RESTRAINT_KEYS = [
     "ItemArms/HeavyYoke",
@@ -51,7 +54,11 @@ export interface RealRoomTestConfig {
     room: string;
     targetMemberNumber: number;
     timeoutMs: number;
-    scenario: typeof DEFAULT_SCENARIO | typeof BUNNY_STEP_SCENARIO;
+    scenario:
+        | typeof DEFAULT_SCENARIO
+        | typeof BUNNY_STEP_SCENARIO
+        | typeof TRANSPORT_MATRIX_SCENARIO
+        | typeof RECONNECT_SCENARIO;
     bunnyStep?: BunnyStepScenarioConfig;
 }
 
@@ -59,6 +66,7 @@ export type ParsedRealRoomTestConfig =
     DisabledRealRoomTestConfig | RealRoomTestConfig;
 
 export interface QualificationConnector {
+    on(event: "Connected", listener: () => void): this;
     on(event: "Message", listener: (message: API_Message) => void): this;
     on(event: "Disconnected", listener: (reason: string) => void): this;
     on(
@@ -71,6 +79,7 @@ export interface QualificationConnector {
     ): this;
     off(event: "Message", listener: (message: API_Message) => void): this;
     off(event: "Disconnected", listener: (reason: string) => void): this;
+    off(event: "Connected", listener: () => void): this;
     off(
         event: "MapPosition",
         listener: (memberNumber: number, position: MapPosition) => void,
@@ -82,6 +91,7 @@ export interface QualificationConnector {
     login(): Promise<void>;
     ChatRoomJoin(name: string): Promise<boolean>;
     SendMessage(type: TellType, message: string, target?: number): void;
+    reconnect?(): Promise<void>;
     moveOnMapAndWait(x: number, y: number, timeoutMs?: number): Promise<void>;
     disconnect(): void;
     readonly Player: {
@@ -105,6 +115,7 @@ export interface QualificationConnector {
 export interface HelpQualificationEvidence {
     scenario: typeof DEFAULT_SCENARIO;
     runId: string;
+    operationId: string;
     startedAt: string;
     finishedAt: string;
     environment: "live" | "test";
@@ -124,6 +135,7 @@ export interface HelpQualificationEvidence {
 export interface BunnyStepQualificationEvidence {
     scenario: typeof BUNNY_STEP_SCENARIO;
     runId: string;
+    operationId: string;
     startedAt: string;
     finishedAt: string;
     environment: "live" | "test";
@@ -141,8 +153,43 @@ export interface BunnyStepQualificationEvidence {
     disconnected: true;
 }
 
+export interface TransportMatrixQualificationEvidence {
+    scenario: typeof TRANSPORT_MATRIX_SCENARIO;
+    runId: string;
+    operationId: string;
+    startedAt: string;
+    finishedAt: string;
+    environment: "live" | "test";
+    room: string;
+    accountRole: "dedicated-test-account";
+    joined: true;
+    transports: Array<{
+        type: "Whisper" | "Chat" | "Emote";
+        marker: string;
+        observed: boolean;
+    }>;
+    disconnected: true;
+}
+
+export interface ReconnectQualificationEvidence {
+    scenario: typeof RECONNECT_SCENARIO;
+    runId: string;
+    operationId: string;
+    startedAt: string;
+    finishedAt: string;
+    environment: "live" | "test";
+    room: string;
+    accountRole: "dedicated-test-account";
+    joined: true;
+    reconnectObserved: true;
+    roomAfterReconnect: string;
+    disconnected: true;
+}
 export type QualificationEvidence =
-    HelpQualificationEvidence | BunnyStepQualificationEvidence;
+    | HelpQualificationEvidence
+    | BunnyStepQualificationEvidence
+    | TransportMatrixQualificationEvidence
+    | ReconnectQualificationEvidence;
 
 export type QualificationConnectorFactory = (
     config: RealRoomTestConfig,
@@ -226,9 +273,14 @@ export function parseRealRoomTestConfig(
     ] as const;
     const scenario =
         requiredValue(environment, "BC_TEST_SCENARIO") ?? DEFAULT_SCENARIO;
-    if (scenario !== DEFAULT_SCENARIO && scenario !== BUNNY_STEP_SCENARIO) {
+    if (
+        scenario !== DEFAULT_SCENARIO &&
+        scenario !== BUNNY_STEP_SCENARIO &&
+        scenario !== TRANSPORT_MATRIX_SCENARIO &&
+        scenario !== RECONNECT_SCENARIO
+    ) {
         throw new QualificationError(
-            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO} or ${BUNNY_STEP_SCENARIO}`,
+            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, or ${RECONNECT_SCENARIO}`,
         );
     }
     if (scenario === BUNNY_STEP_SCENARIO) {
@@ -286,6 +338,7 @@ export function parseRealRoomTestConfig(
     };
 
     if (scenario === DEFAULT_SCENARIO) return baseConfig;
+    if (scenario !== BUNNY_STEP_SCENARIO) return baseConfig;
 
     if (environment.BC_TEST_ALLOW_BUNNY_PUNISHMENT !== "true") {
         throw new QualificationError(
@@ -534,10 +587,125 @@ function appearanceHasNoKeys(
     );
 }
 
+async function runTransportMatrixScenario(
+    config: RealRoomTestConfig,
+    connector: QualificationConnector,
+    startedAt: Date,
+    runId: string,
+): Promise<TransportMatrixQualificationEvidence> {
+    const transports: Array<{
+        type: "Whisper" | "Chat" | "Emote";
+        marker: string;
+        observed: boolean;
+    }> = [];
+    const ownMemberNumber = connector.Player.MemberNumber;
+    const chatMarker = `qualification-${runId}-chat`;
+    const emoteMarker = `qualification-${runId}-emote`;
+    const cases: Array<{
+        type: "Whisper" | "Chat" | "Emote";
+        marker: string;
+        target?: number;
+        predicate: (message: API_Message) => boolean;
+    }> = [
+        {
+            type: "Whisper",
+            marker: DEFAULT_SAFE_COMMAND,
+            target: config.targetMemberNumber,
+            predicate: (message) =>
+                message.sender.MemberNumber === config.targetMemberNumber &&
+                message.message.Type === "Whisper",
+        },
+        {
+            type: "Chat",
+            marker: chatMarker,
+            predicate: (message) =>
+                message.sender.MemberNumber === ownMemberNumber &&
+                message.message.Type === "Chat" &&
+                message.message.Content.includes(chatMarker),
+        },
+        {
+            type: "Emote",
+            marker: emoteMarker,
+            predicate: (message) =>
+                message.sender.MemberNumber === ownMemberNumber &&
+                message.message.Type === "Emote" &&
+                message.message.Content.includes(emoteMarker),
+        },
+    ];
+
+    for (const currentCase of cases) {
+        const waiter = waitForMessage(
+            connector,
+            currentCase.predicate,
+            config.timeoutMs,
+            `${currentCase.type.toLowerCase()} transport observation`,
+        );
+        try {
+            connector.SendMessage(
+                currentCase.type,
+                currentCase.marker,
+                currentCase.target,
+            );
+            await waiter.promise;
+            transports.push({ ...currentCase, observed: true });
+        } finally {
+            waiter.dispose();
+        }
+    }
+
+    return {
+        scenario: TRANSPORT_MATRIX_SCENARIO,
+        runId,
+        operationId: `qualification:${runId}`,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        environment: config.environment,
+        room: config.room,
+        accountRole: "dedicated-test-account",
+        joined: true,
+        transports,
+        disconnected: true,
+    };
+}
+
+async function runReconnectScenario(
+    config: RealRoomTestConfig,
+    connector: QualificationConnector,
+    startedAt: Date,
+    runId: string,
+): Promise<ReconnectQualificationEvidence> {
+    if (!connector.reconnect) {
+        throw new QualificationError(
+            "reconnect qualification is unavailable for this connector",
+        );
+    }
+    await withTimeout(connector.reconnect(), config.timeoutMs, "reconnect");
+    if (connector.chatRoom?.Name !== config.room) {
+        throw new QualificationError(
+            "room identity did not survive reconnect qualification",
+        );
+    }
+    return {
+        scenario: RECONNECT_SCENARIO,
+        runId,
+        operationId: `qualification:${runId}`,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        environment: config.environment,
+        room: config.room,
+        accountRole: "dedicated-test-account",
+        joined: true,
+        reconnectObserved: true,
+        roomAfterReconnect: connector.chatRoom.Name,
+        disconnected: true,
+    };
+}
+
 async function runHelpScenario(
     config: RealRoomTestConfig,
     connector: QualificationConnector,
     startedAt: Date,
+    runId: string,
 ): Promise<HelpQualificationEvidence> {
     const command = validateSafeCommand(DEFAULT_SAFE_COMMAND);
     const responseWaiter = waitForResponse(
@@ -550,7 +718,8 @@ async function runHelpScenario(
         const response = await responseWaiter.promise;
         return {
             scenario: DEFAULT_SCENARIO,
-            runId: crypto.randomUUID(),
+            runId,
+            operationId: `qualification:${runId}`,
             startedAt: startedAt.toISOString(),
             finishedAt: new Date().toISOString(),
             environment: config.environment,
@@ -575,6 +744,7 @@ async function runBunnyStepScenario(
     config: RealRoomTestConfig,
     connector: QualificationConnector,
     startedAt: Date,
+    runId: string,
 ): Promise<BunnyStepQualificationEvidence> {
     const bunnyStep = config.bunnyStep;
     if (!bunnyStep) {
@@ -675,7 +845,8 @@ async function runBunnyStepScenario(
         }
         return {
             scenario: BUNNY_STEP_SCENARIO,
-            runId: crypto.randomUUID(),
+            runId,
+            operationId: `qualification:${runId}`,
             startedAt: startedAt.toISOString(),
             finishedAt: new Date().toISOString(),
             environment: config.environment,
@@ -724,6 +895,7 @@ export async function runRealRoomTestBot(
 ): Promise<QualificationEvidence> {
     const connector = createConnector(config);
     const startedAt = new Date();
+    const runId = crypto.randomUUID();
 
     try {
         await withTimeout(connector.login(), config.timeoutMs, "login");
@@ -743,9 +915,30 @@ export async function runRealRoomTestBot(
         }
 
         if (config.scenario === BUNNY_STEP_SCENARIO) {
-            return await runBunnyStepScenario(config, connector, startedAt);
+            return await runBunnyStepScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
         }
-        return await runHelpScenario(config, connector, startedAt);
+        if (config.scenario === TRANSPORT_MATRIX_SCENARIO) {
+            return await runTransportMatrixScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
+        }
+        if (config.scenario === RECONNECT_SCENARIO) {
+            return await runReconnectScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
+        }
+        return await runHelpScenario(config, connector, startedAt, runId);
     } finally {
         connector.disconnect();
     }
@@ -790,11 +983,17 @@ export async function main(
 
     try {
         const evidence = await runRealRoomTestBot(config);
+        const evidencePath = await writeQualificationEvidence(
+            evidence,
+            environment.QUALIFICATION_EVIDENCE_DIR,
+            [config.password, config.username, config.serverUrl],
+        );
         logger.info("Real-room qualification completed", {
             runId: evidence.runId,
             scenario: evidence.scenario,
             environment: evidence.environment,
             disconnected: evidence.disconnected,
+            evidencePath,
         });
         return 0;
     } catch (error) {

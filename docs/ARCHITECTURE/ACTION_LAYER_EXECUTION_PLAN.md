@@ -20,6 +20,12 @@ The plan is deliberately conservative. A passing contract test does not make a
 feature production-migrated. Runtime enablement, recovery, rollback, live
 connector behavior, and performance are separate gates.
 
+The production caller and ownership source of truth is
+[ACTION_LAYER_CALLER_REGISTRY.md](ACTION_LAYER_CALLER_REGISTRY.md). Any new
+caller, switch, recovery owner, or rollback decision must update that registry.
+Use [ACTION_LAYER_PROMOTION_RECORD.md](ACTION_LAYER_PROMOTION_RECORD.md) for
+go/no-go and rollback evidence.
+
 ## Current position
 
 | Area                       | Actual state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Runtime default                                                  | Next meaningful gate                                                                                                  |
@@ -71,11 +77,9 @@ pnpm exec prettier --check bin/action-layer bin/games/veratown docs/ARCHITECTURE
 git diff --check
 ```
 
-It includes the registered Trashcan Message-event path and the two-cycle
-Shower regression. The current run is locally red only because four existing
-Cage recovery tests call the missing `recoverCagedCharacter` method; the
-communication tests themselves pass. Keep those failures visible until the
-Cage recovery owner repairs them.
+It includes the registered Trashcan Message-event path, the two-cycle Shower
+regression, and the Cage recovery compatibility entry point. Keep the
+controlled-room and deployment evidence gates separate from this local cycle.
 
 The cycle is a promotion gate for local implementation, not a production
 qualification. The following evidence is intentionally outside the fast

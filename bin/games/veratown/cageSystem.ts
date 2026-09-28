@@ -1195,6 +1195,12 @@ export class CageSystem extends AbstractTileFeatureSystem {
         });
     }
 
+    public async recoverCagedCharacter(
+        character: API_Character,
+    ): Promise<void> {
+        await this.reconcileCharacter(character);
+    }
+
     private recordRecoveryStatus(
         memberNumber: number,
         assessment: ContainmentRecoveryAssessment,

@@ -43,6 +43,9 @@ apply/expiry validation cycle; operational qualification remains open.
 The executable next-step order, per-area gates, and one-cycle verification
 command are maintained in
 [ACTION_LAYER_EXECUTION_PLAN.md](ACTION_LAYER_EXECUTION_PLAN.md).
+Caller ownership and promotion/rollback records are maintained in
+[ACTION_LAYER_CALLER_REGISTRY.md](ACTION_LAYER_CALLER_REGISTRY.md) and
+[ACTION_LAYER_PROMOTION_RECORD.md](ACTION_LAYER_PROMOTION_RECORD.md).
 
 ### Current snapshot
 

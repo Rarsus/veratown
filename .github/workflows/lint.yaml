@@ -56,6 +56,16 @@ jobs:
             - name: Check Types
               run: "pnpm run types"
 
+            - name: Run action-layer one-cycle gate
+              run: "pnpm run test:action-layer:one-cycle"
+
+            - name: Upload action-layer one-cycle evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: action-layer-one-cycle
+                  path: out/action-layer-one-cycle.json
+
             - name: Run Phase 1 tests with coverage
               env:
                   NODE_V8_COVERAGE: coverage
