@@ -266,6 +266,12 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             false,
         );
     }
+    if (process.env.ACTION_LAYER_BUNNY_RESTRAINTS_ENABLED !== undefined) {
+        config.action_layer_bunny_restraints_enabled = parseBoolean(
+            process.env.ACTION_LAYER_BUNNY_RESTRAINTS_ENABLED,
+            false,
+        );
+    }
 
     // ============================================================================
     // MONGODB CONFIGURATION
