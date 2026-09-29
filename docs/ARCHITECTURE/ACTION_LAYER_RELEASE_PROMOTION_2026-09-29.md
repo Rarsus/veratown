@@ -28,24 +28,24 @@ access, or release persistence. Bunny remains independently enabled.
 
 ## Gate status
 
-| Gate                                           | Status                                 | Evidence / note                                                                                                                            |
-| ---------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Contract and adapter tests                     | `PASS`                                 | Nine-case release matrix in action-layer qualification; Veratown release suite passed 13/13                                                |
-| Caller integration and action/legacy ownership | `PASS`                                 | Release migration ownership and legacy fallback tests passed; active lease survives rollback and new work routes to legacy                 |
-| Durable projection assertion                   | `PASS`                                 | Release test records planned item, successful attempt, verified final appearance, and preserved owner-locked restraint                     |
-| Restart/idempotency qualification              | `PASS`                                 | Two coordinator instances share one workflow journal; cleared target is not mutated twice                                                  |
-| TypeScript and formatting                      | `PASS`                                 | `pnpm exec tsc --noEmit` and Prettier passed                                                                                               |
-| Whitespace / diff check                        | `PASS`                                 | `git diff --check` passed before commit                                                                                                    |
-| Safe real-room observation                     | `PASS`                                 | `release-observe` sent only `!help`; before/after appearance identical; mutation not attempted; clean disconnect                           |
-| Destructive real-room confirmation             | `MISSING`                              | No dedicated controlled-room authorization was provided; shared production room was not mutated                                            |
-| Connector exception / fail-closed cleanup      | `PASS` local / `MISSING` live          | Local timeout and connector-loss cases pass; no destructive live connector rehearsal                                                       |
-| Disconnect and waiter cleanup                  | `PASS` observation / `MISSING` release | Safe observation disconnected in `finally`; release waiter behavior not exercised live                                                     |
-| Reconnect and exact room identity              | `MISSING`                              | Safe observation joined the configured room but did not perform a release reconnect cycle                                                  |
-| MongoDB durable state                          | `MISSING`                              | No release-specific MongoDB operation query or redacted durable result was captured                                                        |
-| Railway deployment health                      | `PASS`                                 | Deployment `140fde09-9762-4b3c-a932-651de16f457c` for commit `2ba8c48` reached `SUCCESS`                                                   |
-| Railway logs / runtime evidence                | `PASS`                                 | Both Veratown rooms restored workflow journals, reported release ready, and initialized containment; no error-level runtime lines observed |
-| Performance and queue thresholds               | `DEFERRED`                             | Not required for this qualification-only decision                                                                                          |
-| Redacted evidence retained                     | `PASS`                                 | Live artifact retained outside version control; no credential or session data recorded                                                     |
+| Gate                                           | Status                                 | Evidence / note                                                                                                                                                 |
+| ---------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contract and adapter tests                     | `PASS`                                 | Nine-case release matrix in action-layer qualification; Veratown release suite passed 13/13                                                                     |
+| Caller integration and action/legacy ownership | `PASS`                                 | Release migration ownership and legacy fallback tests passed; active lease survives rollback and new work routes to legacy                                      |
+| Durable projection assertion                   | `PASS`                                 | Release test records planned item, successful attempt, verified final appearance, and preserved owner-locked restraint                                          |
+| Restart/idempotency qualification              | `PASS`                                 | Two coordinator instances share one workflow journal; cleared target is not mutated twice                                                                       |
+| TypeScript and formatting                      | `PASS`                                 | `pnpm exec tsc --noEmit` and Prettier passed                                                                                                                    |
+| Whitespace / diff check                        | `PASS`                                 | `git diff --check` passed before commit                                                                                                                         |
+| Safe real-room observation                     | `PASS`                                 | `release-observe` sent only `!help`; before/after appearance identical; mutation not attempted; clean disconnect                                                |
+| Destructive real-room confirmation             | `MISSING`                              | No dedicated controlled-room authorization was provided; shared production room was not mutated                                                                 |
+| Connector exception / fail-closed cleanup      | `PASS` local / `MISSING` live          | Local timeout and connector-loss cases pass; no destructive live connector rehearsal                                                                            |
+| Disconnect and waiter cleanup                  | `PASS` observation / `MISSING` release | Safe observation disconnected in `finally`; release waiter behavior not exercised live                                                                          |
+| Reconnect and exact room identity              | `MISSING`                              | Safe observation joined the configured room but did not perform a release reconnect cycle                                                                       |
+| MongoDB durable state                          | `MISSING`                              | No release-specific MongoDB operation query or redacted durable result was captured                                                                             |
+| Railway deployment health                      | `PASS`                                 | Deployment `cd53a59d-3477-4b2c-a9ee-f0fca9c07b84` for commit `7a7aafb` reached `SUCCESS` after one transient room-readiness timeout                             |
+| Railway logs / runtime evidence                | `PASS with transient recovery`         | VeraBot initially timed out reaching room/map readiness; the same deployment later restored workflow state, reported release ready, and initialized containment |
+| Performance and queue thresholds               | `DEFERRED`                             | Not required for this qualification-only decision                                                                                                               |
+| Redacted evidence retained                     | `PASS`                                 | Live artifact retained outside version control; no credential or session data recorded                                                                          |
 
 ## Connector result
 
@@ -72,12 +72,14 @@ access, or release persistence. Bunny remains independently enabled.
 - Project: `e74f1828-d39b-4b71-b713-9711cd6503c6`
 - Environment: `5a944c49-1656-44c4-9151-bcd14f06fc1a`
 - Service: `e219c657-fb0c-4e97-b00c-4f7ed199eccb`
-- Deployment: `140fde09-9762-4b3c-a932-651de16f457c`
-- Commit: `2ba8c48` (`cover release persistence and restart recovery`)
-- Health/status: `SUCCESS`
+- Deployment: `cd53a59d-3477-4b2c-a9ee-f0fca9c07b84`
+- Commit: `7a7aafb` (`record release removal no-go decision`)
+- Health/status: `SUCCESS` after one transient room-readiness timeout and automatic recovery
 - Runtime switch: no release-removal override; effective `false`
-- Runtime evidence: both rooms initialized with database configured, workflow
-  journal restored, release ready, and containment ready
+- Runtime evidence: Veratown Park initialized with database configured, workflow
+  journal restored, release ready, and containment ready after the transient
+  startup timeout; no persistent startup failure remained when deployment status
+  reached `SUCCESS`
 
 Do not paste Railway variables, tokens, cookies, or authentication headers into
 this record.
