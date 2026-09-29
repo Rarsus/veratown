@@ -392,7 +392,13 @@ export class ReleaseWorkflowSystem
         for (const item of plan.removals) {
             const result = await this.dependencies.appearanceService.remove(
                 character,
-                { group: item.group, asset: item.name },
+                {
+                    group: item.group,
+                    asset: item.name,
+                    ...(item.extendedType === undefined
+                        ? {}
+                        : { extendedType: item.extendedType }),
+                },
                 {
                     operationId: `${next.sessionId}:remove:${item.group}:${item.name}`,
                     memberNumber: character.MemberNumber,

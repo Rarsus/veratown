@@ -111,7 +111,7 @@ function toIdentity(item: BC_AppearanceItem): AppearanceItemIdentity {
     };
 }
 
-function extendedTypeOf(item: BC_AppearanceItem): string | undefined {
+export function extendedTypeOf(item: BC_AppearanceItem): string | undefined {
     const typeRecord = propertyOf(item).TypeRecord;
     if (typeRecord === undefined) return undefined;
     if (typeof typeRecord === "string") return typeRecord;

@@ -137,6 +137,7 @@ export interface RoleplayFlags {
 export interface RemovedBondageItem {
     group: string;
     name: string;
+    extendedType?: string;
     lockType?: string;
     lockedBy?: string;
     lockFingerprint?: string;

@@ -259,6 +259,37 @@ test("blocks locked and ambiguous removal targets", async () => {
     assert.equal(runtime.items.length, 2);
 });
 
+test("removes a typed bunny restraint with incomplete lock metadata", async () => {
+    const runtime = makeCharacter([
+        {
+            Group: "ItemFeet",
+            Name: "HeavySpreaderMetal",
+            Property: {
+                TypeRecord: { typed: 1 },
+                LockedBy: "SafewordPadlock",
+                LockSet: true,
+            },
+        },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({ now: () => 250 });
+
+    const result = await adapter.remove(
+        runtime as never,
+        {
+            group: "ItemFeet",
+            asset: "HeavySpreaderMetal",
+            extendedType: "Wide",
+        },
+        {
+            ...makePolicy("remove-bunny-spreader"),
+            preserveLockedItems: false,
+        },
+    );
+
+    assert.equal(result.status, "in_progress");
+    assert.deepEqual(runtime.items, []);
+});
+
 test("does not replace an occupied group during add", async () => {
     const runtime = makeCharacter([
         { Group: "ItemArms", Name: "ExistingGloves" },

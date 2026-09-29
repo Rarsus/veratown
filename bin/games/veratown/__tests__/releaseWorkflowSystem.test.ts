@@ -32,3 +32,24 @@ test("release planning preserves only explicit owner locks", () => {
     assert.equal(result.timerCleanup[1]?.reason, "active_timer");
     assert.equal(result.timerCleanup[2]?.reason, "non_owner_lock");
 });
+
+test("release planning removes an incompletely recorded bunny spreader", () => {
+    const result = planReleaseAppearance([
+        {
+            Group: "ItemFeet",
+            Name: "HeavySpreaderMetal",
+            Property: {
+                TypeRecord: { typed: 1 },
+                LockedBy: "SafewordPadlock",
+                LockSet: true,
+            },
+        } as never,
+    ]);
+
+    assert.deepEqual(
+        result.removals.map((item) => item.name),
+        ["HeavySpreaderMetal"],
+    );
+    assert.equal(result.removals[0]?.extendedType, "Wide");
+    assert.deepEqual(result.preserved, []);
+});

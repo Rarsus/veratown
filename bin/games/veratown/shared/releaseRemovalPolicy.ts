@@ -1,5 +1,6 @@
 import { BC_AppearanceItem } from "bc-bot";
 import { isBind } from "../../../../src/assetHelpers";
+import { extendedTypeOf } from "../../../action-layer/adapters/bc-appearance";
 import type { RemovedBondageItem } from "../../shared/unifiedCharacterTypes";
 
 const UNLOCKED_VALUES = new Set(["", "none", "unlock", "unlocked"]);
@@ -131,9 +132,10 @@ export function releaseLockFingerprint(item: unknown): string {
 export function releaseItemIdentity(item: {
     group: string;
     name: string;
+    extendedType?: string;
     lockFingerprint?: string;
 }): string {
-    return `${item.group}/${item.name}/${item.lockFingerprint ?? "invalid"}`;
+    return `${item.group}/${item.name}/${item.extendedType ?? ""}/${item.lockFingerprint ?? "invalid"}`;
 }
 
 export function toRemovedBondageItem(
@@ -143,6 +145,7 @@ export function toRemovedBondageItem(
     return {
         group: item.Group,
         name: item.Name,
+        extendedType: extendedTypeOf(item),
         lockType:
             typeof source.Property?.Lock === "string"
                 ? source.Property.Lock
