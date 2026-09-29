@@ -20,6 +20,7 @@ export interface InMemoryAppearanceAdapterOptions {
     readonly memberNumber: number;
     readonly initialItems?: readonly ObservedAppearanceItem[];
     readonly confirmationDelayMs?: number;
+    readonly failureMode?: "connector-loss";
 }
 
 function toObservation(
@@ -68,8 +69,12 @@ function blockedResult(
 
 function waitForConfirmation(
     delayMs: number,
+    failureMode: InMemoryAppearanceAdapterOptions["failureMode"],
     signal: AbortSignal,
 ): Promise<void> {
+    if (failureMode === "connector-loss") {
+        return Promise.reject(new Error("connector disconnected"));
+    }
     if (delayMs <= 0) return Promise.resolve();
 
     return new Promise((resolve, reject) => {
@@ -91,6 +96,7 @@ export class InMemoryAppearanceActionAdapter<
 > implements AppearanceActionAdapter<TRuntimeCharacter> {
     private readonly memberNumber: number;
     private readonly confirmationDelayMs: number;
+    private readonly failureMode: InMemoryAppearanceAdapterOptions["failureMode"];
     private items: ObservedAppearanceItem[];
 
     public constructor(options: InMemoryAppearanceAdapterOptions) {
@@ -109,6 +115,7 @@ export class InMemoryAppearanceActionAdapter<
         }
         this.memberNumber = options.memberNumber;
         this.confirmationDelayMs = options.confirmationDelayMs ?? 0;
+        this.failureMode = options.failureMode;
         this.items = [...(options.initialItems ?? [])];
     }
 
@@ -155,7 +162,11 @@ export class InMemoryAppearanceActionAdapter<
             "appearance.add",
             policy,
             async (signal) => {
-                await waitForConfirmation(this.confirmationDelayMs, signal);
+                await waitForConfirmation(
+                    this.confirmationDelayMs,
+                    this.failureMode,
+                    signal,
+                );
                 this.items = [
                     ...this.items,
                     {
@@ -210,7 +221,11 @@ export class InMemoryAppearanceActionAdapter<
             "appearance.remove",
             policy,
             async (signal) => {
-                await waitForConfirmation(this.confirmationDelayMs, signal);
+                await waitForConfirmation(
+                    this.confirmationDelayMs,
+                    this.failureMode,
+                    signal,
+                );
                 const targetKey = `${item.group}\u0000${item.asset}\u0000${item.extendedType ?? ""}`;
                 this.items = this.items.filter(
                     (current) =>

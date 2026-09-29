@@ -8,6 +8,7 @@ import type { API_Message, AppearancePacketDiagnostic, TellType } from "bc-bot";
 import {
     BUNNY_STEP_SCENARIO,
     RECONNECT_SCENARIO,
+    RELEASE_OBSERVE_SCENARIO,
     TRANSPORT_MATRIX_SCENARIO,
     main,
     parseRealRoomTestConfig,
@@ -61,6 +62,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
     public roomName = "Ropeybot Qualification";
     public responseMode: "respond" | "timeout" = "respond";
     public disconnectDuringResponse = false;
+    public mutateAppearanceOnSend = false;
     public throwOnSend = false;
     public reconnectCalls = 0;
     public movementCalls: MapPosition[] = [];
@@ -125,6 +127,9 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
     public SendMessage(type: TellType, message: string, target?: number): void {
         if (this.throwOnSend) throw new Error("connector send failed");
         this.sentMessages.push({ type, message, target });
+        if (this.mutateAppearanceOnSend) {
+            this.appearance = [{ Group: "ItemArms", Name: "Unexpected" }];
+        }
         if (this.disconnectDuringResponse) {
             setImmediate(() => this.emit("Disconnected", "transport close"));
             return;
@@ -277,6 +282,42 @@ test("successful qualification observes the target response and disconnects", as
     assert.deepEqual(connector.sentMessages, [
         { type: "Whisper", message: "!help", target: 4242 },
     ]);
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("release-observe is production-room safe and records an unchanged appearance", async () => {
+    const connector = new FakeConnector();
+    const parsed = parseRealRoomTestConfig({
+        ...baseEnvironment,
+        BC_TEST_ENV: "live",
+        BC_TEST_SCENARIO: RELEASE_OBSERVE_SCENARIO,
+    });
+    assert.equal(parsed.enabled, true);
+    const evidence = await runRealRoomTestBot(parsed, () => connector);
+
+    assert.equal(evidence.scenario, RELEASE_OBSERVE_SCENARIO);
+    assert.equal(evidence.mutationAttempted, false);
+    assert.equal(evidence.unchanged, true);
+    assert.deepEqual(evidence.appearanceBefore, []);
+    assert.deepEqual(evidence.appearanceAfter, []);
+    assert.deepEqual(connector.sentMessages, [
+        { type: "Whisper", message: "!help", target: 4242 },
+    ]);
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("release-observe rejects an unexpected appearance mutation", async () => {
+    const connector = new FakeConnector();
+    connector.mutateAppearanceOnSend = true;
+    const parsed = parseRealRoomTestConfig({
+        ...baseEnvironment,
+        BC_TEST_SCENARIO: RELEASE_OBSERVE_SCENARIO,
+    });
+
+    await assert.rejects(
+        runRealRoomTestBot(parsed, () => connector),
+        /unexpected appearance mutation/,
+    );
     assert.equal(connector.disconnectCalls, 1);
 });
 

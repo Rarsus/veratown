@@ -25,6 +25,7 @@ export const DEFAULT_SCENARIO = "help";
 export const BUNNY_STEP_SCENARIO = "bunny-step";
 export const TRANSPORT_MATRIX_SCENARIO = "transport-matrix";
 export const RECONNECT_SCENARIO = "reconnect";
+export const RELEASE_OBSERVE_SCENARIO = "release-observe";
 export const BUNNY_RELEASE_MAX_WAIT_MS = MAX_TIMEOUT_MS;
 const BUNNY_RESTRAINT_KEYS = [
     "ItemArms/HeavyYoke",
@@ -59,7 +60,8 @@ export interface RealRoomTestConfig {
         | typeof DEFAULT_SCENARIO
         | typeof BUNNY_STEP_SCENARIO
         | typeof TRANSPORT_MATRIX_SCENARIO
-        | typeof RECONNECT_SCENARIO;
+        | typeof RECONNECT_SCENARIO
+        | typeof RELEASE_OBSERVE_SCENARIO;
     bunnyStep?: BunnyStepScenarioConfig;
 }
 
@@ -194,11 +196,31 @@ export interface ReconnectQualificationEvidence {
     roomAfterReconnect: string;
     disconnected: true;
 }
+
+export interface ReleaseObserveQualificationEvidence {
+    scenario: typeof RELEASE_OBSERVE_SCENARIO;
+    runId: string;
+    operationId: string;
+    startedAt: string;
+    finishedAt: string;
+    environment: "live" | "test";
+    room: string;
+    accountRole: "dedicated-test-account";
+    memberNumber: number;
+    command: string;
+    targetMemberNumber: number;
+    appearanceBefore: string[];
+    appearanceAfter: string[];
+    mutationAttempted: false;
+    unchanged: true;
+    disconnected: true;
+}
 export type QualificationEvidence =
     | HelpQualificationEvidence
     | BunnyStepQualificationEvidence
     | TransportMatrixQualificationEvidence
-    | ReconnectQualificationEvidence;
+    | ReconnectQualificationEvidence
+    | ReleaseObserveQualificationEvidence;
 
 export type QualificationConnectorFactory = (
     config: RealRoomTestConfig,
@@ -286,10 +308,11 @@ export function parseRealRoomTestConfig(
         scenario !== DEFAULT_SCENARIO &&
         scenario !== BUNNY_STEP_SCENARIO &&
         scenario !== TRANSPORT_MATRIX_SCENARIO &&
-        scenario !== RECONNECT_SCENARIO
+        scenario !== RECONNECT_SCENARIO &&
+        scenario !== RELEASE_OBSERVE_SCENARIO
     ) {
         throw new QualificationError(
-            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, or ${RECONNECT_SCENARIO}`,
+            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, ${RECONNECT_SCENARIO}, or ${RELEASE_OBSERVE_SCENARIO}`,
         );
     }
     if (scenario === BUNNY_STEP_SCENARIO) {
@@ -801,6 +824,60 @@ async function runHelpScenario(
     }
 }
 
+async function runReleaseObserveScenario(
+    config: RealRoomTestConfig,
+    connector: QualificationConnector,
+    startedAt: Date,
+    runId: string,
+): Promise<ReleaseObserveQualificationEvidence> {
+    const command = validateSafeCommand(DEFAULT_SAFE_COMMAND);
+    const appearanceBefore = connector.Player.Appearance.getAppearanceData()
+        .map((item) => `${item.Group}/${item.Name}`)
+        .sort();
+    const responseWaiter = waitForResponse(
+        connector,
+        config.targetMemberNumber,
+        config.timeoutMs,
+    );
+    try {
+        connector.SendMessage("Whisper", command, config.targetMemberNumber);
+        await responseWaiter.promise;
+        const appearanceAfter = connector.Player.Appearance.getAppearanceData()
+            .map((item) => `${item.Group}/${item.Name}`)
+            .sort();
+        if (
+            appearanceBefore.length !== appearanceAfter.length ||
+            appearanceBefore.some(
+                (item, index) => item !== appearanceAfter[index],
+            )
+        ) {
+            throw new QualificationError(
+                "release-observe detected an unexpected appearance mutation",
+            );
+        }
+        return {
+            scenario: RELEASE_OBSERVE_SCENARIO,
+            runId,
+            operationId: `qualification:${runId}`,
+            startedAt: startedAt.toISOString(),
+            finishedAt: new Date().toISOString(),
+            environment: config.environment,
+            room: config.room,
+            accountRole: "dedicated-test-account",
+            memberNumber: connector.Player.MemberNumber,
+            command,
+            targetMemberNumber: config.targetMemberNumber,
+            appearanceBefore,
+            appearanceAfter,
+            mutationAttempted: false,
+            unchanged: true,
+            disconnected: true,
+        };
+    } finally {
+        responseWaiter.dispose();
+    }
+}
+
 async function runBunnyStepScenario(
     config: RealRoomTestConfig,
     connector: QualificationConnector,
@@ -995,6 +1072,14 @@ export async function runRealRoomTestBot(
         }
         if (config.scenario === RECONNECT_SCENARIO) {
             return await runReconnectScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
+        }
+        if (config.scenario === RELEASE_OBSERVE_SCENARIO) {
+            return await runReleaseObserveScenario(
                 config,
                 connector,
                 startedAt,

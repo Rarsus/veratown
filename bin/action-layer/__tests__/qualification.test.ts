@@ -15,20 +15,24 @@ test("qualifies Bunny disabled, enabled, duplicate, and rollback ownership", asy
     assert.equal(result.duplicateActionItemCount, 1);
 });
 
-test("qualifies release removal as fail-closed for protected and changed targets", async () => {
+test("qualifies the complete release removal matrix and projections", async () => {
     const results = await qualifyReleaseRemoval();
 
-    assert.equal(results.length, 5);
+    assert.equal(results.length, 9);
     assert.ok(results.every((result) => result.passed));
     assert.equal(
         results.find((result) => result.case === "unlocked")?.status,
         "completed",
     );
     for (const qualificationCase of [
-        "locked",
+        "owner-locked",
+        "timer-effective-locked",
         "ambiguous",
         "wrong-lock",
         "changed-group",
+        "already-removed",
+        "timeout",
+        "connector-loss",
     ] as const) {
         const result = results.find(
             (candidate) => candidate.case === qualificationCase,

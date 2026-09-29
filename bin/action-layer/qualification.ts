@@ -22,7 +22,15 @@ export interface BunnyRestraintQualificationResult {
 }
 
 export type ReleaseQualificationCase =
-    "unlocked" | "locked" | "ambiguous" | "wrong-lock" | "changed-group";
+    | "unlocked"
+    | "owner-locked"
+    | "timer-effective-locked"
+    | "ambiguous"
+    | "wrong-lock"
+    | "changed-group"
+    | "already-removed"
+    | "timeout"
+    | "connector-loss";
 
 export interface ReleaseQualificationResult {
     readonly case: ReleaseQualificationCase;
@@ -145,7 +153,9 @@ function releaseItems(
             group: "ItemArms",
             asset: "QualificationRestraint",
             lockState:
-                qualificationCase === "unlocked"
+                qualificationCase === "unlocked" ||
+                qualificationCase === "timeout" ||
+                qualificationCase === "connector-loss"
                     ? "unlocked"
                     : qualificationCase === "ambiguous"
                       ? "ambiguous"
@@ -159,16 +169,29 @@ export async function qualifyReleaseRemoval(): Promise<
 > {
     const cases: readonly ReleaseQualificationCase[] = [
         "unlocked",
-        "locked",
+        "owner-locked",
+        "timer-effective-locked",
         "ambiguous",
         "wrong-lock",
         "changed-group",
+        "already-removed",
+        "timeout",
+        "connector-loss",
     ];
     const results: ReleaseQualificationResult[] = [];
     for (const qualificationCase of cases) {
         const adapter = new InMemoryAppearanceActionAdapter({
             memberNumber: 1,
-            initialItems: releaseItems(qualificationCase),
+            initialItems:
+                qualificationCase === "already-removed"
+                    ? []
+                    : releaseItems(qualificationCase),
+            ...(qualificationCase === "timeout"
+                ? { confirmationDelayMs: 50 }
+                : {}),
+            ...(qualificationCase === "connector-loss"
+                ? { failureMode: "connector-loss" as const }
+                : {}),
         });
         const service = new AppearanceActionService(adapter);
         const beforeResult = await service.observe(
@@ -182,6 +205,7 @@ export async function qualifyReleaseRemoval(): Promise<
             },
         );
         const before = beforeResult.value ? keys(beforeResult.value) : [];
+        const mutationTimeoutMs = qualificationCase === "timeout" ? 5 : 2_000;
         const result = await service.remove(
             {},
             { group: "ItemArms", asset: "QualificationRestraint" },
@@ -190,7 +214,7 @@ export async function qualifyReleaseRemoval(): Promise<
                 memberNumber: 1,
                 source: "release",
                 reason: "qualification",
-                timeoutMs: 2_000,
+                timeoutMs: mutationTimeoutMs,
                 maxAttempts: 1,
                 retryDelayMs: 0,
                 preserveLockedItems: true,
@@ -203,9 +227,16 @@ export async function qualifyReleaseRemoval(): Promise<
         const shouldRemove = qualificationCase === "unlocked";
         const passed = shouldRemove
             ? result.status === "completed" && after.length === 0
-            : (result.status === "blocked" ||
-                  result.status === "already_satisfied") &&
-              after.length === before.length;
+            : qualificationCase === "already-removed"
+              ? result.status === "already_satisfied" && after.length === 0
+              : qualificationCase === "timeout"
+                ? result.status === "timed_out" &&
+                  after.length === before.length
+                : qualificationCase === "connector-loss"
+                  ? result.status === "failed" && after.length === before.length
+                  : (result.status === "blocked" ||
+                        result.status === "already_satisfied") &&
+                    after.length === before.length;
         results.push({
             case: qualificationCase,
             status: result.status,
