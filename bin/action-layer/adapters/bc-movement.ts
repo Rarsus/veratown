@@ -1,4 +1,3 @@
-import type { API_Character } from "bc-bot";
 import {
     createActionMetadata,
     createActionResult,
@@ -8,6 +7,13 @@ import {
     type MovementActionAdapter,
     type MovementActionPolicy,
 } from "../domain";
+
+interface BCMovementCharacter {
+    readonly MemberNumber: number;
+    readonly MapPos: { X: number; Y: number };
+    readonly connection: unknown;
+    mapTeleport(position: { X: number; Y: number }): void;
+}
 
 interface MovementConnector {
     on(
@@ -20,7 +26,7 @@ interface MovementConnector {
     ): void;
 }
 
-export class BCMovementActionAdapter implements MovementActionAdapter<API_Character> {
+export class BCMovementActionAdapter implements MovementActionAdapter<BCMovementCharacter> {
     public readonly capabilities = {
         observesPosition: true,
         movesCharacters: true,
@@ -28,7 +34,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<API_Charac
     } as const;
 
     public observePosition(
-        character: API_Character,
+        character: BCMovementCharacter,
         context: ActionContext,
     ): Promise<ActionResult<CharacterPosition>> {
         const observedAt = Date.now();
@@ -48,7 +54,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<API_Charac
     }
 
     public move(
-        character: API_Character,
+        character: BCMovementCharacter,
         destination: CharacterPosition,
         policy: MovementActionPolicy,
     ): Promise<ActionResult<CharacterPosition>> {

@@ -1,0 +1,22 @@
+{
+    "schemaVersion": 1,
+    "sourceRepository": "FriendsOfBC/Bondage-College",
+    "sourceRevision": "1b27db45240cc71b09404823dc127244f5f54fa8",
+    "sourceFiles": {
+        "Female3DCG.js": "c0cfae99345695da24f2ba05cea206cede0ca0cbccd933e444cdd8f4b6c7a4fa",
+        "Female3DCGExtended.js": "6a6b3a072c7b9d900a0e2be71cf4be4e9c77ee73106a8f5dda3caa42236ac282",
+        "Female3DCG_Types.d.ts": "d5571c21ada05b75b684798aaaae3acdd929eb99ef3daa355b4bec568db828ad"
+    },
+    "runtimeFiles": {
+        "src/bcdata/Female3DCG.js": "copied upstream data with ropeybot ESM exports preserved",
+        "src/bcdata/Female3DCGExtended.ts": "TypeScript wrapper retained; BC definitions and ropeybot custom hooks are merged",
+        "src/bcdata/Female3DCG_Types.d.ts": "copied upstream declarations"
+    },
+    "excludedFromRuntime": [
+        "images",
+        "preview metadata",
+        "audio files",
+        "localization files",
+        "wardrobe/editor CSV files"
+    ]
+}

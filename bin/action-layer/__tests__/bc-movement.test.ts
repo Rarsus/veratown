@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import type { API_Character } from "bc-bot";
 import { BCMovementActionAdapter } from "../adapters/bc-movement";
 
 function character(
     connection: EventEmitter,
     memberNumber = 145,
-): API_Character {
+): {
+    MemberNumber: number;
+    MapPos: { X: number; Y: number };
+    connection: EventEmitter;
+    mapTeleport(position: { X: number; Y: number }): void;
+} {
     const state = { X: 1, Y: 2 };
     return {
         MemberNumber: memberNumber,
@@ -20,7 +24,7 @@ function character(
                 connection.emit("MapPosition", memberNumber, position),
             );
         },
-    } as unknown as API_Character;
+    };
 }
 
 const policy = {

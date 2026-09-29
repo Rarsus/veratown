@@ -57,6 +57,11 @@ for file in "${FILES[@]}"; do
     echo "✓ Synced: $file ($(stat -f%z "$src" 2>/dev/null || stat -c%s "$src") bytes)"
 done
 
+echo "🔄 Syncing canonical BC map data..."
+pnpm exec tsx scripts/sync-bc-map.ts
+echo "🔄 Recording canonical BC asset revision..."
+pnpm exec tsx scripts/sync-bc-assets-manifest.ts
+
 # Handle Female3DCGExtended TypeScript vs JavaScript
 if [[ -f "$BC_ASSETS_DIR/Female3DCGExtended.js" ]]; then
     src_js="$BC_ASSETS_DIR/Female3DCGExtended.js"

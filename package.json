@@ -25,6 +25,8 @@
         "benchmark:keypad": "tsx scripts/benchmark-keypad-system.ts",
         "qualification:real-room": "node --env-file-if-exists=.env.real-room.local --import tsx scripts/qualification/real-room-test-bot.ts",
         "qualification:action-layer": "tsx scripts/qualify-action-layer.ts",
+        "sync:bc-map": "tsx scripts/sync-bc-map.ts",
+        "sync:bc-assets-manifest": "tsx scripts/sync-bc-assets-manifest.ts",
         "test:action-layer:one-cycle": "tsx scripts/action-layer-one-cycle.ts",
         "reconcile:keypad": "tsx scripts/reconcile-keypad-doors.ts",
         "migrate:audit-log": "tsx scripts/migrate-audit-log.ts",
