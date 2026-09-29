@@ -112,22 +112,25 @@ Use environment variables or the local, ignored `.env.real-room.local` file
 based on `.env.real-room.local.example`. Never put these values in tracked
 configuration, test snapshots, logs, or chat messages.
 
-| Variable                         | Purpose                                                          |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `BC_REAL_ROOM_TEST_ENABLED`      | Explicit opt-in switch; must equal `true`.                       |
-| `BC_TEST_SERVER_URL`             | Socket.IO server endpoint.                                       |
-| `BC_TEST_ENV`                    | Connector environment, normally `live` only for an approved run. |
-| `BC_TEST_USERNAME`               | Dedicated test account name.                                     |
-| `BC_TEST_PASSWORD`               | Dedicated test account password.                                 |
-| `BC_TEST_ROOM`                   | Exact existing room name.                                        |
-| `BC_TEST_TARGET_MEMBER_NUMBER`   | Expected bot member number for command targeting.                |
-| `BC_TEST_TIMEOUT_MS`             | Bounded wait for join, response, and reconnect assertions.       |
-| `BC_TEST_DRY_RUN`                | Validate enabled configuration without opening a connector.      |
-| `BC_TEST_SCENARIO`               | `help` by default, or explicit `bunny-step`.                     |
-| `BC_TEST_ALLOW_BUNNY_PUNISHMENT` | Must be `true` for `bunny-step`.                                 |
-| `BC_TEST_BUNNY_STAGING_POSITION` | Non-park staging coordinate in `X,Y` form.                       |
-| `BC_TEST_BUNNY_POSITION`         | One configured bunny coordinate: `29,6`, `28,7`, or `27,10`.     |
-| `BC_TEST_EXPECTED_RELEASE_MS`    | Bounded expected duration before restraint cleanup.              |
+| Variable                         | Purpose                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| `BC_REAL_ROOM_TEST_ENABLED`      | Explicit opt-in switch; must equal `true`.                                        |
+| `BC_TEST_SERVER_URL`             | Socket.IO server endpoint.                                                        |
+| `BC_TEST_ENV`                    | Connector environment, normally `live` only for an approved run.                  |
+| `BC_TEST_USERNAME`               | Dedicated test account name.                                                      |
+| `BC_TEST_PASSWORD`               | Dedicated test account password.                                                  |
+| `BC_TEST_ROOM`                   | Exact existing room name.                                                         |
+| `BC_TEST_TARGET_MEMBER_NUMBER`   | Expected bot member number for command targeting.                                 |
+| `BC_TEST_TIMEOUT_MS`             | Bounded wait for join, response, and reconnect assertions.                        |
+| `BC_TEST_DRY_RUN`                | Validate enabled configuration without opening a connector.                       |
+| `BC_TEST_SCENARIO`               | `help` by default, or explicit `bunny-step`.                                      |
+| `BC_TEST_ALLOW_BUNNY_PUNISHMENT` | Must be `true` for `bunny-step`.                                                  |
+| `BC_TEST_BUNNY_STAGING_POSITION` | Non-park staging coordinate in `X,Y` form.                                        |
+| `BC_TEST_BUNNY_POSITION`         | One configured bunny coordinate: `29,6`, `28,7`, or `27,10`.                      |
+| `BC_TEST_EXPECTED_RELEASE_MS`    | Bounded expected duration before restraint cleanup.                               |
+| `BC_TEST_ALLOW_RELEASE_MUTATION` | Must be `true` for the explicitly authorized `release-test`.                      |
+| `BC_TEST_RELEASE_CONFIRM_ROOM`   | Must exactly match `BC_TEST_ROOM` for `release-test`.                             |
+| `BC_TEST_RELEASE_FIXTURE`        | Approved unlocked fixture: `ItemArms/HeavyYoke` or `ItemFeet/HeavySpreaderMetal`. |
 
 The harness should reject startup unless the opt-in switch, server URL, room,
 account, and target member number are all present. It should redact usernames,
@@ -143,6 +146,10 @@ room details, and credentials from error output where practical.
 - The explicit `bunny-step` scenario may only use movement and appearance
   observation for the configured bunny coordinates, and requires an explicit
   punishment opt-in plus a dedicated room and a short release duration.
+- The explicit `release-test` scenario requires live environment selection,
+  mutation opt-in, exact room confirmation, and one approved unlocked fixture;
+  it sends only the release command and its confirmation, then disconnects
+  after verified punishment-room progression.
 - Never send a destructive command to trigger the bunny scenario; movement is
   the only trigger and must use the connector's bounded movement primitive.
 - Abort if the joined room does not match the configured room identity.

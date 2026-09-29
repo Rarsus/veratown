@@ -380,7 +380,6 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             if (settled) return;
             settled = true;
             if (timer !== undefined) clearTimeout(timer);
-            connector.off("AppearanceSyncReceived", onAppearancePacket);
             connector.off("AppearanceItemUpdateReceived", onItemUpdate);
             connector.off("CharacterSync", onCharacterSync);
             connector.off("Connected", onConnected);
@@ -407,22 +406,6 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                     observation: toObservation(items, observedAt),
                 });
             }
-        };
-
-        const onAppearancePacket = (diagnostic: any): void => {
-            if (
-                diagnostic?.direction !== "inbound" ||
-                diagnostic.memberNumber !== character.MemberNumber ||
-                !Array.isArray(diagnostic.appearance)
-            ) {
-                return;
-            }
-            accept(
-                diagnostic.appearance as BC_AppearanceItem[],
-                Number.isFinite(diagnostic.timestamp)
-                    ? diagnostic.timestamp
-                    : this.now(),
-            );
         };
 
         const onItemUpdate = (diagnostic: any): void => {
@@ -482,7 +465,6 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             onDisconnected();
         };
 
-        connector.on("AppearanceSyncReceived", onAppearancePacket);
         connector.on("AppearanceItemUpdateReceived", onItemUpdate);
         connector.on("CharacterSync", onCharacterSync);
         connector.on("Connected", onConnected);

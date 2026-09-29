@@ -8,7 +8,9 @@ import type { API_Message, AppearancePacketDiagnostic, TellType } from "bc-bot";
 import {
     BUNNY_STEP_SCENARIO,
     RECONNECT_SCENARIO,
+    RELEASE_MONITOR_SCENARIO,
     RELEASE_OBSERVE_SCENARIO,
+    RELEASE_TEST_SCENARIO,
     TRANSPORT_MATRIX_SCENARIO,
     main,
     parseRealRoomTestConfig,
@@ -67,21 +69,57 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
     public reconnectCalls = 0;
     public movementCalls: MapPosition[] = [];
     public releaseMode: "release" | "timeout" = "release";
+    public monitorAppearanceChangeOnJoin = false;
+    private monitorAppearance: Array<{ Group: string; Name: string }> = [];
+    private monitorMapPosition: MapPosition = { X: 4, Y: 4 };
     public Player = {
         MemberNumber: 9001,
         MapPos: { X: 0, Y: 0 },
         Appearance: {
             getAppearanceData: () => this.appearance,
+            AddItem: (item: { Group: string; Name: string }) => {
+                this.appearance = this.appearance.filter(
+                    (current) => current.Group !== item.Group,
+                );
+                this.appearance.push(item);
+                this.emitAppearance();
+            },
+            RemoveItem: (group: string) => {
+                this.appearance = this.appearance.filter(
+                    (current) => current.Group !== group,
+                );
+                this.emitAppearance();
+            },
         },
+        sendAppearanceUpdate: () => this.emitAppearance(),
     };
     private appearance: Array<{ Group: string; Name: string }> = [];
 
     public get chatRoom(): {
         readonly Name: string;
+        readonly characters: readonly {
+            MemberNumber: number;
+            MapPos: MapPosition;
+            Appearance: {
+                getAppearanceData(): readonly {
+                    Group: string;
+                    Name: string;
+                }[];
+            };
+        }[];
         readonly map: { getObject(position: MapPosition): string | null };
     } {
         return {
             Name: this.roomName,
+            characters: [
+                {
+                    MemberNumber: 4242,
+                    MapPos: this.monitorMapPosition,
+                    Appearance: {
+                        getAppearanceData: () => this.monitorAppearance,
+                    },
+                },
+            ],
             map: {
                 getObject: (position) =>
                     position.X === 29 && position.Y === 6
@@ -96,6 +134,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
             | "Message"
             | "Disconnected"
             | "MapPosition"
+            | "CharacterSync"
             | "AppearanceSyncReceived"
             | "AppearanceItemUpdateReceived",
         listener: (...args: never[]) => void,
@@ -108,6 +147,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
             | "Message"
             | "Disconnected"
             | "MapPosition"
+            | "CharacterSync"
             | "AppearanceSyncReceived"
             | "AppearanceItemUpdateReceived",
         listener: (...args: never[]) => void,
@@ -121,6 +161,22 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
 
     public async ChatRoomJoin(name: string): Promise<boolean> {
         this.joinCalls.push(name);
+        if (this.monitorAppearanceChangeOnJoin) {
+            setImmediate(() => {
+                this.monitorAppearance = [
+                    { Group: "ItemArms", Name: "HeavyYoke" },
+                ];
+                this.monitorMapPosition = { X: 9, Y: 9 };
+                this.emit("MapPosition", 4242, this.monitorMapPosition);
+                this.emit("CharacterSync", {
+                    MemberNumber: 4242,
+                    MapPos: this.monitorMapPosition,
+                    Appearance: {
+                        getAppearanceData: () => this.monitorAppearance,
+                    },
+                });
+            });
+        }
         return this.joinResult;
     }
 
@@ -136,6 +192,45 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
         }
         if (this.responseMode === "respond") {
             setImmediate(() => {
+                if (message === "!release") {
+                    this.emit("Message", {
+                        sender: { MemberNumber: 4242 },
+                        message: {
+                            Sender: 4242,
+                            Type: "Whisper",
+                            Content: "PAROLE CONFIRMATION REQUIRED: Confirm?",
+                        },
+                    } as unknown as API_Message);
+                    return;
+                }
+                if (message === "!release yes") {
+                    this.appearance = this.appearance.filter(
+                        (item) =>
+                            `${item.Group}/${item.Name}` !==
+                            "ItemArms/HeavyYoke",
+                    );
+                    this.emitAppearance();
+                    this.emit("Message", {
+                        sender: { MemberNumber: 4242 },
+                        message: {
+                            Sender: 4242,
+                            Type: "Whisper",
+                            Content: "The barrier dissolves...",
+                        },
+                    } as unknown as API_Message);
+                    return;
+                }
+                if (message === "!release no") {
+                    this.emit("Message", {
+                        sender: { MemberNumber: 4242 },
+                        message: {
+                            Sender: 4242,
+                            Type: "Whisper",
+                            Content: "Release cancelled.",
+                        },
+                    } as unknown as API_Message);
+                    return;
+                }
                 this.emit("Message", {
                     sender: {
                         MemberNumber:
@@ -318,6 +413,74 @@ test("release-observe rejects an unexpected appearance mutation", async () => {
         runRealRoomTestBot(parsed, () => connector),
         /unexpected appearance mutation/,
     );
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("release-monitor records a target post-cache appearance transition without mutating", async () => {
+    const connector = new FakeConnector();
+    connector.monitorAppearanceChangeOnJoin = true;
+    const parsed = parseRealRoomTestConfig({
+        ...baseEnvironment,
+        BC_TEST_SCENARIO: RELEASE_MONITOR_SCENARIO,
+    });
+    const evidence = await runRealRoomTestBot(parsed, () => connector);
+
+    assert.equal(evidence.scenario, RELEASE_MONITOR_SCENARIO);
+    assert.deepEqual(evidence.appearanceBefore, []);
+    assert.deepEqual(evidence.appearanceAfter, ["ItemArms/HeavyYoke"]);
+    assert.deepEqual(evidence.mapPositionBefore, { X: 4, Y: 4 });
+    assert.deepEqual(evidence.mapPositionAfter, { X: 9, Y: 9 });
+    assert.equal(evidence.authoritativeSyncObserved, true);
+    assert.equal(evidence.mutationAttempted, false);
+    assert.equal(connector.sentMessages.length, 0);
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("release-test requires explicit mutation and room confirmation", () => {
+    assert.throws(
+        () =>
+            parseRealRoomTestConfig({
+                ...baseEnvironment,
+                BC_TEST_SCENARIO: RELEASE_TEST_SCENARIO,
+                BC_TEST_RELEASE_FIXTURE: "ItemArms/HeavyYoke",
+            }),
+        /missing required qualification configuration/,
+    );
+    assert.throws(
+        () =>
+            parseRealRoomTestConfig({
+                ...baseEnvironment,
+                BC_TEST_SCENARIO: RELEASE_TEST_SCENARIO,
+                BC_TEST_ALLOW_RELEASE_MUTATION: "true",
+                BC_TEST_RELEASE_CONFIRM_ROOM: "Ropeybot Qualification",
+                BC_TEST_RELEASE_FIXTURE: "ItemArms/HeavyYoke",
+            }),
+        /requires BC_TEST_ENV=live/,
+    );
+});
+
+test("release-test equips and removes only the approved fixture", async () => {
+    const connector = new FakeConnector();
+    const parsed = parseRealRoomTestConfig({
+        ...baseEnvironment,
+        BC_TEST_ENV: "live",
+        BC_TEST_SCENARIO: RELEASE_TEST_SCENARIO,
+        BC_TEST_ALLOW_RELEASE_MUTATION: "true",
+        BC_TEST_RELEASE_CONFIRM_ROOM: "Ropeybot Qualification",
+        BC_TEST_RELEASE_FIXTURE: "ItemArms/HeavyYoke",
+    });
+    const evidence = await runRealRoomTestBot(parsed, () => connector);
+
+    assert.equal(evidence.scenario, RELEASE_TEST_SCENARIO);
+    assert.equal(evidence.fixture, "ItemArms/HeavyYoke");
+    assert.equal(evidence.mutationAttempted, true);
+    assert.equal(evidence.fixtureRemoved, true);
+    assert.deepEqual(connector.sentMessages, [
+        { type: "Whisper", message: "!release", target: 4242 },
+        { type: "Whisper", message: "!release no", target: 4242 },
+        { type: "Whisper", message: "!release", target: 4242 },
+        { type: "Whisper", message: "!release yes", target: 4242 },
+    ]);
     assert.equal(connector.disconnectCalls, 1);
 });
 

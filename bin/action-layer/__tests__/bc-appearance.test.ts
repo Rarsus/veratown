@@ -344,7 +344,7 @@ test("does not mutate when a required fresh observation times out", async () => 
     assert.equal(connector.listenerCount(), 0);
 });
 
-test("accepts a matching inbound appearance snapshot and cleans up listeners", async () => {
+test("accepts a matching post-cache CharacterSync and cleans up listeners", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);
     const adapter = new BCAppearanceActionAdapter({
@@ -363,10 +363,45 @@ test("accepts a matching inbound appearance snapshot and cleans up listeners", a
         timestamp: 100,
         appearance: runtime.Appearance.MakeAppearanceBundle(),
     });
+    connector.emit("CharacterSync", runtime);
 
     const result = await pending;
     assert.equal(result.status, "completed");
     assert.equal(connector.listenerCount(), 0);
+});
+
+test("does not confirm from an appearance packet before the character cache updates", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "ItemArms", Name: "Gloves" },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+    });
+
+    const pending = adapter.remove(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        confirmedPolicy("confirmed-remove"),
+    );
+    let settled = false;
+    void pending.then(() => {
+        settled = true;
+    });
+
+    connector.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: 11,
+        timestamp: 100,
+        appearance: [],
+    });
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.equal(settled, false);
+
+    connector.emit("CharacterSync", runtime);
+    const result = await pending;
+    assert.equal(result.status, "completed");
 });
 
 test("accepts a matching inbound appearance item update", async () => {
@@ -473,6 +508,7 @@ test("disconnect fails the current operation but allows a new epoch to recover",
         timestamp: 100,
         appearance: runtime.Appearance.MakeAppearanceBundle(),
     });
+    connector.emit("CharacterSync", runtime);
 
     const secondResult = await second;
     assert.equal(secondResult.status, "completed");

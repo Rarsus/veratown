@@ -64,7 +64,7 @@ import {
 } from "./veratown/veratownLocationStore";
 import { VeratownAdminCommands } from "./veratown/adminCommands";
 import { RegionManager, VeratownRegion } from "./veratown/regionManager";
-import { ReleaseSystem } from "./veratown/veratownReleaseSystem";
+import { ReleaseWorkflowSystem } from "./veratown/releaseWorkflowSystem";
 import { FurnitureInteractionSystem } from "./veratown/furnitureInteractionSystem";
 import { AppearanceAuditTrail } from "./veratown/appearanceAuditTrail";
 import { DIContainer, DIServiceKeys } from "../di/container";
@@ -225,7 +225,7 @@ export class Veratown {
     private keypadLocationIntegration?: KeypadLocationIntegration;
     private catDogSystem?: CatDogSystem;
     private furnitureBondageSystem?: FurnitureBondageSystem;
-    private releaseSystem?: ReleaseSystem;
+    private releaseSystem?: ReleaseWorkflowSystem;
 
     // EPIC 1.3: Veratown Architecture Systems
     private furnitureInteractionSystem?: FurnitureInteractionSystem;
@@ -875,59 +875,21 @@ export class Veratown {
         );
         this.releaseSystem = this.initFeature(
             () =>
-                new ReleaseSystem(
-                    this.conn,
-                    this.locationStore,
-                    undefined,
-                    this.container.has(DIServiceKeys.UNIFIED_CHARACTER_STORE)
-                        ? this.container.get<UnifiedCharacterStore>(
-                              DIServiceKeys.UNIFIED_CHARACTER_STORE,
-                          )
-                        : new UnifiedCharacterStore(db!),
-                    this.container.has(
+                new ReleaseWorkflowSystem({
+                    conn: this.conn,
+                    locationStore: this.locationStore!,
+                    unifiedStore: this.unifiedCharacterStore!,
+                    mutationService: this.container.has(
                         DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                     )
                         ? this.container.get<GameStateMutationService>(
                               DIServiceKeys.GAME_STATE_MUTATION_SERVICE,
                           )
                         : undefined,
-                    (character, context, observedAppearance) =>
-                        this.liveCharacterStateSync
-                            ?.syncCharacter(
-                                character,
-                                character.MapPos,
-                                false,
-                                context,
-                                observedAppearance,
-                            )
-                            .then(() => undefined) ?? Promise.resolve(),
-                    async (character, releaseOperation) => {
-                        const view =
-                            await this.unifiedCharacterStore?.getVeratownView(
-                                character.MemberNumber,
-                            );
-                        const artifact = view?.bunnyPunishmentArtifact;
-                        if (artifact) {
-                            await this.unifiedCharacterStore!.cleanupBunnyPunishment(
-                                character.MemberNumber,
-                                artifact.operationId,
-                                `release_cleanup:${releaseOperation}`,
-                            );
-                        }
-                    },
-                    this.container.has(
+                    appearanceService: this.container.get(
                         DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
-                    ) && this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
-                        ? {
-                              appearanceService: this.container.get(
-                                  DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
-                              ),
-                              rollout: this.container.get(
-                                  DIServiceKeys.ACTION_LAYER_ROLLOUT,
-                              ),
-                          }
-                        : undefined,
-                ),
+                    ),
+                }),
         );
         this.locationMonitorSystem = this.initFeature(
             () =>

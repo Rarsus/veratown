@@ -26,7 +26,13 @@ export const BUNNY_STEP_SCENARIO = "bunny-step";
 export const TRANSPORT_MATRIX_SCENARIO = "transport-matrix";
 export const RECONNECT_SCENARIO = "reconnect";
 export const RELEASE_OBSERVE_SCENARIO = "release-observe";
+export const RELEASE_MONITOR_SCENARIO = "release-monitor";
+export const RELEASE_TEST_SCENARIO = "release-test";
 export const BUNNY_RELEASE_MAX_WAIT_MS = MAX_TIMEOUT_MS;
+const RELEASE_TEST_FIXTURES = new Set([
+    "ItemArms/HeavyYoke",
+    "ItemFeet/HeavySpreaderMetal",
+]);
 const BUNNY_RESTRAINT_KEYS = [
     "ItemArms/HeavyYoke",
     "ItemFeet/HeavySpreaderMetal",
@@ -41,6 +47,12 @@ export interface BunnyStepScenarioConfig {
     stagingPosition: MapPosition;
     bunnyPosition: MapPosition;
     expectedReleaseMs: number;
+}
+
+export interface ReleaseTestScenarioConfig {
+    allowMutation: true;
+    fixtureGroup: string;
+    fixtureName: string;
 }
 
 export interface DisabledRealRoomTestConfig {
@@ -61,8 +73,10 @@ export interface RealRoomTestConfig {
         | typeof BUNNY_STEP_SCENARIO
         | typeof TRANSPORT_MATRIX_SCENARIO
         | typeof RECONNECT_SCENARIO
-        | typeof RELEASE_OBSERVE_SCENARIO;
+        | typeof RELEASE_OBSERVE_SCENARIO
+        | typeof RELEASE_TEST_SCENARIO;
     bunnyStep?: BunnyStepScenarioConfig;
+    releaseTest?: ReleaseTestScenarioConfig;
 }
 
 export type ParsedRealRoomTestConfig =
@@ -84,6 +98,16 @@ export interface QualificationConnector {
         event: "AppearanceItemUpdateReceived",
         listener: (diagnostic: AppearanceItemUpdateDiagnostic) => void,
     ): this;
+    on(
+        event: "CharacterSync",
+        listener: (character: {
+            MemberNumber: number;
+            MapPos: MapPosition;
+            Appearance: {
+                getAppearanceData(): readonly { Group: string; Name: string }[];
+            };
+        }) => void,
+    ): this;
     off(event: "Message", listener: (message: API_Message) => void): this;
     off(event: "Disconnected", listener: (reason: string) => void): this;
     off(event: "Connected", listener: () => void): this;
@@ -99,6 +123,16 @@ export interface QualificationConnector {
         event: "AppearanceItemUpdateReceived",
         listener: (diagnostic: AppearanceItemUpdateDiagnostic) => void,
     ): this;
+    off(
+        event: "CharacterSync",
+        listener: (character: {
+            MemberNumber: number;
+            MapPos: MapPosition;
+            Appearance: {
+                getAppearanceData(): readonly { Group: string; Name: string }[];
+            };
+        }) => void,
+    ): this;
     login(): Promise<void>;
     ChatRoomJoin(name: string): Promise<boolean>;
     SendMessage(type: TellType, message: string, target?: number): void;
@@ -113,10 +147,23 @@ export interface QualificationConnector {
                 Group: string;
                 Name: string;
             }[];
+            AddItem(item: { Group: string; Name: string }): void;
+            RemoveItem(group: string): void;
         };
+        sendAppearanceUpdate(): void;
     };
     readonly chatRoom?: {
         readonly Name: string;
+        readonly characters?: readonly {
+            MemberNumber: number;
+            MapPos: MapPosition;
+            Appearance: {
+                getAppearanceData(): readonly {
+                    Group: string;
+                    Name: string;
+                }[];
+            };
+        }[];
         readonly map?: {
             getObject(position: MapPosition): string | null;
         };
@@ -215,12 +262,58 @@ export interface ReleaseObserveQualificationEvidence {
     unchanged: true;
     disconnected: true;
 }
+
+export interface ReleaseMonitorQualificationEvidence {
+    scenario: typeof RELEASE_MONITOR_SCENARIO;
+    runId: string;
+    operationId: string;
+    startedAt: string;
+    finishedAt: string;
+    environment: "live" | "test";
+    room: string;
+    accountRole: "dedicated-test-account";
+    memberNumber: number;
+    targetMemberNumber: number;
+    appearanceBefore: string[];
+    appearanceAfter: string[];
+    mapPositionBefore: MapPosition;
+    mapPositionAfter: MapPosition;
+    authoritativeSyncObserved: true;
+    mutationAttempted: false;
+    disconnected: true;
+}
+
+export interface ReleaseTestQualificationEvidence {
+    scenario: typeof RELEASE_TEST_SCENARIO;
+    runId: string;
+    operationId: string;
+    startedAt: string;
+    finishedAt: string;
+    environment: "live";
+    room: string;
+    accountRole: "dedicated-test-account";
+    memberNumber: number;
+    command: "!release";
+    confirmationCommand: "!release yes";
+    targetMemberNumber: number;
+    fixture: string;
+    appearanceBefore: string[];
+    appearanceAfter: string[];
+    mutationAttempted: true;
+    fixtureAdded: true;
+    fixtureRemoved: true;
+    confirmationObserved: true;
+    punishmentRoomProgressed: true;
+    disconnected: true;
+}
 export type QualificationEvidence =
     | HelpQualificationEvidence
     | BunnyStepQualificationEvidence
     | TransportMatrixQualificationEvidence
     | ReconnectQualificationEvidence
-    | ReleaseObserveQualificationEvidence;
+    | ReleaseObserveQualificationEvidence
+    | ReleaseMonitorQualificationEvidence
+    | ReleaseTestQualificationEvidence;
 
 export type QualificationConnectorFactory = (
     config: RealRoomTestConfig,
@@ -309,10 +402,12 @@ export function parseRealRoomTestConfig(
         scenario !== BUNNY_STEP_SCENARIO &&
         scenario !== TRANSPORT_MATRIX_SCENARIO &&
         scenario !== RECONNECT_SCENARIO &&
-        scenario !== RELEASE_OBSERVE_SCENARIO
+        scenario !== RELEASE_OBSERVE_SCENARIO &&
+        scenario !== RELEASE_MONITOR_SCENARIO &&
+        scenario !== RELEASE_TEST_SCENARIO
     ) {
         throw new QualificationError(
-            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, ${RECONNECT_SCENARIO}, or ${RELEASE_OBSERVE_SCENARIO}`,
+            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, ${RECONNECT_SCENARIO}, ${RELEASE_OBSERVE_SCENARIO}, ${RELEASE_MONITOR_SCENARIO}, or ${RELEASE_TEST_SCENARIO}`,
         );
     }
     if (scenario === BUNNY_STEP_SCENARIO) {
@@ -321,6 +416,13 @@ export function parseRealRoomTestConfig(
             "BC_TEST_BUNNY_POSITION",
             "BC_TEST_EXPECTED_RELEASE_MS",
             "BC_TEST_ALLOW_BUNNY_PUNISHMENT",
+        );
+    }
+    if (scenario === RELEASE_TEST_SCENARIO) {
+        requiredKeys.push(
+            "BC_TEST_ALLOW_RELEASE_MUTATION",
+            "BC_TEST_RELEASE_CONFIRM_ROOM",
+            "BC_TEST_RELEASE_FIXTURE",
         );
     }
     const missingKeys = requiredKeys.filter(
@@ -370,6 +472,41 @@ export function parseRealRoomTestConfig(
     };
 
     if (scenario === DEFAULT_SCENARIO) return baseConfig;
+    if (scenario === RELEASE_TEST_SCENARIO) {
+        if (environmentName !== "live") {
+            throw new QualificationError(
+                "release-test requires BC_TEST_ENV=live",
+            );
+        }
+        if (environment.BC_TEST_ALLOW_RELEASE_MUTATION !== "true") {
+            throw new QualificationError(
+                "BC_TEST_ALLOW_RELEASE_MUTATION must equal true for release-test",
+            );
+        }
+        if (
+            requiredValue(environment, "BC_TEST_RELEASE_CONFIRM_ROOM") !==
+            baseConfig.room
+        ) {
+            throw new QualificationError(
+                "BC_TEST_RELEASE_CONFIRM_ROOM must exactly match BC_TEST_ROOM",
+            );
+        }
+        const fixture = requiredValue(environment, "BC_TEST_RELEASE_FIXTURE")!;
+        if (!RELEASE_TEST_FIXTURES.has(fixture)) {
+            throw new QualificationError(
+                "BC_TEST_RELEASE_FIXTURE must be ItemArms/HeavyYoke or ItemFeet/HeavySpreaderMetal",
+            );
+        }
+        const separator = fixture.indexOf("/");
+        return {
+            ...baseConfig,
+            releaseTest: {
+                allowMutation: true,
+                fixtureGroup: fixture.slice(0, separator),
+                fixtureName: fixture.slice(separator + 1),
+            },
+        };
+    }
     if (scenario !== BUNNY_STEP_SCENARIO) return baseConfig;
 
     if (environment.BC_TEST_ALLOW_BUNNY_PUNISHMENT !== "true") {
@@ -534,6 +671,59 @@ function waitForMessage(
         promise,
         dispose: cleanup,
     };
+}
+
+async function waitForReleaseReady(
+    connector: QualificationConnector,
+    targetMemberNumber: number,
+    timeoutMs: number,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const remainingMs = deadline - Date.now();
+        const responseWaiter = waitForMessage(
+            connector,
+            (message) =>
+                message.sender.MemberNumber === targetMemberNumber &&
+                (message.message.Content.includes(
+                    "PAROLE CONFIRMATION REQUIRED",
+                ) ||
+                    message.message.Content.includes("currently unavailable")),
+            remainingMs,
+            "release readiness response",
+        );
+        try {
+            connector.SendMessage("Whisper", "!release", targetMemberNumber);
+            const response = await responseWaiter.promise;
+            if (response.message.Content.includes("currently unavailable")) {
+                await new Promise((resolve) => setTimeout(resolve, 250));
+                continue;
+            }
+
+            const cancellationWaiter = waitForMessage(
+                connector,
+                (message) =>
+                    message.sender.MemberNumber === targetMemberNumber &&
+                    message.message.Content.includes("Release cancelled"),
+                Math.max(1, deadline - Date.now()),
+                "release readiness cancellation",
+            );
+            try {
+                connector.SendMessage(
+                    "Whisper",
+                    "!release no",
+                    targetMemberNumber,
+                );
+                await cancellationWaiter.promise;
+            } finally {
+                cancellationWaiter.dispose();
+            }
+            return;
+        } finally {
+            responseWaiter.dispose();
+        }
+    }
+    throw new QualificationError("release readiness timed out");
 }
 
 function waitForAppearance(
@@ -878,6 +1068,353 @@ async function runReleaseObserveScenario(
     }
 }
 
+async function runReleaseMonitorScenario(
+    config: RealRoomTestConfig,
+    connector: QualificationConnector,
+    startedAt: Date,
+    runId: string,
+): Promise<ReleaseMonitorQualificationEvidence> {
+    const target = await new Promise<{
+        appearance: string[];
+        mapPosition: MapPosition;
+    }>((resolve, reject) => {
+        let settled = false;
+        let interval: NodeJS.Timeout | undefined;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(
+                new QualificationError(
+                    `target ${config.targetMemberNumber} was not found`,
+                ),
+            );
+        }, config.timeoutMs);
+        const cleanup = () => {
+            clearTimeout(timer);
+            if (interval) clearInterval(interval);
+            connector.off("CharacterSync", onCharacterSync);
+            connector.off("Disconnected", onDisconnected);
+        };
+        const check = () => {
+            const character = connector.chatRoom?.characters?.find(
+                (candidate) =>
+                    candidate.MemberNumber === config.targetMemberNumber,
+            );
+            if (!character || settled) return;
+            settled = true;
+            cleanup();
+            resolve({
+                appearance: character.Appearance.getAppearanceData()
+                    .map((item) => `${item.Group}/${item.Name}`)
+                    .sort(),
+                mapPosition: { ...character.MapPos },
+            });
+        };
+        const onCharacterSync = (character: { MemberNumber: number }) => {
+            if (character.MemberNumber === config.targetMemberNumber) check();
+        };
+        const onDisconnected = (reason: string) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(
+                new QualificationError(
+                    `disconnected while locating target: ${reason}`,
+                ),
+            );
+        };
+        connector.on("CharacterSync", onCharacterSync);
+        connector.on("Disconnected", onDisconnected);
+        interval = setInterval(check, 100);
+        check();
+    });
+
+    return await new Promise<ReleaseMonitorQualificationEvidence>(
+        (resolve, reject) => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(
+                    new QualificationError(
+                        `authoritative release appearance sync for ${config.targetMemberNumber} timed out`,
+                    ),
+                );
+            }, config.timeoutMs);
+            const cleanup = () => {
+                clearTimeout(timer);
+                connector.off("CharacterSync", onCharacterSync);
+                connector.off("MapPosition", onMapPosition);
+                connector.off("Disconnected", onDisconnected);
+            };
+            const mapPositionAfter = { ...target.mapPosition };
+            const onMapPosition = (
+                memberNumber: number,
+                position: MapPosition,
+            ) => {
+                if (memberNumber === config.targetMemberNumber) {
+                    mapPositionAfter.X = position.X;
+                    mapPositionAfter.Y = position.Y;
+                }
+            };
+            const onCharacterSync = (character: {
+                MemberNumber: number;
+                MapPos: MapPosition;
+                Appearance: {
+                    getAppearanceData(): readonly {
+                        Group: string;
+                        Name: string;
+                    }[];
+                };
+            }) => {
+                if (character.MemberNumber !== config.targetMemberNumber)
+                    return;
+                const appearanceAfter = character.Appearance.getAppearanceData()
+                    .map((item) => `${item.Group}/${item.Name}`)
+                    .sort();
+                if (
+                    appearanceAfter.length === target.appearance.length &&
+                    appearanceAfter.every(
+                        (item, index) => item === target.appearance[index],
+                    )
+                ) {
+                    return;
+                }
+                if (settled) return;
+                settled = true;
+                mapPositionAfter.X = character.MapPos.X;
+                mapPositionAfter.Y = character.MapPos.Y;
+                cleanup();
+                resolve({
+                    scenario: RELEASE_MONITOR_SCENARIO,
+                    runId,
+                    operationId: `qualification:${runId}`,
+                    startedAt: startedAt.toISOString(),
+                    finishedAt: new Date().toISOString(),
+                    environment: config.environment,
+                    room: config.room,
+                    accountRole: "dedicated-test-account",
+                    memberNumber: connector.Player.MemberNumber,
+                    targetMemberNumber: config.targetMemberNumber,
+                    appearanceBefore: target.appearance,
+                    appearanceAfter,
+                    mapPositionBefore: target.mapPosition,
+                    mapPositionAfter,
+                    authoritativeSyncObserved: true,
+                    mutationAttempted: false,
+                    disconnected: true,
+                });
+            };
+            const onDisconnected = (reason: string) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(
+                    new QualificationError(
+                        `disconnected while monitoring release: ${reason}`,
+                    ),
+                );
+            };
+            connector.on("CharacterSync", onCharacterSync);
+            connector.on("MapPosition", onMapPosition);
+            connector.on("Disconnected", onDisconnected);
+        },
+    );
+}
+
+function appearanceKeys(connector: QualificationConnector): string[] {
+    return connector.Player.Appearance.getAppearanceData()
+        .map((item) => `${item.Group}/${item.Name}`)
+        .sort();
+}
+
+function waitForAppearanceState(
+    connector: QualificationConnector,
+    predicate: (appearance: readonly string[]) => boolean,
+    timeoutMs: number,
+    description: string,
+): { promise: Promise<void>; dispose(): void } {
+    let timer: NodeJS.Timeout | undefined;
+    let settled = false;
+    let resolveState!: () => void;
+    let rejectState!: (error: Error) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+        resolveState = resolve;
+        rejectState = reject;
+    });
+    const cleanup = () => {
+        connector.off("Disconnected", onDisconnected);
+        if (timer) clearInterval(timer);
+        if (timeout) clearTimeout(timeout);
+    };
+    const settle = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolveState();
+    };
+    const check = () => {
+        if (predicate(appearanceKeys(connector))) settle();
+    };
+    const onDisconnected = (reason: string) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        rejectState(
+            new QualificationError(
+                `disconnected while waiting for ${description}: ${reason}`,
+            ),
+        );
+    };
+    connector.on("Disconnected", onDisconnected);
+    timer = setInterval(check, 100);
+    const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        rejectState(new QualificationError(`${description} timed out`));
+    }, timeoutMs);
+    check();
+    return { promise, dispose: cleanup };
+}
+
+async function runReleaseTestScenario(
+    config: RealRoomTestConfig,
+    connector: QualificationConnector,
+    startedAt: Date,
+    runId: string,
+): Promise<ReleaseTestQualificationEvidence> {
+    const releaseTest = config.releaseTest;
+    if (!releaseTest) {
+        throw new QualificationError("release-test configuration is missing");
+    }
+
+    await waitForReleaseReady(
+        connector,
+        config.targetMemberNumber,
+        config.timeoutMs,
+    );
+
+    const fixture = `${releaseTest.fixtureGroup}/${releaseTest.fixtureName}`;
+    const initialAppearance = appearanceKeys(connector);
+    if (
+        initialAppearance.some((item) =>
+            item.startsWith(`${releaseTest.fixtureGroup}/`),
+        )
+    ) {
+        throw new QualificationError(
+            `release-test fixture group is already occupied: ${releaseTest.fixtureGroup}`,
+        );
+    }
+
+    let fixtureAdded = false;
+    try {
+        const fixtureWaiter = waitForAppearanceState(
+            connector,
+            (appearance) => appearance.includes(fixture),
+            config.timeoutMs,
+            "release fixture appearance",
+        );
+        try {
+            connector.Player.Appearance.AddItem({
+                Group: releaseTest.fixtureGroup,
+                Name: releaseTest.fixtureName,
+            });
+            connector.Player.sendAppearanceUpdate();
+            await fixtureWaiter.promise;
+            fixtureAdded = true;
+        } finally {
+            fixtureWaiter.dispose();
+        }
+
+        const appearanceBefore = appearanceKeys(connector);
+        const confirmationPromptWaiter = waitForMessage(
+            connector,
+            (message) =>
+                message.sender.MemberNumber === config.targetMemberNumber &&
+                message.message.Content.includes(
+                    "PAROLE CONFIRMATION REQUIRED",
+                ),
+            config.timeoutMs,
+            "release confirmation prompt",
+        );
+        try {
+            connector.SendMessage(
+                "Whisper",
+                "!release",
+                config.targetMemberNumber,
+            );
+            await confirmationPromptWaiter.promise;
+        } finally {
+            confirmationPromptWaiter.dispose();
+        }
+
+        const removalWaiter = waitForAppearanceState(
+            connector,
+            (appearance) => !appearance.includes(fixture),
+            config.timeoutMs,
+            "release fixture removal",
+        );
+        const progressWaiter = waitForMessage(
+            connector,
+            (message) =>
+                message.sender.MemberNumber === config.targetMemberNumber &&
+                message.message.Content.includes("barrier dissolves"),
+            config.timeoutMs,
+            "release punishment-room progression",
+        );
+        try {
+            connector.SendMessage(
+                "Whisper",
+                "!release yes",
+                config.targetMemberNumber,
+            );
+            await Promise.all([removalWaiter.promise, progressWaiter.promise]);
+        } finally {
+            removalWaiter.dispose();
+            progressWaiter.dispose();
+        }
+
+        const appearanceAfter = appearanceKeys(connector);
+        if (appearanceAfter.includes(fixture)) {
+            throw new QualificationError(
+                "release-test fixture remained after release confirmation",
+            );
+        }
+
+        return {
+            scenario: RELEASE_TEST_SCENARIO,
+            runId,
+            operationId: `qualification:${runId}`,
+            startedAt: startedAt.toISOString(),
+            finishedAt: new Date().toISOString(),
+            environment: "live",
+            room: config.room,
+            accountRole: "dedicated-test-account",
+            memberNumber: connector.Player.MemberNumber,
+            command: "!release",
+            confirmationCommand: "!release yes",
+            targetMemberNumber: config.targetMemberNumber,
+            fixture,
+            appearanceBefore,
+            appearanceAfter,
+            mutationAttempted: true,
+            fixtureAdded: true,
+            fixtureRemoved: true,
+            confirmationObserved: true,
+            punishmentRoomProgressed: true,
+            disconnected: true,
+        };
+    } finally {
+        if (fixtureAdded && appearanceKeys(connector).includes(fixture)) {
+            connector.Player.Appearance.RemoveItem(releaseTest.fixtureGroup);
+            connector.Player.sendAppearanceUpdate();
+        }
+    }
+}
+
 async function runBunnyStepScenario(
     config: RealRoomTestConfig,
     connector: QualificationConnector,
@@ -1080,6 +1617,22 @@ export async function runRealRoomTestBot(
         }
         if (config.scenario === RELEASE_OBSERVE_SCENARIO) {
             return await runReleaseObserveScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
+        }
+        if (config.scenario === RELEASE_MONITOR_SCENARIO) {
+            return await runReleaseMonitorScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
+        }
+        if (config.scenario === RELEASE_TEST_SCENARIO) {
+            return await runReleaseTestScenario(
                 config,
                 connector,
                 startedAt,

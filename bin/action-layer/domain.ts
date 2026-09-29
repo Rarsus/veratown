@@ -139,6 +139,11 @@ export interface MovementActionAdapter<TRuntimeCharacter = unknown> {
     ): Promise<ActionResult<CharacterPosition>>;
 }
 
+export interface MovementActionPolicy extends ActionExecutionPolicy {
+    readonly operationId: string;
+    readonly memberNumber: number;
+}
+
 export type MessageChannel = "whisper" | "chat" | "emote";
 
 export interface MessageRequest {

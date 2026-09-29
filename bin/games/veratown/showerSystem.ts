@@ -26,7 +26,7 @@ import {
 } from "./veratownConfig";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
-import type { ReleaseSystem } from "./veratownReleaseSystem";
+import type { ReleaseCompatibleSystem } from "./releaseWorkflowSystem";
 import { createIdempotentMonitor } from "./shared";
 import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
@@ -55,7 +55,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
     >;
     private readonly stepDelayMs: number;
     private readonly singDelayMs: number;
-    private releaseSystem?: ReleaseSystem;
+    private releaseSystem?: ReleaseCompatibleSystem;
     private showerNotificationSequence = 0;
 
     public constructor(
@@ -77,7 +77,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
      * Set the release system reference for parole checking
      * Called after ReleaseSystem is initialized
      */
-    public setReleaseSystem(releaseSystem: ReleaseSystem): void {
+    public setReleaseSystem(releaseSystem: ReleaseCompatibleSystem): void {
         this.releaseSystem = releaseSystem;
     }
 

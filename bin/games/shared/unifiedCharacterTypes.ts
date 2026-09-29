@@ -177,12 +177,44 @@ export interface ReleaseRemovalFinalSnapshot {
     remainingItems?: RemovedBondageItem[];
 }
 
+export type ReleaseSessionPhase =
+    | "awaiting_confirmation"
+    | "moving_to_release_room"
+    | "holding_in_release_room"
+    | "stripping"
+    | "cooldown"
+    | "completed"
+    | "failed";
+
+export interface ReleaseTimerCleanupDecision {
+    group: string;
+    name: string;
+    action: "remove" | "preserve_owner_lock" | "mark_for_removal";
+    reason: "active_timer" | "non_owner_lock" | "owner_lock";
+}
+
+export interface ReleaseSession {
+    sessionId: string;
+    memberNumber: number;
+    phase: ReleaseSessionPhase;
+    room: ChatRoomMapPos;
+    confirmationExpiresAt: number;
+    cooldownExpiresAt?: number;
+    plannedRemovals: RemovedBondageItem[];
+    preservedOwnerLockedItems: RemovedBondageItem[];
+    timerCleanup: ReleaseTimerCleanupDecision[];
+    updatedAt: number;
+    attempt: number;
+    lastError?: string;
+}
+
 export interface ReleaseParoleState {
     isOnParole: boolean;
     paroleStartedAt?: number;
     paroleExpiresAt?: number;
     removedBondageItems?: RemovedBondageItem[];
     releaseRemovalOperation?: ReleaseRemovalOperation;
+    releaseSession?: ReleaseSession;
     releasedFromLocation?: ChatRoomMapPos;
 }
 
