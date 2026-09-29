@@ -16,6 +16,10 @@ import { API_Character } from "./apiCharacter.ts";
 import { AssetType } from "./appearance.ts";
 import { AssetFemale3DCG, PoseFemale3DCG } from "./bcdata/Female3DCG.js";
 import { AssetFemale3DCGExtended } from "./bcdata/Female3DCGExtended.ts";
+import {
+    PostR132AssetDefinitions,
+    PostR132ExtendedAssetDefinitions,
+} from "./bcdata/PostR132AssetDefinitions.ts";
 
 // An item as it appears on the wire (similar to Item but instead of the Asset
 // there's just Name representing the asset name), plus a Group
@@ -540,8 +544,14 @@ export function getAssetDef(desc: BC_AppearanceItem): AssetDefinition | null {
         (a) => typeof a !== "string" && a.Name === desc.Name,
     );
 
+    const postR132AssetDef = PostR132AssetDefinitions[desc.Group]?.find(
+        (asset) => asset.Name === desc.Name,
+    );
+
     // FIXME: those are the simple string; they'd need to be expanded
-    if (typeof assetDef === "string" || assetDef === undefined) return null;
+    if (typeof assetDef === "string" || assetDef === undefined) {
+        return (postR132AssetDef as AssetDefinition | undefined) ?? null;
+    }
 
     return assetDef;
 }
@@ -564,13 +574,15 @@ export function getExtendedAssetDef(
         return null;
     }
 
-    const result = grp[desc.Name];
+    const result =
+        grp[desc.Name] ??
+        PostR132ExtendedAssetDefinitions[desc.Group]?.[desc.Name];
     if (!result) {
         console.debug(
             `Extended definition not found: ${desc.Group}/${desc.Name}. Item may not have extended properties.`,
         );
     }
-    return result ?? null;
+    return (result as AssetArchetypeConfig | undefined) ?? null;
 }
 
 function makeAssetType(desc: BC_AppearanceItem) {
