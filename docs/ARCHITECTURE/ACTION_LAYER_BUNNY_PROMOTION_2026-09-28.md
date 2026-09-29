@@ -2,23 +2,23 @@
 title: "Bunny Action-Layer Promotion Record"
 subtitle: "Explicitly approved promotion preparation and current go/no-go decision"
 date: "September 28, 2026"
-version: "1.3"
-status: "Controlled production restraint ownership enabled; final migration gates remain open"
+version: "1.4"
+status: "Controlled production restraint ownership promoted; final architecture-wide migration remains open"
 ---
 
 # Bunny Action-Layer Promotion Record
 
 ## Decision identity
 
-| Field          | Value                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------- |
-| Record ID      | `promotion-20260928-bunny-001`                                                        |
-| Epic / issue   | `#235`                                                                                |
-| Decision owner | Requesting operator; explicit approval received 2026-09-28                            |
-| Feature family | Bunny punishment restraint application                                                |
-| Runtime switch | `action_layer_bunny_restraints_enabled=true`                                          |
-| Runtime change | Enabled in Railway production after deployment `549ed032-a7e5-4733-b8ce-ede107cb2247` |
-| Decision       | `GO` for controlled Bunny restraint ownership; `NO-GO` for final migration completion |
+| Field          | Value                                                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Record ID      | `promotion-20260928-bunny-001`                                                                                                          |
+| Epic / issue   | `#235`                                                                                                                                  |
+| Decision owner | Requesting operator; explicit approval received 2026-09-28                                                                              |
+| Feature family | Bunny punishment restraint application                                                                                                  |
+| Runtime switch | `action_layer_bunny_restraints_enabled=true`                                                                                            |
+| Runtime change | Enabled in Railway production; the verified restart/cycle evidence was recorded after deployment `079bc0a2-9541-4eaf-9356-9f129f481c3c` |
+| Decision       | `GO` for controlled Bunny restraint ownership and the live canary; `NO-GO` for final architecture-wide migration                        |
 
 Explicit approval authorized the promotion process. Bunny restraint ownership
 was enabled after the environment mapping landed in commit `af05c66` and the
@@ -27,19 +27,19 @@ legacy-owned and its switch was not changed.
 
 ## Gate status
 
-| Gate                                           | Status                  | Evidence / note                                                                                                                                                                                                                                |
-| ---------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bunny action ownership and rollback unit tests | `PASS`                  | 55 focused tests passed, including action ownership and rollback contracts                                                                                                                                                                     |
-| TypeScript, formatting, and whitespace         | `PASS`                  | `pnpm types`, Prettier, and `git diff --check` passed                                                                                                                                                                                          |
-| Short 15-character workload                    | `PASS`                  | 150/150 actions completed; zero failures; queues empty; retained redacted artifact                                                                                                                                                             |
-| Full 30-minute 15-character qualification      | `DEFERRED`              | No longer an early hard requirement; schedule with the late-track performance and cutover evidence                                                                                                                                             |
-| Controlled-room Bunny confirmation             | `PASS`                  | Live `bunny-step` completed in the configured dedicated test room; retained artifact `75dc9564-78bf-4ad1-b4f0-cdade436d164.json`                                                                                                               |
-| Controlled-room connector reconnect            | `PASS`                  | Live reconnect completed and rejoined `Veratown`; retained artifact `e5e20d99-bdad-4816-b7c6-23352070ebb7.json`                                                                                                                                |
-| Process-restart recovery                       | `MISSING`               | Production startup completed journal, Bunny, and location recovery, but a controlled restart with an in-flight Bunny operation remains open                                                                                                    |
-| In-flight rollback                             | `MISSING`               | Controlled-room rollback rehearsal remains open; production ownership is enabled only for the restraint path                                                                                                                                   |
-| MongoDB Bunny state cleanup                    | `PASS`                  | TestVeraTown was guarded-deleted and recreated clean; zero active artifacts and zero artifact/restraint overlaps remain                                                                                                                        |
-| Railway health and runtime evidence            | `PASS`                  | Deployment `549ed032-a7e5-4733-b8ce-ede107cb2247` for `af05c66` is `SUCCESS`/`RUNNING`; `ACTION_LAYER_BUNNY_RESTRAINTS_ENABLED=true`; startup reached Bunny recovery, location reload, full containment readiness, and stable room connections |
-| Redacted evidence retained                     | `PASS` for current runs | Bunny-step and reconnect artifacts are retained under `out/qualification-evidence`; full-soak evidence is absent                                                                                                                               |
+| Gate                                           | Status     | Evidence / note                                                                                                                                                                                                        |
+| ---------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bunny action ownership and rollback unit tests | `PASS`     | 55 focused tests passed, including action ownership and rollback contracts                                                                                                                                             |
+| TypeScript, formatting, and whitespace         | `PASS`     | `pnpm types`, Prettier, and `git diff --check` passed                                                                                                                                                                  |
+| Short 15-character workload                    | `PASS`     | 150/150 actions completed; zero failures; queues empty; retained redacted artifact                                                                                                                                     |
+| Full 30-minute 15-character qualification      | `DEFERRED` | No longer an early hard requirement; schedule with the late-track performance and cutover evidence                                                                                                                     |
+| Controlled-room Bunny confirmation             | `PASS`     | Live `bunny-step` completed in the configured dedicated test room; retained artifact `75dc9564-78bf-4ad1-b4f0-cdade436d164.json`                                                                                       |
+| Controlled-room connector reconnect            | `PASS`     | Live reconnect completed and rejoined `Veratown`; retained artifact `e5e20d99-bdad-4816-b7c6-23352070ebb7.json`                                                                                                        |
+| Process-restart recovery                       | `PASS`     | After the complete bot restart, startup reached Bunny recovery, location reload, and containment readiness; Miss Vera `250927` then completed a fresh apply/expiry cycle with clean durable state                      |
+| In-flight rollback                             | `PASS`     | Accepted in GitHub issue `#243`; the action lease and new-operation legacy routing evidence were accepted and the issue was closed                                                                                     |
+| MongoDB Bunny state cleanup                    | `PASS`     | TestVeraTown was guarded-deleted and recreated clean; zero active artifacts and zero artifact/restraint overlaps remain                                                                                                |
+| Railway health and runtime evidence            | `PASS`     | Deployment `079bc0a2-9541-4eaf-9356-9f129f481c3c` is `SUCCESS`; `ACTION_LAYER_BUNNY_RESTRAINTS_ENABLED=true`; startup reached Bunny recovery, location reload, full containment readiness, and stable room connections |
+| Durable cycle evidence                         | `PASS`     | Operation `bunny-250927-1790669931518-1` recorded both applied pieces, completed journal and release records, artifact `expired`/cleaned, and final `currentRestraints: []`                                            |
 
 ## Database cleanup
 
@@ -75,19 +75,20 @@ been recorded.
 
 ## Promotion decision
 
-**Current decision: `GO` for controlled production restraint ownership; `NO-GO`
-for final migration completion.** The Bunny restraint switch is enabled in
-Railway production, and the promoted instance reached full startup readiness
-with Bunny recovery and stable room connections. Process-restart recovery with
-an in-flight operation, in-flight rollback, and a live operation canary remain
-open evidence gates. The full performance suite is deferred to the late track;
-slightly degraded but bounded performance is acceptable when stability and
-recovery are materially better.
+**Current decision: `GO` for controlled production restraint ownership and the
+live canary; `NO-GO` for final architecture-wide migration.** The Bunny
+restraint switch is enabled in Railway production, the restarted instance
+reached full startup readiness, and the post-restart Miss Vera cycle completed
+with durable apply and expiry evidence. The application path now flushes item
+updates before the compatibility snapshot; authoritative item observation is
+asynchronous evidence and is not an application prerequisite. Release removal
+remains independently controlled. The full performance suite is deferred to
+the late track; bounded performance qualification remains required for the
+broader action-layer cutover.
 
-The final migration decision may change to `GO` after the active stability,
-rollback, and canary gates are recorded as `PASS` in this document and
-residual performance risk is accepted. Late-track performance evidence remains
-required before declaring the broader action-layer migration complete.
+The final migration decision may change to `GO` after the late-track
+performance evidence and residual-risk decision are accepted. This record does
+not claim release-removal migration or architecture-wide feature migration.
 
 The executable rehearsal design for the remaining gates is maintained in
 [BUNNY_REAL_ROOM_RESTART_ROLLBACK_REHEARSAL.md](BUNNY_REAL_ROOM_RESTART_ROLLBACK_REHEARSAL.md).

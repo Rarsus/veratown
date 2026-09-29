@@ -3,7 +3,7 @@ title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
 version: "1.27"
-status: "Foundation plus controlled production Bunny restraint ownership; operational recovery, rollback, and broader migration remain pending"
+status: "Foundation plus promoted production Bunny restraint ownership; broader migration and late-track performance remain pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -64,25 +64,25 @@ The controlled real-room restart, rollback, and canary rehearsal is defined in
 - Bunny restraint application and selected release removal have action paths,
   rollout leases, and rollback routing. Bunny restraint ownership is enabled in
   Railway production; release removal remains disabled and legacy-owned.
-- The Bunny workflow projects its artifact from the adapter-returned confirmed
-  observation and is wired to the production Mongo workflow journal. Startup
-  restores journal records and active artifacts; shutdown disposes workflow
-  timers and subscriptions.
-- One bounded live Bunny apply/expiry operation is complete: Railway deployment
-  `fd050056...` was healthy and running, operation
-  `bunny-250927-1790448380357-1` reached journal version 6, Heavy Yoke and
-  Heavy Spreader were applied, and expiry cleanup recorded `status: expired`,
-  `cleanedAt`, and `cleanupReason: expired` in Atlas.
+- The Bunny workflow dispatches restraint application through the action layer
+  and records authoritative item observation asynchronously. It is wired to
+  the production Mongo workflow journal. Startup restores journal records and
+  active artifacts; shutdown disposes workflow timers and subscriptions.
+- A restarted production Bunny cycle is complete: deployment
+  `079bc0a2-9541-4eaf-9356-9f129f481c3c` reached startup readiness, operation
+  `bunny-250927-1790669931518-1` recorded Heavy Yoke and Heavy Spreader as
+  applied, and expiry cleanup recorded `status: expired`, `cleanedAt`, and
+  `cleanupReason: expired` in Atlas. The final profile projection has no
+  active restraints.
 - The Bunny projection boundary is transaction-aware and idempotent by
   operation ID; replica-set tests cover duplicate retry and rollback after an
   event persistence failure.
 - Production startup has completed Bunny journal recovery, location reload, and
-  containment readiness with stable room connections. Controlled in-flight
-  restart recovery, rollback rehearsal, and a live operation canary remain open
-  stability gates. The full performance suite has moved to the late track;
-  bounded performance degradation is acceptable while stability and recovery
-  improve. Explicit promotion approval is recorded, with only the Bunny
-  restraint switch enabled.
+  containment readiness with stable room connections. The restarted live cycle
+  and canary are recorded as passing, and the accepted rollback evidence is
+  tracked in #243. The full performance suite has moved to the late track;
+  bounded performance qualification remains open for the broader cutover.
+  Only the Bunny restraint switch is enabled; release removal remains disabled.
 - Communication action design, IST/SOLL UML diagrams, and the three-scope state
   management model are documented in
   [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
@@ -116,7 +116,7 @@ requires recovery, rollback, performance, and an accepted go/no-go record.
 ### Migration status answer
 
 **Bunny is not fully migrated to the new method.** The narrow restraint
-application operation is now action-layer-owned in Railway production through
+application operation is now promoted and action-layer-owned in Railway production through
 `action_layer_bunny_restraints_enabled=true`. Release removal and remaining
 workflow responsibilities remain legacy-owned or independently controlled.
 
@@ -129,38 +129,33 @@ orchestration. `BunnyPunishmentService` remains a compatibility facade, and
 See [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md) for the maintained registry,
 ownership tables, UML diagrams, evidence ledger, and documentation maintenance
 rules. Do not describe Bunny as fully migrated until the remaining
-live-confirmation, restart/reconnect, rollback, qualification, and rollout
-gates are closed.
+performance, release-removal, and broader feature-family rollout gates are
+closed.
 
 ### Bunny first-feature evaluation
 
 Bunny is the correct first feature for the new system. Its bounded restraint
-operation has a clear action contract, authoritative confirmation, one-owner
-rollout lease, durable workflow journal, transaction-aware projection, expiry
+operation has a clear action contract, asynchronous authoritative observation,
+one-owner rollout lease, durable workflow journal, transaction-aware projection, expiry
 cleanup, and a compatibility facade for existing callers. The manually
 validated checks also confirm that duplicate projection retries do not
 increment the offence count twice and that an event-write failure rolls back
 the projection.
 
-The feature is therefore **migration-ready behind the switch**, but it is not
-yet **production migrated**. Full migration requires closing the three
-operational gates below, then enabling the switch deliberately:
+The feature is therefore **promoted for controlled production restraint
+ownership**, but it is not yet **production migrated** across the architecture.
+The remaining broader cutover work is:
 
-1. Reconnect/restart rehearsal: interrupt an active confirmed workflow and
-   verify journal restoration, artifact reconciliation, no duplicate restraint,
-   and expiry cleanup after recovery.
-2. Rollback rehearsal: switch new operations to legacy while an action-owned
-   operation finishes, and verify that one operation ID has exactly one owner
-   throughout the handoff.
-3. Late-track performance qualification: after the stability gates and broader
+1. Late-track performance qualification: after the stability gates and broader
    family work, run the 15-character workload, record latency, queue, retry,
    timeout, memory, and failure thresholds, and retain the evidence with the
    final rollout decision. This is no longer an early hard requirement.
 
-The rollout flag must remain `false` until all three gates pass. The known
-non-blocking `Emoticon` appearance-group warning from the bounded live run
-should be tracked separately and resolved or explicitly accepted before broad
-rollout; it did not prevent restraint application or expiry cleanup.
+The restraint rollout flag is enabled for controlled production ownership. The
+release-removal flag remains disabled. The known non-blocking `Emoticon`
+appearance-group warning was explicitly accepted for this bounded path; it did
+not prevent restraint application or expiry cleanup. Architecture-wide default
+cutover still depends on the late-track performance and capacity decision.
 
 ### Completed groundwork
 

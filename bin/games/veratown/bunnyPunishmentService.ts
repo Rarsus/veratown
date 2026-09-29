@@ -367,8 +367,9 @@ export class BunnyPunishmentWorkflow {
                                     maxAttempts: 1,
                                     retryDelayMs: 0,
                                     preserveLockedItems: true,
-                                    requireServerConfirmation: true,
-                                    requireFreshObservation: true,
+                                    // BC applies appearance mutations asynchronously;
+                                    // the live observer records confirmation separately.
+                                    requireServerConfirmation: false,
                                     itemOptions: {
                                         color: BUNNY_ROPE_COLOR,
                                         craft: {
@@ -392,7 +393,8 @@ export class BunnyPunishmentWorkflow {
                             );
                         if (
                             result.status !== "completed" &&
-                            result.status !== "already_satisfied"
+                            result.status !== "already_satisfied" &&
+                            result.status !== "in_progress"
                         ) {
                             throw new Error(
                                 result.reason ??

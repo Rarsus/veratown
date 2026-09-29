@@ -94,7 +94,8 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
             | "Message"
             | "Disconnected"
             | "MapPosition"
-            | "AppearanceSyncReceived",
+            | "AppearanceSyncReceived"
+            | "AppearanceItemUpdateReceived",
         listener: (...args: never[]) => void,
     ): this {
         return super.on(event, listener);
@@ -105,7 +106,8 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
             | "Message"
             | "Disconnected"
             | "MapPosition"
-            | "AppearanceSyncReceived",
+            | "AppearanceSyncReceived"
+            | "AppearanceItemUpdateReceived",
         listener: (...args: never[]) => void,
     ): this {
         return super.off(event, listener);

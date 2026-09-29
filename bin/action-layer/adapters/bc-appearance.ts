@@ -29,6 +29,7 @@ type BCProperty = Record<string, unknown>;
 
 type ConnectorEvent =
     | "AppearanceSyncReceived"
+    | "AppearanceItemUpdateReceived"
     | "CharacterSync"
     | "Connected"
     | "Disconnected"
@@ -380,6 +381,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             settled = true;
             if (timer !== undefined) clearTimeout(timer);
             connector.off("AppearanceSyncReceived", onAppearancePacket);
+            connector.off("AppearanceItemUpdateReceived", onItemUpdate);
             connector.off("CharacterSync", onCharacterSync);
             connector.off("Connected", onConnected);
             connector.off("Disconnected", onDisconnected);
@@ -423,6 +425,30 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             );
         };
 
+        const onItemUpdate = (diagnostic: any): void => {
+            if (
+                diagnostic?.direction !== "inbound" ||
+                diagnostic.targetMemberNumber !== character.MemberNumber ||
+                diagnostic.group !== target.group ||
+                (action === "add" && diagnostic.name !== target.asset) ||
+                (action === "remove" && diagnostic.action !== "remove")
+            ) {
+                return;
+            }
+
+            // The connector emits this event before rebuilding its cached
+            // character, so read the authoritative local view on the next
+            // microtask after the packet has been applied.
+            queueMicrotask(() => {
+                accept(
+                    character.Appearance.MakeAppearanceBundle(),
+                    Number.isFinite(diagnostic.timestamp)
+                        ? diagnostic.timestamp
+                        : this.now(),
+                );
+            });
+        };
+
         const onCharacterSync = (syncedCharacter: API_Character): void => {
             if (syncedCharacter?.MemberNumber !== character.MemberNumber)
                 return;
@@ -457,6 +483,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         };
 
         connector.on("AppearanceSyncReceived", onAppearancePacket);
+        connector.on("AppearanceItemUpdateReceived", onItemUpdate);
         connector.on("CharacterSync", onCharacterSync);
         connector.on("Connected", onConnected);
         connector.on("Disconnected", onDisconnected);
@@ -657,6 +684,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
 
         try {
             apply();
+            character.Appearance.flushUpdates();
+            if (waiter) character.sendAppearanceUpdate();
         } catch (error) {
             waiter?.cancel();
             return failedMutation(

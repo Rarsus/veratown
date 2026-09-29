@@ -2,18 +2,20 @@
 title: "Bunny Real-Room Restart, Rollback, and Canary Rehearsal"
 subtitle: "Controlled production evidence design for the remaining Bunny promotion gates"
 date: "September 29, 2026"
-version: "1.0"
-status: "Designed; execution and evidence review pending"
+version: "1.1"
+status: "Executed for restart/canary; rollback accepted separately; evidence review complete"
 ---
 
 # Bunny Real-Room Restart, Rollback, and Canary Rehearsal
 
-This runbook defines the controlled tests needed to close the remaining Bunny
-promotion gates. It uses the real-room qualification bot for the Bondage Club
-side of the workflow and explicit Railway project, environment, and service IDs
-for container operations.
+This runbook defined the controlled tests used to close the Bunny restraint
+promotion gates. The restart/cycle evidence is now complete for Miss Vera
+(`250927`); rollback evidence was accepted separately in GitHub issue `#243`.
+It uses the real-room qualification bot for the Bondage Club side of the
+workflow and explicit Railway project, environment, and service IDs for
+container operations.
 
-The tests must run against a dedicated test character and room. They must not
+The tests ran against a dedicated test character and room. They must not
 use a player account, a shared public room, or the release-removal switch.
 Every phase writes redacted evidence to a unique directory and records the
 Bunny operation ID, deployment ID, instance ID, journal versions, and final
@@ -232,7 +234,9 @@ The operator must attach a redacted summary to #254 containing:
 | Rollback record        | Control ID, active lease, selected path before/after rollback, second operation path                        |
 | Canary record          | Fresh post-rehearsal Bunny operation and final cleanup                                                      |
 
-Only after all three phases pass should the promotion record change
-`Process-restart recovery`, `In-flight rollback`, and `Live production canary`
-from `MISSING` to `PASS`. #254 may then be closed with `state_reason:
-completed`. #311 remains open for the late-track performance and capacity work.
+The verified restart/cycle and live canary changed `Process-restart recovery`
+and `Live production canary` to `PASS` in the promotion record. The rollback
+gate was accepted and closed under #243. #254 can therefore be closed with
+`state_reason: completed`. #311 remains open for the late-track performance
+and capacity work, and release-removal rollout remains independently
+controlled.

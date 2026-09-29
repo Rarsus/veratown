@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import {
     API_Connector,
     type API_Message,
+    type AppearanceItemUpdateDiagnostic,
     type AppearancePacketDiagnostic,
     type TellType,
 } from "bc-bot";
@@ -77,6 +78,10 @@ export interface QualificationConnector {
         event: "AppearanceSyncReceived",
         listener: (diagnostic: AppearancePacketDiagnostic) => void,
     ): this;
+    on(
+        event: "AppearanceItemUpdateReceived",
+        listener: (diagnostic: AppearanceItemUpdateDiagnostic) => void,
+    ): this;
     off(event: "Message", listener: (message: API_Message) => void): this;
     off(event: "Disconnected", listener: (reason: string) => void): this;
     off(event: "Connected", listener: () => void): this;
@@ -87,6 +92,10 @@ export interface QualificationConnector {
     off(
         event: "AppearanceSyncReceived",
         listener: (diagnostic: AppearancePacketDiagnostic) => void,
+    ): this;
+    off(
+        event: "AppearanceItemUpdateReceived",
+        listener: (diagnostic: AppearanceItemUpdateDiagnostic) => void,
     ): this;
     login(): Promise<void>;
     ChatRoomJoin(name: string): Promise<boolean>;
@@ -509,6 +518,11 @@ function waitForAppearance(
     predicate: (diagnostic: AppearancePacketDiagnostic) => boolean,
     timeoutMs: number,
     description: string,
+    baselineAppearance?: readonly {
+        Group: string;
+        Name: string;
+    }[],
+    trackedGroups?: readonly string[],
 ): { promise: Promise<AppearancePacketDiagnostic>; dispose(): void } {
     let timer: NodeJS.Timeout | undefined;
     let settled = false;
@@ -521,12 +535,57 @@ function waitForAppearance(
         },
     );
 
+    type ObservedItem = AppearancePacketDiagnostic["appearance"][number];
+    const knownAppearance = new Map<string, ObservedItem>();
+    for (const item of baselineAppearance ??
+        connector.Player.Appearance.getAppearanceData()) {
+        knownAppearance.set(item.Group, item as ObservedItem);
+    }
     const onAppearance = (diagnostic: AppearancePacketDiagnostic) => {
-        if (!predicate(diagnostic)) return;
+        if (diagnostic.appearance.length === 0) {
+            knownAppearance.clear();
+        } else {
+            const receivedGroups = new Set(
+                diagnostic.appearance.map((item) => item.Group),
+            );
+            for (const item of diagnostic.appearance) {
+                if (item.Name) knownAppearance.set(item.Group, item);
+                else knownAppearance.delete(item.Group);
+            }
+            for (const group of trackedGroups ?? []) {
+                if (!receivedGroups.has(group)) knownAppearance.delete(group);
+            }
+        }
+        const mergedAppearance = Array.from(knownAppearance.values());
+        const mergedDiagnostic = {
+            ...diagnostic,
+            itemKeys: mergedAppearance.map(
+                (item) => `${item.Group}/${item.Name}`,
+            ),
+            appearance: mergedAppearance,
+        };
+        if (!predicate(mergedDiagnostic)) return;
         if (settled) return;
         settled = true;
         cleanup();
-        resolveAppearance(diagnostic);
+        resolveAppearance(mergedDiagnostic);
+    };
+    const onItemAppearance = (diagnostic: AppearanceItemUpdateDiagnostic) => {
+        if (diagnostic.targetMemberNumber !== connector.Player.MemberNumber)
+            return;
+        queueMicrotask(() => {
+            onAppearance({
+                connectionId: diagnostic.connectionId,
+                direction: "inbound",
+                memberNumber: diagnostic.targetMemberNumber,
+                timestamp: diagnostic.timestamp,
+                itemKeys: connector.Player.Appearance.getAppearanceData().map(
+                    (item) => `${item.Group}/${item.Name}`,
+                ),
+                lockShapes: [],
+                appearance: connector.Player.Appearance.getAppearanceData(),
+            });
+        });
     };
     const onDisconnected = (reason: string) => {
         if (settled) return;
@@ -540,11 +599,13 @@ function waitForAppearance(
     };
     const cleanup = () => {
         connector.off("AppearanceSyncReceived", onAppearance);
+        connector.off("AppearanceItemUpdateReceived", onItemAppearance);
         connector.off("Disconnected", onDisconnected);
         if (timer) clearTimeout(timer);
     };
 
     connector.on("AppearanceSyncReceived", onAppearance);
+    connector.on("AppearanceItemUpdateReceived", onItemAppearance);
     connector.on("Disconnected", onDisconnected);
     timer = setTimeout(() => {
         if (settled) return;
@@ -837,6 +898,8 @@ async function runBunnyStepScenario(
                 bunnyStep.expectedReleaseMs + config.timeoutMs,
             ),
             "bunny punishment release",
+            punishment.appearance,
+            BUNNY_RESTRAINT_KEYS.map((key) => key.split("/")[0]),
         );
         try {
             await releaseWaiter.promise;

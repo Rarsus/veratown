@@ -10,9 +10,12 @@ interface FakeItem {
 
 function makeCharacter(initial: FakeItem[] = []) {
     const items = [...initial];
+    const events: string[] = [];
     return {
+        sendAppearanceUpdate: () => events.push("appearance"),
         Appearance: {
             MakeAppearanceBundle: () => items.map((item) => ({ ...item })),
+            flushUpdates: () => events.push("items"),
             AddItem: (item: FakeItem) => {
                 items.push({ ...item });
                 return {};
@@ -23,6 +26,7 @@ function makeCharacter(initial: FakeItem[] = []) {
             },
         },
         items,
+        events,
     };
 }
 
@@ -111,6 +115,7 @@ test("applies extended type, color, craft, and safeword lock metadata", async ()
         MemberNumber: 11,
         Appearance: {
             MakeAppearanceBundle: () => state.map((item) => ({ ...item })),
+            flushUpdates: () => undefined,
             AddItem: (descriptor: any) => {
                 addedDescriptor = descriptor;
                 const data: FakeItem = {
@@ -362,6 +367,60 @@ test("accepts a matching inbound appearance snapshot and cleans up listeners", a
     const result = await pending;
     assert.equal(result.status, "completed");
     assert.equal(connector.listenerCount(), 0);
+});
+
+test("accepts a matching inbound appearance item update", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+    });
+
+    const pending = adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        confirmedPolicy("confirmed-item-add"),
+    );
+    connector.emit("AppearanceItemUpdateReceived", {
+        direction: "inbound",
+        targetMemberNumber: 11,
+        group: "ItemArms",
+        name: "Gloves",
+        action: "unbind",
+        timestamp: 100,
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.equal(connector.listenerCount(), 0);
+});
+
+test("flushes item updates before sending the compatibility appearance snapshot", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector);
+    const adapter = new BCAppearanceActionAdapter({ now: () => 100 });
+    const waiter = setImmediate(() =>
+        connector.emit("AppearanceItemUpdateReceived", {
+            connectionId: connector.connectionId,
+            direction: "inbound",
+            targetMemberNumber: 11,
+            group: "ItemArms",
+            name: "Gloves",
+            itemKeys: ["ItemArms/Gloves"],
+            timestamp: 101,
+        }),
+    );
+
+    const result = await adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        confirmedPolicy("ordered-add"),
+    );
+
+    clearImmediate(waiter);
+    assert.equal(result.status, "completed");
+    assert.deepEqual(runtime.events, ["items", "appearance"]);
 });
 
 test("times out confirmation and removes every listener", async () => {
