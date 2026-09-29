@@ -88,3 +88,6 @@ The final migration decision may change to `GO` after the active stability,
 rollback, and canary gates are recorded as `PASS` in this document and
 residual performance risk is accepted. Late-track performance evidence remains
 required before declaring the broader action-layer migration complete.
+
+The executable rehearsal design for the remaining gates is maintained in
+[BUNNY_REAL_ROOM_RESTART_ROLLBACK_REHEARSAL.md](BUNNY_REAL_ROOM_RESTART_ROLLBACK_REHEARSAL.md).

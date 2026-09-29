@@ -48,6 +48,8 @@ Caller ownership and promotion/rollback records are maintained in
 [ACTION_LAYER_PROMOTION_RECORD.md](ACTION_LAYER_PROMOTION_RECORD.md).
 The approved Bunny promotion attempt is tracked in
 [ACTION_LAYER_BUNNY_PROMOTION_2026-09-28.md](ACTION_LAYER_BUNNY_PROMOTION_2026-09-28.md).
+The controlled real-room restart, rollback, and canary rehearsal is defined in
+[BUNNY_REAL_ROOM_RESTART_ROLLBACK_REHEARSAL.md](BUNNY_REAL_ROOM_RESTART_ROLLBACK_REHEARSAL.md).
 
 ### Current snapshot
 
