@@ -2,8 +2,8 @@
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
 date: "September 27, 2026"
-version: "1.26"
-status: "Foundation plus opt-in appearance, communication, position-observation, map-trigger, and Door pilot slices; operational qualification and broader migration remain pending"
+version: "1.27"
+status: "Foundation plus controlled production Bunny restraint ownership; operational recovery, rollback, and broader migration remain pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -60,8 +60,8 @@ The approved Bunny promotion attempt is tracked in
 - Generated BC typed and modular definitions are translated only at the BC
   adapter boundary, including copy-chain resolution.
 - Bunny restraint application and selected release removal have action paths,
-  rollout leases, and rollback routing, but both switches are disabled by
-  default.
+  rollout leases, and rollback routing. Bunny restraint ownership is enabled in
+  Railway production; release removal remains disabled and legacy-owned.
 - The Bunny workflow projects its artifact from the adapter-returned confirmed
   observation and is wired to the production Mongo workflow journal. Startup
   restores journal records and active artifacts; shutdown disposes workflow
@@ -74,11 +74,13 @@ The approved Bunny promotion attempt is tracked in
 - The Bunny projection boundary is transaction-aware and idempotent by
   operation ID; replica-set tests cover duplicate retry and rollback after an
   event persistence failure.
-- Controlled-room confirmation across reconnect/restart and rollback rehearsal
-  remain open stability gates. The full performance suite has moved to the
-  late track; bounded performance degradation is acceptable while stability and
-  recovery improve. Explicit promotion approval has been recorded, but both
-  runtime switches remain disabled until the active stability gates pass.
+- Production startup has completed Bunny journal recovery, location reload, and
+  containment readiness with stable room connections. Controlled in-flight
+  restart recovery, rollback rehearsal, and a live operation canary remain open
+  stability gates. The full performance suite has moved to the late track;
+  bounded performance degradation is acceptable while stability and recovery
+  improve. Explicit promotion approval is recorded, with only the Bunny
+  restraint switch enabled.
 - Communication action design, IST/SOLL UML diagrams, and the three-scope state
   management model are documented in
   [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
@@ -111,10 +113,10 @@ requires recovery, rollback, performance, and an accepted go/no-go record.
 
 ### Migration status answer
 
-**Bunny is not fully migrated to the new method.** Only the narrow restraint
-application operation has an opt-in action-layer path. The rollout switch
-`action_layer_bunny_restraints_enabled` defaults to `false`, so normal runtime
-behavior remains on the legacy path.
+**Bunny is not fully migrated to the new method.** The narrow restraint
+application operation is now action-layer-owned in Railway production through
+`action_layer_bunny_restraints_enabled=true`. Release removal and remaining
+workflow responsibilities remain legacy-owned or independently controlled.
 
 `BunnyPunishmentWorkflow` now owns configuration selection and validation,
 active-artifact decisions, versioned workflow stages, punishment persistence,
@@ -124,7 +126,7 @@ orchestration. `BunnyPunishmentService` remains a compatibility facade, and
 
 See [MIGRATED_FEATURES.md](MIGRATED_FEATURES.md) for the maintained registry,
 ownership tables, UML diagrams, evidence ledger, and documentation maintenance
-rules. Do not describe Bunny as fully migrated until that registry's remaining
+rules. Do not describe Bunny as fully migrated until the remaining
 live-confirmation, restart/reconnect, rollback, qualification, and rollout
 gates are closed.
 
