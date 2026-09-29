@@ -142,6 +142,7 @@ export interface MovementActionAdapter<TRuntimeCharacter = unknown> {
 export interface MovementActionPolicy extends ActionExecutionPolicy {
     readonly operationId: string;
     readonly memberNumber: number;
+    readonly acceptPosition?: (position: CharacterPosition) => boolean;
 }
 
 export type MessageChannel = "whisper" | "chat" | "emote";

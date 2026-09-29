@@ -72,9 +72,15 @@ export class BCMovementActionAdapter implements MovementActionAdapter<API_Charac
             );
         }
 
+        const acceptsPosition = (position: CharacterPosition): boolean =>
+            policy.acceptPosition?.(position) ??
+            (position.x === destination.x && position.y === destination.y);
+
         if (
-            character.MapPos.X === destination.x &&
-            character.MapPos.Y === destination.y
+            acceptsPosition({
+                x: character.MapPos.X,
+                y: character.MapPos.Y,
+            })
         ) {
             return Promise.resolve(
                 createActionResult(
@@ -108,8 +114,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<API_Charac
             ): void => {
                 if (
                     memberNumber !== character.MemberNumber ||
-                    position.X !== destination.x ||
-                    position.Y !== destination.y
+                    !acceptsPosition({ x: position.X, y: position.Y })
                 ) {
                     return;
                 }
@@ -122,7 +127,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<API_Charac
                             startedAt,
                         ),
                         {
-                            value: destination,
+                            value: { x: position.X, y: position.Y },
                             retryable: false,
                         },
                     ),

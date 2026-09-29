@@ -194,11 +194,17 @@ export interface ReleaseTimerCleanupDecision {
     reason: "active_timer" | "non_owner_lock" | "owner_lock";
 }
 
+export interface ReleaseRoomRegion {
+    TopLeft: ChatRoomMapPos;
+    BottomRight: ChatRoomMapPos;
+}
+
 export interface ReleaseSession {
     sessionId: string;
     memberNumber: number;
     phase: ReleaseSessionPhase;
     room: ChatRoomMapPos;
+    roomRegion?: ReleaseRoomRegion;
     confirmationExpiresAt: number;
     cooldownExpiresAt?: number;
     plannedRemovals: RemovedBondageItem[];

@@ -11,6 +11,7 @@ import type { GameStateMutationService } from "../shared/gameStateMutationServic
 import { GameStateMutationServiceImpl } from "../shared/gameStateMutationService";
 import type {
     ReleaseParoleState,
+    ReleaseRoomRegion,
     ReleaseSession,
     ReleaseSessionPhase,
     ReleaseTimerCleanupDecision,
@@ -21,6 +22,7 @@ import { VeratownFeatureSystem } from "./featureSystem";
 import { VeratownLocationStore } from "./veratownLocationStore";
 import {
     RELEASE_PUNISHMENT_ROOM_KEY,
+    RELEASE_PUNISHMENT_ROOM_REGION,
     RELEASE_PAROLE_DURATION_MS,
 } from "./veratownConfig";
 import {
@@ -153,6 +155,7 @@ export class ReleaseWorkflowSystem
             memberNumber,
             phase: "awaiting_confirmation",
             room: { X: room.x, Y: room.y },
+            roomRegion: room.region,
             confirmationExpiresAt: now + CONFIRMATION_TIMEOUT_MS,
             plannedRemovals: [],
             preservedOwnerLockedItems: [],
@@ -260,8 +263,7 @@ export class ReleaseWorkflowSystem
                 session.phase === "cooldown"
             )
                 return;
-            if (position.X === session.room.X && position.Y === session.room.Y)
-                return;
+            if (isReleaseRoomPosition(position, session)) return;
             await this.contain(character, session);
         });
     };
@@ -303,7 +305,15 @@ export class ReleaseWorkflowSystem
             const moved = await this.movementService.move(
                 character,
                 { x: session.room.X, y: session.room.Y },
-                movementPolicy(session.sessionId, character.MemberNumber),
+                movementPolicy(
+                    session.sessionId,
+                    character.MemberNumber,
+                    (position) =>
+                        isReleaseRoomPosition(
+                            { X: position.x, Y: position.y },
+                            session,
+                        ),
+                ),
             );
             if (
                 moved.status !== "completed" &&
@@ -502,6 +512,11 @@ export class ReleaseWorkflowSystem
                 movementPolicy(
                     `${session.sessionId}:contain`,
                     character.MemberNumber,
+                    (position) =>
+                        isReleaseRoomPosition(
+                            { X: position.x, Y: position.y },
+                            session,
+                        ),
                 ),
             );
             if (
@@ -626,7 +641,11 @@ export class ReleaseWorkflowSystem
         return session;
     }
 
-    private async releaseRoom(): Promise<{ x: number; y: number }> {
+    private async releaseRoom(): Promise<{
+        x: number;
+        y: number;
+        region: ReleaseRoomRegion;
+    }> {
         const location = await this.dependencies.locationStore.getLocation(
             RELEASE_PUNISHMENT_ROOM_KEY,
         );
@@ -638,7 +657,11 @@ export class ReleaseWorkflowSystem
         ) {
             throw new Error("Release room location is unavailable");
         }
-        return { x: location.x, y: location.y };
+        const region = location.region ?? RELEASE_PUNISHMENT_ROOM_REGION;
+        if (!isReleaseRoomRegion(region)) {
+            throw new Error("Release room region is invalid");
+        }
+        return { x: location.x, y: location.y, region };
     }
 
     private contains(session: ReleaseSession): boolean {
@@ -717,12 +740,47 @@ function isActiveTimer(item: BC_AppearanceItem): boolean {
     });
 }
 
-function movementPolicy(operationId: string, memberNumber: number) {
+export function isReleaseRoomPosition(
+    position: { X: number; Y: number },
+    session: Pick<ReleaseSession, "room" | "roomRegion">,
+): boolean {
+    if (position.X === session.room.X && position.Y === session.room.Y) {
+        return true;
+    }
+    const region = session.roomRegion;
+    return (
+        region !== undefined &&
+        position.X >= region.TopLeft.X &&
+        position.X <= region.BottomRight.X &&
+        position.Y >= region.TopLeft.Y &&
+        position.Y <= region.BottomRight.Y
+    );
+}
+
+function isReleaseRoomRegion(region: unknown): region is ReleaseRoomRegion {
+    if (!region || typeof region !== "object") return false;
+    const candidate = region as ReleaseRoomRegion;
+    return (
+        Number.isFinite(candidate.TopLeft?.X) &&
+        Number.isFinite(candidate.TopLeft?.Y) &&
+        Number.isFinite(candidate.BottomRight?.X) &&
+        Number.isFinite(candidate.BottomRight?.Y) &&
+        candidate.TopLeft.X <= candidate.BottomRight.X &&
+        candidate.TopLeft.Y <= candidate.BottomRight.Y
+    );
+}
+
+function movementPolicy(
+    operationId: string,
+    memberNumber: number,
+    acceptPosition?: (position: { x: number; y: number }) => boolean,
+) {
     return {
         operationId,
         memberNumber,
         timeoutMs: ACTION_TIMEOUT_MS,
         maxAttempts: 1,
         retryDelayMs: 0,
+        ...(acceptPosition ? { acceptPosition } : {}),
     } as const;
 }

@@ -1,6 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planReleaseAppearance } from "../releaseWorkflowSystem";
+import {
+    isReleaseRoomPosition,
+    planReleaseAppearance,
+} from "../releaseWorkflowSystem";
+
+const releaseSession = {
+    room: { X: 14, Y: 13 },
+    roomRegion: {
+        TopLeft: { X: 9, Y: 11 },
+        BottomRight: { X: 15, Y: 14 },
+    },
+};
+
+test("release room accepts any position inside its configured region", () => {
+    assert.equal(isReleaseRoomPosition({ X: 14, Y: 12 }, releaseSession), true);
+    assert.equal(isReleaseRoomPosition({ X: 8, Y: 12 }, releaseSession), false);
+});
+
+test("legacy release sessions still accept their exact entrance point", () => {
+    assert.equal(
+        isReleaseRoomPosition({ X: 14, Y: 13 }, { room: releaseSession.room }),
+        true,
+    );
+    assert.equal(
+        isReleaseRoomPosition({ X: 14, Y: 12 }, { room: releaseSession.room }),
+        false,
+    );
+});
 
 test("release planning preserves only explicit owner locks", () => {
     const result = planReleaseAppearance([

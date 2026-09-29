@@ -333,6 +333,10 @@ export const RELEASE_COOLDOWN_MS = 0; // DISABLED: Temporarily no cooldown for t
 export const RELEASE_NUDITY_CHECK_INTERVAL_MS = 1000; // Check every 1 second (faster detection)
 export const RELEASE_NUDITY_TIMEOUT_MS = 60 * 1000; // 60 second max to strip
 export const RELEASE_PUNISHMENT_ROOM_KEY = "punishment_room_entrance"; // Location key
+export const RELEASE_PUNISHMENT_ROOM_REGION = {
+    TopLeft: { X: 9, Y: 11 },
+    BottomRight: { X: 15, Y: 14 },
+} as const;
 export const RELEASE_PAROLE_DURATION_MS = 10 * 60 * 1000; // 10 minutes parole period
 
 // --- Shared helpers ---
@@ -570,6 +574,7 @@ export const VERATOWN_LOCATIONS_FALLBACK: VeratownLocationDoc[] = [
         y: 13,
         description:
             "Where emergency-release players are placed before parole.",
+        region: RELEASE_PUNISHMENT_ROOM_REGION,
         data: {},
         enabled: true,
         createdAt: Date.now(),

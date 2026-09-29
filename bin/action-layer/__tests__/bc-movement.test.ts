@@ -56,3 +56,32 @@ test("movement reports connector loss instead of claiming completion", async () 
     assert.equal(result.status, "failed");
     assert.equal(result.retryable, true);
 });
+
+test("movement accepts an authoritative position inside a configured region", async () => {
+    const connection = new EventEmitter();
+    const runtimeCharacter = character(connection);
+    runtimeCharacter.mapTeleport = (position: { X: number; Y: number }) => {
+        (runtimeCharacter.MapPos as { X: number; Y: number }).X = 14;
+        (runtimeCharacter.MapPos as { X: number; Y: number }).Y = 12;
+        queueMicrotask(() =>
+            connection.emit("MapPosition", runtimeCharacter.MemberNumber, {
+                X: 14,
+                Y: 12,
+            }),
+        );
+        void position;
+    };
+    const pending = new BCMovementActionAdapter().move(
+        runtimeCharacter,
+        { x: 9, y: 10 },
+        {
+            ...policy,
+            acceptPosition: ({ x, y }) =>
+                x >= 9 && x <= 15 && y >= 11 && y <= 14,
+        },
+    );
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.deepEqual(result.value, { x: 14, y: 12 });
+});
