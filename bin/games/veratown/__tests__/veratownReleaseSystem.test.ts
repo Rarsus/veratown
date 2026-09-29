@@ -6,6 +6,11 @@ import { LiveCharacterStateSync } from "../liveCharacterStateSync";
 import { LiveAppearanceRemovalCoordinator } from "../shared";
 import { ActionLayerRolloutController } from "../../../action-layer";
 import {
+    InMemoryWorkflowJournalStorage,
+    WorkflowJournal,
+} from "../../shared/durableWorkflowJournal";
+import { VeratownWorkflowRecovery } from "../shared/veratownWorkflowRecovery";
+import {
     isEffectivelyUnlockedBondageItem,
     normalizeReleaseAppearanceItem,
     releaseItemIdentity,
@@ -193,6 +198,78 @@ test("release flow does not grant access until verified restraints are persisted
     );
 });
 
+test("release persists the verified appearance projection", async () => {
+    const created = createCharacter([
+        { Group: "ItemArms", Name: "UnlockedCuffs", Property: {} },
+        {
+            Group: "ItemDevices",
+            Name: "OwnerDevice",
+            Property: { Lock: "OwnerPadlock", LockedBy: 145 },
+        },
+        { Group: "Cloth", Name: "CottonShirt", Property: {} },
+    ]);
+    const durable = {
+        begin: undefined as any,
+        attempts: [] as any[],
+        completed: undefined as any,
+        beginReleaseRemoval: async (
+            memberNumber: number,
+            operationId: string,
+            plan: any,
+        ) => {
+            durable.begin = { memberNumber, operationId, plan };
+            return {
+                operationId,
+                status: "planned",
+                startedAt: 1,
+                updatedAt: 1,
+                attempt: 0,
+                plannedUnlockedItems: plan.plannedUnlockedItems,
+                preservedLockedItems: plan.preservedLockedItems,
+                completedRemovals: [],
+                remainingItems: plan.plannedUnlockedItems,
+            };
+        },
+        recordReleaseRemovalAttempt: async (...args: any[]) => {
+            durable.attempts.push(args);
+        },
+        completeReleaseRemoval: async (...args: any[]) => {
+            durable.completed = args;
+        },
+        getEventBus: () => ({ emit: () => {} }),
+    };
+    const system = new ReleaseSystem(
+        createConnection(),
+        undefined,
+        undefined,
+        durable as any,
+    );
+
+    await (system as any).stripNonOwnerItems(created.character);
+
+    assert.deepEqual(
+        durable.begin.plan.plannedUnlockedItems.map(
+            (item: any) => `${item.group}/${item.name}`,
+        ),
+        ["ItemArms/UnlockedCuffs"],
+    );
+    assert.equal(durable.attempts.length, 1);
+    assert.equal(durable.attempts[0][3].success, true);
+    assert.deepEqual(
+        durable.completed[2].currentAppearance.map(
+            (item: any) => `${item.Group}/${item.Name}`,
+        ),
+        ["ItemDevices/OwnerDevice"],
+    );
+    assert.deepEqual(durable.completed[2].currentRestraints, [
+        {
+            itemName: "OwnerDevice",
+            group: "ItemDevices",
+            equippedAt: durable.completed[2].currentRestraints[0].equippedAt,
+        },
+    ]);
+});
+
 test("release ignores empty and malformed appearance placeholders", async () => {
     const created = createCharacter([
         { Group: "ItemArms", Name: "Cuffs", Property: {} },
@@ -288,6 +365,66 @@ test("live removal retries a partial mutation and is idempotent after success", 
 
     assert.equal(attempts, 2);
     assert.deepEqual(appearance, []);
+});
+
+test("release removal resumes after coordinator restart without duplicate mutation", async () => {
+    let appearance: any[] = [
+        { Group: "ItemArms", Name: "RestartCuffs", Property: {} },
+    ];
+    let actionCalls = 0;
+    const storage = new InMemoryWorkflowJournalStorage();
+    const firstCoordinator = new LiveAppearanceRemovalCoordinator(2, {
+        rollout: new ActionLayerRolloutController({
+            releaseRemovalEnabled: true,
+        }),
+        workflowRecovery: new VeratownWorkflowRecovery(
+            new WorkflowJournal(storage),
+        ),
+        appearanceService: {
+            remove: async () => {
+                actionCalls++;
+                appearance = [];
+                return { status: "completed" as const, metadata: {} as any };
+            },
+        } as any,
+    });
+    const character: any = {
+        MemberNumber: 145,
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+        },
+    };
+
+    await firstCoordinator.remove(character, "release-restart-1", {
+        group: "ItemArms",
+        name: "RestartCuffs",
+    });
+
+    const restartedCoordinator = new LiveAppearanceRemovalCoordinator(2, {
+        rollout: new ActionLayerRolloutController({
+            releaseRemovalEnabled: true,
+        }),
+        workflowRecovery: new VeratownWorkflowRecovery(
+            new WorkflowJournal(storage),
+        ),
+        appearanceService: {
+            remove: async () => {
+                actionCalls++;
+                throw new Error("duplicate removal");
+            },
+        } as any,
+    });
+
+    await restartedCoordinator.remove(character, "release-restart-1", {
+        group: "ItemArms",
+        name: "RestartCuffs",
+    });
+
+    assert.equal(actionCalls, 1);
+    assert.deepEqual(appearance, []);
+    const records = await storage.list();
+    assert.equal(records.length, 1);
+    assert.equal(records[0].state.status, "completed");
 });
 
 test("enabled release migration owns removal without calling the legacy mutator", async () => {
