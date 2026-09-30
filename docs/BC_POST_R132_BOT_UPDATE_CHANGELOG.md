@@ -188,9 +188,9 @@ slice, the asset overlay, and the test-repair slice:
 
 Railway project: `veratown`, production environment, service `veratown`.
 Pushes to `main` trigger deployments. At the last checkpoint observation,
-`fd68532` was the successful running revision and `fa85a87` was building with
-`deploymentStopped: true`; the deployment status must be rechecked after the
-next pushed documentation checkpoint.
+deployment `b19c5c3f-0ba4-47b4-b867-afc65ecf33b3` for commit `616e32b` reached
+`SUCCESS` with a `RUNNING` instance. Runtime logs confirmed the bot connected,
+joined `Veratown`, and reached `mapReady`.
 
 ## Residual Risk and Follow-up
 
