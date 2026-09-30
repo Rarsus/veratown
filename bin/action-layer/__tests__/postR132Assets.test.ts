@@ -28,6 +28,8 @@ test("post-R132 runtime asset manifest identifies the upstream source", () => {
 
 test("post-R132 behavior-bearing assets resolve through the central lookup", () => {
     for (const [group, name] of [
+        ["ItemHandheld", "Book"],
+        ["ItemHandheld", "ToyHammer"],
         ["ItemHandheld", "Rattle"],
         ["ItemDevices", "BirdCage"],
         ["ItemNipples", "NippleClamps1"],
@@ -38,8 +40,27 @@ test("post-R132 behavior-bearing assets resolve through the central lookup", () 
     ] as const) {
         const definition = getAssetDef({ Group: group, Name: name });
         assert.equal(definition?.Name, name);
-        assert.equal(definition?.InventoryID !== undefined, true);
     }
+});
+
+test("post-R132 overlay fields preserve the upstream item semantics", () => {
+    const rattle = getAssetDef({ Group: "ItemHandheld", Name: "Rattle" });
+    const birdCage = getAssetDef({ Group: "ItemDevices", Name: "BirdCage" });
+    const nippleClamps = getAssetDef({
+        Group: "ItemNipples",
+        Name: "NippleClamps1",
+    });
+
+    assert.equal(
+        getAssetDef({ Group: "ItemHandheld", Name: "Book" })?.InventoryID,
+        1405,
+    );
+    assert.equal(rattle?.InventoryID, 1405);
+    assert.deepEqual(rattle?.AllowActivity, ["ShakeItem", "RubItem"]);
+    assert.deepEqual(birdCage?.Effect, ["BlockWardrobe", "Freeze"]);
+    assert.equal(birdCage?.SetPose?.[0], "Kneel");
+    assert.equal(nippleClamps?.AllowLock, true);
+    assert.deepEqual(nippleClamps?.Effect, ["Wiggling"]);
 });
 
 test("post-R132 typed and modular definitions preserve semantic options", () => {
