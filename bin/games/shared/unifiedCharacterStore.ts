@@ -151,8 +151,8 @@ function withoutTimestamps(value: unknown): unknown {
     if (!value || typeof value !== "object") return value;
     return Object.fromEntries(
         Object.entries(value as Record<string, unknown>)
-            .filter(([, item]) => item !== undefined)
-            .filter(([key]) => !key.endsWith("At"))
+            .filter(([, item]) => item !== undefined && item !== null)
+            .filter(([key]) => !key.endsWith("At") && key !== "lastFlagChange")
             .map(([key, item]) => [key, withoutTimestamps(item)]),
     );
 }
@@ -354,10 +354,11 @@ export class UnifiedCharacterStore {
     ): boolean {
         if (profile.name !== "" || profile.version !== 0) return false;
         const candidate = { ...profile, _id: memberNumber };
-        return isDeepStrictEqual(
-            withoutTimestamps(candidate),
-            withoutTimestamps(this.defaultProfile(memberNumber)),
+        const normalizedCandidate = withoutTimestamps(candidate);
+        const normalizedDefault = withoutTimestamps(
+            this.defaultProfile(memberNumber),
         );
+        return isDeepStrictEqual(normalizedCandidate, normalizedDefault);
     }
 
     private async init(): Promise<void> {

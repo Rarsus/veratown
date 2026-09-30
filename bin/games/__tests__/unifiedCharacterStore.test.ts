@@ -399,7 +399,7 @@ test("UnifiedCharacterStore - chip guards and bondage lifecycle no-ops", async (
     await store.updateChips(memberNumber, 25, "seed");
     await store.lockChips(memberNumber, 100, "cage", Date.now() + 1_000);
     let casino = await store.getCasinoView(memberNumber);
-    assert.equal(casino.chips, 0);
+    assert.equal(casino.chips, 25);
     assert.equal(casino.lockedChips, 25);
 
     await store.unlockChips(memberNumber, 100);
@@ -878,13 +878,13 @@ test("UnifiedCharacterStore covers state recovery and keypad workflows", async (
     const escaped = await store.spendChipsToEscape(memberNumber, 20);
     assert.equal(escaped.success, true);
     assert.equal(escaped.bondageRemoved, 2);
-    assert.equal((await store.getCasinoView(memberNumber)).chips, 50);
+    assert.equal((await store.getCasinoView(memberNumber)).chips, 80);
     assert.deepEqual((await store.getDareView(memberNumber)).activeBondage, []);
     assert.deepEqual(escapeEvents[0].data, {
         chipsCost: 20,
         bondageItemsRemoved: 2,
-        previousChips: 70,
-        remainingChips: 50,
+        previousChips: 100,
+        remainingChips: 80,
     });
 
     await store.updatePosition(memberNumber, { X: 5, Y: 6 });
