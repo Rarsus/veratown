@@ -472,6 +472,55 @@ test("enabled release migration owns removal without calling the legacy mutator"
     assert.equal(legacyRemoveCalls, 0);
 });
 
+test("enabled release migration retries transient action failure without legacy fallback", async () => {
+    let actionCalls = 0;
+    let legacyRemoveCalls = 0;
+    let appearance: any[] = [
+        { Group: "ItemArms", Name: "RetryActionCuffs", Property: {} },
+    ];
+    const coordinator = new LiveAppearanceRemovalCoordinator(2, {
+        rollout: new ActionLayerRolloutController({
+            releaseRemovalEnabled: true,
+        }),
+        appearanceService: {
+            remove: async () => {
+                actionCalls += 1;
+                if (actionCalls === 1) {
+                    return {
+                        status: "failed" as const,
+                        retryable: true,
+                        reason: "BC connector disconnected before confirmation",
+                        metadata: {} as any,
+                    };
+                }
+                appearance = [];
+                return {
+                    status: "completed" as const,
+                    metadata: {} as any,
+                };
+            },
+        } as any,
+    });
+    const character: any = {
+        MemberNumber: 145,
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+            RemoveItem: () => {
+                legacyRemoveCalls += 1;
+            },
+        },
+    };
+
+    await coordinator.remove(character, "release-action-retry-1", {
+        group: "ItemArms",
+        name: "RetryActionCuffs",
+    });
+
+    assert.equal(actionCalls, 2);
+    assert.equal(legacyRemoveCalls, 0);
+    assert.deepEqual(appearance, []);
+});
+
 test("enabled release migration preserves locked and ambiguous targets", async () => {
     let actionCalls = 0;
     let legacyRemoveCalls = 0;

@@ -75,6 +75,7 @@ export class LiveAppearanceRemovalCoordinator {
         target: LiveRemovalTarget,
     ): Promise<void> {
         let lastError: unknown;
+        let lastActionError: Error | undefined;
         const workflowRecovery = this.actionLayer?.workflowRecovery;
         let workflowState = workflowRecovery
             ? await workflowRecovery.start(
@@ -126,6 +127,7 @@ export class LiveAppearanceRemovalCoordinator {
                 operationKey,
             );
             if (lease?.path === "action") {
+                let retryAction = false;
                 try {
                     const result =
                         await this.actionLayer!.appearanceService.remove(
@@ -157,13 +159,36 @@ export class LiveAppearanceRemovalCoordinator {
                         await finishWorkflow("failed");
                         return;
                     }
-                    throw new Error(
+                    const actionError = new Error(
                         result.reason ??
                             `Action-layer removal did not complete for ${target.group}/${target.name}`,
                     );
+                    if (
+                        (result.status === "timed_out" ||
+                            result.status === "failed") &&
+                        result.retryable === true
+                    ) {
+                        lastActionError = actionError;
+                        retryAction = true;
+                        if (workflowState && workflowRecovery) {
+                            workflowState = await workflowRecovery.advance(
+                                workflowState,
+                                "release-removal",
+                                {
+                                    attempt: attempt + 1,
+                                    status: result.status,
+                                    reason: result.reason,
+                                },
+                            );
+                        }
+                    } else {
+                        await finishWorkflow("failed");
+                        throw actionError;
+                    }
                 } finally {
                     lease.release();
                 }
+                if (retryAction) continue;
             }
             lease?.release();
 
@@ -199,6 +224,7 @@ export class LiveAppearanceRemovalCoordinator {
 
         await finishWorkflow("failed");
         if (lastError) throw lastError;
+        if (lastActionError) throw lastActionError;
         throw new Error(
             `Live appearance removal did not complete for ${target.group}/${target.name}`,
         );
