@@ -14,6 +14,8 @@ WORKDIR /app
 
 # The "src" package's install/prepare scripts (pnpm compile) need its
 # tsconfig.json and sources present, so copy the full repo before installing.
+# Bondage College is not present in Railway's build context; runtime BC data
+# must therefore come from the committed src/bcdata snapshot.
 COPY . .
 
 # Install dependencies

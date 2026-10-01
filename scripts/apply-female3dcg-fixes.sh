@@ -35,7 +35,7 @@ CHANGES=0
 
 # Fix 1: AssetUpperOverflowAlpha
 if grep -q "^const AssetUpperOverflowAlpha" "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^const AssetUpperOverflowAlpha/export const AssetUpperOverflowAlpha/' "$FEMALE3DCG_FILE"
+    sed -i 's/^const AssetUpperOverflowAlpha/export const AssetUpperOverflowAlpha/' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetUpperOverflowAlpha${NC}"
     ((CHANGES += 1))
 elif grep -q "^export const AssetUpperOverflowAlpha" "$FEMALE3DCG_FILE"; then
@@ -44,7 +44,7 @@ fi
 
 # Fix 2: AssetLowerOverflowAlpha
 if grep -q "^const AssetLowerOverflowAlpha" "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^const AssetLowerOverflowAlpha/export const AssetLowerOverflowAlpha/' "$FEMALE3DCG_FILE"
+    sed -i 's/^const AssetLowerOverflowAlpha/export const AssetLowerOverflowAlpha/' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetLowerOverflowAlpha${NC}"
     ((CHANGES += 1))
 elif grep -q "^export const AssetLowerOverflowAlpha" "$FEMALE3DCG_FILE"; then
@@ -59,7 +59,7 @@ if ! grep -q "export const PoseType" "$FEMALE3DCG_FILE"; then
         E_LINE=$(grep -n "^const E = " "$FEMALE3DCG_FILE" | cut -d: -f1)
         if [[ -n "$E_LINE" ]]; then
             # Insert PoseType constants before E
-            sed -i.tmp "${E_LINE}i\\
+            sed -i "${E_LINE}i\\
 \\
 /**\\
  * Pose type constants for PoseMapping\\
@@ -84,7 +84,7 @@ fi
 
 # Fix 4: Effects namespace (E)
 if grep -q "^const E = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^const E = /export const E = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^const E = /export const E = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: E (effects namespace)${NC}"
     ((CHANGES += 1))
 elif grep -q "^export const E = " "$FEMALE3DCG_FILE"; then
@@ -93,7 +93,7 @@ fi
 
 # Fix 5: AssetPoseMapping
 if grep -q "^const AssetPoseMapping = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^const AssetPoseMapping = /export const AssetPoseMapping = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^const AssetPoseMapping = /export const AssetPoseMapping = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetPoseMapping${NC}"
     ((CHANGES += 1))
 elif grep -q "^export const AssetPoseMapping = " "$FEMALE3DCG_FILE"; then
@@ -102,7 +102,7 @@ fi
 
 # Fix 6: AssetFemale3DCG
 if grep -q "^var AssetFemale3DCG = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^var AssetFemale3DCG = /export var AssetFemale3DCG = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^var AssetFemale3DCG = /export var AssetFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: AssetFemale3DCG${NC}"
     ((CHANGES += 1))
 elif grep -q "^export var AssetFemale3DCG = " "$FEMALE3DCG_FILE"; then
@@ -111,7 +111,7 @@ fi
 
 # Fix 7: PoseFemale3DCG
 if grep -q "^var PoseFemale3DCG = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^var PoseFemale3DCG = /export var PoseFemale3DCG = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^var PoseFemale3DCG = /export var PoseFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: PoseFemale3DCG${NC}"
     ((CHANGES += 1))
 elif grep -q "^export var PoseFemale3DCG = " "$FEMALE3DCG_FILE"; then
@@ -120,7 +120,7 @@ fi
 
 # Fix 8: PoseFemale3DCGNames
 if grep -q "^var PoseFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^var PoseFemale3DCGNames = /export var PoseFemale3DCGNames = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^var PoseFemale3DCGNames = /export var PoseFemale3DCGNames = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: PoseFemale3DCGNames${NC}"
     ((CHANGES += 1))
 elif grep -q "^export var PoseFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
@@ -129,7 +129,7 @@ fi
 
 # Fix 9: ActivityFemale3DCG
 if grep -q "^var ActivityFemale3DCG = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^var ActivityFemale3DCG = /export var ActivityFemale3DCG = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^var ActivityFemale3DCG = /export var ActivityFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: ActivityFemale3DCG${NC}"
     ((CHANGES += 1))
 elif grep -q "^export var ActivityFemale3DCG = " "$FEMALE3DCG_FILE"; then
@@ -138,7 +138,7 @@ fi
 
 # Fix 10: ActivityFemale3DCGOrdering
 if grep -q "^let ActivityFemale3DCGOrdering = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^let ActivityFemale3DCGOrdering = /export let ActivityFemale3DCGOrdering = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^let ActivityFemale3DCGOrdering = /export let ActivityFemale3DCGOrdering = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: ActivityFemale3DCGOrdering${NC}"
     ((CHANGES += 1))
 elif grep -q "^export let ActivityFemale3DCGOrdering = " "$FEMALE3DCG_FILE"; then
@@ -147,7 +147,7 @@ fi
 
 # Fix 11: FetishFemale3DCG
 if grep -q "^var FetishFemale3DCG = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^var FetishFemale3DCG = /export var FetishFemale3DCG = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^var FetishFemale3DCG = /export var FetishFemale3DCG = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: FetishFemale3DCG${NC}"
     ((CHANGES += 1))
 elif grep -q "^export var FetishFemale3DCG = " "$FEMALE3DCG_FILE"; then
@@ -156,15 +156,12 @@ fi
 
 # Fix 12: FetishFemale3DCGNames
 if grep -q "^const FetishFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
-    sed -i.tmp 's/^const FetishFemale3DCGNames = /export const FetishFemale3DCGNames = /' "$FEMALE3DCG_FILE"
+    sed -i 's/^const FetishFemale3DCGNames = /export const FetishFemale3DCGNames = /' "$FEMALE3DCG_FILE"
     echo -e "${GREEN}✓ Export added: FetishFemale3DCGNames${NC}"
     ((CHANGES += 1))
 elif grep -q "^export const FetishFemale3DCGNames = " "$FEMALE3DCG_FILE"; then
     echo -e "${YELLOW}  Already exported: FetishFemale3DCGNames${NC}"
 fi
-
-# Clean up sed temporary files
-rm -f "${FEMALE3DCG_FILE}.tmp"
 
 echo ""
 if [[ $CHANGES -gt 0 ]]; then

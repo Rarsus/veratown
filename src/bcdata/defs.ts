@@ -46,6 +46,9 @@ export function AssetsClothCheerleaderTopAfterDrawHook(...args: any[]): any {
 export function AssetsItemDevicesDollBoxAfterDrawHook(...args: any[]): any {
 	return null;
 }
+export function AssetsItemDevicesCardBoardBoxAfterDrawHook(...args: any[]): any {
+	return null;
+}
 export function AssetsItemDevicesFuckMachineBeforeDrawHook(...args: any[]): any {
 	return null;
 }

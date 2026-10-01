@@ -44,6 +44,7 @@ import {
 	AssetsItemDevicesFuturisticCrateScriptDrawHook,
 	AssetsItemDevicesFuckMachineScriptDrawHook,
 	AssetsItemDevicesFuckMachineBeforeDrawHook,
+	AssetsItemDevicesCardBoardBoxAfterDrawHook,
 	PropertyOpacityInit,
 	PropertyOpacityLoad,
 	PropertyOpacityDraw,
@@ -1429,6 +1430,10 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 		},
 	}, // Decals
 	BodyMarkings: {
+		BabyPowderDust: {
+			Archetype: ExtendedArchetype.TYPED,
+			Options: [{ Name: "Light" }, { Name: "Heavy" }],
+		},
 		WombTattoos: {
 			Archetype: ExtendedArchetype.MODULAR,
 			ChatSetting: ModularItemChatSetting.PER_MODULE,
@@ -6610,7 +6615,33 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 					Name: "Layering",
 					Key: "l",
 					Options: [
-						{},
+						{
+							Property: {
+								OverridePriority: {
+									base: 45,
+									nose: 44,
+									straps: 44,
+									sideAttachments: 45,
+									attachmentPoint: 45,
+									top: 44,
+									filter: 46,
+									tubes: 46,
+									exhalationValve: 45,
+									visorOpaque: 44,
+									visorReflection: 44,
+									visorTransparent: 44,
+									visorReflectionTransparent: 44,
+									hypno1: 44,
+									hypno2: 44,
+									tube: 44,
+									canteen: 45,
+									liquid: 46,
+									baseCap: 45,
+									CTlogo: 45,
+									BFlogo: 45,
+								},
+							},
+						},
 						{
 							Property: {
 								OverridePriority: {
@@ -6621,18 +6652,31 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 									top: 53,
 									exhalationValve: 53,
 									visorOpaque: 52,
-									visorReflection: 53,
+									visorReflection: 52,
 									visorTransparent: 52,
-									visorReflectionTransparent: 53,
+									visorReflectionTransparent: 52,
 									hypno1: 52,
 									hypno2: 52,
 									tube: 53,
 									canteen: 53,
 									liquid: 53,
+									baseCap: 53,
+									CTlogo: 53,
+									BFlogo: 53,
 								},
 							},
 						},
 					],
+				},
+				{
+					Name: "Attachments",
+					Key: "at",
+					Options: [{}, {}, {}],
+				},
+				{
+					Name: "frontCap",
+					Key: "fc",
+					Options: [{}, {}, {}],
 				},
 			],
 		}, // CybertechMask
@@ -10760,6 +10804,10 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 		}, // TransparentLatexHood
 	}, // ItemHood
 	Jewelry: {
+		NavelBar1: {
+			Archetype: ExtendedArchetype.MODULAR,
+			CopyConfig: { GroupName: "ItemTorso", AssetName: "NavelBar1" },
+		},
 		JewelrySet: {
 			Archetype: ExtendedArchetype.MODULAR,
 			Modules: [
@@ -13269,6 +13317,56 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 			DrawImages: false,
 			Options: [{ Name: "Translucent" }, { Name: "Opaque" }],
 		}, // LongBag
+		CardBoardBox: {
+			Archetype: ExtendedArchetype.MODULAR,
+			Modules: [
+				{
+					Name: "HandleHole",
+					Key: "h",
+					Options: [{}, {}],
+				},
+				{
+					Name: "OpenTop",
+					Key: "t",
+					Options: [
+						{},
+						{
+							Property: {
+								SetPose: ["AllFours"],
+								AllowActivePose: ["Hogtied"],
+								Effect: [E.BlindLight, E.Enclose],
+							},
+						},
+						{
+							Property: {
+								SetPose: ["AllFours"],
+								AllowActivePose: ["Hogtied"],
+								Difficulty: 22,
+								Effect: [E.BlindLight, E.BlockWardrobe, E.Freeze, E.Enclose],
+							},
+						},
+					],
+				},
+				{
+					Name: "Txt",
+					Key: "x",
+					Options: [
+						{},
+						{
+							HasSubscreen: true,
+							ArchetypeConfig: {
+								Archetype: ExtendedArchetype.TEXT,
+								MaxLength: { Text: 14, Text2: 14, Text3: 14 },
+								Font: "Impact",
+								ScriptHooks: {
+									AfterDraw: AssetsItemDevicesCardBoardBoxAfterDrawHook,
+								},
+							},
+						},
+					],
+				},
+			],
+		}, //CardBoardBox
 	}, // ItemDevices
 	ItemBoots: {
 		ToeTape: {
@@ -13988,8 +14086,69 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 				CommonChatTags.ASSET_NAME,
 			],
 		}, // UsedCondom
+		MoreWiredVibrators: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Modules: [
+				{
+					Name: "SelectVibratorSwitch",
+					DrawImages: false,
+					Key: "o",
+					Options: [
+						{
+							Property: { Intensity: -1, Effect: ["Egged"] },
+						},
+						{
+							Property: { Intensity: 0, Effect: ["Egged", "Vibrating"] },
+						},
+						{
+							Property: { Intensity: 1, Effect: ["Egged", "Vibrating"] },
+						},
+						{
+							Property: { Intensity: 2, Effect: ["Egged", "Vibrating"] },
+						},
+						{
+							Property: { Intensity: 3, Effect: ["Egged", "Vibrating"] },
+						},
+					],
+				},
+				{
+					Name: "SelectVibratorQuantity",
+					DrawImages: false,
+					Key: "n",
+					Options: [{}, {}, {}, {}, {}],
+				},
+			],
+		}, // MoreWiredVibrators
 	}, // ItemVulva
 	ItemVulvaPiercings: {
+		Catheter: {
+			Archetype: ExtendedArchetype.MODULAR,
+			DrawImages: false,
+			Modules: [
+				{
+					Name: "Length",
+					Key: "l",
+					DrawImages: false,
+					Options: [{}, {}],
+				},
+				{
+					Name: "OpenEnded",
+					Key: "o",
+					DrawImages: false,
+					Options: [
+						{},
+						{
+							Property: { Effect: ["DenialMode", "RuinOrgasms"] },
+						},
+					],
+				},
+			],
+		},
 		ClitRing: {
 			Archetype: ExtendedArchetype.TYPED,
 			ChatTags: [CommonChatTags.SOURCE_CHAR, CommonChatTags.DEST_CHAR],
@@ -14644,6 +14803,10 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 		}, // ShockClamps
 	}, // ItemNipples
 	Corset: {
+		HeavyLatexCorset: {
+			Archetype: ExtendedArchetype.TYPED,
+			CopyConfig: { GroupName: "ItemTorso", AssetName: "HeavyLatexCorset" },
+		},
 		LatexCorset1: {
 			Archetype: ExtendedArchetype.TYPED,
 			Options: [
@@ -15139,6 +15302,157 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 			],
 			ChangeWhenLocked: false,
 		}, // BarrelCorset
+		Movableglasscabinet: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChangeWhenLocked: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Modules: [
+				{
+					Name: "GlassType",
+					Key: "t",
+					DrawImages: false,
+					Options: [{}, {}],
+				},
+				{
+					Name: "BreastGlassDoor",
+					Key: "up",
+					DrawImages: false,
+					Options: [
+						{
+							Property: {
+								Block: [
+									"ItemHands",
+									"ItemHandheld",
+									"ItemArms",
+									"ItemBreast",
+									"ItemTorso2",
+									"ItemNipples",
+									"ItemNipplesPiercings",
+								],
+							},
+						},
+						{},
+					],
+				},
+				{
+					Name: "AbdominalGlassDoor",
+					Key: "down",
+					DrawImages: false,
+					Options: [
+						{
+							Property: {
+								Block: [
+									"ItemPelvis",
+									"ItemButt",
+									"ItemVulva",
+									"ItemVulvaPiercings",
+								],
+							},
+						},
+						{},
+					],
+				},
+			],
+		}, // Movableglasscabinet
+		RestraintSet: {
+			Archetype: ExtendedArchetype.TYPED,
+			ChangeWhenLocked: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.TARGET_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			DrawImages: false,
+			Options: [
+				{ Name: "No" },
+				{ Name: "LatexSuit" },
+				{ Name: "SheerBodysuit" },
+				{ Name: "Bodysuit" },
+			],
+		}, // RestraintSet
+		TentacleSuit: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChangeWhenLocked: false,
+			DrawImages: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.TARGET_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Modules: [
+				{
+					Name: "TentacleStatus",
+					Key: "d",
+					Options: [
+						{
+							Property: {
+								Block: ["ItemVulva", "ItemVulvaPiercings", "ItemButt"],
+							},
+						},
+						{},
+						{
+							HasSubscreen: true,
+							Prerequisite: [
+								"AccessVulva",
+								"VulvaEmpty",
+								"AccessButt",
+								"ButtEmpty",
+							],
+							Property: {
+								Effect: [E.VulvaShaft],
+								Block: ["ItemVulva", "ItemButt"],
+							},
+							ArchetypeConfig: {
+								Archetype: ExtendedArchetype.VIBRATING,
+							},
+						},
+					],
+				},
+				{
+					Name: "TopStatus",
+					Key: "s",
+					Options: [{}, {}],
+				},
+				{
+					Name: "GloveStatus",
+					Key: "h",
+					Options: [
+						{},
+						{},
+						{
+							Property: {
+								Difficulty: 13,
+								SetPose: ["BackElbowTouch"],
+								Effect: [E.Block],
+								Block: ["ItemArms", "ItemHands"],
+							},
+						},
+					],
+				},
+				{
+					Name: "MouthCoverStatus",
+					Key: "m",
+					Options: [
+						{},
+						{
+							Property: {
+								Effect: [E.BlockMouth, E.GagLight],
+								Block: ["ItemMouth"],
+							},
+						},
+					],
+				},
+				{
+					Name: "FootCoverStatus",
+					Key: "f",
+					Options: [{}, { Property: { Effect: [E.Slow] } }],
+				},
+			],
+		}, // TentacleSuit
 	}, // ItemTorso
 	ItemTorso2: {
 		LockingSwimsuit: {
@@ -15196,6 +15510,29 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 		}, // BarrelCorset
 	}, //ItemTorso2
 	Shoes: {
+		ToeRing: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChangeWhenLocked: false,
+			Modules: [
+				...[
+					["RightLittleToeRing", "R5"],
+					["RightFourthToeRing", "R4"],
+					["RightMiddleToeRing", "R3"],
+					["RightSecondToeRing", "R2"],
+					["RightBigToeRing", "R1"],
+					["LeftBigToeRing", "L1"],
+					["LeftSecondToeRing", "L2"],
+					["LeftMiddleToeRing", "L3"],
+					["LeftFourthToeRing", "L4"],
+					["LeftLittleToeRing", "L5"],
+				].map(([Name, Key]) => ({
+					Name,
+					Key,
+					DrawImages: false,
+					Options: [{}, {}],
+				})),
+			],
+		},
 		FuturisticHeels2: {
 			Archetype: ExtendedArchetype.TYPED,
 			Options: [{ Name: "Shiny" }, { Name: "Matte" }],
@@ -15665,6 +16002,15 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 		},
 	}, // HairAccessory3
 	ItemMouth: {
+		PacifierClip: {
+			Archetype: ExtendedArchetype.TYPED,
+			Options: [{ Name: "PacifierIn" }, { Name: "PacifierOut" }],
+			DialogPrefix: {
+				Header: "SelectGagType",
+				Option: "BallGagMouthType",
+				Chat: "BallGagMouthSet",
+			},
+		},
 		ClothGag: {
 			Archetype: ExtendedArchetype.TYPED,
 			Options: [
@@ -17911,20 +18257,24 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 								OverridePriority: {
 									base: 44,
 									straps: 44,
-									nose: 42,
-									sideAttachments: 44,
-									attachmentPoint: 44,
+									sideAttachments: 45,
+									attachmentPoint: 45,
 									top: 44,
-									exhalationValve: 44,
-									visorOpaque: 43,
+									filter: 46,
+									tubes: 46,
+									exhalationValve: 45,
+									visorOpaque: 44,
 									visorReflection: 44,
-									visorTransparent: 43,
+									visorTransparent: 44,
 									visorReflectionTransparent: 44,
-									hypno1: 43,
-									hypno2: 43,
+									hypno1: 44,
+									hypno2: 44,
 									tube: 44,
-									canteen: 44,
-									liquid: 44,
+									canteen: 45,
+									liquid: 46,
+									baseCap: 45,
+									CTlogo: 45,
+									BFlogo: 45,
 								},
 							},
 						},
@@ -17938,18 +18288,31 @@ export var AssetFemale3DCGExtended: ExtendedItemMainConfig = {
 									top: 53,
 									exhalationValve: 53,
 									visorOpaque: 52,
-									visorReflection: 53,
+									visorReflection: 52,
 									visorTransparent: 52,
-									visorReflectionTransparent: 53,
+									visorReflectionTransparent: 52,
 									hypno1: 52,
 									hypno2: 52,
 									tube: 53,
 									canteen: 53,
 									liquid: 53,
+									baseCap: 53,
+									CTlogo: 53,
+									BFlogo: 53,
 								},
 							},
 						},
 					],
+				},
+				{
+					Name: "Attachments",
+					Key: "at",
+					Options: [{}, {}, {}],
+				},
+				{
+					Name: "frontCap",
+					Key: "fc",
+					Options: [{}, {}, {}],
 				},
 			],
 		}, // CybertechMask

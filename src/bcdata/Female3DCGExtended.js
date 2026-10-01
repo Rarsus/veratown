@@ -6632,19 +6632,22 @@ var AssetFemale3DCGExtended = {
 									straps: 44,
 									sideAttachments: 45,
 									attachmentPoint: 45,
-									top: 45,
+									top: 44,
 									filter: 46,
 									tubes: 46,
 									exhalationValve: 45,
 									visorOpaque: 44,
-									visorReflection: 45,
+									visorReflection: 44,
 									visorTransparent: 44,
-									visorReflectionTransparent: 45,
+									visorReflectionTransparent: 44,
 									hypno1: 44,
 									hypno2: 44,
 									tube: 44,
 									canteen: 45,
 									liquid: 46,
+									baseCap: 45,
+									CTlogo: 45,
+									BFlogo: 45,
 								},
 							},
 						},
@@ -6661,14 +6664,17 @@ var AssetFemale3DCGExtended = {
 									tubes: 54,
 									exhalationValve: 53,
 									visorOpaque: 52,
-									visorReflection: 53,
+									visorReflection: 52,
 									visorTransparent: 52,
-									visorReflectionTransparent: 53,
+									visorReflectionTransparent: 52,
 									hypno1: 52,
 									hypno2: 52,
 									tube: 53,
 									canteen: 53,
 									liquid: 53,
+									baseCap: 53,
+									CTlogo: 53,
+									BFlogo: 53,
 								},
 							},
 						},
@@ -6677,6 +6683,11 @@ var AssetFemale3DCGExtended = {
 				{
 					Name: "Attachments",
 					Key: "at",
+					Options: [{}, {}, {}],
+				},
+				{
+					Name: "frontCap",
+					Key: "fc",
 					Options: [{}, {}, {}],
 				},
 			],
@@ -13324,6 +13335,56 @@ var AssetFemale3DCGExtended = {
 			DrawImages: false,
 			Options: [{ Name: "Translucent" }, { Name: "Opaque" }],
 		}, // LongBag
+		CardBoardBox: {
+			Archetype: ExtendedArchetype.MODULAR,
+			Modules: [
+				{
+					Name: "HandleHole",
+					Key: "h",
+					Options: [{}, {}],
+				},
+				{
+					Name: "OpenTop",
+					Key: "t",
+					Options: [
+						{},
+						{
+							Property: {
+								SetPose: ["AllFours"],
+								AllowActivePose: ["Hogtied"],
+								Effect: [E.BlindLight, E.Enclose],
+							},
+						},
+						{
+							Property: {
+								SetPose: ["AllFours"],
+								AllowActivePose: ["Hogtied"],
+								Difficulty: 22,
+								Effect: [E.BlindLight, E.BlockWardrobe, E.Freeze, E.Enclose],
+							},
+						},
+					],
+				},
+				{
+					Name: "Txt",
+					Key: "x",
+					Options: [
+						{},
+						{
+							HasSubscreen: true,
+							ArchetypeConfig: {
+								Archetype: ExtendedArchetype.TEXT,
+								MaxLength: { Text: 14, Text2: 14, Text3: 14 },
+								Font: "Impact",
+								ScriptHooks: {
+									AfterDraw: AssetsItemDevicesCardBoardBoxAfterDrawHook,
+								},
+							},
+						},
+					],
+				},
+			],
+		}, //CardBoardBox
 	}, // ItemDevices
 	ItemBoots: {
 		ToeTape: {
@@ -14043,6 +14104,44 @@ var AssetFemale3DCGExtended = {
 				CommonChatTags.ASSET_NAME,
 			],
 		}, // UsedCondom
+		MoreWiredVibrators: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Modules: [
+				{
+					Name: "SelectVibratorSwitch",
+					DrawImages: false,
+					Key: "o",
+					Options: [
+						{
+							Property: { Intensity: -1, Effect: ["Egged"] },
+						},
+						{
+							Property: { Intensity: 0, Effect: ["Egged", "Vibrating"] },
+						},
+						{
+							Property: { Intensity: 1, Effect: ["Egged", "Vibrating"] },
+						},
+						{
+							Property: { Intensity: 2, Effect: ["Egged", "Vibrating"] },
+						},
+						{
+							Property: { Intensity: 3, Effect: ["Egged", "Vibrating"] },
+						},
+					],
+				},
+				{
+					Name: "SelectVibratorQuantity",
+					DrawImages: false,
+					Key: "n",
+					Options: [{}, {}, {}, {}, {}],
+				},
+			],
+		}, // MoreWiredVibrators
 	}, // ItemVulva
 	ItemVulvaPiercings: {
 		ClitRing: {
@@ -15233,6 +15332,157 @@ var AssetFemale3DCGExtended = {
 			],
 			ChangeWhenLocked: false,
 		}, // BarrelCorset
+		Movableglasscabinet: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChangeWhenLocked: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.DEST_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Modules: [
+				{
+					Name: "GlassType",
+					Key: "t",
+					DrawImages: false,
+					Options: [{}, {}],
+				},
+				{
+					Name: "BreastGlassDoor",
+					Key: "up",
+					DrawImages: false,
+					Options: [
+						{
+							Property: {
+								Block: [
+									"ItemHands",
+									"ItemHandheld",
+									"ItemArms",
+									"ItemBreast",
+									"ItemTorso2",
+									"ItemNipples",
+									"ItemNipplesPiercings",
+								],
+							},
+						},
+						{},
+					],
+				},
+				{
+					Name: "AbdominalGlassDoor",
+					Key: "down",
+					DrawImages: false,
+					Options: [
+						{
+							Property: {
+								Block: [
+									"ItemPelvis",
+									"ItemButt",
+									"ItemVulva",
+									"ItemVulvaPiercings",
+								],
+							},
+						},
+						{},
+					],
+				},
+			],
+		}, // Movableglasscabinet
+		RestraintSet: {
+			Archetype: ExtendedArchetype.TYPED,
+			ChangeWhenLocked: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.TARGET_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			DrawImages: false,
+			Options: [
+				{ Name: "No" },
+				{ Name: "LatexSuit" },
+				{ Name: "SheerBodysuit" },
+				{ Name: "Bodysuit" },
+			],
+		}, // RestraintSet
+		TentacleSuit: {
+			Archetype: ExtendedArchetype.MODULAR,
+			ChangeWhenLocked: false,
+			DrawImages: false,
+			ChatTags: [
+				CommonChatTags.SOURCE_CHAR,
+				CommonChatTags.TARGET_CHAR,
+				CommonChatTags.ASSET_NAME,
+			],
+			Modules: [
+				{
+					Name: "TentacleStatus",
+					Key: "d",
+					Options: [
+						{
+							Property: {
+								Block: ["ItemVulva", "ItemVulvaPiercings", "ItemButt"],
+							},
+						},
+						{},
+						{
+							HasSubscreen: true,
+							Prerequisite: [
+								"AccessVulva",
+								"VulvaEmpty",
+								"AccessButt",
+								"ButtEmpty",
+							],
+							Property: {
+								Effect: [E.VulvaShaft],
+								Block: ["ItemVulva", "ItemButt"],
+							},
+							ArchetypeConfig: {
+								Archetype: ExtendedArchetype.VIBRATING,
+							},
+						},
+					],
+				},
+				{
+					Name: "TopStatus",
+					Key: "s",
+					Options: [{}, {}],
+				},
+				{
+					Name: "GloveStatus",
+					Key: "h",
+					Options: [
+						{},
+						{},
+						{
+							Property: {
+								Difficulty: 13,
+								SetPose: ["BackElbowTouch"],
+								Effect: [E.Block],
+								Block: ["ItemArms", "ItemHands"],
+							},
+						},
+					],
+				},
+				{
+					Name: "MouthCoverStatus",
+					Key: "m",
+					Options: [
+						{},
+						{
+							Property: {
+								Effect: [E.BlockMouth, E.GagLight],
+								Block: ["ItemMouth"],
+							},
+						},
+					],
+				},
+				{
+					Name: "FootCoverStatus",
+					Key: "f",
+					Options: [{}, { Property: { Effect: [E.Slow] } }],
+				},
+			],
+		}, // TentacleSuit
 	}, // ItemTorso
 	ItemTorso2: {
 		LockingSwimsuit: {
@@ -18150,19 +18400,22 @@ var AssetFemale3DCGExtended = {
 									straps: 44,
 									sideAttachments: 45,
 									attachmentPoint: 45,
-									top: 45,
+									top: 44,
 									filter: 46,
 									tubes: 46,
 									exhalationValve: 45,
 									visorOpaque: 44,
-									visorReflection: 45,
+									visorReflection: 44,
 									visorTransparent: 44,
-									visorReflectionTransparent: 45,
+									visorReflectionTransparent: 44,
 									hypno1: 44,
 									hypno2: 44,
 									tube: 44,
 									canteen: 45,
 									liquid: 46,
+									baseCap: 45,
+									CTlogo: 45,
+									BFlogo: 45,
 								},
 							},
 						},
@@ -18179,14 +18432,17 @@ var AssetFemale3DCGExtended = {
 									tubes: 54,
 									exhalationValve: 53,
 									visorOpaque: 52,
-									visorReflection: 53,
+									visorReflection: 52,
 									visorTransparent: 52,
-									visorReflectionTransparent: 53,
+									visorReflectionTransparent: 52,
 									hypno1: 52,
 									hypno2: 52,
 									tube: 53,
 									canteen: 53,
 									liquid: 53,
+									baseCap: 53,
+									CTlogo: 53,
+									BFlogo: 53,
 								},
 							},
 						},
@@ -18195,6 +18451,11 @@ var AssetFemale3DCGExtended = {
 				{
 					Name: "Attachments",
 					Key: "at",
+					Options: [{}, {}, {}],
+				},
+				{
+					Name: "frontCap",
+					Key: "fc",
 					Options: [{}, {}, {}],
 				},
 			],

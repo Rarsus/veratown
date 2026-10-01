@@ -460,6 +460,7 @@ declare namespace AssetGroupDefinition {
 		IsRestraint?: false;
 		Zone?: never;
 		Time?: never;
+		Effect?: Exclude<EffectName, GagEffectName | BlindEffectName | DeafEffectName | BlurEffectName>[];
 	}
 	/** An {@link AssetGroupDefinition} subtype for groups of the `Script` category. */
 	interface Script extends AssetGroupDefinitionBase {
@@ -823,6 +824,7 @@ declare namespace AssetDefinition {
 		SelfUnlock?: false;
 		Time?: never;
 		Block?: never;
+		Effect?: Exclude<EffectName, GagEffectName | BlindEffectName | DeafEffectName | BlurEffectName>[];
 		// We only allow a specific subset of those for clothing
 		Prerequisite?: AssetAppearancePrerequisite | AssetAppearancePrerequisite[];
 	}

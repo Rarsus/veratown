@@ -77,6 +77,12 @@ if [[ -f "$BC_ASSETS_DIR/Female3DCGExtended.js" ]]; then
     fi
 fi
 
+echo "🔧 Reapplying ropeybot ESM export compatibility..."
+bash "$ROPEYBOT_ROOT/scripts/apply-female3dcg-fixes.sh"
+
+echo "🔍 Validating the generated runtime registry..."
+(cd "$ROPEYBOT_ROOT" && pnpm run validate:bc-assets)
+
 echo ""
 echo "✅ Asset sync complete!"
 echo ""
