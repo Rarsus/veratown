@@ -323,10 +323,15 @@ are implemented in `bin/action-layer/reply-correlation.ts` and its focused
 tests. This is correlation evidence, not an authoritative delivery receipt.
 
 As of 2026-10-01, the local action-layer one-cycle gate, communication-family
-tests, and 22-test real-room harness contract are green. A safe live
-`release-observe` run completed separately with run ID
+tests, and 22-test real-room harness contract are green. Live-safe
+communication qualification also passed with retained evidence:
+
+- `transport-matrix`: run ID `6da5c54a-dc8f-4f40-bf82-da570d01c30e`;
+- `reconnect`: run ID `e4044e99-6cd2-4216-b942-1be65dba0a45`.
+
+A safe live `release-observe` run completed separately with run ID
 `d0f31da9-eee1-4787-8c86-9011bbd89174`; no communication canary or rollout
-switch was enabled from that observation.
+switch was enabled from these observations.
 
 ## Incremental Implementation Plan
 
