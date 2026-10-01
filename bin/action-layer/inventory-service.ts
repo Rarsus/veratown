@@ -1,13 +1,16 @@
-import type {
-    ActionResult,
-    InventoryActionAdapter,
-    InventoryActionContext,
-    InventoryItem,
-    InventoryItemIdentity,
-    InventoryMutationPolicy,
-    InventoryObservation,
-    InventoryTransferObservation,
-    InventoryTransferPolicy,
+import {
+    createActionMetadata,
+    createActionResult,
+    type ActionContext,
+    type ActionResult,
+    type InventoryActionAdapter,
+    type InventoryActionContext,
+    type InventoryItem,
+    type InventoryItemIdentity,
+    type InventoryMutationPolicy,
+    type InventoryObservation,
+    type InventoryTransferObservation,
+    type InventoryTransferPolicy,
 } from "./domain";
 import { ActionScheduler } from "./scheduler";
 import { validateActionExecutionPolicy } from "./policy";
@@ -79,6 +82,22 @@ function validateMutation(policy: InventoryMutationPolicy): void {
     }
 }
 
+function deadlineResult<T>(
+    context: ActionContext,
+    actionId: string,
+): ActionResult<T> {
+    const now = Date.now();
+    return createActionResult(
+        "timed_out",
+        createActionMetadata(context, actionId, now, context.attempt ?? 1, now),
+        {
+            reason: "Inventory action deadline expired before dispatch",
+            failureKind: "timeout",
+            retryable: false,
+        },
+    );
+}
+
 export class InventoryActionService<TRuntimeCharacter = unknown> {
     private readonly scheduler: ActionScheduler;
 
@@ -97,7 +116,10 @@ export class InventoryActionService<TRuntimeCharacter = unknown> {
         return this.scheduler.schedule(
             context.memberNumber,
             context.operationId,
-            () => this.adapter.observe(character, context),
+            () =>
+                Date.now() >= context.deadlineAt
+                    ? deadlineResult(context, "inventory.observe")
+                    : this.adapter.observe(character, context),
         );
     }
 
@@ -118,7 +140,10 @@ export class InventoryActionService<TRuntimeCharacter = unknown> {
         return this.scheduler.schedule(
             policy.memberNumber,
             policy.operationId,
-            () => this.adapter.add(character, item, policy),
+            () =>
+                Date.now() >= policy.deadlineAt
+                    ? deadlineResult(policy, "inventory.add")
+                    : this.adapter.add(character, item, policy),
         );
     }
 
@@ -141,7 +166,15 @@ export class InventoryActionService<TRuntimeCharacter = unknown> {
         return this.scheduler.schedule(
             policy.memberNumber,
             policy.operationId,
-            () => this.adapter.remove(character, identity, quantity, policy),
+            () =>
+                Date.now() >= policy.deadlineAt
+                    ? deadlineResult(policy, "inventory.remove")
+                    : this.adapter.remove(
+                          character,
+                          identity,
+                          quantity,
+                          policy,
+                      ),
         );
     }
 
@@ -169,13 +202,15 @@ export class InventoryActionService<TRuntimeCharacter = unknown> {
             policy.memberNumber,
             policy.operationId,
             () =>
-                this.adapter.transfer(
-                    source,
-                    recipient,
-                    identity,
-                    quantity,
-                    policy,
-                ),
+                Date.now() >= policy.deadlineAt
+                    ? deadlineResult(policy, "inventory.transfer")
+                    : this.adapter.transfer(
+                          source,
+                          recipient,
+                          identity,
+                          quantity,
+                          policy,
+                      ),
         );
     }
 

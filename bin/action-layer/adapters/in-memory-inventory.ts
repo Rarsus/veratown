@@ -201,6 +201,13 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
     ): Promise<ActionResult<InventoryObservation> | undefined> {
         const previous = this.cached(policy, fingerprintValue);
         if (previous) return previous;
+        if (this.now() >= policy.deadlineAt) {
+            return this.result("timed_out", policy, actionId, {
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         const denied = this.validateScope(policy);
         if (denied) {
             return this.result("blocked", policy, actionId, {
@@ -230,14 +237,17 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
                 retryable: false,
             });
         }
+        const remainingMs = policy.deadlineAt - this.now();
         if (
             this.failureMode === "timeout" ||
-            this.confirmationDelayMs > policy.timeoutMs
+            this.confirmationDelayMs > Math.min(policy.timeoutMs, remainingMs)
         ) {
-            if (policy.timeoutMs > 0) {
-                await new Promise((resolve) =>
-                    setTimeout(resolve, Math.min(policy.timeoutMs, 10)),
-                );
+            const waitMs = Math.max(
+                0,
+                Math.min(policy.timeoutMs, remainingMs, 10),
+            );
+            if (waitMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, waitMs));
             }
             return this.result("timed_out", policy, actionId, {
                 reason: "Inventory confirmation timed out",
@@ -249,6 +259,13 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
             await new Promise((resolve) =>
                 setTimeout(resolve, this.confirmationDelayMs),
             );
+        }
+        if (this.now() >= policy.deadlineAt) {
+            return this.result("timed_out", policy, actionId, {
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
         }
         return undefined;
     }
@@ -377,6 +394,13 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
                 retryable: false,
             });
         }
+        if (this.now() >= context.deadlineAt) {
+            return this.result("timed_out", context, "inventory.observe", {
+                reason: "Inventory action deadline expired before observation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         const observation = this.observation(
             context.ownerMemberNumber,
             context.roomName,
@@ -451,6 +475,18 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
                     {
                         reason: "Operation ID was reused for another transfer",
                         failureKind: "rejected",
+                        retryable: false,
+                    },
+                );
+            }
+            if (this.now() >= policy.deadlineAt) {
+                return this.result<InventoryTransferObservation>(
+                    "timed_out",
+                    policy,
+                    actionId,
+                    {
+                        reason: "Inventory action deadline expired before transfer",
+                        failureKind: "timeout",
                         retryable: false,
                     },
                 );
@@ -583,14 +619,17 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
                 },
             );
         }
+        const remainingMs = policy.deadlineAt - this.now();
         if (
             this.failureMode === "timeout" ||
-            this.confirmationDelayMs > policy.timeoutMs
+            this.confirmationDelayMs > Math.min(policy.timeoutMs, remainingMs)
         ) {
-            if (policy.timeoutMs > 0) {
-                await new Promise((resolve) =>
-                    setTimeout(resolve, Math.min(policy.timeoutMs, 10)),
-                );
+            const waitMs = Math.max(
+                0,
+                Math.min(policy.timeoutMs, remainingMs, 10),
+            );
+            if (waitMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, waitMs));
             }
             return this.result<InventoryTransferObservation>(
                 "timed_out",
@@ -606,6 +645,18 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
         if (this.confirmationDelayMs > 0) {
             await new Promise((resolve) =>
                 setTimeout(resolve, this.confirmationDelayMs),
+            );
+        }
+        if (this.now() >= policy.deadlineAt) {
+            return this.result<InventoryTransferObservation>(
+                "timed_out",
+                policy,
+                actionId,
+                {
+                    reason: "Inventory action deadline expired before transfer",
+                    failureKind: "timeout",
+                    retryable: false,
+                },
             );
         }
 

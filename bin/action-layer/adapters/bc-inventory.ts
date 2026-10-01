@@ -279,6 +279,19 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
                 retryable: false,
             });
         }
+        if (this.now() >= context.deadlineAt) {
+            return result(
+                "timed_out",
+                context,
+                "inventory.observe",
+                startedAt,
+                {
+                    reason: "Inventory action deadline expired before observation",
+                    failureKind: "timeout",
+                    retryable: false,
+                },
+            );
+        }
         if (context.requireServerConfirmation) {
             const observationWait = await this.waitForObservation(
                 character,
@@ -361,9 +374,16 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
                 observedAt: number,
             ): void => {
                 if (
+                    this.now() >= context.deadlineAt ||
                     observedAt < startedAt ||
                     connector.chatRoom?.Name !== context.roomName
                 ) {
+                    if (this.now() >= context.deadlineAt) {
+                        finish({
+                            outcome: "timed_out",
+                            reason: "Inventory action deadline expired before observation",
+                        });
+                    }
                     return;
                 }
                 const observation: InventoryObservation = {
@@ -484,9 +504,16 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
                 observedAt: number,
             ): void => {
                 if (
+                    this.now() >= context.deadlineAt ||
                     observedAt < startedAt ||
                     connector.chatRoom?.Name !== context.roomName
                 ) {
+                    if (this.now() >= context.deadlineAt) {
+                        finish({
+                            outcome: "timed_out",
+                            reason: "Inventory action deadline expired before confirmation",
+                        });
+                    }
                     return;
                 }
                 const hasTarget = rawItems.some(
@@ -635,6 +662,13 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
                 retryable: false,
             });
         }
+        if (this.now() >= policy.deadlineAt) {
+            return result("timed_out", policy, actionId, startedAt, {
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         let asset: BC_AppearanceItem | undefined;
         if (operation === "add") {
             try {
@@ -765,6 +799,13 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
         startedAt: number,
     ): Promise<ActionResult<InventoryObservation>> {
         const actionId = `inventory.${operation}`;
+        if (this.now() >= policy.deadlineAt) {
+            return result("timed_out", policy, actionId, startedAt, {
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         const connector = this.connectorFor(character);
         const cachedObservation = connector
             ? this.latestAuthoritativeObservations.get(connector as object)
@@ -790,7 +831,13 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
                   policy,
                   Math.min(
                       this.confirmationTimeoutMs,
-                      Math.max(1, policy.timeoutMs),
+                      Math.max(
+                          1,
+                          Math.min(
+                              policy.timeoutMs,
+                              policy.deadlineAt - this.now(),
+                          ),
+                      ),
                   ),
               );
         if (observationWait.outcome !== "accepted") {
@@ -807,6 +854,14 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
                   });
         }
         const before = observationWait.observation;
+        if (this.now() >= policy.deadlineAt) {
+            return result("timed_out", policy, actionId, startedAt, {
+                observed: before,
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         const plan = planInventoryMutation(
             before,
             identity,
@@ -903,14 +958,32 @@ export class BCInventoryActionAdapter implements InventoryActionAdapter<API_Char
             }
         }
 
+        const remainingMs = policy.deadlineAt - this.now();
+        if (remainingMs <= 0) {
+            return result("timed_out", policy, actionId, startedAt, {
+                observed: before,
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         const confirmation = this.waitForMutationConfirmation(
             character,
             policy,
             identity,
             operation,
             startedAt,
-            Math.min(this.confirmationTimeoutMs, Math.max(1, policy.timeoutMs)),
+            Math.min(this.confirmationTimeoutMs, policy.timeoutMs, remainingMs),
         );
+        if (this.now() >= policy.deadlineAt) {
+            confirmation.cancel();
+            return result("timed_out", policy, actionId, startedAt, {
+                observed: before,
+                reason: "Inventory action deadline expired before mutation",
+                failureKind: "timeout",
+                retryable: false,
+            });
+        }
         try {
             if (operation === "add") {
                 const descriptor = copyMetadata(asset!, item?.metadata);

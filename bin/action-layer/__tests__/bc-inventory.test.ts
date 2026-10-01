@@ -239,6 +239,37 @@ test("times out before dispatch when no fresh authoritative observation arrives"
     assert.equal(connector.listenerCount(), 0);
 });
 
+test("an already-expired mutation never registers listeners or dispatches", async () => {
+    const { character, connector } = makeCharacter();
+    const adapter = new BCInventoryActionAdapter({
+        confirmationTimeoutMs: 100,
+    });
+    const result = await adapter.add(character as never, item, {
+        ...policy("expired-before-dispatch"),
+        deadlineAt: Date.now() - 1,
+    });
+
+    assert.equal(result.status, "timed_out");
+    assert.equal(character.addCalls, 0);
+    assert.equal(connector.listenerCount(), 0);
+});
+
+test("an action deadline bounds authoritative observation before dispatch", async () => {
+    const { character, connector } = makeCharacter();
+    const adapter = new BCInventoryActionAdapter({
+        confirmationTimeoutMs: 1_000,
+    });
+    const result = await adapter.add(character as never, item, {
+        ...policy("expires-waiting-for-observation"),
+        timeoutMs: 1_000,
+        deadlineAt: Date.now() + 30,
+    });
+
+    assert.equal(result.status, "timed_out");
+    assert.equal(character.addCalls, 0);
+    assert.equal(connector.listenerCount(), 0);
+});
+
 test("disconnect during confirmation fails closed and cleans up listeners", async () => {
     const { character, connector } = makeCharacter();
     const adapter = new BCInventoryActionAdapter({

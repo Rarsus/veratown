@@ -61,6 +61,56 @@ test("observes an empty inventory and adds an owned quantity", async () => {
     service.close();
 });
 
+test("expired inventory mutations are not applied", async () => {
+    const adapter = new InMemoryInventoryActionAdapter();
+    const result = await adapter.add(
+        {},
+        item,
+        policy("expired-add", { deadlineAt: Date.now() - 1 }),
+    );
+
+    assert.equal(result.status, "timed_out");
+    assert.deepEqual(adapter.snapshot(11), []);
+});
+
+test("queued inventory mutations expire before reaching the adapter", async () => {
+    const adapter = new InMemoryInventoryActionAdapter();
+    let releaseObservation!: () => void;
+    let markObservationStarted!: () => void;
+    const observationStarted = new Promise<void>((resolve) => {
+        markObservationStarted = resolve;
+    });
+    adapter.observe = async (character, context) => {
+        markObservationStarted();
+        await new Promise<void>((resolve) => {
+            releaseObservation = resolve;
+        });
+        return InMemoryInventoryActionAdapter.prototype.observe.call(
+            adapter,
+            character,
+            context,
+        );
+    };
+    const service = new InventoryActionService(adapter);
+    const blocking = service.observe({}, context("blocking-observation"));
+    await observationStarted;
+
+    const queued = service.add(
+        {},
+        item,
+        policy("expired-while-queued", {
+            deadlineAt: Date.now() + 30,
+        }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    releaseObservation();
+
+    assert.equal((await blocking).status, "completed");
+    assert.equal((await queued).status, "timed_out");
+    assert.deepEqual(adapter.snapshot(11), []);
+    service.close();
+});
+
 test("removing a missing item is already satisfied and duplicate operation IDs do not replay", async () => {
     const adapter = new InMemoryInventoryActionAdapter();
     const service = new InventoryActionService(adapter);

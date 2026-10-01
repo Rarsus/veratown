@@ -160,6 +160,32 @@ test("rollback selects the legacy owner only for the next operation", async () =
     assert.equal(runtime.legacyCalls, 1);
 });
 
+test("rollback cannot start a legacy mutation while a canary operation is active", async () => {
+    const runtime = setup();
+    const rollout = new ActionLayerRolloutController({
+        inventoryEnabled: true,
+    });
+    const game = runtime.game(rollout);
+    const pending = game.getWheel();
+    await waitFor(() => runtime.connector.listenerCount() >= 4);
+
+    rollout.rollback();
+    assert.strictEqual(game.getWheel(), pending);
+    runtime.connector.emit("CharacterSync", runtime.character);
+    await waitFor(() => runtime.addCalls === 1);
+    runtime.connector.emit("AppearanceItemUpdateReceived", {
+        direction: "inbound",
+        targetMemberNumber: 11,
+        group: "ItemDevices",
+        name: "LuckyWheel",
+        action: "add",
+        timestamp: Date.now() + 1,
+    });
+
+    assert.equal((await pending).Name, "LuckyWheel");
+    assert.equal(runtime.legacyCalls, 0);
+});
+
 test("an action-path failure never dispatches the legacy mutation concurrently", async () => {
     const runtime = setup();
     const rollout = new ActionLayerRolloutController({

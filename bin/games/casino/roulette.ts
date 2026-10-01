@@ -189,6 +189,7 @@ export class RouletteGame implements Game {
     private readonly settledRounds = new Set<string>();
     private readonly roles = new Map<number, RouletteRole>();
     private inventoryStateUncertain = false;
+    private activeWheelOperation?: Promise<API_AppearanceItem>;
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -961,7 +962,20 @@ export class RouletteGame implements Game {
         await this.casino.setBio();
     }
 
-    public async getWheel(): Promise<API_AppearanceItem> {
+    public getWheel(): Promise<API_AppearanceItem> {
+        if (this.activeWheelOperation) return this.activeWheelOperation;
+        const operation = this.resolveWheel();
+        let tracked: Promise<API_AppearanceItem>;
+        tracked = operation.finally(() => {
+            if (this.activeWheelOperation === tracked) {
+                this.activeWheelOperation = undefined;
+            }
+        });
+        this.activeWheelOperation = tracked;
+        return tracked;
+    }
+
+    private async resolveWheel(): Promise<API_AppearanceItem> {
         const operationId = `roulette-wheel-add-${randomUUID()}`;
         const lease = this.inventoryCanary?.rollout.begin(
             "inventory",
