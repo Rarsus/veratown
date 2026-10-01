@@ -36,6 +36,7 @@ import { KidnappersGamePersistence } from "./kidnappers/kidnappersGamePersistenc
 import { CageSystem } from "./veratown/cageSystem";
 import { KennelSystem } from "./veratown/kennelSystem";
 import { ShowerSystem } from "./veratown/showerSystem";
+import { ShowerSongDataService } from "./veratown/showerSongDataService";
 import { BedSystem } from "./veratown/bedSystem";
 import { BunnyParkSystem } from "./veratown/bunnyParkSystem";
 import { BunnyPunishmentService } from "./veratown/bunnyPunishmentService";
@@ -632,36 +633,52 @@ export class Veratown {
                         : undefined,
                 ),
         );
-        this.showerSystem = this.initFeature(
-            () =>
-                new ShowerSystem(
-                    this.conn,
-                    this.conn2,
-                    (character, context, observedAppearance) =>
-                        this.liveCharacterStateSync
-                            ?.syncCharacter(
-                                character,
-                                character.MapPos,
-                                false,
-                                context,
-                                observedAppearance,
-                            )
-                            .then(() => undefined) ?? Promise.resolve(),
-                    this.roomKey === "main",
-                    this.container.has(
-                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
-                    )
-                        ? this.container.get<CommunicationActionService>(
-                              DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
-                          )
-                        : undefined,
-                    this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
-                        ? this.container.get<ActionLayerRolloutController>(
-                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
-                          )
-                        : undefined,
-                ),
-        );
+        this.showerSystem = this.initFeature(() => {
+            const songDataService = this.container.has(
+                DIServiceKeys.SHOWER_SONG_DATA_SERVICE,
+            )
+                ? this.container.get<ShowerSongDataService>(
+                      DIServiceKeys.SHOWER_SONG_DATA_SERVICE,
+                  )
+                : db
+                  ? new ShowerSongDataService(db)
+                  : undefined;
+            void songDataService?.ensureSeeded().catch((error) => {
+                logger.warn("Shower song database seed deferred", {
+                    roomKey: this.roomKey,
+                    error,
+                });
+            });
+            return new ShowerSystem(
+                this.conn,
+                this.conn2,
+                (character, context, observedAppearance) =>
+                    this.liveCharacterStateSync
+                        ?.syncCharacter(
+                            character,
+                            character.MapPos,
+                            false,
+                            context,
+                            observedAppearance,
+                        )
+                        .then(() => undefined) ?? Promise.resolve(),
+                this.roomKey === "main",
+                this.container.has(
+                    DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                )
+                    ? this.container.get<CommunicationActionService>(
+                          DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                      )
+                    : undefined,
+                this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                    ? this.container.get<ActionLayerRolloutController>(
+                          DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                      )
+                    : undefined,
+                {},
+                songDataService,
+            );
+        });
         this.bedSystem = this.initFeature(
             () =>
                 new BedSystem(

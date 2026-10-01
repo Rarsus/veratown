@@ -20,10 +20,13 @@ import {
     SHOWER_BOT2_HOME_POSITION,
     SHOWER_STEP_DELAY_MS,
     SHOWER_SING_DELAY_MS,
-    SHOWER_SONGS,
     showerBroadcastPos,
     isCharacterAtAnyPosition,
 } from "./veratownConfig";
+import {
+    DEFAULT_SHOWER_SONGS,
+    ShowerSongDataService,
+} from "./showerSongDataService";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { NarratorBot } from "./veratownNarrationUtils";
 import type { ReleaseCompatibleSystem } from "./releaseWorkflowSystem";
@@ -66,6 +69,7 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
         timing: ShowerTimingOptions = {},
+        private readonly songDataService?: ShowerSongDataService,
     ) {
         super(conn, "shower", "Showers");
         this.stepDelayMs = timing.stepDelayMs ?? SHOWER_STEP_DELAY_MS;
@@ -240,8 +244,9 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
                 if (!isInShower()) return await abortShower();
 
                 const song =
-                    SHOWER_SONGS[
-                        Math.floor(Math.random() * SHOWER_SONGS.length)
+                    (await this.songDataService?.drawSong()) ??
+                    DEFAULT_SHOWER_SONGS[
+                        Math.floor(Math.random() * DEFAULT_SHOWER_SONGS.length)
                     ];
                 narrator.sayAt(
                     broadcastPos,

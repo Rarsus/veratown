@@ -31,6 +31,7 @@ import {
 } from "./botConnections";
 import { UnifiedCharacterStore } from "./games/shared/unifiedCharacterStore";
 import { DareDataService } from "./games/dare/dareDataService";
+import { ShowerSongDataService } from "./games/veratown/showerSongDataService";
 import { CrossSystemSubscribers } from "./games/shared/crossSystemSubscribers";
 import { DeviceFactory } from "./games/shared/deviceFactory";
 import {
@@ -581,6 +582,10 @@ async function initializeVeratownGame(
     container.register(
         DIServiceKeys.DARE_DATA_SERVICE,
         new DareDataService(db),
+    );
+    container.register(
+        DIServiceKeys.SHOWER_SONG_DATA_SERVICE,
+        new ShowerSongDataService(db),
     );
     container.register(DIServiceKeys.DEVICE_FACTORY, new DeviceFactory());
     container.register(

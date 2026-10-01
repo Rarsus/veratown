@@ -85,11 +85,15 @@ still uses the shared transition.
 
 Four `SHOWER_POSITIONS` tiles. Stepping on one
 (`onCharacterEnterShower`) runs a scripted sequence: snapshot clothing, strip
-it off item-by-item, "turn on the shower", sing a random line from
-`SHOWER_SONGS`, "dry off", then re-dress from the snapshot - all narrated via
-`sayNear()`, which briefly moves the narrating connector next to the shower
-tile to speak (since the bot can't stand on the occupied shower tile itself),
-then moves it back. Uses the dedicated `conn2` if configured (parked at
+it off item-by-item, "turn on the shower", select an enabled song from the
+`showerSongs` reference collection, "dry off", then re-dress from the snapshot.
+The service seeds the 13 existing songs plus 35 additional songs on startup and
+falls back to that catalog if MongoDB is temporarily unavailable. Narration
+continues through `NarratorBot`, which uses the movement adapter and briefly
+moves the narrating connector next to the shower tile to speak (since the bot
+can't stand on the occupied shower tile itself), then moves it back. Shower
+notifications continue through the communication action service when enabled.
+Uses the dedicated `conn2` if configured (parked at
 `SHOWER_BOT2_HOME_POSITION` between uses), otherwise the main bot. Leaving
 the shower tile before the sequence finishes aborts it and **does not**
 restore clothing (`abortShower()`).

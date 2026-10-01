@@ -262,22 +262,6 @@ export const SHOWER_BOT2_HOME_POSITION: ChatRoomMapPos = { X: 9, Y: 24 };
 export const SHOWER_STEP_DELAY_MS = 2 * 1000;
 export const SHOWER_SING_DELAY_MS = 5 * 1000;
 
-export const SHOWER_SONGS: string[] = [
-    '"Row, row, row your boat, gently down the stream, merrily, merrily, merrily, merrily, life is but a dream!"',
-    '"Rubber ducky, you\'re the one, you make bathtime lots of fun!"',
-    '"Twinkle, twinkle, little star, how I wonder what you are!"',
-    "\"I'm singing in the shower, just singing in the shower, what a glorious feeling, I'm happy again!\"",
-    '"Splish splash, I was taking a bath, long about a Saturday night!"',
-    '"Head, shoulders, knees and toes, knees and toes, head, shoulders, knees and toes, knees and toes!"',
-    '"Oh Susanna, oh don\'t you cry for me, for I come from Alabama with a banjo on my knee!"',
-    '"La la la, la-la la la, washing all my cares away, la la la, la-la la la!"',
-    '"You are my sunshine, my only sunshine, you make me happy when skies are grey!"',
-    '"Bibbidi-bobbidi-boo, it\'ll do magic believe it or not, bibbidi-bobbidi-boo!"',
-    '"Yo ho, yo ho, a shower life for me, scrubbing away all the grime of the day!"',
-    '"Happy birthday to me, happy birthday to me, happy shower time to me!"',
-    '"Doe, a deer, a female deer, ray, a drop of golden sun!"',
-];
-
 // --- Windows ---
 
 // Positions of windows characters can peep through. Populate as needed.

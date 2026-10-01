@@ -709,6 +709,35 @@ export const DATABASE_SCHEMA_REGISTRY: Record<string, CollectionSchema> = {
         },
     },
 
+    // ===== SHOWER SONGS (Reference data)
+    showerSongs: {
+        _id: {
+            type: "string",
+            description: "Stable shower song ID",
+            required: true,
+        },
+        text: {
+            type: "string",
+            description: "Song text used in shower narration",
+            required: true,
+        },
+        enabled: {
+            type: "boolean",
+            description: "Whether the song can be selected",
+            required: true,
+        },
+        createdAt: {
+            type: "timestamp",
+            description: "Song creation time",
+            required: true,
+        },
+        updatedAt: {
+            type: "timestamp",
+            description: "Song update time",
+            required: true,
+        },
+    },
+
     // ===== DARE STATE (Game state)
     dareState: {
         _id: { type: "string", description: "Dare state ID", required: true },

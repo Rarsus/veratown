@@ -227,6 +227,7 @@ export const DIServiceKeys = {
     CONFIGURATION: "configuration",
     UNIFIED_CHARACTER_STORE: "unifiedCharacterStore",
     DARE_DATA_SERVICE: "dareDataService",
+    SHOWER_SONG_DATA_SERVICE: "showerSongDataService",
     CROSS_SYSTEM_SUBSCRIBERS: "crossSystemSubscribers",
     CASINO_VENUE_SYSTEM: "casinoVenueSystem",
     CASINO_ENGINE: "casinoEngine",
