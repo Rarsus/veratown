@@ -109,7 +109,7 @@ export function findMovementRoute(
     options: MovementRouteOptions,
 ): MovementRouteResult {
     validateMap(mapData);
-    if (!isInBounds(start) || !isWalkable(mapData, start)) {
+    if (!isInBounds(start)) {
         throw new Error(
             `movement start is not an accessible map tile: ${positionKey(start)}`,
         );

@@ -708,6 +708,47 @@ test("bunny punishment keeps successful pieces when one restraint fails", async 
     );
 });
 
+test("bunny punishment accepts occupied slots and applies available restraints", async () => {
+    const created = createCharacter(15, {
+        initialAppearance: [
+            { Group: "ItemArms", Name: "OldCuffs", Property: {} },
+        ],
+    });
+    const system = createBunnySystem(
+        createMessageConnection(created.character) as any,
+        async () => {},
+        deterministicRandom(0),
+        0,
+    );
+
+    const result = await (system as any).applyPunishment(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.status, "completed");
+    assert.deepEqual(result.failedPieces, []);
+    assert.deepEqual(result.appliedPieces, ["ItemFeet/HeavySpreaderMetal"]);
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemArms" && item.Name === "OldCuffs",
+            ),
+    );
+    assert.ok(
+        created
+            .appearance()
+            .some(
+                (item: any) =>
+                    item.Group === "ItemFeet" &&
+                    item.Name === "HeavySpreaderMetal",
+            ),
+    );
+});
+
 test("bunny punishment continues when a restraint is silently omitted", async () => {
     const created = createCharacter(20, {
         omitOn: "ItemArms/HeavyYoke",

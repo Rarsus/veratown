@@ -220,7 +220,7 @@ Do not run this scenario against a shared or production room.
 
 ### Phase 1b: Movement-path qualification
 
-In the controlled test room, run `movement-path` with the explicit movement
+In the controlled room, run `movement-path` with the explicit movement
 guards enabled. The promotion record must show:
 
 - the map payload was present and validated as a 40x40 live room map;
@@ -230,8 +230,13 @@ guards enabled. The promotion record must show:
 - the final authoritative position matched the selected target;
 - the evidence contains the route, map hash, operation IDs, and clean disconnect.
 
-Do not use the generated static map source as database evidence, and do not run
-this scenario against a shared or production room.
+On October 1, 2026, a human visual observation confirmed the configured test
+character at `(19,17)` and visually observed the next movement at `(20,17)`.
+This is supporting evidence only; it does not replace the inbound
+`MapPositionObserved` requirement above.
+
+Do not use the generated static map source as database evidence. Use only a
+dedicated, explicitly confirmed qualification room.
 
 ### Phase 2: Communication qualification
 

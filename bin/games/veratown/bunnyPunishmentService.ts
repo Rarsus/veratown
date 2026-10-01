@@ -299,22 +299,24 @@ export class BunnyPunishmentWorkflow {
             ...config,
             pieces: config.pieces,
         });
-        if (
-            currentPlan.exactPieces.length ===
-                currentPlan.requestedPieces.length &&
-            persistedState?.artifact?.status !== "active"
-        ) {
+        const blockedPieceKeys = new Set(
+            currentPlan.blockedPieces.map(bunnyPieceKey),
+        );
+        const applicablePieces = currentPlan.missingPieces;
+        if (applicablePieces.length === 0) {
             return {
                 success: true,
                 status: "skipped",
                 skipped: true,
                 configuration: config.name,
                 attemptedPieces,
-                appliedPieces: attemptedPieces,
+                appliedPieces: currentPlan.exactPieces.map(bunnyPieceKey),
                 failedPieces: [],
                 finalVerification: true,
+                operationId,
             };
         }
+        const punishmentConfig = { ...config, pieces: applicablePieces };
 
         let workflowState:
             Awaited<ReturnType<VeratownWorkflowRecovery["start"]>> | undefined;
@@ -346,7 +348,7 @@ export class BunnyPunishmentWorkflow {
         );
         try {
             if (lease?.path === "action") {
-                for (const piece of config.pieces) {
+                for (const piece of punishmentConfig.pieces) {
                     try {
                         const result =
                             await this.actionLayer!.appearanceService.add(
@@ -420,7 +422,7 @@ export class BunnyPunishmentWorkflow {
                 await syncAppearanceMutation(
                     character,
                     () => {
-                        for (const piece of config.pieces) {
+                        for (const piece of punishmentConfig.pieces) {
                             try {
                                 const asset = AssetGet(
                                     piece.group,
@@ -487,7 +489,7 @@ export class BunnyPunishmentWorkflow {
                         sendFullAppearanceUpdate: true,
                         awaitServerSync: true,
                         serverSyncPredicate: (appearance) =>
-                            config.pieces.every((piece) =>
+                            punishmentConfig.pieces.every((piece) =>
                                 hasBunnyRestraint(appearance, piece),
                             ),
                     },
@@ -541,7 +543,8 @@ export class BunnyPunishmentWorkflow {
                   );
         });
         const failedPieces = attemptedPieces.filter(
-            (piece) => !appliedPieces.includes(piece),
+            (piece) =>
+                !appliedPieces.includes(piece) && !blockedPieceKeys.has(piece),
         );
         const complete = mutationConfirmed && failedPieces.length === 0;
         const failureReason = complete
