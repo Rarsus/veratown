@@ -462,6 +462,7 @@ test("release-test requires explicit mutation and room confirmation", () => {
 
 test("release-test equips and removes only the approved fixture", async () => {
     const connector = new FakeConnector();
+    connector.Player.MapPos = { X: 9, Y: 11 };
     const parsed = parseRealRoomTestConfig({
         ...baseEnvironment,
         BC_TEST_ENV: "live",
@@ -476,6 +477,8 @@ test("release-test equips and removes only the approved fixture", async () => {
     assert.equal(evidence.fixture, "ItemArms/HeavyYoke");
     assert.equal(evidence.mutationAttempted, true);
     assert.equal(evidence.fixtureRemoved, true);
+    assert.deepEqual(evidence.postReleasePosition, { X: 9, Y: 10 });
+    assert.deepEqual(connector.movementCalls, [{ X: 9, Y: 10 }]);
     assert.deepEqual(connector.sentMessages, [
         { type: "Whisper", message: "!release", target: 4242 },
         { type: "Whisper", message: "!release no", target: 4242 },

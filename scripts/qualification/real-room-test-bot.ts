@@ -304,6 +304,7 @@ export interface ReleaseTestQualificationEvidence {
     fixtureRemoved: true;
     confirmationObserved: true;
     punishmentRoomProgressed: true;
+    postReleasePosition: MapPosition;
     disconnected: true;
 }
 export type QualificationEvidence =
@@ -1391,6 +1392,22 @@ async function runReleaseTestScenario(
             );
         }
 
+        const releasePosition = { ...connector.Player.MapPos };
+        if (releasePosition.Y <= 0) {
+            throw new QualificationError(
+                "cannot move north from the northern map boundary after release",
+            );
+        }
+        await withTimeout(
+            connector.moveOnMapAndWait(
+                releasePosition.X,
+                releasePosition.Y - 1,
+                config.timeoutMs,
+            ),
+            config.timeoutMs,
+            "post-release north movement",
+        );
+
         return {
             scenario: RELEASE_TEST_SCENARIO,
             runId,
@@ -1412,6 +1429,7 @@ async function runReleaseTestScenario(
             fixtureRemoved: true,
             confirmationObserved: true,
             punishmentRoomProgressed: true,
+            postReleasePosition: { ...connector.Player.MapPos },
             disconnected: true,
         };
     } finally {
