@@ -7,7 +7,9 @@ type TestCharacter = {
     MemberNumber: number;
     MapPos: { X: number; Y: number };
     connection: EventEmitter & {
+        Player: { MemberNumber: number };
         moveOnMap(x: number, y: number): void;
+        teleportOnMap(x: number, y: number, memberNumber?: number): void;
     };
 };
 
@@ -17,11 +19,20 @@ function movementCharacter(
 ): TestCharacter {
     const state = { X: 1, Y: 2 };
     Object.assign(connection, {
+        Player: { MemberNumber: memberNumber },
+        teleportOnMap() {
+            throw new Error("unexpected teleport");
+        },
         moveOnMap(x: number, y: number) {
             state.X = x;
             state.Y = y;
             queueMicrotask(() =>
-                connection.emit("MapPosition", memberNumber, { X: x, Y: y }),
+                connection.emit(
+                    "MapPositionObserved",
+                    memberNumber,
+                    { X: x, Y: y },
+                    1,
+                ),
             );
         },
     });
@@ -68,6 +79,64 @@ test("movement reports connector loss instead of claiming completion", async () 
     assert.equal(result.retryable, true);
 });
 
+test("movement teleports a target owned by another connector", async () => {
+    const connection = new EventEmitter();
+    let teleport: [number, number, number] | undefined;
+    Object.assign(connection, {
+        Player: { MemberNumber: 9001 },
+        moveOnMap: () => {
+            throw new Error("wrong character movement dispatched");
+        },
+        teleportOnMap: (x: number, y: number, memberNumber?: number) => {
+            teleport = [memberNumber!, x, y];
+            queueMicrotask(() =>
+                connection.emit(
+                    "MapPositionObserved",
+                    memberNumber,
+                    { X: x, Y: y },
+                    1,
+                ),
+            );
+        },
+    });
+    const result = await new BCMovementActionAdapter().move(
+        {
+            MemberNumber: 145,
+            MapPos: { X: 1, Y: 2 },
+            connection: connection as TestCharacter["connection"],
+        },
+        { x: 9, y: 10 },
+        policy,
+    );
+
+    assert.equal(result.status, "completed");
+    assert.deepEqual(teleport, [145, 9, 10]);
+});
+
+test("movement rejects another target without teleport capability", async () => {
+    const connection = new EventEmitter();
+    let moved = false;
+    Object.assign(connection, {
+        Player: { MemberNumber: 9001 },
+        moveOnMap: () => {
+            moved = true;
+        },
+    });
+
+    const result = await new BCMovementActionAdapter().move(
+        {
+            MemberNumber: 145,
+            MapPos: { X: 1, Y: 2 },
+            connection: connection as TestCharacter["connection"],
+        },
+        { x: 9, y: 10 },
+        policy,
+    );
+
+    assert.equal(result.status, "rejected");
+    assert.equal(moved, false);
+});
+
 test("movement accepts an authoritative position inside a configured region", async () => {
     const connection = new EventEmitter();
     const runtimeCharacter = movementCharacter(connection);
@@ -75,10 +144,12 @@ test("movement accepts an authoritative position inside a configured region", as
         (runtimeCharacter.MapPos as { X: number; Y: number }).X = 14;
         (runtimeCharacter.MapPos as { X: number; Y: number }).Y = 12;
         queueMicrotask(() =>
-            connection.emit("MapPosition", runtimeCharacter.MemberNumber, {
-                X: 14,
-                Y: 12,
-            }),
+            connection.emit(
+                "MapPositionObserved",
+                runtimeCharacter.MemberNumber,
+                { X: 14, Y: 12 },
+                1,
+            ),
         );
     };
     const pending = new BCMovementActionAdapter().move(
@@ -103,7 +174,7 @@ test("movement ignores another character's arrival event", async () => {
         { x: 9, y: 10 },
         { ...policy, timeoutMs: 20 },
     );
-    connection.emit("MapPosition", 999, { X: 9, Y: 10 });
+    connection.emit("MapPositionObserved", 999, { X: 9, Y: 10 }, 1);
     const result = await pending;
 
     assert.equal(result.status, "completed");
@@ -117,7 +188,9 @@ test("movement times out when the connector does not confirm arrival", async () 
         {
             MemberNumber: 145,
             MapPos: { X: 1, Y: 2 },
-            connection: connection as TestCharacter["connection"],
+            connection: Object.assign(connection, {
+                Player: { MemberNumber: 145 },
+            }) as TestCharacter["connection"],
         },
         { x: 9, y: 10 },
         { ...policy, timeoutMs: 10 },
@@ -140,7 +213,9 @@ test("movement is already satisfied without dispatching a command", async () => 
         {
             MemberNumber: 145,
             MapPos: { X: 9, Y: 10 },
-            connection: connection as TestCharacter["connection"],
+            connection: Object.assign(connection, {
+                Player: { MemberNumber: 145 },
+            }) as TestCharacter["connection"],
         },
         { x: 9, y: 10 },
         policy,
@@ -165,7 +240,7 @@ test("movement cancellation removes listeners and does not claim arrival", async
     assert.equal(result.status, "cancelled");
     assert.equal(result.failureKind, "cancelled");
     assert.equal(result.retryable, false);
-    assert.equal(connection.listenerCount("MapPosition"), 0);
+    assert.equal(connection.listenerCount("MapPositionObserved"), 0);
     assert.equal(connection.listenerCount("Disconnected"), 0);
 });
 
@@ -180,7 +255,9 @@ test("movement classifies connector dispatch errors as retryable failures", asyn
         {
             MemberNumber: 145,
             MapPos: { X: 1, Y: 2 },
-            connection: connection as TestCharacter["connection"],
+            connection: Object.assign(connection, {
+                Player: { MemberNumber: 145 },
+            }) as TestCharacter["connection"],
         },
         { x: 9, y: 10 },
         policy,

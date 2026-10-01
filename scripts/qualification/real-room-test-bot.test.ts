@@ -7,6 +7,7 @@ import { test } from "node:test";
 import type { API_Message, AppearancePacketDiagnostic, TellType } from "bc-bot";
 import {
     BUNNY_STEP_SCENARIO,
+    MOVEMENT_PATH_SCENARIO,
     RECONNECT_SCENARIO,
     RELEASE_MONITOR_SCENARIO,
     RELEASE_OBSERVE_SCENARIO,
@@ -45,6 +46,20 @@ const bunnyEnvironment = {
     BC_TEST_EXPECTED_RELEASE_MS: "10",
 };
 
+const movementEnvironment = {
+    ...baseEnvironment,
+    BC_TEST_SCENARIO: MOVEMENT_PATH_SCENARIO,
+    BC_TEST_ALLOW_MOVEMENT: "true",
+    BC_TEST_MOVEMENT_CONFIRM_ROOM: "Ropeybot Qualification",
+    BC_TEST_MOVEMENT_MIN_STEPS: "2",
+    BC_TEST_MOVEMENT_MAX_STEPS: "3",
+};
+
+const floorMapData = {
+    Tiles: String.fromCharCode(100).repeat(1600),
+    Objects: String.fromCharCode(100).repeat(1600),
+};
+
 function config(): RealRoomTestConfig {
     const parsed = parseRealRoomTestConfig(baseEnvironment);
     assert.equal(parsed.enabled, true);
@@ -72,6 +87,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
     public monitorAppearanceChangeOnJoin = false;
     private monitorAppearance: Array<{ Group: string; Name: string }> = [];
     private monitorMapPosition: MapPosition = { X: 4, Y: 4 };
+    private mapData = floorMapData;
     public Player = {
         MemberNumber: 9001,
         MapPos: { X: 0, Y: 0 },
@@ -107,7 +123,10 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
                 }[];
             };
         }[];
-        readonly map: { getObject(position: MapPosition): string | null };
+        readonly map: {
+            getObject(position: MapPosition): string | null;
+            readonly mapData: typeof floorMapData | undefined;
+        };
     } {
         return {
             Name: this.roomName,
@@ -121,6 +140,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
                 },
             ],
             map: {
+                mapData: this.mapData,
                 getObject: (position) =>
                     position.X === 29 && position.Y === 6
                         ? "RabbitBrownStand"
@@ -134,6 +154,8 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
             | "Message"
             | "Disconnected"
             | "MapPosition"
+            | "MapPositionObserved"
+            | "Connected"
             | "CharacterSync"
             | "AppearanceSyncReceived"
             | "AppearanceItemUpdateReceived",
@@ -147,6 +169,8 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
             | "Message"
             | "Disconnected"
             | "MapPosition"
+            | "MapPositionObserved"
+            | "Connected"
             | "CharacterSync"
             | "AppearanceSyncReceived"
             | "AppearanceItemUpdateReceived",
@@ -270,9 +294,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
         _timeoutMs?: number,
     ): Promise<void> {
         const position = { X: x, Y: y };
-        this.movementCalls.push(position);
-        this.Player.MapPos = position;
-        this.emit("MapPosition", this.Player.MemberNumber, position);
+        this.moveOnMap(x, y);
         if (x !== 29 || y !== 6) return;
 
         this.emit("Message", {
@@ -295,6 +317,18 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
                 this.emitAppearance();
             }, 10);
         }
+    }
+
+    public moveOnMap(x: number, y: number): void {
+        const position = { X: x, Y: y };
+        this.movementCalls.push(position);
+        this.Player.MapPos = position;
+        this.emit("MapPosition", this.Player.MemberNumber, position);
+        this.emit("MapPositionObserved", this.Player.MemberNumber, position, 1);
+    }
+
+    public setMapData(mapData: typeof floorMapData | undefined): void {
+        this.mapData = mapData;
     }
 
     private emitAppearance(): void {
@@ -333,6 +367,25 @@ test("bunny-step requires explicit punishment opt-in", () => {
                 BC_TEST_ALLOW_BUNNY_PUNISHMENT: "false",
             }),
         /BC_TEST_ALLOW_BUNNY_PUNISHMENT must equal true/,
+    );
+});
+
+test("movement-path requires explicit test-room movement consent", () => {
+    assert.throws(
+        () =>
+            parseRealRoomTestConfig({
+                ...movementEnvironment,
+                BC_TEST_ALLOW_MOVEMENT: "false",
+            }),
+        /BC_TEST_ALLOW_MOVEMENT must equal true/,
+    );
+    assert.throws(
+        () =>
+            parseRealRoomTestConfig({
+                ...movementEnvironment,
+                BC_TEST_ENV: "live",
+            }),
+        /movement-path requires BC_TEST_ENV=test/,
     );
 });
 
@@ -599,6 +652,44 @@ test("bunny-step moves through the park and observes punishment cleanup", async 
     assert.equal(connector.Player.Appearance.getAppearanceData().length, 0);
     assert.equal(connector.listenerCount("Message"), 0);
     assert.equal(connector.listenerCount("AppearanceSyncReceived"), 0);
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("movement-path derives an accessible route from the live room map", async () => {
+    const connector = new FakeConnector();
+    const parsed = parseRealRoomTestConfig(movementEnvironment);
+    assert.equal(parsed.enabled, true);
+    const evidence = await runRealRoomTestBot(parsed, () => connector);
+
+    assert.equal(evidence.scenario, MOVEMENT_PATH_SCENARIO);
+    assert.equal(evidence.map.source, "live-room-map");
+    assert.equal(evidence.authoritativeObservations, true);
+    assert.equal(evidence.route.length, 4);
+    assert.deepEqual(evidence.route, [
+        { X: 0, Y: 0 },
+        { X: 1, Y: 0 },
+        { X: 2, Y: 0 },
+        { X: 3, Y: 0 },
+    ]);
+    assert.deepEqual(
+        evidence.movements.map((movement) => movement.observedPosition),
+        evidence.route.slice(1),
+    );
+    assert.equal(evidence.operationIds.length, 4);
+    assert.deepEqual(connector.movementCalls, evidence.route.slice(1));
+    assert.equal(connector.disconnectCalls, 1);
+});
+
+test("movement-path fails closed when the live room map is unavailable", async () => {
+    const connector = new FakeConnector();
+    connector.setMapData(undefined);
+    const parsed = parseRealRoomTestConfig(movementEnvironment);
+
+    await assert.rejects(
+        runRealRoomTestBot(parsed, () => connector),
+        /live room map data was unavailable/,
+    );
+    assert.equal(connector.movementCalls.length, 0);
     assert.equal(connector.disconnectCalls, 1);
 });
 

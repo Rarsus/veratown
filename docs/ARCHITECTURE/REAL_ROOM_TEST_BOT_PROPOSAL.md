@@ -2,8 +2,8 @@
 title: "Real-Room Test Bot Proposal"
 subtitle: "Opt-in end-to-end qualification for Ropeybot communication and Veratown command paths"
 date: "September 27, 2026"
-version: "1.2"
-status: "Phase 0 and bunny-step contract implemented locally; live-room qualification pending"
+version: "1.3"
+status: "Phase 0, bunny-step, and movement-path contracts implemented locally; live-room qualification pending"
 ---
 
 # Real-Room Test Bot Proposal
@@ -93,6 +93,21 @@ observes the warning, both expected restraint pieces, and their removal. This
 scenario requires `BC_TEST_ALLOW_BUNNY_PUNISHMENT=true` and a bounded expected
 release duration; it is never selected by default.
 
+The runner also has an explicit `movement-path` scenario for a dedicated test
+room. After joining, it reads the room's live `ServerChatRoomMapData` payload,
+validates the 40x40 tile/object strings, and computes a bounded four-direction
+route from the account's current position. Only floor or exterior-floor cells
+with the blank object are treated as walkable; other room members are treated
+as temporary obstacles. The route is derived from the map delivered for the
+joined room rather than from the generated static map source. The scenario
+refuses to run without map data, an accessible route, explicit movement
+consent, and an exact room confirmation.
+
+Movement evidence records the map hash, route, every requested waypoint, every
+inbound authoritative `MapPositionObserved` event, connection epoch, final
+position, operation IDs, and cleanup status. The connector's optimistic local
+`MapPosition` event is deliberately not accepted as movement confirmation.
+
 The runner must call `ChatRoomJoin` only. It must never use
 `joinOrCreateRoom`, because a wrong room name must fail rather than create a
 room.
@@ -112,25 +127,30 @@ Use environment variables or the local, ignored `.env.real-room.local` file
 based on `.env.real-room.local.example`. Never put these values in tracked
 configuration, test snapshots, logs, or chat messages.
 
-| Variable                         | Purpose                                                                           |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| `BC_REAL_ROOM_TEST_ENABLED`      | Explicit opt-in switch; must equal `true`.                                        |
-| `BC_TEST_SERVER_URL`             | Socket.IO server endpoint.                                                        |
-| `BC_TEST_ENV`                    | Connector environment, normally `live` only for an approved run.                  |
-| `BC_TEST_USERNAME`               | Dedicated test account name.                                                      |
-| `BC_TEST_PASSWORD`               | Dedicated test account password.                                                  |
-| `BC_TEST_ROOM`                   | Exact existing room name.                                                         |
-| `BC_TEST_TARGET_MEMBER_NUMBER`   | Expected bot member number for command targeting.                                 |
-| `BC_TEST_TIMEOUT_MS`             | Bounded wait for join, response, and reconnect assertions.                        |
-| `BC_TEST_DRY_RUN`                | Validate enabled configuration without opening a connector.                       |
-| `BC_TEST_SCENARIO`               | `help` by default, or explicit `bunny-step`.                                      |
-| `BC_TEST_ALLOW_BUNNY_PUNISHMENT` | Must be `true` for `bunny-step`.                                                  |
-| `BC_TEST_BUNNY_STAGING_POSITION` | Non-park staging coordinate in `X,Y` form.                                        |
-| `BC_TEST_BUNNY_POSITION`         | One configured bunny coordinate: `29,6`, `28,7`, or `27,10`.                      |
-| `BC_TEST_EXPECTED_RELEASE_MS`    | Bounded expected duration before restraint cleanup.                               |
-| `BC_TEST_ALLOW_RELEASE_MUTATION` | Must be `true` for the explicitly authorized `release-test`.                      |
-| `BC_TEST_RELEASE_CONFIRM_ROOM`   | Must exactly match `BC_TEST_ROOM` for `release-test`.                             |
-| `BC_TEST_RELEASE_FIXTURE`        | Approved unlocked fixture: `ItemArms/HeavyYoke` or `ItemFeet/HeavySpreaderMetal`. |
+| Variable                           | Purpose                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `BC_REAL_ROOM_TEST_ENABLED`        | Explicit opt-in switch; must equal `true`.                                           |
+| `BC_TEST_SERVER_URL`               | Socket.IO server endpoint.                                                           |
+| `BC_TEST_ENV`                      | Connector environment, normally `live` only for an approved run.                     |
+| `BC_TEST_USERNAME`                 | Dedicated test account name.                                                         |
+| `BC_TEST_PASSWORD`                 | Dedicated test account password.                                                     |
+| `BC_TEST_ROOM`                     | Exact existing room name.                                                            |
+| `BC_TEST_TARGET_MEMBER_NUMBER`     | Expected bot member number for command targeting.                                    |
+| `BC_TEST_TIMEOUT_MS`               | Bounded wait for join, response, and reconnect assertions.                           |
+| `BC_TEST_DRY_RUN`                  | Validate enabled configuration without opening a connector.                          |
+| `BC_TEST_SCENARIO`                 | `help` by default, or explicit `bunny-step`, `movement-path`.                        |
+| `BC_TEST_ALLOW_MOVEMENT`           | Must be `true` for test-only `movement-path`.                                        |
+| `BC_TEST_MOVEMENT_CONFIRM_ROOM`    | Must exactly match `BC_TEST_ROOM` for `movement-path`.                               |
+| `BC_TEST_MOVEMENT_MIN_STEPS`       | Minimum route length; defaults to `2`.                                               |
+| `BC_TEST_MOVEMENT_MAX_STEPS`       | Maximum route length; defaults to `12` and is bounded at `1600`.                     |
+| `BC_TEST_MOVEMENT_TARGET_POSITION` | Optional explicit `X,Y` target; otherwise the route target is selected from the map. |
+| `BC_TEST_ALLOW_BUNNY_PUNISHMENT`   | Must be `true` for `bunny-step`.                                                     |
+| `BC_TEST_BUNNY_STAGING_POSITION`   | Non-park staging coordinate in `X,Y` form.                                           |
+| `BC_TEST_BUNNY_POSITION`           | One configured bunny coordinate: `29,6`, `28,7`, or `27,10`.                         |
+| `BC_TEST_EXPECTED_RELEASE_MS`      | Bounded expected duration before restraint cleanup.                                  |
+| `BC_TEST_ALLOW_RELEASE_MUTATION`   | Must be `true` for the explicitly authorized `release-test`.                         |
+| `BC_TEST_RELEASE_CONFIRM_ROOM`     | Must exactly match `BC_TEST_ROOM` for `release-test`.                                |
+| `BC_TEST_RELEASE_FIXTURE`          | Approved unlocked fixture: `ItemArms/HeavyYoke` or `ItemFeet/HeavySpreaderMetal`.    |
 
 The harness should reject startup unless the opt-in switch, server URL, room,
 account, and target member number are all present. It should redact usernames,
@@ -146,6 +166,10 @@ room details, and credentials from error output where practical.
 - The explicit `bunny-step` scenario may only use movement and appearance
   observation for the configured bunny coordinates, and requires an explicit
   punishment opt-in plus a dedicated room and a short release duration.
+- The explicit `movement-path` scenario is test-environment-only, changes only
+  the dedicated account's map position, and requires movement opt-in plus exact
+  room confirmation. It must use inbound authoritative map observations, not
+  the connector's optimistic local event, as evidence.
 - The explicit `release-test` scenario requires live environment selection,
   mutation opt-in, exact room confirmation, and one approved unlocked fixture;
   it sends only the release command and its confirmation, then disconnects
@@ -193,6 +217,21 @@ promotion record must show:
 - the test account disconnected and no waiters remained.
 
 Do not run this scenario against a shared or production room.
+
+### Phase 1b: Movement-path qualification
+
+In the controlled test room, run `movement-path` with the explicit movement
+guards enabled. The promotion record must show:
+
+- the map payload was present and validated as a 40x40 live room map;
+- the route target and every waypoint were derived from that payload;
+- every waypoint received an inbound authoritative position observation in the
+  active connection epoch;
+- the final authoritative position matched the selected target;
+- the evidence contains the route, map hash, operation IDs, and clean disconnect.
+
+Do not use the generated static map source as database evidence, and do not run
+this scenario against a shared or production room.
 
 ### Phase 2: Communication qualification
 

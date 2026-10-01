@@ -13,6 +13,10 @@ import {
 } from "../../bin/games/veratown/veratownConfig.ts";
 import { createLogger } from "../../bin/logging/index.ts";
 import { writeQualificationEvidence } from "./qualificationEvidence.ts";
+import {
+    findMovementRoute,
+    type QualificationMapData,
+} from "./movementPathfinder.ts";
 
 const logger = createLogger("RealRoomTestBot");
 
@@ -28,6 +32,7 @@ export const RECONNECT_SCENARIO = "reconnect";
 export const RELEASE_OBSERVE_SCENARIO = "release-observe";
 export const RELEASE_MONITOR_SCENARIO = "release-monitor";
 export const RELEASE_TEST_SCENARIO = "release-test";
+export const MOVEMENT_PATH_SCENARIO = "movement-path";
 export const BUNNY_RELEASE_MAX_WAIT_MS = MAX_TIMEOUT_MS;
 const RELEASE_TEST_FIXTURES = new Set([
     "ItemArms/HeavyYoke",
@@ -55,6 +60,14 @@ export interface ReleaseTestScenarioConfig {
     fixtureName: string;
 }
 
+export interface MovementPathScenarioConfig {
+    allowMovement: true;
+    confirmationRoom: string;
+    minSteps: number;
+    maxSteps: number;
+    targetPosition?: MapPosition;
+}
+
 export interface DisabledRealRoomTestConfig {
     enabled: false;
 }
@@ -74,9 +87,11 @@ export interface RealRoomTestConfig {
         | typeof TRANSPORT_MATRIX_SCENARIO
         | typeof RECONNECT_SCENARIO
         | typeof RELEASE_OBSERVE_SCENARIO
-        | typeof RELEASE_TEST_SCENARIO;
+        | typeof RELEASE_TEST_SCENARIO
+        | typeof MOVEMENT_PATH_SCENARIO;
     bunnyStep?: BunnyStepScenarioConfig;
     releaseTest?: ReleaseTestScenarioConfig;
+    movementPath?: MovementPathScenarioConfig;
 }
 
 export type ParsedRealRoomTestConfig =
@@ -89,6 +104,14 @@ export interface QualificationConnector {
     on(
         event: "MapPosition",
         listener: (memberNumber: number, position: MapPosition) => void,
+    ): this;
+    on(
+        event: "MapPositionObserved",
+        listener: (
+            memberNumber: number,
+            position: MapPosition,
+            connectionEpoch: number,
+        ) => void,
     ): this;
     on(
         event: "AppearanceSyncReceived",
@@ -116,6 +139,14 @@ export interface QualificationConnector {
         listener: (memberNumber: number, position: MapPosition) => void,
     ): this;
     off(
+        event: "MapPositionObserved",
+        listener: (
+            memberNumber: number,
+            position: MapPosition,
+            connectionEpoch: number,
+        ) => void,
+    ): this;
+    off(
         event: "AppearanceSyncReceived",
         listener: (diagnostic: AppearancePacketDiagnostic) => void,
     ): this;
@@ -137,6 +168,7 @@ export interface QualificationConnector {
     ChatRoomJoin(name: string): Promise<boolean>;
     SendMessage(type: TellType, message: string, target?: number): void;
     reconnect?(): Promise<void>;
+    moveOnMap(x: number, y: number): void;
     moveOnMapAndWait(x: number, y: number, timeoutMs?: number): Promise<void>;
     disconnect(): void;
     readonly Player: {
@@ -166,6 +198,7 @@ export interface QualificationConnector {
         }[];
         readonly map?: {
             getObject(position: MapPosition): string | null;
+            readonly mapData?: QualificationMapData;
         };
     };
 }
@@ -307,6 +340,39 @@ export interface ReleaseTestQualificationEvidence {
     postReleasePosition: MapPosition;
     disconnected: true;
 }
+
+export interface MovementPathQualificationEvidence {
+    scenario: typeof MOVEMENT_PATH_SCENARIO;
+    runId: string;
+    operationId: string;
+    operationIds: string[];
+    startedAt: string;
+    finishedAt: string;
+    environment: "test";
+    room: string;
+    accountRole: "dedicated-test-account";
+    memberNumber: number;
+    map: {
+        source: "live-room-map";
+        width: 40;
+        height: 40;
+        mapHash: string;
+        walkableTileCount: number;
+    };
+    startPosition: MapPosition;
+    targetPosition: MapPosition;
+    route: MapPosition[];
+    movements: Array<{
+        operationId: string;
+        requestedPosition: MapPosition;
+        observedPosition: MapPosition;
+        observedAt: string;
+        connectionEpoch: number;
+    }>;
+    finalPosition: MapPosition;
+    authoritativeObservations: true;
+    disconnected: true;
+}
 export type QualificationEvidence =
     | HelpQualificationEvidence
     | BunnyStepQualificationEvidence
@@ -314,7 +380,8 @@ export type QualificationEvidence =
     | ReconnectQualificationEvidence
     | ReleaseObserveQualificationEvidence
     | ReleaseMonitorQualificationEvidence
-    | ReleaseTestQualificationEvidence;
+    | ReleaseTestQualificationEvidence
+    | MovementPathQualificationEvidence;
 
 export type QualificationConnectorFactory = (
     config: RealRoomTestConfig,
@@ -405,10 +472,11 @@ export function parseRealRoomTestConfig(
         scenario !== RECONNECT_SCENARIO &&
         scenario !== RELEASE_OBSERVE_SCENARIO &&
         scenario !== RELEASE_MONITOR_SCENARIO &&
-        scenario !== RELEASE_TEST_SCENARIO
+        scenario !== RELEASE_TEST_SCENARIO &&
+        scenario !== MOVEMENT_PATH_SCENARIO
     ) {
         throw new QualificationError(
-            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, ${RECONNECT_SCENARIO}, ${RELEASE_OBSERVE_SCENARIO}, ${RELEASE_MONITOR_SCENARIO}, or ${RELEASE_TEST_SCENARIO}`,
+            `BC_TEST_SCENARIO must be ${DEFAULT_SCENARIO}, ${BUNNY_STEP_SCENARIO}, ${TRANSPORT_MATRIX_SCENARIO}, ${RECONNECT_SCENARIO}, ${RELEASE_OBSERVE_SCENARIO}, ${RELEASE_MONITOR_SCENARIO}, ${RELEASE_TEST_SCENARIO}, or ${MOVEMENT_PATH_SCENARIO}`,
         );
     }
     if (scenario === BUNNY_STEP_SCENARIO) {
@@ -424,6 +492,12 @@ export function parseRealRoomTestConfig(
             "BC_TEST_ALLOW_RELEASE_MUTATION",
             "BC_TEST_RELEASE_CONFIRM_ROOM",
             "BC_TEST_RELEASE_FIXTURE",
+        );
+    }
+    if (scenario === MOVEMENT_PATH_SCENARIO) {
+        requiredKeys.push(
+            "BC_TEST_ALLOW_MOVEMENT",
+            "BC_TEST_MOVEMENT_CONFIRM_ROOM",
         );
     }
     const missingKeys = requiredKeys.filter(
@@ -473,6 +547,58 @@ export function parseRealRoomTestConfig(
     };
 
     if (scenario === DEFAULT_SCENARIO) return baseConfig;
+    if (scenario === MOVEMENT_PATH_SCENARIO) {
+        if (environmentName !== "test") {
+            throw new QualificationError(
+                "movement-path requires BC_TEST_ENV=test",
+            );
+        }
+        if (environment.BC_TEST_ALLOW_MOVEMENT !== "true") {
+            throw new QualificationError(
+                "BC_TEST_ALLOW_MOVEMENT must equal true for movement-path",
+            );
+        }
+        if (
+            requiredValue(environment, "BC_TEST_MOVEMENT_CONFIRM_ROOM") !==
+            baseConfig.room
+        ) {
+            throw new QualificationError(
+                "BC_TEST_MOVEMENT_CONFIRM_ROOM must exactly match BC_TEST_ROOM",
+            );
+        }
+        const minSteps = parsePositiveInteger(
+            requiredValue(environment, "BC_TEST_MOVEMENT_MIN_STEPS") ?? "2",
+            "BC_TEST_MOVEMENT_MIN_STEPS",
+        );
+        const maxSteps = parsePositiveInteger(
+            requiredValue(environment, "BC_TEST_MOVEMENT_MAX_STEPS") ?? "12",
+            "BC_TEST_MOVEMENT_MAX_STEPS",
+        );
+        if (maxSteps < minSteps || maxSteps > 1600) {
+            throw new QualificationError(
+                "BC_TEST_MOVEMENT_MAX_STEPS must be between the minimum and 1600",
+            );
+        }
+        const targetValue = requiredValue(
+            environment,
+            "BC_TEST_MOVEMENT_TARGET_POSITION",
+        );
+        return {
+            ...baseConfig,
+            movementPath: {
+                allowMovement: true,
+                confirmationRoom: baseConfig.room,
+                minSteps,
+                maxSteps,
+                targetPosition: targetValue
+                    ? parseCoordinatePair(
+                          targetValue,
+                          "BC_TEST_MOVEMENT_TARGET_POSITION",
+                      )
+                    : undefined,
+            },
+        };
+    }
     if (scenario === RELEASE_TEST_SCENARIO) {
         if (environmentName !== "live") {
             throw new QualificationError(
@@ -619,6 +745,97 @@ function waitForResponse(
         timeoutMs,
         "response",
     );
+}
+
+function waitForAuthoritativeMovement(
+    connector: QualificationConnector,
+    memberNumber: number,
+    target: MapPosition,
+    timeoutMs: number,
+): {
+    promise: Promise<{
+        position: MapPosition;
+        observedAt: string;
+        connectionEpoch: number;
+    }>;
+    dispose(): void;
+} {
+    let timer: NodeJS.Timeout | undefined;
+    let settled = false;
+    let resolveMovement!: (observation: {
+        position: MapPosition;
+        observedAt: string;
+        connectionEpoch: number;
+    }) => void;
+    let rejectMovement!: (error: Error) => void;
+    const promise = new Promise<{
+        position: MapPosition;
+        observedAt: string;
+        connectionEpoch: number;
+    }>((resolve, reject) => {
+        resolveMovement = resolve;
+        rejectMovement = reject;
+    });
+    const onObserved = (
+        observedMemberNumber: number,
+        position: MapPosition,
+        connectionEpoch: number,
+    ) => {
+        if (
+            observedMemberNumber !== memberNumber ||
+            !samePosition(position, target) ||
+            settled
+        ) {
+            return;
+        }
+        settled = true;
+        cleanup();
+        resolveMovement({
+            position: { ...position },
+            observedAt: new Date().toISOString(),
+            connectionEpoch,
+        });
+    };
+    const onDisconnected = (reason: string) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        rejectMovement(
+            new QualificationError(
+                `disconnected while waiting for authoritative movement: ${reason}`,
+            ),
+        );
+    };
+    const cleanup = () => {
+        connector.off("MapPositionObserved", onObserved);
+        connector.off("Disconnected", onDisconnected);
+        if (timer) clearTimeout(timer);
+    };
+
+    connector.on("MapPositionObserved", onObserved);
+    connector.on("Disconnected", onDisconnected);
+    timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        rejectMovement(
+            new QualificationError(
+                `authoritative movement to (${target.X},${target.Y}) timed out`,
+            ),
+        );
+    }, timeoutMs);
+
+    try {
+        connector.moveOnMap(target.X, target.Y);
+    } catch (error) {
+        settled = true;
+        cleanup();
+        rejectMovement(
+            error instanceof Error ? error : new Error(String(error)),
+        );
+    }
+
+    return { promise, dispose: cleanup };
 }
 
 function waitForMessage(
@@ -1571,6 +1788,103 @@ async function runBunnyStepScenario(
     }
 }
 
+async function runMovementPathScenario(
+    config: RealRoomTestConfig,
+    connector: QualificationConnector,
+    startedAt: Date,
+    runId: string,
+): Promise<MovementPathQualificationEvidence> {
+    const movementPath = config.movementPath;
+    if (!movementPath) {
+        throw new QualificationError("movement-path configuration is missing");
+    }
+    if (connector.chatRoom?.Name !== movementPath.confirmationRoom) {
+        throw new QualificationError(
+            "movement-path room confirmation did not match the joined room",
+        );
+    }
+
+    const mapData = connector.chatRoom?.map?.mapData;
+    if (!mapData) {
+        throw new QualificationError(
+            "live room map data was unavailable after room join",
+        );
+    }
+
+    const ownMemberNumber = connector.Player.MemberNumber;
+    const blockedPositions = (connector.chatRoom?.characters ?? [])
+        .filter((character) => character.MemberNumber !== ownMemberNumber)
+        .map((character) => character.MapPos);
+    const startPosition = { ...connector.Player.MapPos };
+    const route = findMovementRoute(mapData, startPosition, {
+        minSteps: movementPath.minSteps,
+        maxSteps: movementPath.maxSteps,
+        target: movementPath.targetPosition,
+        blockedPositions,
+    });
+    const operationId = `qualification:${runId}:movement`;
+    const movements: MovementPathQualificationEvidence["movements"] = [];
+    const operationIds = [operationId];
+
+    for (let index = 1; index < route.route.length; index += 1) {
+        const target = route.route[index]!;
+        const stepOperationId = `${operationId}:step:${index}`;
+        operationIds.push(stepOperationId);
+        const waiter = waitForAuthoritativeMovement(
+            connector,
+            ownMemberNumber,
+            target,
+            config.timeoutMs,
+        );
+        try {
+            const observation = await waiter.promise;
+            movements.push({
+                operationId: stepOperationId,
+                requestedPosition: { ...target },
+                observedPosition: observation.position,
+                observedAt: observation.observedAt,
+                connectionEpoch: observation.connectionEpoch,
+            });
+        } finally {
+            waiter.dispose();
+        }
+    }
+
+    const finalPosition = movements.at(-1)?.observedPosition ?? startPosition;
+    if (!samePosition(finalPosition, route.target)) {
+        throw new QualificationError(
+            "movement-path finished without authoritative arrival at its target",
+        );
+    }
+
+    return {
+        scenario: MOVEMENT_PATH_SCENARIO,
+        runId,
+        operationId,
+        operationIds,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        environment: "test",
+        room: config.room,
+        accountRole: "dedicated-test-account",
+        memberNumber: ownMemberNumber,
+        map: {
+            source: "live-room-map",
+            width: 40,
+            height: 40,
+            mapHash: route.mapHash,
+            walkableTileCount: route.walkableTileCount,
+        },
+        startPosition,
+        targetPosition: route.target,
+        route: route.route,
+        movements,
+        finalPosition,
+        authoritativeObservations: true,
+        disconnected: true,
+    };
+}
+
 function redact(value: string, config?: RealRoomTestConfig): string {
     let redacted = value;
     for (const secret of [
@@ -1658,6 +1972,14 @@ export async function runRealRoomTestBot(
         }
         if (config.scenario === RELEASE_TEST_SCENARIO) {
             return await runReleaseTestScenario(
+                config,
+                connector,
+                startedAt,
+                runId,
+            );
+        }
+        if (config.scenario === MOVEMENT_PATH_SCENARIO) {
+            return await runMovementPathScenario(
                 config,
                 connector,
                 startedAt,

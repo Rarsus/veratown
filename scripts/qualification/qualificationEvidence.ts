@@ -48,9 +48,22 @@ export function redactQualificationEvidence(
 
 function operationIdsFor(evidence: unknown): string[] {
     if (!evidence || typeof evidence !== "object") return [];
-    const candidate = (evidence as { operationId?: unknown }).operationId;
-    if (typeof candidate === "string" && candidate.length > 0) {
-        return [candidate];
+    const record = evidence as {
+        operationId?: unknown;
+        operationIds?: unknown;
+    };
+    if (Array.isArray(record.operationIds)) {
+        const operationIds = record.operationIds.filter(
+            (operationId): operationId is string =>
+                typeof operationId === "string" && operationId.length > 0,
+        );
+        if (operationIds.length > 0) return operationIds;
+    }
+    if (
+        typeof record.operationId === "string" &&
+        record.operationId.length > 0
+    ) {
+        return [record.operationId];
     }
     return [];
 }

@@ -107,6 +107,11 @@ interface ConnectorEvents {
     Disconnected: [reason: Socket.DisconnectReason];
     ReconnectFailed: [];
     MapPosition: [memberNumber: number, position: ChatRoomMapPos];
+    MapPositionObserved: [
+        memberNumber: number,
+        position: ChatRoomMapPos,
+        connectionEpoch: number,
+    ];
     PoseChange: [character: API_Character];
     Message: [message: API_Message];
     RawChatRoomMessage: [message: ServerChatRoomMessage];
@@ -271,6 +276,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private leaveReasons = new Map<number, LeaveReason>();
 
     private bot?: LogicBase;
+    private connectionEpoch = 0;
 
     public readonly connectionId: string;
 
@@ -451,6 +457,7 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
 
     private onSocketConnect = async () => {
         console.log("Socket connected!");
+        this.connectionEpoch += 1;
         this.wrappedSock.emit("AccountLogin", {
             AccountName: this.username,
             Password: this.password,
@@ -777,6 +784,12 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         this._chatRoom?.mapPositionUpdate(update.MemberNumber, update.MapData);
         if (update.MapData?.Pos) {
             this.emit("MapPosition", update.MemberNumber, update.MapData.Pos);
+            this.emit(
+                "MapPositionObserved",
+                update.MemberNumber,
+                update.MapData.Pos,
+                this.connectionEpoch,
+            );
         }
     };
 
@@ -1123,19 +1136,27 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         }
     }
 
-    /** Teleport this bot using Bondage Club's map teleport protocol. */
-    public teleportOnMap(x: number, y: number): void {
-        this.SendMessage(
-            "Hidden",
-            "ChatRoomMapViewTeleport",
-            this.Player.MemberNumber,
-            [
-                {
-                    Tag: "MapViewTeleport",
-                    Position: { X: x, Y: y },
-                },
-            ],
-        );
+    /** Teleport a room character using Bondage Club's map teleport protocol. */
+    public teleportOnMap(
+        x: number,
+        y: number,
+        memberNumber = this.Player.MemberNumber,
+    ): void {
+        this.SendMessage("Hidden", "ChatRoomMapViewTeleport", memberNumber, [
+            {
+                Tag: "MapViewTeleport",
+                Position: { X: x, Y: y },
+            },
+        ]);
+    }
+
+    /** Explicitly named wrapper for callers that move another character. */
+    public teleportCharacterOnMap(
+        memberNumber: number,
+        x: number,
+        y: number,
+    ): void {
+        this.teleportOnMap(x, y, memberNumber);
     }
 
     public async moveOnMapAndWait(

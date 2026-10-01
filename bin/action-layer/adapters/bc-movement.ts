@@ -15,15 +15,19 @@ interface BCMovementCharacter {
 }
 
 interface MovementConnector {
+    readonly Player?: {
+        readonly MemberNumber: number;
+    };
     on(
-        event: "MapPosition" | "Disconnected",
+        event: "MapPositionObserved" | "Disconnected",
         listener: (...args: any[]) => void,
     ): void;
     off(
-        event: "MapPosition" | "Disconnected",
+        event: "MapPositionObserved" | "Disconnected",
         listener: (...args: any[]) => void,
     ): void;
     moveOnMap(x: number, y: number): void;
+    teleportOnMap(x: number, y: number, memberNumber?: number): void;
 }
 
 export class BCMovementActionAdapter implements MovementActionAdapter<BCMovementCharacter> {
@@ -82,6 +86,28 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                 ),
             );
         }
+        const connectorOwnsCharacter =
+            connector.Player?.MemberNumber === character.MemberNumber;
+        if (
+            !connectorOwnsCharacter &&
+            typeof connector.teleportOnMap !== "function"
+        ) {
+            return Promise.resolve(
+                createActionResult(
+                    "rejected",
+                    createActionMetadata(
+                        policyContext(policy),
+                        "movement.move",
+                        startedAt,
+                    ),
+                    {
+                        reason: "Movement connector does not expose target-member teleport",
+                        failureKind: "rejected",
+                        retryable: false,
+                    },
+                ),
+            );
+        }
 
         const acceptsPosition = (position: CharacterPosition): boolean =>
             policy.acceptPosition?.(position) ??
@@ -115,7 +141,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                 if (settled) return;
                 settled = true;
                 clearTimeout(timeout);
-                connector.off("MapPosition", onMapPosition);
+                connector.off("MapPositionObserved", onMapPosition);
                 connector.off("Disconnected", onDisconnected);
                 policy.signal?.removeEventListener("abort", onAbort);
                 resolve(result);
@@ -197,7 +223,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                 );
             }, policy.timeoutMs);
 
-            connector.on("MapPosition", onMapPosition);
+            connector.on("MapPositionObserved", onMapPosition);
             connector.on("Disconnected", onDisconnected);
             policy.signal?.addEventListener("abort", onAbort, { once: true });
             if (policy.signal?.aborted) {
@@ -205,7 +231,15 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                 return;
             }
             try {
-                connector.moveOnMap(destination.x, destination.y);
+                if (connectorOwnsCharacter) {
+                    connector.moveOnMap(destination.x, destination.y);
+                } else {
+                    connector.teleportOnMap(
+                        destination.x,
+                        destination.y,
+                        character.MemberNumber,
+                    );
+                }
             } catch (error) {
                 finish(
                     createActionResult(
