@@ -3,28 +3,29 @@ title: "Release Appearance-Removal Promotion Record"
 subtitle: "Qualification and controlled rollout decision for selected-target removal"
 date: "September 29, 2026"
 version: "1.0"
-status: "NO-GO; qualification evidence recorded, release-removal migration remains disabled"
+status: "SUPERSEDED; GO with accepted technical debt, release-removal and communication switches enabled"
 ---
 
 # Release Appearance-Removal Promotion Record
 
 ## Decision identity
 
-| Field                    | Value                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Record ID                | `promotion-20260929-release-removal-001`                                                              |
-| Epic / issues            | `#237`, `#297`, `#258`, `#255`, `#299`, `#257`                                                        |
-| Feature family           | Selected-target release appearance removal only                                                       |
-| Decision owner           | Requesting operator; explicit approval was granted for the controlled qualification run               |
-| Recovery owner           | Veratown workflow recovery owner                                                                      |
-| Rollback owner           | Action-layer rollout owner / requesting operator                                                      |
-| Runtime environment      | Railway production, qualification-only                                                                |
-| Rollout switch and value | `action_layer_release_removal_enabled` absent; effective value `false`                                |
-| Decision                 | `NO-GO` for release-removal promotion; `PASS` for local qualification and safe deployment observation |
+| Field                    | Value                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Record ID                | `promotion-20260929-release-removal-001`                                                                 |
+| Epic / issues            | `#237`, `#233`, `#297`, `#258`, `#255`, `#299`, `#257`, `#312`                                           |
+| Feature family           | Selected-target release appearance removal and targeted communication notifications                      |
+| Decision owner           | Requesting operator; explicit approval was granted for the controlled qualification run                  |
+| Recovery owner           | Veratown workflow recovery owner                                                                         |
+| Rollback owner           | Action-layer rollout owner / requesting operator                                                         |
+| Runtime environment      | Railway production                                                                                       |
+| Historical rollout state | `action_layer_release_removal_enabled` absent; effective value `false` before the superseding decision   |
+| Decision                 | Historical `NO-GO` superseded by the 2026-10-01 operator-approved promotion with accepted technical debt |
 
-This record does not authorize a destructive production-room release and does not
-claim migration of teleport, cage/kennel release, forced nudity, parole, keypad
-access, or release persistence. Bunny remains independently enabled.
+The historical 2026-09-29 decision did not authorize a destructive production-room
+release and did not claim migration of teleport, cage/kennel release, forced
+nudity, parole, keypad access, or release persistence. Bunny remains independently
+enabled. The superseding operator decision is recorded below.
 
 ## Subsequent verification: 2026-10-01
 
@@ -51,6 +52,23 @@ access, or release persistence. Bunny remains independently enabled.
   not produce a verified terminal removal state and configured shell access is
   unavailable.
 - Performance testing remains deferred and is not part of this release decision.
+
+## Superseding operator decision: 2026-10-01
+
+- The requesting operator accepted the documented release and communication
+  qualification gaps as technical debt under GitHub issue #312.
+- The selected-target release-removal and targeted communication notification
+  switches were enabled together in Railway production.
+- `ACTION_LAYER_RELEASE_REMOVAL_ENABLED=true`
+- `ACTION_LAYER_COMMUNICATION_NOTIFICATIONS_ENABLED=true`
+- Railway deployment `2b8d6c0a-a792-4e84-bf42-4317d17adc49` for commit `cc80243`
+  reached `SUCCESS` with a `RUNNING` instance.
+- This is an operator-approved risk acceptance, not evidence that the historical
+  movement-confirmation, MongoDB, reconnect, recovery, or communication gaps
+  passed. The selected release scope and legacy boundaries remain unchanged.
+- Rollback is immediate by setting both switches to `false`, preserving active
+  operation ownership, routing new work to legacy behavior, and reconciling
+  in-flight operations.
 
 ## Gate status
 
@@ -126,7 +144,7 @@ release removal or promotion readiness.
 Do not paste Railway variables, tokens, cookies, or authentication headers into
 this record.
 
-## Go / No-Go
+## Historical Go / No-Go (2026-09-29)
 
 - [x] Local contract, projection, ownership, recovery, type, formatting, and whitespace gates pass.
 - [x] Safe redacted real-room observation completed without mutation.
@@ -136,9 +154,9 @@ this record.
 - [ ] In-flight connector-loss/process-restart recovery and replacement-group rehearsal are complete.
 - [ ] All promotion residual risks have accepted owners and follow-up evidence.
 
-**Decision:** `NO-GO`
+**Historical decision:** `NO-GO` (superseded by the operator decision above)
 
-**Reason:** The release-removal switch remains disabled. The authorized live
+**Historical reason:** The release-removal switch remained disabled. The authorized live
 attempt failed closed during movement confirmation before verified selected-target
 removal; MongoDB terminal-state evidence and full in-flight recovery gates are
 also incomplete.
@@ -152,13 +170,14 @@ also incomplete.
 
 ## Rollback procedure
 
-1. Keep `action_layer_release_removal_enabled=false`.
-2. Freeze new action-owned release-removal operations if a controlled canary is ever enabled.
+1. Set `ACTION_LAYER_RELEASE_REMOVAL_ENABLED=false` and
+   `ACTION_LAYER_COMMUNICATION_NOTIFICATIONS_ENABLED=false`.
+2. Freeze new action-owned release-removal operations.
 3. Preserve the active operation lease; route only new operations to legacy.
 4. Reconcile in-flight operations through the workflow recovery owner.
 5. Verify MongoDB journal, audit, projection, and idempotency state.
 6. Capture redacted connector and Railway evidence.
-7. Re-run focused release and rollout qualification before any new decision.
+7. Re-run focused release and rollout qualification before another decision.
 
 Rollback is incomplete until new work is legacy-owned, in-flight work has a
 recorded terminal or recovered state, and the evidence artifact is retained.
