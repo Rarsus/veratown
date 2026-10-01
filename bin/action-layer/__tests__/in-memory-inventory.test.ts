@@ -174,9 +174,7 @@ test("removal is atomic when quantity is insufficient", async () => {
 
 test("does not merge quantities with conflicting item metadata", async () => {
     const adapter = new InMemoryInventoryActionAdapter({
-        initialItems: [
-            { ...item, quantity: 1, metadata: { color: "blue" } },
-        ],
+        initialItems: [{ ...item, quantity: 1, metadata: { color: "blue" } }],
     });
     const service = new InventoryActionService(adapter);
     const result = await service.add(

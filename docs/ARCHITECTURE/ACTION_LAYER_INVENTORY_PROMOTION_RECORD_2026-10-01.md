@@ -8,27 +8,27 @@ status: "NO-GO — keep the inventory switch disabled"
 
 ## Decision identity
 
-| Field                    | Value                                                              |
-| ------------------------ | ------------------------------------------------------------------ |
-| Record ID                | `inventory-20261001-roulette-wheel-1`                              |
-| Epic / issue             | [#234](https://github.com/Rarsus/veratown/issues/234), [#302](https://github.com/Rarsus/veratown/issues/302) |
-| Caller                   | `RouletteGame.getWheel()` — add the casino bot's LuckyWheel         |
-| Operation                | `inventory.add` for one `ItemDevices/LuckyWheel` slot              |
-| Operation ID             | Per-attempt UUID; retained only by the in-process adapter          |
-| Decision owner           | Roulette workflow before dispatch; BC adapter owns translation    |
-| Recovery / rollback owner| Roulette workflow                                                   |
-| Runtime                  | Local tests only                                                    |
-| Rollout switch           | `ACTION_LAYER_INVENTORY_ENABLED=false`                              |
+| Field                     | Value                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Record ID                 | `inventory-20261001-roulette-wheel-1`                                                                        |
+| Epic / issue              | [#234](https://github.com/Rarsus/veratown/issues/234), [#302](https://github.com/Rarsus/veratown/issues/302) |
+| Caller                    | `RouletteGame.getWheel()` — add the casino bot's LuckyWheel                                                  |
+| Operation                 | `inventory.add` for one `ItemDevices/LuckyWheel` slot                                                        |
+| Operation ID              | Per-attempt UUID; retained only by the in-process adapter                                                    |
+| Decision owner            | Roulette workflow before dispatch; BC adapter owns translation                                               |
+| Recovery / rollback owner | Roulette workflow                                                                                            |
+| Runtime                   | Local tests only                                                                                             |
+| Rollout switch            | `ACTION_LAYER_INVENTORY_ENABLED=false`                                                                       |
 
 ## Local evidence
 
-| Gate                                    | Result | Evidence |
-| --------------------------------------- | ------ | -------- |
-| Inventory contract and memory adapter   | PASS   | `bin/action-layer/__tests__/in-memory-inventory.test.ts` |
-| BC adapter permission/lifecycle tests   | PASS   | `bin/action-layer/__tests__/bc-inventory.test.ts` |
-| Roulette canary and legacy rollback path| PASS   | `bin/games/casino/__tests__/rouletteInventory.integration.test.ts` |
-| TypeScript                              | PASS   | `pnpm types` |
-| Formatting and whitespace               | PASS   | Prettier check and `git diff --check` |
+| Gate                                     | Result | Evidence                                                           |
+| ---------------------------------------- | ------ | ------------------------------------------------------------------ |
+| Inventory contract and memory adapter    | PASS   | `bin/action-layer/__tests__/in-memory-inventory.test.ts`           |
+| BC adapter permission/lifecycle tests    | PASS   | `bin/action-layer/__tests__/bc-inventory.test.ts`                  |
+| Roulette canary and legacy rollback path | PASS   | `bin/games/casino/__tests__/rouletteInventory.integration.test.ts` |
+| TypeScript                               | PASS   | `pnpm types`                                                       |
+| Formatting and whitespace                | PASS   | Prettier check and `git diff --check`                              |
 
 The repeatable one-cycle command is not fully green in this environment:
 `postR132Assets.test.ts` has an unrelated upstream-asset assertion mismatch, and
@@ -38,16 +38,16 @@ caller, passed.
 
 ## Controlled-room gates
 
-| Gate                                 | Result  | Notes |
-| ------------------------------------ | ------- | ----- |
-| Real-room add success                | MISSING | No approved live-room run was performed |
-| Real-room permission denial          | MISSING | Local permission rejection is not connector evidence |
-| Real-room timeout / unknown outcome  | MISSING | Requires retained connector observation |
-| Real-room disconnect and reconnect   | MISSING | Local lifecycle tests only |
-| Real-room duplicate operation        | MISSING | Local adapter idempotency tests only |
-| Real-room rollback rehearsal         | MISSING | Local path-selection test only |
+| Gate                                 | Result  | Notes                                                     |
+| ------------------------------------ | ------- | --------------------------------------------------------- |
+| Real-room add success                | MISSING | No approved live-room run was performed                   |
+| Real-room permission denial          | MISSING | Local permission rejection is not connector evidence      |
+| Real-room timeout / unknown outcome  | MISSING | Requires retained connector observation                   |
+| Real-room disconnect and reconnect   | MISSING | Local lifecycle tests only                                |
+| Real-room duplicate operation        | MISSING | Local adapter idempotency tests only                      |
+| Real-room rollback rehearsal         | MISSING | Local path-selection test only                            |
 | MongoDB durable state                | N/A     | This BC inventory slice does not write game-profile state |
-| Performance / retained live artifact | MISSING | No live artifact exists |
+| Performance / retained live artifact | MISSING | No live artifact exists                                   |
 
 ## Rollback and decision
 

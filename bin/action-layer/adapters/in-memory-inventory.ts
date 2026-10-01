@@ -613,9 +613,9 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
         const sourceItem = this.itemsFor(policy.ownerMemberNumber).find(
             (candidate) => inventoryIdentityKey(candidate.identity) === key,
         );
-        const recipientItem = this.itemsFor(
-            policy.recipientMemberNumber,
-        ).find((candidate) => inventoryIdentityKey(candidate.identity) === key);
+        const recipientItem = this.itemsFor(policy.recipientMemberNumber).find(
+            (candidate) => inventoryIdentityKey(candidate.identity) === key,
+        );
         if (
             recipientItem &&
             fingerprint(recipientItem.metadata ?? {}) !==
@@ -626,8 +626,7 @@ export class InMemoryInventoryActionAdapter implements InventoryActionAdapter<un
                 policy,
                 actionId,
                 {
-                    reason:
-                        "Recipient inventory item metadata conflicts with the source",
+                    reason: "Recipient inventory item metadata conflicts with the source",
                     failureKind: "blocked",
                     retryable: false,
                 },
