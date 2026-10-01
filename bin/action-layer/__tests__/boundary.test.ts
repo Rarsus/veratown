@@ -11,7 +11,7 @@ const PROHIBITED_IMPORTS = [
 ];
 const IMPORT_PATTERN = /(?:from|import\s*\()\s*["']([^"']+)["']/g;
 const BC_ADAPTER_PATTERN =
-    /adapters\/bc-(appearance|communication|map-object|map-trigger)\.ts$/;
+    /adapters\/bc-(appearance|communication|inventory|map-object|map-trigger)\.ts$/;
 
 async function getTypeScriptFiles(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });

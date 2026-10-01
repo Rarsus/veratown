@@ -29,6 +29,16 @@ test("configuration applies deterministic safe defaults", () => {
         config.action_layer_communication_notifications_enabled,
         false,
     );
+    assert.equal(config.action_layer_inventory_enabled, false);
+});
+
+test("configuration accepts enabling inventory actions explicitly", () => {
+    const config = validateConfig({
+        ...validConfig(),
+        action_layer_inventory_enabled: true,
+    });
+
+    assert.equal(config.action_layer_inventory_enabled, true);
 });
 
 test("configuration accepts enabling communication notifications explicitly", () => {

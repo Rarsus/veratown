@@ -25,7 +25,7 @@ import {
     BC_AppearanceItem,
     importBundle,
 } from "bc-bot";
-import { RouletteGame } from "./casino/roulette";
+import { RouletteGame, type RouletteInventoryCanary } from "./casino/roulette";
 import { durationString, generatePassword } from "../utils";
 import {
     FORFEITS,
@@ -60,6 +60,10 @@ import {
     CasinoVenueSystem,
 } from "./shared/casinoVenueSystem";
 import { MessageSender } from "./shared/messageSender";
+import type {
+    ActionLayerRolloutController,
+    InventoryActionService,
+} from "../action-layer";
 
 const logger = createLogger("Casino");
 
@@ -136,6 +140,7 @@ export class Casino implements GamePlugin {
     private readonly lastDailyChipNotificationAt = new Map<number, number>();
     private readonly lastCasinoWelcomeAt = new Map<number, number>();
     private readonly managedReleaseWorkersEnabled: boolean;
+    private readonly rouletteInventoryCanary?: RouletteInventoryCanary;
 
     /**
      * Phase 5: Direct UnifiedCharacterStore access (no adapters)
@@ -202,6 +207,26 @@ export class Casino implements GamePlugin {
                   { venues: config?.venues },
                   this.mutationService,
               );
+        const inventoryService = container?.has(
+            DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE,
+        )
+            ? container.get<InventoryActionService<API_Character>>(
+                  DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE,
+              )
+            : undefined;
+        const actionLayerRollout = container?.has(
+            DIServiceKeys.ACTION_LAYER_ROLLOUT,
+        )
+            ? container.get<ActionLayerRolloutController>(
+                  DIServiceKeys.ACTION_LAYER_ROLLOUT,
+              )
+            : undefined;
+        if (inventoryService && actionLayerRollout) {
+            this.rouletteInventoryCanary = {
+                service: inventoryService,
+                rollout: actionLayerRollout,
+            };
+        }
 
         // If no CommandParser provided, create one for this casino instance
         // Bound to the connector passed in (typically conn3 for casino)
@@ -220,7 +245,7 @@ export class Casino implements GamePlugin {
         this.game =
             config?.game === "blackjack"
                 ? new BlackjackGame(conn, this)
-                : new RouletteGame(conn, this);
+                : new RouletteGame(conn, this, this.rouletteInventoryCanary);
         this.messageFeatureSystem = new GamePluginMessageFeatureSystem(
             this.conn,
             this.key,
@@ -1507,7 +1532,11 @@ ${forfeitsString()}
             previousGame.unregisterCommands(this.commandRouter!);
             this.game =
                 game === "roulette"
-                    ? new RouletteGame(this.conn, this)
+                    ? new RouletteGame(
+                          this.conn,
+                          this,
+                          this.rouletteInventoryCanary,
+                      )
                     : new BlackjackGame(this.conn, this);
             this.game.registerCommands(this.commandRouter!);
             await this.game.initializeAppearance();

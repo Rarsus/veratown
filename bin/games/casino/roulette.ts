@@ -13,6 +13,9 @@
  */
 
 import { wait, waitForCondition } from "../../hub/utils";
+import { randomUUID } from "node:crypto";
+import type { ActionLayerRolloutController } from "../../action-layer/rollout";
+import type { InventoryActionService, InventoryItem } from "../../action-layer";
 import { Casino, getItemsBlockingForfeit } from "../casino";
 import {
     API_Character,
@@ -94,6 +97,11 @@ export interface RouletteBet extends Bet {
     stakeForfeit: string;
     kind: RouletteBetKind;
     number?: number;
+}
+
+export interface RouletteInventoryCanary {
+    readonly service: InventoryActionService<API_Character>;
+    readonly rollout: ActionLayerRolloutController;
 }
 
 export type Color = "Red" | "Black" | "Green";
@@ -180,6 +188,7 @@ export class RouletteGame implements Game {
     private currentPhase: RouletteGameState["phase"] = "betting";
     private readonly settledRounds = new Set<string>();
     private readonly roles = new Map<number, RouletteRole>();
+    private inventoryStateUncertain = false;
 
     public HELPMESSAGE = ROULETTEHELP;
     public EXAMPLES = ROULETTEEXAMPLES;
@@ -213,12 +222,12 @@ export class RouletteGame implements Game {
         );
         router.registerRootCommand(
             "wheel",
-            (
+            async (
                 sender: API_Character,
                 msg: BC_Server_ChatRoomMessage,
                 args: string[],
             ) => {
-                this.getWheel();
+                await this.getWheel();
             },
         );
     }
@@ -232,6 +241,7 @@ export class RouletteGame implements Game {
     public constructor(
         private conn: API_Connector,
         casino: Casino,
+        private readonly inventoryCanary?: RouletteInventoryCanary,
     ) {
         this.casino = casino;
     }
@@ -239,7 +249,7 @@ export class RouletteGame implements Game {
     public async initializeAppearance(): Promise<void> {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        const wheel = this.getWheel();
+        await this.getWheel();
 
         const sign = this.casino.getSign();
         sign.setProperty("OverridePriority", { Text: 63, Text2: 63 });
@@ -835,7 +845,7 @@ export class RouletteGame implements Game {
         }
         this.currentPhase = "spinning";
         await this.persistGameState();
-        const wheel = this.getWheel();
+        const wheel = await this.getWheel();
         const wheelData = wheel.getData();
         const prevAngle = wheelData?.Property?.TargetAngle ?? 0;
 
@@ -951,12 +961,148 @@ export class RouletteGame implements Game {
         await this.casino.setBio();
     }
 
-    public getWheel(): API_AppearanceItem {
-        const wheel = this.conn.Player.Appearance.InventoryGet("ItemDevices");
-        if (wheel?.Name === "LuckyWheel") {
-            return wheel;
-        }
+    public async getWheel(): Promise<API_AppearanceItem> {
+        const operationId = `roulette-wheel-add-${randomUUID()}`;
+        const lease = this.inventoryCanary?.rollout.begin(
+            "inventory",
+            operationId,
+        );
+        try {
+            if (!lease || lease.path === "legacy") {
+                if (this.inventoryStateUncertain && this.inventoryCanary) {
+                    const observation =
+                        await this.authoritativeInventoryObservation(
+                            `${operationId}:reconcile`,
+                        );
+                    this.inventoryStateUncertain = false;
+                    const confirmedWheel =
+                        this.conn.Player.Appearance.InventoryGet("ItemDevices");
+                    if (
+                        observation.items.some(
+                            (item) =>
+                                item.identity.group === "ItemDevices" &&
+                                item.identity.asset === "LuckyWheel",
+                        ) &&
+                        confirmedWheel?.Name === "LuckyWheel"
+                    ) {
+                        return confirmedWheel;
+                    }
+                } else {
+                    const wheel =
+                        this.conn.Player.Appearance.InventoryGet("ItemDevices");
+                    if (wheel?.Name === "LuckyWheel") return wheel;
+                }
+                return this.equipLegacyRouletteWheel();
+            }
 
+            const observation = await this.authoritativeInventoryObservation(
+                `${operationId}:observe`,
+            );
+            const observedWheel = observation.items.find(
+                (item) =>
+                    item.identity.group === "ItemDevices" &&
+                    item.identity.asset === "LuckyWheel",
+            );
+            if (observedWheel) {
+                const currentWheel =
+                    this.conn.Player.Appearance.InventoryGet("ItemDevices");
+                if (currentWheel?.Name === "LuckyWheel") return currentWheel;
+                this.inventoryStateUncertain = true;
+                throw new Error(
+                    "Authoritative roulette inventory is not reflected in the local BC character",
+                );
+            }
+
+            const descriptor = ROULETTE_WHEEL[0];
+            const item: InventoryItem = {
+                identity: {
+                    group: "ItemDevices",
+                    asset: "LuckyWheel",
+                },
+                ownerMemberNumber: this.conn.Player.MemberNumber,
+                quantity: 1,
+                metadata: {
+                    Color: descriptor.Color,
+                    Property: descriptor.Property,
+                },
+            };
+            const result = await this.inventoryCanary!.service.add(
+                this.conn.Player,
+                item,
+                {
+                    operationId,
+                    memberNumber: this.conn.Player.MemberNumber,
+                    ownerMemberNumber: this.conn.Player.MemberNumber,
+                    actorMemberNumber: this.conn.Player.MemberNumber,
+                    roomName: this.conn.chatRoom?.Name ?? "",
+                    source: "feature",
+                    reason: "initialize roulette wheel",
+                    deadlineAt: Date.now() + 5_000,
+                    timeoutMs: 5_000,
+                    maxAttempts: 1,
+                    retryDelayMs: 0,
+                    requireServerConfirmation: true,
+                    expectedObservation: observation,
+                    expectedQuantity: 0,
+                },
+            );
+            if (
+                result.status !== "completed" &&
+                result.status !== "already_satisfied"
+            ) {
+                this.inventoryStateUncertain = true;
+                throw new Error(
+                    result.reason ?? "Action-layer roulette wheel add failed",
+                );
+            }
+            const addedWheel =
+                this.conn.Player.Appearance.InventoryGet("ItemDevices");
+            if (!addedWheel || addedWheel.Name !== "LuckyWheel") {
+                this.inventoryStateUncertain = true;
+                throw new Error(
+                    "Action-layer did not confirm the roulette wheel",
+                );
+            }
+            this.inventoryStateUncertain = false;
+            return addedWheel;
+        } finally {
+            lease?.release();
+        }
+    }
+
+    private async authoritativeInventoryObservation(operationId: string) {
+        if (!this.inventoryCanary) {
+            throw new Error("Inventory action service is unavailable");
+        }
+        const memberNumber = this.conn.Player.MemberNumber;
+        const result = await this.inventoryCanary.service.observe(
+            this.conn.Player,
+            {
+                operationId,
+                memberNumber,
+                ownerMemberNumber: memberNumber,
+                actorMemberNumber: memberNumber,
+                roomName: this.conn.chatRoom?.Name ?? "",
+                source: "feature",
+                reason: "reconcile roulette inventory",
+                deadlineAt: Date.now() + 5_000,
+                maxObservationAgeMs: 5_000,
+                requireServerConfirmation: true,
+            },
+        );
+        if (
+            result.status !== "completed" ||
+            result.value?.authority !== "authoritative"
+        ) {
+            throw new Error(
+                result.reason ??
+                    "Authoritative roulette inventory is unavailable",
+            );
+        }
+        return result.value;
+    }
+
+    private equipLegacyRouletteWheel(): API_AppearanceItem {
         this.conn.Player.Appearance.applyBundle(ROULETTE_WHEEL);
         const rouletteWheel =
             this.conn.Player.Appearance.InventoryGet("ItemDevices");

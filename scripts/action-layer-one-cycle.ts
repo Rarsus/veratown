@@ -50,6 +50,9 @@ const veratownPilotTests = existingFiles([
 const mapDoorTests = existingFiles([
     "bin/games/__tests__/integration/keypadDoorSystem.integration.test.ts",
 ]);
+const inventoryCallerTests = existingFiles([
+    "bin/games/casino/__tests__/rouletteInventory.integration.test.ts",
+]);
 
 const checks: Array<{ name: string; command: string; args: string[] }> = [
     {
@@ -65,6 +68,11 @@ const checks: Array<{ name: string; command: string; args: string[] }> = [
     },
     ...mapDoorTests.map((testPath) => ({
         name: `map-door:${testPath.split("/").at(-1)}`,
+        command: process.execPath,
+        args: ["--import", "tsx", "--test", "--test-concurrency=1", testPath],
+    })),
+    ...inventoryCallerTests.map((testPath) => ({
+        name: `inventory-caller:${testPath.split("/").at(-1)}`,
         command: process.execPath,
         args: ["--import", "tsx", "--test", "--test-concurrency=1", testPath],
     })),
@@ -94,6 +102,9 @@ const checks: Array<{ name: string; command: string; args: string[] }> = [
             "--check",
             "bin/action-layer",
             "bin/games/veratown",
+            "bin/games/casino.ts",
+            "bin/games/casino/roulette.ts",
+            "bin/games/casino/__tests__/rouletteInventory.integration.test.ts",
             "scripts/action-layer-one-cycle.ts",
             "scripts/qualification",
             "docs/ARCHITECTURE",

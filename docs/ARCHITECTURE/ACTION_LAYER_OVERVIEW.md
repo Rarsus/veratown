@@ -249,8 +249,10 @@ cutover still depends on the late-track performance and capacity decision.
       projection and authoritative expiry cleanup. Controlled-room
       reconnect/restart evidence remains open.
 - [ ] Movement dispatch/teleport adapter and authoritative arrival contract.
-- [ ] Inventory and permission adapters with explicit authorization and
-      confirmation contracts.
+- [x] Inventory-specific contracts, in-memory and BC adapters, and the
+      opt-in Roulette wheel-add canary with local lifecycle/failure tests.
+- [ ] Controlled-room inventory canary qualification; BC transfers and general
+      room-admin permission actions remain unsupported.
 - [ ] Family-wide communication, map-trigger, map-object, and Door migration.
 - [ ] Live restart/reconnect rehearsal for the production journal and Bunny
       artifact recovery. The Mongo journal is active in production, while the
@@ -633,8 +635,10 @@ return:
 - map object updates and full map replacement; tile, enter-region, and
   leave-region trigger lifecycle is implemented for the `LocationMonitorSystem`
   pilot but is not yet a family-wide migration;
-- inventory semantics beyond identity observation, including inventory
-  ownership, permission, and asset-specific property inspection;
+- cross-member BC inventory transfer, stacks beyond one item per equipped slot,
+  room-admin mutation, and asset properties beyond the adapter's safe metadata
+  allowlist. `BCInventoryActionAdapter` is self-owner-only and separately
+  confirms slot changes from inbound BC state;
 - `CommandParser`, room serialization, and other command or room bootstrap
   concerns, which are integration boundaries rather than action primitives.
 

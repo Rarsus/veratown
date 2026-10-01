@@ -273,6 +273,12 @@ export async function loadConfig(configFilePath: string): Promise<ConfigFile> {
             false,
         );
     }
+    if (process.env.ACTION_LAYER_INVENTORY_ENABLED !== undefined) {
+        config.action_layer_inventory_enabled = parseBoolean(
+            process.env.ACTION_LAYER_INVENTORY_ENABLED,
+            false,
+        );
+    }
 
     // ============================================================================
     // MONGODB CONFIGURATION
@@ -662,6 +668,7 @@ async function initializeVeratownGame(
         config.action_layer_bunny_restraints_enabled,
         config.action_layer_release_removal_enabled,
         config.action_layer_communication_notifications_enabled,
+        config.action_layer_inventory_enabled,
     );
     logger.info("Starting Veratown game initialization", {
         roomKey,

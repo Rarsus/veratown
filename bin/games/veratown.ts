@@ -73,7 +73,9 @@ import {
     ActionLayerRolloutController,
     AppearanceActionService,
     BCAppearanceActionAdapter,
+    BCInventoryActionAdapter,
     BCCommunicationActionAdapter,
+    InventoryActionService,
     CommunicationActionService,
 } from "../action-layer";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
@@ -273,6 +275,7 @@ export class Veratown {
         private readonly actionLayerBunnyRestraintsEnabled = false,
         private readonly actionLayerReleaseRemovalEnabled = false,
         private readonly actionLayerCommunicationNotificationsEnabled = false,
+        private readonly actionLayerInventoryEnabled = false,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
@@ -289,6 +292,7 @@ export class Veratown {
                         this.actionLayerReleaseRemovalEnabled,
                     communicationNotificationsEnabled:
                         this.actionLayerCommunicationNotificationsEnabled,
+                    inventoryEnabled: this.actionLayerInventoryEnabled,
                 }),
             );
         }
@@ -298,6 +302,12 @@ export class Veratown {
             this.container.register(
                 DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
                 new AppearanceActionService(new BCAppearanceActionAdapter()),
+            );
+        }
+        if (!this.container.has(DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE)) {
+            this.container.register(
+                DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE,
+                new InventoryActionService(new BCInventoryActionAdapter()),
             );
         }
         if (
