@@ -3,7 +3,7 @@ title: "Position Observation and Movement"
 subtitle: "IST/SOLL design for observed position, reconnect epochs, and movement actions"
 date: "September 27, 2026"
 version: "1.1"
-status: "Position observation runtime slice implemented and locally qualified; movement and teleport migration are not implemented"
+status: "Position observation and movement action slices implemented and locally qualified; controlled-room reconnect evidence and teleport migration remain open"
 ---
 
 # Position Observation and Movement
@@ -13,11 +13,14 @@ architecture. The first slice is **observation**, not teleportation. A movement
 request and an observed arrival are different facts and must remain different
 in the domain, diagnostics, persistence, and workflow state.
 
-The immediate owner is `LiveCharacterStateSync`. It receives live map position
-events and room snapshots, applies reconnect-epoch and sequence guards, and
-reconciles accepted observations into the Veratown character projection. The
-action-layer `MovementActionAdapter` is still only a transport-neutral contract;
-no production movement command caller is migrated to it.
+The immediate owner is `LiveCharacterStateSync` for projection and
+`MovementActionService` for bounded movement commands. It receives live map
+position events and room snapshots, applies reconnect-epoch and sequence
+guards, and reconciles accepted observations into the Veratown character
+projection. `BCMovementActionAdapter` dispatches `moveOnMap()` and completes
+only on a matching `MapPosition` observation. The release workflow and the
+bounded `NarratorBot` caller use that path; broader movement callers remain
+legacy-owned.
 
 ## Scope and invariants
 
@@ -68,7 +71,11 @@ epoch per connector, assigns or accepts observation sequences, rejects prior
 epochs and non-newer same-epoch observations, persists only accepted observed
 coordinates, and records accepted/stale diagnostics. `Connected` and
 `Disconnected` events advance the epoch. This is a Veratown synchronization
-slice, not a production `MovementActionAdapter` implementation. Position-only
+slice plus a production `MovementActionAdapter` implementation. The BC
+adapter correlates the member number and acceptance predicate against
+`MapPosition`, and fails on timeout, disconnect, cancellation, or dispatch
+error. It never treats `moveOnMap()` returning as arrival and does not write
+the durable position projection. Position-only
 observations persist coordinates and derive restraint state from the existing
 profile appearance; they do not overwrite an existing appearance projection
 from the local BC cache. A character with no stored appearance still receives
@@ -122,7 +129,7 @@ classDiagram
     LiveCharacterStateSync --> UnifiedCharacterStore : persists projection
     LiveCharacterStateSync --> SelfPositionSyncDiagnostic : records diagnostics
     NarratorBot --> API_Connector : direct moveOnMap
-    MovementActionAdapter ..> API_Connector : not implemented
+    MovementActionAdapter ..> API_Connector : authoritative MapPosition boundary
 ```
 
 ### IST state management
@@ -154,15 +161,15 @@ stateDiagram-v2
 
 ### IST risks
 
-| Concern              | Current owner                    | Current behavior                                 | Risk                                                              |
-| -------------------- | -------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------- |
-| Move request         | `NarratorBot` or feature caller  | Direct `moveOnMap` or `mapTeleport` call         | BC transport is exposed to feature code                           |
-| Local position       | Caller or `API_Character.MapPos` | May be a local/tracked value                     | Request can be confused with observation                          |
-| Observation          | `LiveCharacterStateSync`         | `MapPosition`, room snapshot, or `Player.MapPos` | No epoch or monotonic stale guard                                 |
-| Ordering             | `syncChains` per member          | Serializes persistence promises                  | Does not reject stale event content                               |
-| Persistence          | `UnifiedCharacterStore`          | Writes `lastPosition` and `lastPositionAt`       | Older observations can overwrite newer state                      |
-| Arrival confirmation | None                             | No authoritative contract                        | Teleport migration cannot safely claim arrival                    |
-| Diagnostics          | `SelfPositionSyncDiagnostic`     | Keeps requested/observed/persisted fields        | Current persistence argument can be requested instead of observed |
+| Concern              | Current owner                    | Current behavior                                           | Risk                                                              |
+| -------------------- | -------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| Move request         | `MovementActionService`          | Bounded callers dispatch through `BCMovementActionAdapter` | Legacy direct callers remain outside the migration                |
+| Local position       | Caller or `API_Character.MapPos` | May be a local/tracked value                               | Request can be confused with observation                          |
+| Observation          | `LiveCharacterStateSync`         | `MapPosition`, room snapshot, or `Player.MapPos`           | No epoch or monotonic stale guard                                 |
+| Ordering             | `syncChains` per member          | Serializes persistence promises                            | Does not reject stale event content                               |
+| Persistence          | `UnifiedCharacterStore`          | Writes `lastPosition` and `lastPositionAt`                 | Older observations can overwrite newer state                      |
+| Arrival confirmation | `BCMovementActionAdapter`        | Matching member `MapPosition`, exact or accepted region    | Controlled-room reconnect and server-denial evidence remain open  |
+| Diagnostics          | `SelfPositionSyncDiagnostic`     | Keeps requested/observed/persisted fields                  | Current persistence argument can be requested instead of observed |
 
 ## SOLL: observation-first layered architecture
 
@@ -330,10 +337,12 @@ stateDiagram-v2
 
 ## Movement and teleport boundary
 
-Movement command dispatch is a future adapter operation. The adapter may
-return a local dispatch result such as `queued`, but it must not return
-`completed` or update the durable position projection until a matching
-arrival observation is defined.
+Movement command dispatch is owned by `MovementActionService` and translated by
+`BCMovementActionAdapter`. The adapter may send `moveOnMap()`, but it returns
+`completed` only after a matching member `MapPosition` observation satisfies
+the exact destination or the caller's acceptance predicate. It does not update
+the durable position projection; `LiveCharacterStateSync` remains the
+observation and persistence owner.
 
 Teleportation is explicitly deferred. Before `teleportCharacter` can be
 implemented or migrated, the contract must define:
@@ -346,9 +355,11 @@ implemented or migrated, the contract must define:
   `unknown` outcomes; and
 - how an already-at-destination observation is treated idempotently.
 
-Until those answers are tested against a real connector, legacy movement
-helpers remain compatibility code and position observation remains the only
-migration target.
+The movement contract now covers exact and region acceptance, already-at-target
+idempotency, unrelated-member events, timeout, disconnect, cancellation,
+dispatch failure, listener cleanup, and operation metadata in local tests.
+Legacy movement helpers remain compatibility code until controlled-room
+reconnect and room-replacement evidence is retained.
 
 ## Incremental implementation plan
 
@@ -374,12 +385,13 @@ migration target.
 
 ### Iteration 3: Movement adapter qualification
 
-- [ ] Define the arrival event and operation-correlation contract.
-- [x] Implement and test `observePosition` with connector doubles.
+- [x] Define the arrival event and operation-correlation contract.
+- [x] Implement and test `observePosition` and authoritative movement with connector doubles.
 - [ ] Qualify observation epochs and delayed events in a controlled room.
-- [ ] Add `moveCharacter` only after dispatch-versus-arrival behavior is
-      proven.
-- [ ] Keep all movement rollout switches disabled by default.
+- [x] Add bounded movement callers only after dispatch-versus-arrival behavior
+      is proven (`ReleaseWorkflowSystem`, `NarratorBot`).
+- [ ] Add an explicit movement rollout switch before migrating additional
+      callers.
 
 ### Iteration 4: Teleport decision
 

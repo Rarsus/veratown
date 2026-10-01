@@ -9,6 +9,7 @@
 export type ActionStatus =
     | "completed"
     | "already_satisfied"
+    | "cancelled"
     | "in_progress"
     | "blocked"
     | "rejected"
@@ -16,7 +17,12 @@ export type ActionStatus =
     | "failed";
 
 export type ActionFailureKind =
-    "blocked" | "rejected" | "transient" | "permanent" | "timeout";
+    | "blocked"
+    | "rejected"
+    | "transient"
+    | "permanent"
+    | "timeout"
+    | "cancelled";
 
 export type ActionSource =
     "bunny" | "release" | "feature" | "admin" | "external" | "system";
@@ -135,14 +141,17 @@ export interface MovementActionAdapter<TRuntimeCharacter = unknown> {
     move(
         character: TRuntimeCharacter,
         destination: CharacterPosition,
-        policy: ActionExecutionPolicy,
+        policy: MovementActionPolicy,
     ): Promise<ActionResult<CharacterPosition>>;
 }
 
 export interface MovementActionPolicy extends ActionExecutionPolicy {
     readonly operationId: string;
     readonly memberNumber: number;
+    readonly source: ActionSource;
+    readonly reason: string;
     readonly acceptPosition?: (position: CharacterPosition) => boolean;
+    readonly signal?: AbortSignal;
 }
 
 export type MessageChannel = "whisper" | "chat" | "emote";

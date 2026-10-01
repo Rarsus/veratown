@@ -11,8 +11,7 @@ import {
 interface BCMovementCharacter {
     readonly MemberNumber: number;
     readonly MapPos: { X: number; Y: number };
-    readonly connection: unknown;
-    mapTeleport(position: { X: number; Y: number }): void;
+    readonly connection: MovementConnector;
 }
 
 interface MovementConnector {
@@ -24,6 +23,7 @@ interface MovementConnector {
         event: "MapPosition" | "Disconnected",
         listener: (...args: any[]) => void,
     ): void;
+    moveOnMap(x: number, y: number): void;
 }
 
 export class BCMovementActionAdapter implements MovementActionAdapter<BCMovementCharacter> {
@@ -59,8 +59,13 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
         policy: MovementActionPolicy,
     ): Promise<ActionResult<CharacterPosition>> {
         const startedAt = Date.now();
-        const connector = character.connection as unknown as MovementConnector;
-        if (!connector || typeof connector.on !== "function") {
+        const connector = character.connection;
+        if (
+            !connector ||
+            typeof connector.on !== "function" ||
+            typeof connector.off !== "function" ||
+            typeof connector.moveOnMap !== "function"
+        ) {
             return Promise.resolve(
                 createActionResult(
                     "failed",
@@ -112,6 +117,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                 clearTimeout(timeout);
                 connector.off("MapPosition", onMapPosition);
                 connector.off("Disconnected", onDisconnected);
+                policy.signal?.removeEventListener("abort", onAbort);
                 resolve(result);
             };
             const onMapPosition = (
@@ -156,6 +162,23 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                     ),
                 );
             };
+            const onAbort = (): void => {
+                finish(
+                    createActionResult(
+                        "cancelled",
+                        createActionMetadata(
+                            policyContext(policy),
+                            "movement.move",
+                            startedAt,
+                        ),
+                        {
+                            reason: "Movement was cancelled before confirmation",
+                            failureKind: "cancelled",
+                            retryable: false,
+                        },
+                    ),
+                );
+            };
             const timeout = setTimeout(() => {
                 finish(
                     createActionResult(
@@ -176,7 +199,33 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
 
             connector.on("MapPosition", onMapPosition);
             connector.on("Disconnected", onDisconnected);
-            character.mapTeleport({ X: destination.x, Y: destination.y });
+            policy.signal?.addEventListener("abort", onAbort, { once: true });
+            if (policy.signal?.aborted) {
+                onAbort();
+                return;
+            }
+            try {
+                connector.moveOnMap(destination.x, destination.y);
+            } catch (error) {
+                finish(
+                    createActionResult(
+                        "failed",
+                        createActionMetadata(
+                            policyContext(policy),
+                            "movement.move",
+                            startedAt,
+                        ),
+                        {
+                            reason:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                            failureKind: "transient",
+                            retryable: true,
+                        },
+                    ),
+                );
+            }
         });
     }
 }
@@ -185,8 +234,8 @@ function policyContext(policy: MovementActionPolicy): ActionContext {
     return {
         operationId: policy.operationId,
         memberNumber: policy.memberNumber,
-        source: "release",
-        reason: "release_room_containment",
+        source: policy.source,
+        reason: policy.reason,
         deadlineAt: Date.now() + policy.timeoutMs,
     };
 }

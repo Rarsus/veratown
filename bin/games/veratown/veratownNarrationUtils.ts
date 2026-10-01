@@ -12,7 +12,11 @@
  * limitations under the License.
  */
 
-import { API_Connector } from "bc-bot";
+import { API_Connector, API_Character } from "bc-bot";
+import {
+    BCMovementActionAdapter,
+    MovementActionService,
+} from "../../action-layer";
 import { createLogger } from "../../logging";
 
 type ChatRoomMapPos = { X: number; Y: number };
@@ -158,6 +162,10 @@ export class NarratorBot {
     private readonly narratorConn: API_Connector;
     private readonly homePos: ChatRoomMapPos;
     private currentPos: ChatRoomMapPos;
+    private readonly movementService = new MovementActionService(
+        new BCMovementActionAdapter(),
+    );
+    private movementOperationSequence = 0;
 
     /**
      * Creates a new NarratorBot instance.
@@ -262,10 +270,7 @@ export class NarratorBot {
                         `Moving to broadcast pos ${JSON.stringify(broadcastPos)}`,
                     );
                 }
-                await this.narratorConn.moveOnMap(
-                    broadcastPos.X,
-                    broadcastPos.Y,
-                );
+                await this.moveAuthoritatively(broadcastPos);
                 this.currentPos = { ...broadcastPos };
             } else if (debug) {
                 logger.debug(
@@ -283,10 +288,7 @@ export class NarratorBot {
                         `Returning to home pos ${JSON.stringify(this.homePos)}`,
                     );
                 }
-                await this.narratorConn.moveOnMap(
-                    this.homePos.X,
-                    this.homePos.Y,
-                );
+                await this.moveAuthoritatively(this.homePos);
                 this.currentPos = { ...this.homePos };
             }
         } catch (err) {
@@ -295,16 +297,38 @@ export class NarratorBot {
             );
             // Attempt fallback: at least return to home position
             try {
-                await this.narratorConn.moveOnMap(
-                    this.homePos.X,
-                    this.homePos.Y,
-                );
+                await this.moveAuthoritatively(this.homePos);
                 this.currentPos = { ...this.homePos };
             } catch (fallbackErr) {
                 logger.error(
                     `Fallback move to home also failed: ${fallbackErr}`,
                 );
             }
+        }
+    }
+
+    private async moveAuthoritatively(position: ChatRoomMapPos): Promise<void> {
+        const character = this.narratorConn.Player as API_Character;
+        const result = await this.movementService.move(
+            character,
+            { x: position.X, y: position.Y },
+            {
+                operationId: `narration:${character.MemberNumber}:move:${++this.movementOperationSequence}`,
+                memberNumber: character.MemberNumber,
+                source: "feature",
+                reason: "veratown_narration",
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+            },
+        );
+        if (
+            result.status !== "completed" &&
+            result.status !== "already_satisfied"
+        ) {
+            throw new Error(
+                result.reason ?? "Narration movement was not confirmed",
+            );
         }
     }
 
@@ -405,7 +429,7 @@ export class NarratorBot {
                 if (debug) {
                     logger.debug(`Moving to ${JSON.stringify(pos)}`);
                 }
-                await this.narratorConn.moveOnMap(pos.X, pos.Y);
+                await this.moveAuthoritatively(pos);
                 this.currentPos = { ...pos };
             } else if (debug) {
                 logger.debug(
@@ -442,10 +466,7 @@ export class NarratorBot {
                         `Returning to home position ${JSON.stringify(this.homePos)}`,
                     );
                 }
-                await this.narratorConn.moveOnMap(
-                    this.homePos.X,
-                    this.homePos.Y,
-                );
+                await this.moveAuthoritatively(this.homePos);
                 this.currentPos = { ...this.homePos };
             } else if (debug) {
                 logger.debug("Already at home position");

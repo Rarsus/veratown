@@ -778,6 +778,8 @@ function movementPolicy(
     return {
         operationId,
         memberNumber,
+        source: "release" as const,
+        reason: "release_room_containment",
         timeoutMs: ACTION_TIMEOUT_MS,
         maxAttempts: 1,
         retryDelayMs: 0,

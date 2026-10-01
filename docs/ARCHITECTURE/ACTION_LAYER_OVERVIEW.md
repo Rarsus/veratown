@@ -1342,11 +1342,12 @@ Migration is incremental and should preserve existing behavior after each step.
       [POSITION_OBSERVATION_MOVEMENT.md](POSITION_OBSERVATION_MOVEMENT.md).
 - [ ] Migrate remaining `messageSender` callers and connector movement calls.
 - [x] Return accepted/stale observed-position results from the position sync
-      boundary; movement actions still need an arrival-confirmation contract.
+      boundary and define bounded movement arrival confirmation.
 - [x] Integrate reconnect epochs and stale-confirmation handling for position
       observations.
-- [ ] Migrate low-risk callers first: narration, notifications, and position
-      sync.
+- [x] Migrate the bounded narration caller through authoritative movement.
+- [ ] Migrate additional movement and notification callers only after controlled
+      rollout and recovery evidence.
 
 ### Phase 3: Map operations and trigger lifecycle
 
@@ -1464,8 +1465,9 @@ The next migration sequence is intentionally evidence-driven:
 3. Keep short bounded performance checks available, but defer the full
    15-character and 25-character performance suite toward final-track
    qualification. Do not block stability work on latency optimization.
-4. Migrate communication and movement adapters, starting with narration,
-   notifications, and position synchronization.
+4. Expand communication and movement caller coverage only after controlled
+   connector evidence, explicit rollout control, and rollback semantics are
+   retained for each caller.
 5. Migrate map operations and trigger lifecycle, including room recreation and
    duplicate registration cleanup.
 6. Complete the release workflow around the durable recovery boundary, then
