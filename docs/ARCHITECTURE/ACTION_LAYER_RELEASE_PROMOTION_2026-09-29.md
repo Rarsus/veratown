@@ -15,7 +15,7 @@ status: "NO-GO; qualification evidence recorded, release-removal migration remai
 | Record ID                | `promotion-20260929-release-removal-001`                                                              |
 | Epic / issues            | `#237`, `#297`, `#258`, `#255`, `#299`, `#257`                                                        |
 | Feature family           | Selected-target release appearance removal only                                                       |
-| Decision owner           | Requesting operator; explicit approval is still required for any destructive live-room run            |
+| Decision owner           | Requesting operator; explicit approval was granted for the controlled qualification run               |
 | Recovery owner           | Veratown workflow recovery owner                                                                      |
 | Rollback owner           | Action-layer rollout owner / requesting operator                                                      |
 | Runtime environment      | Railway production, qualification-only                                                                |
@@ -29,7 +29,8 @@ access, or release persistence. Bunny remains independently enabled.
 ## Subsequent verification: 2026-10-01
 
 - The canonical action-layer one-cycle gate, local REAL ROOM TEST BOT contract
-  suite, and communication-family gate remain green on `eb5b498`.
+  suite, and communication-family gate remain green after commits `6900509`
+  and `4f933ce`; the local real-room suite is 22/22 green.
 - A fresh non-mutating `release-observe` run completed against the configured
   `Veratown` room with run ID `d0f31da9-eee1-4787-8c86-9011bbd89174`.
 - The observation joined and left cleanly, recorded unchanged target appearance,
@@ -37,30 +38,40 @@ access, or release persistence. Bunny remains independently enabled.
   `out/qualification-evidence/`.
 - Railway deployment `9bab8cf5-b5b6-4805-9879-a0732a2a7ab4` for the current
   communication recovery checkpoint is `SUCCESS` with a `RUNNING` instance.
-- The release-removal switch remains effectively `false`; no destructive live
-  release or MongoDB release-operation query has been authorized or performed.
+- The release-removal switch remains effectively `false`.
+- Controlled destructive qualification was explicitly authorized, but it did
+  not reach a promotable terminal state. The first run exposed a stale harness
+  response phrase and performed no mutation. The corrected HeavyYoke run
+  stopped at the occupied `ItemArms` fixture-group guard. The corrected
+  HeavySpreaderMetal run equipped the fixture and reached confirmation, then
+  production failed closed at `Movement confirmation exceeded 5000ms` before
+  stripping or selected-target removal. The harness cleanup path was invoked;
+  no authoritative final-state artifact was written.
+- No MongoDB release-operation query was captured because the live attempt did
+  not produce a verified terminal removal state and configured shell access is
+  unavailable.
 - Performance testing remains deferred and is not part of this release decision.
 
 ## Gate status
 
-| Gate                                           | Status                                 | Evidence / note                                                                                                                                                 |
-| ---------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Contract and adapter tests                     | `PASS`                                 | Nine-case release matrix in action-layer qualification; Veratown release suite passed 13/13                                                                     |
-| Caller integration and action/legacy ownership | `PASS`                                 | Release migration ownership and legacy fallback tests passed; active lease survives rollback and new work routes to legacy                                      |
-| Durable projection assertion                   | `PASS`                                 | Release test records planned item, successful attempt, verified final appearance, and preserved owner-locked restraint                                          |
-| Restart/idempotency qualification              | `PASS`                                 | Two coordinator instances share one workflow journal; cleared target is not mutated twice                                                                       |
-| TypeScript and formatting                      | `PASS`                                 | `pnpm exec tsc --noEmit` and Prettier passed                                                                                                                    |
-| Whitespace / diff check                        | `PASS`                                 | `git diff --check` passed before commit                                                                                                                         |
-| Safe real-room observation                     | `PASS`                                 | `release-observe` sent only `!help`; before/after appearance identical; mutation not attempted; clean disconnect                                                |
-| Destructive real-room confirmation             | `MISSING`                              | No dedicated controlled-room authorization was provided; shared production room was not mutated                                                                 |
-| Connector exception / fail-closed cleanup      | `PASS` local / `MISSING` live          | Local timeout and connector-loss cases pass; no destructive live connector rehearsal                                                                            |
-| Disconnect and waiter cleanup                  | `PASS` observation / `MISSING` release | Safe observation disconnected in `finally`; release waiter behavior not exercised live                                                                          |
-| Reconnect and exact room identity              | `MISSING`                              | Safe observation joined the configured room but did not perform a release reconnect cycle                                                                       |
-| MongoDB durable state                          | `MISSING`                              | No release-specific MongoDB operation query or redacted durable result was captured                                                                             |
-| Railway deployment health                      | `PASS`                                 | Deployment `cd53a59d-3477-4b2c-a9ee-f0fca9c07b84` for commit `7a7aafb` reached `SUCCESS` after one transient room-readiness timeout                             |
-| Railway logs / runtime evidence                | `PASS with transient recovery`         | VeraBot initially timed out reaching room/map readiness; the same deployment later restored workflow state, reported release ready, and initialized containment |
-| Performance and queue thresholds               | `DEFERRED`                             | Not required for this qualification-only decision                                                                                                               |
-| Redacted evidence retained                     | `PASS`                                 | Live artifact retained outside version control; no credential or session data recorded                                                                          |
+| Gate                                           | Status                                 | Evidence / note                                                                                                                                         |
+| ---------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contract and adapter tests                     | `PASS`                                 | Nine-case release matrix in action-layer qualification; Veratown release suite passed 13/13                                                             |
+| Caller integration and action/legacy ownership | `PASS`                                 | Release migration ownership and legacy fallback tests passed; active lease survives rollback and new work routes to legacy                              |
+| Durable projection assertion                   | `PASS`                                 | Release test records planned item, successful attempt, verified final appearance, and preserved owner-locked restraint                                  |
+| Restart/idempotency qualification              | `PASS`                                 | Two coordinator instances share one workflow journal; cleared target is not mutated twice                                                               |
+| TypeScript and formatting                      | `PASS`                                 | `pnpm exec tsc --noEmit` and Prettier passed                                                                                                            |
+| Whitespace / diff check                        | `PASS`                                 | `git diff --check` passed before commit                                                                                                                 |
+| Safe real-room observation                     | `PASS`                                 | `release-observe` sent only `!help`; before/after appearance identical; mutation not attempted; clean disconnect                                        |
+| Destructive real-room confirmation             | `BLOCKED`                              | Authorized run reached fixture mutation once, but production movement confirmation failed before removal; no promotable terminal state                  |
+| Connector exception / fail-closed cleanup      | `PASS` local / `PARTIAL` live          | Local timeout and connector-loss cases pass; live run failed closed on movement confirmation and disconnected                                           |
+| Disconnect and waiter cleanup                  | `PASS` observation / `PARTIAL` release | All live attempts disconnected in `finally`; release terminal-state evidence remains incomplete                                                         |
+| Reconnect and exact room identity              | `MISSING`                              | Safe observation joined the configured room but did not perform a release reconnect cycle                                                               |
+| MongoDB durable state                          | `MISSING`                              | No release-specific MongoDB operation query or redacted durable result was captured                                                                     |
+| Railway deployment health                      | `PASS`                                 | Deployment `abf3b7e7-d89f-470f-a9fb-3dbade1f8aa1` for commit `6900509` reached `SUCCESS`; instance is `RUNNING`                                         |
+| Railway logs / runtime evidence                | `PASS with qualification failure`      | Production logged the release commands and `Movement confirmation exceeded 5000ms`; release capability remained ready and no rollout switch was enabled |
+| Performance and queue thresholds               | `DEFERRED`                             | Not required for this qualification-only decision                                                                                                       |
+| Redacted evidence retained                     | `PASS`                                 | Live artifact retained outside version control; no credential or session data recorded                                                                  |
 
 ## Connector result
 
@@ -73,6 +84,22 @@ access, or release persistence. Bunny remains independently enabled.
 - Disconnected in `finally`: `yes`
 - Evidence: redacted local artifact under `out/qualification-evidence/`
 - Secret scan result: no secrets written by the scenario
+
+### Authorized destructive attempts
+
+- Run 1: release readiness timed out because the qualification harness waited
+  for a retired response phrase. No fixture was equipped.
+- Run 2: after the harness predicate fix, `ItemArms/HeavyYoke` was rejected by
+  the preflight guard because the qualification account already occupied the
+  `ItemArms` group. No fixture was equipped.
+- Run 3: `ItemFeet/HeavySpreaderMetal` passed fixture setup and confirmation.
+  The production workflow then logged `Movement confirmation exceeded 5000ms`
+  for the controlled account before stripping/removal. The command exited
+  nonzero and no success evidence was retained. The fixture cleanup path ran
+  before connector disconnect.
+
+These runs are evidence of fail-closed behavior, not evidence of successful
+release removal or promotion readiness.
 
 ## MongoDB result
 
@@ -104,16 +131,17 @@ this record.
 - [x] Local contract, projection, ownership, recovery, type, formatting, and whitespace gates pass.
 - [x] Safe redacted real-room observation completed without mutation.
 - [x] Railway build, deployment, and game-engine initialization verified.
-- [ ] Dedicated controlled-room destructive release confirmation is complete.
+- [ ] Dedicated controlled-room destructive release confirmation is complete; the authorized attempt failed before verified removal.
 - [ ] MongoDB durable-state evidence is complete.
 - [ ] In-flight connector-loss/process-restart recovery and replacement-group rehearsal are complete.
 - [ ] All promotion residual risks have accepted owners and follow-up evidence.
 
 **Decision:** `NO-GO`
 
-**Reason:** The release-removal switch remains disabled. The available live test is
-non-mutating by design, and the destructive controlled-room, MongoDB, and full
-in-flight recovery gates are not complete.
+**Reason:** The release-removal switch remains disabled. The authorized live
+attempt failed closed during movement confirmation before verified selected-target
+removal; MongoDB terminal-state evidence and full in-flight recovery gates are
+also incomplete.
 
 **Residual risks and follow-up issues:**
 

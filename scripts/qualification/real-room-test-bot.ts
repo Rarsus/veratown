@@ -686,8 +686,11 @@ async function waitForReleaseReady(
             (message) =>
                 message.sender.MemberNumber === targetMemberNumber &&
                 (message.message.Content.includes(
-                    "PAROLE CONFIRMATION REQUIRED",
+                    "Release requires confirmation",
                 ) ||
+                    message.message.Content.includes(
+                        "PAROLE CONFIRMATION REQUIRED",
+                    ) ||
                     message.message.Content.includes("currently unavailable")),
             remainingMs,
             "release readiness response",
@@ -1334,9 +1337,12 @@ async function runReleaseTestScenario(
             connector,
             (message) =>
                 message.sender.MemberNumber === config.targetMemberNumber &&
-                message.message.Content.includes(
-                    "PAROLE CONFIRMATION REQUIRED",
-                ),
+                (message.message.Content.includes(
+                    "Release requires confirmation",
+                ) ||
+                    message.message.Content.includes(
+                        "PAROLE CONFIRMATION REQUIRED",
+                    )),
             config.timeoutMs,
             "release confirmation prompt",
         );
@@ -1361,7 +1367,8 @@ async function runReleaseTestScenario(
             connector,
             (message) =>
                 message.sender.MemberNumber === config.targetMemberNumber &&
-                message.message.Content.includes("barrier dissolves"),
+                (message.message.Content.includes("The release room is open") ||
+                    message.message.Content.includes("barrier dissolves")),
             config.timeoutMs,
             "release punishment-room progression",
         );

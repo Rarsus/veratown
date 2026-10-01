@@ -198,7 +198,8 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
                         message: {
                             Sender: 4242,
                             Type: "Whisper",
-                            Content: "PAROLE CONFIRMATION REQUIRED: Confirm?",
+                            Content:
+                                "Release requires confirmation. Type /bot release yes.",
                         },
                     } as unknown as API_Message);
                     return;
@@ -215,7 +216,7 @@ class FakeConnector extends EventEmitter implements QualificationConnector {
                         message: {
                             Sender: 4242,
                             Type: "Whisper",
-                            Content: "The barrier dissolves...",
+                            Content: "The release room is open.",
                         },
                     } as unknown as API_Message);
                     return;
