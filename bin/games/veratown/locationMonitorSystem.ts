@@ -265,12 +265,12 @@ export class LocationMonitorSystem
             const message = await provider.getDisplay({ character, location });
             if (!message.trim()) return;
 
-            this.lastDisplayedAt.set(cooldownKey, Date.now());
             const operationId = `location-monitor:${location.key}:${character.MemberNumber}`;
             const lease = this.rollout?.begin(
                 "communication-notifications",
                 operationId,
             );
+            let dispatched = false;
             try {
                 if (
                     lease?.path === "action" &&
@@ -303,12 +303,17 @@ export class LocationMonitorSystem
                             },
                         );
                     }
+                    dispatched =
+                        result.status === "completed" ||
+                        result.status === "already_satisfied";
                 } else {
                     await this.sendMessage(character.MemberNumber, message);
+                    dispatched = true;
                 }
             } finally {
                 lease?.release();
             }
+            if (dispatched) this.lastDisplayedAt.set(cooldownKey, Date.now());
         } finally {
             this.activeDisplays.delete(cooldownKey);
         }

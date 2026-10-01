@@ -214,6 +214,90 @@ test("enabled communication rollout routes monitor notifications through actions
     ]);
 });
 
+test("location monitor leaves cooldown open after a transient action failure", async () => {
+    let callback: ((character: unknown) => void) | undefined;
+    const map = {
+        addEnterRegionTrigger: (_region: unknown, next: any) => {
+            callback = next;
+        },
+        removeEnterRegionTrigger: () => {},
+    };
+    let actionCalls = 0;
+    let legacyMessages = 0;
+    const adapter: CommunicationActionAdapter = {
+        async send(
+            request: MessageRequest,
+            context: ActionContext,
+        ): Promise<ActionResult<CommunicationObservation>> {
+            actionCalls += 1;
+            if (actionCalls === 1) {
+                return {
+                    status: "failed",
+                    retryable: true,
+                    reason: "connector disconnected",
+                    metadata: {
+                        operationId: context.operationId,
+                        actionId: "communication.test",
+                        memberNumber: context.memberNumber,
+                        attempt: 1,
+                        startedAt: 1,
+                        completedAt: 2,
+                    },
+                    value: {
+                        channel: request.channel,
+                        deliveryStatus: "unknown",
+                        targetMemberNumber: request.targetMemberNumber,
+                        textLength: request.text.length,
+                        observedAt: 2,
+                    },
+                };
+            }
+            return {
+                status: "completed",
+                metadata: {
+                    operationId: context.operationId,
+                    actionId: "communication.test",
+                    memberNumber: context.memberNumber,
+                    attempt: 1,
+                    startedAt: 1,
+                    completedAt: 2,
+                },
+                value: {
+                    channel: request.channel,
+                    deliveryStatus: "queued",
+                    targetMemberNumber: request.targetMemberNumber,
+                    textLength: request.text.length,
+                    observedAt: 2,
+                },
+            };
+        },
+    };
+    const system = new LocationMonitorSystem(
+        {
+            chatRoom: { map },
+            SendMessage: () => {
+                legacyMessages += 1;
+            },
+        } as any,
+        [new BotHelpMonitorProvider(() => "Bot help")],
+        undefined,
+        new CommunicationActionService(adapter),
+        new ActionLayerRolloutController({
+            communicationNotificationsEnabled: true,
+        }),
+    );
+
+    system.registerTriggers();
+    await system.reloadLocations([location("help", "bot_help")]);
+    callback!({ MemberNumber: 5 });
+    await new Promise((resolve) => setImmediate(resolve));
+    callback!({ MemberNumber: 5 });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(actionCalls, 2);
+    assert.equal(legacyMessages, 0);
+});
+
 test("location monitor lifecycle replaces and cleans up scoped registrations", async () => {
     function mapWithTracking() {
         const active = new Set<(...args: any[]) => void>();
