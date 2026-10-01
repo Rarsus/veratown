@@ -53,7 +53,7 @@ test("post-R132 overlay fields preserve the upstream item semantics", () => {
 
     assert.equal(
         getAssetDef({ Group: "ItemHandheld", Name: "Book" })?.InventoryID,
-        1405,
+        1412,
     );
     assert.equal(rattle?.InventoryID, 1405);
     assert.deepEqual(rattle?.AllowActivity, ["ShakeItem", "RubItem"]);
