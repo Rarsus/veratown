@@ -26,6 +26,21 @@ This record does not authorize a destructive production-room release and does no
 claim migration of teleport, cage/kennel release, forced nudity, parole, keypad
 access, or release persistence. Bunny remains independently enabled.
 
+## Subsequent verification: 2026-10-01
+
+- The canonical action-layer one-cycle gate, local REAL ROOM TEST BOT contract
+  suite, and communication-family gate remain green on `eb5b498`.
+- A fresh non-mutating `release-observe` run completed against the configured
+  `Veratown` room with run ID `d0f31da9-eee1-4787-8c86-9011bbd89174`.
+- The observation joined and left cleanly, recorded unchanged target appearance,
+  and attempted no mutation. Redacted evidence is retained under
+  `out/qualification-evidence/`.
+- Railway deployment `9bab8cf5-b5b6-4805-9879-a0732a2a7ab4` for the current
+  communication recovery checkpoint is `SUCCESS` with a `RUNNING` instance.
+- The release-removal switch remains effectively `false`; no destructive live
+  release or MongoDB release-operation query has been authorized or performed.
+- Performance testing remains deferred and is not part of this release decision.
+
 ## Gate status
 
 | Gate                                           | Status                                 | Evidence / note                                                                                                                                                 |

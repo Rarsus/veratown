@@ -5,6 +5,7 @@ export * from "./appearance-confirmation";
 export * from "./appearance-service";
 export * from "./movement-service";
 export * from "./communication-service";
+export * from "./reply-correlation";
 export * from "./policy";
 export * from "./workflow";
 export * from "./rollout";

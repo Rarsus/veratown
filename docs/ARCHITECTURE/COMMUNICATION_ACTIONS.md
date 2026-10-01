@@ -303,6 +303,31 @@ the action layer does not claim duplicate suppression across process restart;
 a durable workflow must own that obligation when restart protection is
 required.
 
+### Reply and replay decisions for the targeted notification slice
+
+The targeted notification callers do not advance durable workflow state from a
+message result. Their process-local deduplication window is therefore
+intentional: reconnect retries are bounded by the caller, while a process
+restart may repeat a non-authoritative notification rather than silently
+claiming durable delivery. No caller in the current inventory requires a
+durable communication journal for its migrated notification.
+
+Command replies remain outside the migrated notification slice. Before any
+reply caller is migrated, it must register a request ID with the expected
+sender and a bounded timeout. An inbound response must carry a response ID and
+be classified as exactly one of `matched`, `sender_mismatch`, `duplicate`,
+`late`, or `unknown_request`. A sender mismatch does not complete the request;
+an expired or restarted request fails closed as `late` or `unknown_request`.
+The transport-neutral contract and simulated restart/late-response coverage
+are implemented in `bin/action-layer/reply-correlation.ts` and its focused
+tests. This is correlation evidence, not an authoritative delivery receipt.
+
+As of 2026-10-01, the local action-layer one-cycle gate, communication-family
+tests, and 22-test real-room harness contract are green. A safe live
+`release-observe` run completed separately with run ID
+`d0f31da9-eee1-4787-8c86-9011bbd89174`; no communication canary or rollout
+switch was enabled from that observation.
+
 ## Incremental Implementation Plan
 
 Each iteration must leave the legacy path working and produce executable
