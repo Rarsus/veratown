@@ -67,7 +67,8 @@ export class CharacterActionExecutor<TRuntimeCharacter = unknown> {
 
         switch (action.type) {
             case "appearance.add":
-            case "appearance.remove": {
+            case "appearance.remove":
+            case "appearance.update_extended_properties": {
                 const service = this.services.appearance;
                 const source = appearanceSource(context.source);
                 if (!source) {
@@ -95,9 +96,19 @@ export class CharacterActionExecutor<TRuntimeCharacter = unknown> {
                     source,
                     reason: context.reason,
                 };
-                return action.type === "appearance.add"
-                    ? service.add(character, action.item, policy)
-                    : service.remove(character, action.item, policy);
+                if (action.type === "appearance.add") {
+                    return service.add(character, action.item, policy);
+                }
+                if (action.type === "appearance.remove") {
+                    return service.remove(character, action.item, policy);
+                }
+                return service.updateExtendedProperties(
+                    character,
+                    action.item,
+                    action.properties,
+                    action.expectedProperties,
+                    policy,
+                );
             }
             case "appearance.set_hidden_layers": {
                 const service = this.services.appearance;

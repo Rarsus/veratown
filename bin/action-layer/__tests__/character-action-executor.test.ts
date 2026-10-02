@@ -93,6 +93,60 @@ test("routes appearance additions and derives policy from action context", async
     });
 });
 
+test("routes generic extended-property updates through the appearance service", async () => {
+    const calls: unknown[] = [];
+    const appearance = {
+        updateExtendedProperties: async (...args: unknown[]) => {
+            calls.push(args);
+            return completed(context);
+        },
+    } as unknown as AppearanceActionService<string>;
+    const executor = new CharacterActionExecutor({ appearance });
+    const properties = {
+        TypeRecord: { vibrating: 1 },
+        Mode: "Low",
+        Intensity: 0,
+        Effect: ["Egged", "Vibrating"],
+    };
+    const expectedProperties = {
+        TypeRecord: { vibrating: 0 },
+        Mode: "Off",
+    };
+
+    const result = await executor.execute(
+        "character",
+        {
+            type: "appearance.update_extended_properties",
+            item: { group: "ItemVulva", asset: "VibratingEgg" },
+            properties,
+            expectedProperties,
+            options: {
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+                requireServerConfirmation: true,
+            },
+        },
+        context,
+    );
+
+    assert.equal(result.status, "completed");
+    assert.equal(calls.length, 1);
+    const [, item, actualProperties, actualExpected, policy] = calls[0] as [
+        string,
+        { group: string; asset: string },
+        Record<string, unknown>,
+        Record<string, unknown>,
+        Record<string, unknown>,
+    ];
+    assert.deepEqual(item, { group: "ItemVulva", asset: "VibratingEgg" });
+    assert.deepEqual(actualProperties, properties);
+    assert.deepEqual(actualExpected, expectedProperties);
+    assert.equal(policy.operationId, context.operationId);
+    assert.equal(policy.source, context.source);
+    assert.equal(policy.reason, context.reason);
+});
+
 test("rejects actions when the owning service or a valid source is unavailable", async () => {
     const executor = new CharacterActionExecutor<string>({});
     const missingService = await executor.execute(

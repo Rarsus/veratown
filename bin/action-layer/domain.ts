@@ -114,6 +114,8 @@ export interface AppearanceObservation {
     readonly observedAt: number;
 }
 
+export type ExtendedItemProperties = Readonly<Record<string, unknown>>;
+
 export interface InventoryItemIdentity {
     readonly group: string;
     readonly asset: string;
@@ -211,6 +213,14 @@ export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
     remove(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>>;
+
+    updateExtendedProperties(
+        character: TRuntimeCharacter,
+        item: AppearanceItemIdentity,
+        properties: ExtendedItemProperties,
+        expectedProperties: ExtendedItemProperties | undefined,
         policy: AppearanceMutationPolicy,
     ): Promise<ActionResult<AppearanceObservation>>;
 
@@ -372,6 +382,13 @@ export type CharacterAction =
     | {
           readonly type: "appearance.remove";
           readonly item: AppearanceItemIdentity;
+          readonly options: AppearanceActionOptions;
+      }
+    | {
+          readonly type: "appearance.update_extended_properties";
+          readonly item: AppearanceItemIdentity;
+          readonly properties: ExtendedItemProperties;
+          readonly expectedProperties?: ExtendedItemProperties;
           readonly options: AppearanceActionOptions;
       }
     | {

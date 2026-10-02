@@ -12,13 +12,20 @@
  * limitations under the License.
  */
 
-import { API_Connector, API_Character, AssetGet } from "bc-bot";
+import {
+    API_Connector,
+    API_Character,
+    AssetGet,
+    getExtendedAssetDef,
+} from "bc-bot";
 import {
     ActionLayerRolloutController,
     CharacterActionExecutor,
     createActionMetadata,
     createActionResult,
     sendFeatureWhisper,
+    type ActionContext,
+    type ActionResult,
     type AppearanceActionService,
     type CommunicationActionService,
 } from "../../action-layer";
@@ -63,6 +70,309 @@ interface CatDogVibratorAction extends CatDogAction {
 
 type CatDogActionUnion =
     CatDogEmoteAction | CatDogBondageAction | CatDogVibratorAction;
+
+type CatDogAppearanceItem = API_Character["Appearance"]["Appearance"][number];
+
+interface CatDogExtendedModuleOption {
+    readonly Property?: Record<string, unknown>;
+}
+
+interface CatDogExtendedModule {
+    readonly Name: string;
+    readonly Key: string;
+    readonly Options: readonly CatDogExtendedModuleOption[];
+}
+
+interface CatDogExtendedDefinition {
+    readonly Archetype?: string;
+    readonly Options?: readonly unknown[];
+    readonly Modules?: readonly CatDogExtendedModule[];
+    readonly CopyConfig?: {
+        readonly GroupName?: string;
+        readonly AssetName: string;
+    };
+}
+
+interface ExtendedPropertyMutation {
+    readonly properties: Record<string, unknown>;
+    readonly expectedProperties: Record<string, unknown>;
+}
+
+const STANDARD_VIBRATOR_OPTIONS = [
+    { name: "Off", intensity: -1, effects: ["Egged"] },
+    { name: "Low", intensity: 0, effects: ["Egged", "Vibrating"] },
+    { name: "Medium", intensity: 1, effects: ["Egged", "Vibrating"] },
+    { name: "High", intensity: 2, effects: ["Egged", "Vibrating"] },
+    { name: "Maximum", intensity: 3, effects: ["Egged", "Vibrating"] },
+] as const;
+
+const ADVANCED_VIBRATOR_OPTION_NAMES = [
+    "Random",
+    "Escalate",
+    "Tease",
+    "Deny",
+    "Edge",
+] as const;
+
+function extendedDefinitionFor(
+    group: string,
+    asset: string,
+): CatDogExtendedDefinition | undefined {
+    const visited = new Set<string>();
+    let currentGroup = group;
+    let currentAsset = asset;
+
+    while (true) {
+        const key = `${currentGroup}\u0000${currentAsset}`;
+        if (visited.has(key)) return undefined;
+        visited.add(key);
+        const definition = getExtendedAssetDef({
+            Group: currentGroup as never,
+            Name: currentAsset as never,
+        } as never) as unknown as CatDogExtendedDefinition | null;
+        if (!definition) return undefined;
+        if (!definition.CopyConfig) return definition;
+        currentGroup = definition.CopyConfig.GroupName ?? currentGroup;
+        currentAsset = definition.CopyConfig.AssetName;
+    }
+}
+
+function itemPropertyRecord(
+    item: CatDogAppearanceItem,
+): Record<string, unknown> {
+    const properties = item.getData().Property;
+    return properties && typeof properties === "object"
+        ? (properties as Record<string, unknown>)
+        : {};
+}
+
+function typeRecordOf(
+    properties: Record<string, unknown>,
+): Record<string, number> {
+    const typeRecord = properties.TypeRecord;
+    if (!typeRecord || typeof typeRecord !== "object") return {};
+    return Object.fromEntries(
+        Object.entries(typeRecord).filter(
+            (entry): entry is [string, number] =>
+                typeof entry[1] === "number" && Number.isInteger(entry[1]),
+        ),
+    );
+}
+
+function propertySnapshot(
+    properties: Record<string, unknown>,
+    keys: readonly string[],
+): Record<string, unknown> {
+    return Object.fromEntries(
+        keys
+            .filter((key) => Object.hasOwn(properties, key))
+            .map((key) => [key, properties[key]]),
+    );
+}
+
+function vibrationModeNames(definition: CatDogExtendedDefinition): string[] {
+    const configuredSets = definition.Options?.filter(
+        (option): option is string =>
+            option === "Standard" || option === "Advanced",
+    );
+    const modeSets =
+        configuredSets && configuredSets.length > 0
+            ? configuredSets
+            : ["Standard", "Advanced"];
+    return modeSets.flatMap((modeSet) =>
+        modeSet === "Standard"
+            ? STANDARD_VIBRATOR_OPTIONS.map((option) => option.name)
+            : [...ADVANCED_VIBRATOR_OPTION_NAMES],
+    );
+}
+
+function buildVibratorModeMutation(
+    item: CatDogAppearanceItem,
+    definition: CatDogExtendedDefinition,
+    intensityIncrease: number,
+): ExtendedPropertyMutation | undefined {
+    const properties = itemPropertyRecord(item);
+    const typeRecord = typeRecordOf(properties);
+    const optionNames = vibrationModeNames(definition);
+    const typeRecordKey = definition.Archetype ?? "vibrating";
+    const recordIndex = typeRecord[typeRecordKey];
+    const currentMode =
+        typeof properties.Mode === "string"
+            ? properties.Mode
+            : typeof recordIndex === "number"
+              ? optionNames[recordIndex]
+              : "Off";
+    const currentStandardIndex = STANDARD_VIBRATOR_OPTIONS.findIndex(
+        (option) => option.name === currentMode,
+    );
+    if (currentStandardIndex < 0) {
+        if (
+            !ADVANCED_VIBRATOR_OPTION_NAMES.includes(
+                currentMode as (typeof ADVANCED_VIBRATOR_OPTION_NAMES)[number],
+            )
+        ) {
+            return undefined;
+        }
+        const currentIntensity =
+            typeof properties.Intensity === "number"
+                ? properties.Intensity
+                : currentMode === "Random"
+                  ? -1
+                  : 0;
+        const maxIntensity = currentMode === "Edge" ? 1 : 3;
+        const targetIntensity = Math.min(
+            maxIntensity,
+            currentIntensity + intensityIncrease,
+        );
+        if (targetIntensity === currentIntensity) return undefined;
+        const effects = new Set(
+            Array.isArray(properties.Effect)
+                ? properties.Effect.filter(
+                      (effect): effect is string => typeof effect === "string",
+                  )
+                : ["Egged"],
+        );
+        if (targetIntensity >= 0) effects.add("Vibrating");
+        else effects.delete("Vibrating");
+        if (currentMode === "Deny" || currentMode === "Edge") {
+            effects.add("Edged");
+        }
+        return {
+            properties: {
+                Intensity: targetIntensity,
+                Effect: [...effects],
+            },
+            expectedProperties: propertySnapshot(properties, [
+                "TypeRecord",
+                "Mode",
+                "Intensity",
+                "Effect",
+            ]),
+        };
+    }
+
+    const targetStandardIndex = Math.min(
+        STANDARD_VIBRATOR_OPTIONS.length - 1,
+        currentStandardIndex + intensityIncrease,
+    );
+    if (targetStandardIndex === currentStandardIndex) return undefined;
+    const targetOption = STANDARD_VIBRATOR_OPTIONS[targetStandardIndex];
+    const optionIndex = optionNames.indexOf(targetOption.name);
+    if (optionIndex < 0) return undefined;
+
+    return {
+        properties: {
+            TypeRecord: { ...typeRecord, [typeRecordKey]: optionIndex },
+            Mode: targetOption.name,
+            Intensity: targetOption.intensity,
+            Effect: [...targetOption.effects],
+        },
+        expectedProperties: propertySnapshot(properties, [
+            "TypeRecord",
+            "Mode",
+            "Intensity",
+            "Effect",
+        ]),
+    };
+}
+
+function isVibrationModule(module: CatDogExtendedModule): boolean {
+    return module.Options.some((option) => {
+        const properties = option.Property;
+        return (
+            typeof properties?.Intensity === "number" &&
+            Array.isArray(properties.Effect) &&
+            properties.Effect.includes("Vibrating")
+        );
+    });
+}
+
+function buildVibrationModuleMutation(
+    item: CatDogAppearanceItem,
+    definition: CatDogExtendedDefinition,
+    vibrationModules: readonly CatDogExtendedModule[],
+    intensityIncrease: number,
+): ExtendedPropertyMutation | undefined {
+    const properties = itemPropertyRecord(item);
+    const typeRecord = typeRecordOf(properties);
+    const modules = definition.Modules ?? [];
+    const nextTypeRecord = { ...typeRecord };
+    let changed = false;
+    for (const module of vibrationModules) {
+        const currentIndex = typeRecord[module.Key] ?? 0;
+        if (!module.Options[currentIndex]) return undefined;
+        const targetIndex = Math.min(
+            module.Options.length - 1,
+            currentIndex + intensityIncrease,
+        );
+        if (targetIndex !== currentIndex) changed = true;
+        nextTypeRecord[module.Key] = targetIndex;
+    }
+    if (!changed) return undefined;
+
+    const configuredEffects = new Set<string>();
+    for (const module of modules) {
+        for (const option of module.Options) {
+            const effects = option.Property?.Effect;
+            if (Array.isArray(effects)) {
+                for (const effect of effects) {
+                    if (typeof effect === "string")
+                        configuredEffects.add(effect);
+                }
+            }
+        }
+    }
+
+    const preservedEffects = Array.isArray(properties.Effect)
+        ? properties.Effect.filter(
+              (effect): effect is string =>
+                  typeof effect === "string" && !configuredEffects.has(effect),
+          )
+        : [];
+    const selectedEffects: string[] = [];
+    let effectiveIntensity: number | undefined;
+    const updates: Record<string, unknown> = {
+        TypeRecord: nextTypeRecord,
+    };
+    for (const module of modules) {
+        const selectedIndex = nextTypeRecord[module.Key] ?? 0;
+        const selectedProperties = module.Options[selectedIndex]?.Property;
+        if (!selectedProperties) continue;
+        if (typeof selectedProperties.Intensity === "number") {
+            effectiveIntensity = selectedProperties.Intensity;
+        }
+        if (Array.isArray(selectedProperties.Effect)) {
+            selectedEffects.push(
+                ...selectedProperties.Effect.filter(
+                    (effect): effect is string => typeof effect === "string",
+                ),
+            );
+        }
+        for (const [key, value] of Object.entries(selectedProperties)) {
+            if (
+                key !== "TypeRecord" &&
+                key !== "Effect" &&
+                key !== "Intensity"
+            ) {
+                updates[key] = value;
+            }
+        }
+    }
+
+    updates.Effect = [...new Set([...preservedEffects, ...selectedEffects])];
+    if (effectiveIntensity !== undefined) {
+        updates.Intensity = effectiveIntensity;
+    }
+
+    return {
+        properties: updates,
+        expectedProperties: propertySnapshot(properties, [
+            "TypeRecord",
+            "Intensity",
+            "Effect",
+        ]),
+    };
+}
 
 interface CatDogTileConfig {
     actions: CatDogActionUnion[];
@@ -375,10 +685,11 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                         } else if (action.type === "bondage") {
                             await this.performBondageAction(character, action);
                         } else if (action.type === "vibrator") {
-                            await this.performVibratorAction(
+                            return this.performVibratorAction(
                                 character,
                                 action,
                                 tile.petType,
+                                context,
                             );
                         }
                         return createActionResult(
@@ -686,352 +997,154 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         character: API_Character,
         action: CatDogVibratorAction,
         petType: "cat" | "dog",
-    ): Promise<void> {
+        context: ActionContext,
+    ): Promise<ActionResult<unknown>> {
+        const operationId = `${context.operationId}:vibrator`;
+        const lease = this.rollout?.begin("feature-appearance", operationId);
+        const startedAt = Date.now();
+
         try {
-            // Find vibrator items in character's appearance
-            // Vibrators can have many custom names, so we detect by:
-            // 1. Location (ItemVulva, ItemPelvis groups)
-            // 2. Properties (Extended.Type, TypeRecord, Property, Mode, Intensity, etc.)
+            if (lease?.path !== "action") {
+                return createActionResult(
+                    "rejected",
+                    createActionMetadata(context, "catdog.vibrator", startedAt),
+                    {
+                        reason: "CatDog appearance action-layer rollout is disabled",
+                        failureKind: "permanent",
+                        retryable: false,
+                    },
+                );
+            }
+            if (!this.appearanceService) {
+                return createActionResult(
+                    "rejected",
+                    createActionMetadata(context, "catdog.vibrator", startedAt),
+                    {
+                        reason: "Appearance action service is unavailable",
+                        failureKind: "permanent",
+                        retryable: false,
+                    },
+                );
+            }
 
-            const vibrators: any[] = [];
-            const appearance = character.Appearance.Appearance || [];
-
-            this.logger?.info(
-                `[CatDogSystem] Scanning ${appearance.length} appearance items for vibrators`,
-            );
-
+            const results: ActionResult<unknown>[] = [];
+            const appearance = character.Appearance.Appearance ?? [];
             for (const item of appearance) {
-                try {
-                    const assetName = (item as any)?.Name as string | undefined;
-                    const groupName = (item as any)?.Group as
-                        string | undefined;
+                const definition = extendedDefinitionFor(item.Group, item.Name);
+                if (!definition) continue;
 
-                    // Only check items in these intimate groups
-                    if (
-                        groupName !== "ItemVulva" &&
-                        groupName !== "ItemPelvis"
-                    ) {
-                        continue;
-                    }
-
-                    this.logger?.info(
-                        `[CatDogSystem]   Item in ${groupName}: "${assetName}"`,
+                const dispatch = (
+                    mutation: ExtendedPropertyMutation,
+                    channel: string,
+                ) => {
+                    const itemOperationId = `${operationId}:${item.Group}:${item.Name}:${channel}`;
+                    const timeoutMs = Math.max(
+                        1,
+                        Math.min(5_000, context.deadlineAt - Date.now()),
                     );
-
-                    // Analyze all properties of this item to detect if it's a vibrator
-                    const hasVibratorName =
-                        assetName?.includes("Vibrator") ||
-                        assetName?.includes("Vibrat");
-                    const hasExtendedType =
-                        (item as any)?.Extended?.Type !== undefined;
-                    const hasTypeProperty =
-                        typeof (item as any)?.getProperty === "function" &&
-                        (item as any)?.getProperty("TypeRecord") !== undefined;
-                    const hasProperty = (item as any)?.Property !== undefined;
-                    const hasMode = (item as any)?.Mode !== undefined;
-                    const hasIntensity = (item as any)?.Intensity !== undefined;
-
-                    // Log all detected properties
-                    if (hasExtendedType)
-                        this.logger?.info(
-                            `[CatDogSystem]     ✓ Has Extended.Type: ${(item as any)?.Extended?.Type}`,
-                        );
-                    if (hasTypeProperty)
-                        this.logger?.info(
-                            `[CatDogSystem]     ✓ Has TypeRecord property`,
-                        );
-                    if (hasProperty)
-                        this.logger?.info(
-                            `[CatDogSystem]     ✓ Has Property: ${(item as any)?.Property}`,
-                        );
-                    if (hasMode)
-                        this.logger?.info(
-                            `[CatDogSystem]     ✓ Has Mode: ${(item as any)?.Mode}`,
-                        );
-                    if (hasIntensity)
-                        this.logger?.info(
-                            `[CatDogSystem]     ✓ Has Intensity: ${(item as any)?.Intensity}`,
-                        );
-
-                    // Check if this is a vibrator item
-                    // Detect by name OR by presence of mode/intensity properties
-                    if (
-                        hasVibratorName ||
-                        hasExtendedType ||
-                        hasTypeProperty ||
-                        hasMode ||
-                        hasIntensity
-                    ) {
-                        this.logger?.info(
-                            `[CatDogSystem]     → Detected as vibrator! (name: ${hasVibratorName}, extended: ${hasExtendedType}, typeRec: ${hasTypeProperty}, mode: ${hasMode}, intensity: ${hasIntensity})`,
-                        );
-                        vibrators.push(item);
-                    } else {
-                        this.logger?.info(
-                            `[CatDogSystem]     → Not a vibrator (no vibrator name or properties)`,
-                        );
-                    }
-                } catch (e) {
-                    // Skip items that cause errors during inspection
-                    this.logger?.debug(
-                        "[CatDogSystem] Skipped item during vibrator detection",
-                        e as any,
+                    return this.characterActions.execute(
+                        character,
+                        {
+                            type: "appearance.update_extended_properties",
+                            item: { group: item.Group, asset: item.Name },
+                            properties: mutation.properties,
+                            expectedProperties: mutation.expectedProperties,
+                            options: {
+                                timeoutMs,
+                                maxAttempts: 1,
+                                retryDelayMs: 0,
+                                requireServerConfirmation: true,
+                            },
+                        },
+                        {
+                            ...context,
+                            operationId: itemOperationId,
+                            reason: `CatDog vibration update for ${item.Group}/${item.Name}/${channel}`,
+                        },
                     );
+                };
+
+                if (definition.Archetype === "vibrating") {
+                    const mutation = buildVibratorModeMutation(
+                        item,
+                        definition,
+                        action.intensityIncrease,
+                    );
+                    if (!mutation) continue;
+                    results.push(await dispatch(mutation, "vibrator-mode"));
+                    await this.wait(50);
+                    continue;
                 }
+
+                if (definition.Archetype !== "modular") continue;
+                const vibrationModules = (definition.Modules ?? []).filter(
+                    isVibrationModule,
+                );
+                if (vibrationModules.length === 0) continue;
+                const mutation = buildVibrationModuleMutation(
+                    item,
+                    definition,
+                    vibrationModules,
+                    action.intensityIncrease,
+                );
+                if (!mutation) continue;
+                results.push(
+                    await dispatch(
+                        mutation,
+                        `modules-${vibrationModules.map((module) => module.Key).join("-")}`,
+                    ),
+                );
+                await this.wait(50);
             }
 
-            this.logger?.info(
-                `[CatDogSystem] Found ${vibrators.length} vibrator(s)`,
+            if (results.length === 0) {
+                return createActionResult(
+                    "already_satisfied",
+                    createActionMetadata(context, "catdog.vibrator", startedAt),
+                    { reason: "No supported vibration controls are equipped" },
+                );
+            }
+
+            const failure = results.find(
+                (result) =>
+                    result.status !== "completed" &&
+                    result.status !== "already_satisfied",
             );
-
-            if (vibrators.length > 0) {
-                // Send whisper with custom message
-                await this.sendCatDogNotification(
-                    character,
-                    `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`,
-                );
-
-                // Escalate each vibrator
-                for (const vibrator of vibrators) {
-                    try {
-                        this.escalateVibrator(
-                            character,
-                            vibrator,
-                            action.intensityIncrease,
-                        );
-                    } catch (e) {
-                        this.logger?.error(
-                            "[CatDogSystem] Failed to escalate vibrator:",
-                            e as any,
-                        );
-                    }
-                }
-            } else {
-                this.logger?.info(
-                    `[CatDogSystem] No vibrators found for ${character.Name}`,
-                );
-            }
-        } catch (e) {
-            this.logger?.error(
-                "[CatDogSystem] Failed to perform vibrator action",
-                e as any,
-            );
-        }
-    }
-
-    private escalateVibrator(
-        character: API_Character,
-        vibratorItem: any,
-        intensityIncrease: number,
-    ): void {
-        try {
-            if (!vibratorItem) return;
-
-            const assetName = (vibratorItem as any)?.Asset?.Name as
-                string | undefined;
-            this.logger?.info(
-                `[CatDogSystem] Escalating vibrator: ${assetName}`,
-            );
-
-            // Get current intensity/type - try multiple property paths
-            let currentIntensity = 0;
-            let intensitySource = "unknown";
-
-            // Try Extended.Type first (for typed vibrators with modes)
-            if (vibratorItem?.Extended?.Type !== undefined) {
-                const rawType = vibratorItem.Extended.Type;
-                currentIntensity =
-                    typeof rawType === "string" ? parseInt(rawType) : rawType;
-                currentIntensity = isNaN(currentIntensity)
-                    ? 0
-                    : currentIntensity;
-                intensitySource = "Extended.Type";
-                this.logger?.info(
-                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
-                );
-            }
-            // Try TypeRecord property
-            else if (typeof vibratorItem?.getProperty === "function") {
-                const typeRecord = vibratorItem.getProperty("TypeRecord");
-                if (typeRecord !== undefined) {
-                    currentIntensity = typeRecord?.v ?? typeRecord ?? 0;
-                    intensitySource = "TypeRecord";
-                    this.logger?.info(
-                        `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
-                    );
-                }
-            }
-
-            // Try Mode property (common in custom vibrators)
-            if (
-                intensitySource === "unknown" &&
-                (vibratorItem as any)?.Mode !== undefined
-            ) {
-                const rawMode = (vibratorItem as any).Mode;
-                currentIntensity =
-                    typeof rawMode === "string" ? parseInt(rawMode) : rawMode;
-                currentIntensity = isNaN(currentIntensity)
-                    ? 0
-                    : currentIntensity;
-                intensitySource = "Mode";
-                this.logger?.info(
-                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
-                );
-            }
-
-            // Try Intensity property
-            if (
-                intensitySource === "unknown" &&
-                (vibratorItem as any)?.Intensity !== undefined
-            ) {
-                const rawIntensity = (vibratorItem as any).Intensity;
-                currentIntensity =
-                    typeof rawIntensity === "string"
-                        ? parseInt(rawIntensity)
-                        : rawIntensity;
-                currentIntensity = isNaN(currentIntensity)
-                    ? 0
-                    : currentIntensity;
-                intensitySource = "Intensity";
-                this.logger?.info(
-                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
-                );
-            }
-
-            // Try Property directly
-            if (
-                intensitySource === "unknown" &&
-                vibratorItem?.Property !== undefined
-            ) {
-                const prop = vibratorItem.Property;
-                currentIntensity =
-                    typeof prop === "string" ? parseInt(prop) : prop;
-                currentIntensity = isNaN(currentIntensity)
-                    ? 0
-                    : currentIntensity;
-                intensitySource = "Property";
-                this.logger?.info(
-                    `[CatDogSystem] Current intensity via ${intensitySource}: ${currentIntensity}`,
-                );
-            }
-
-            // Calculate new intensity - no hardcoded max, let the item decide
-            const newIntensity = Math.max(
-                0,
-                currentIntensity + intensityIncrease,
-            );
-
-            this.logger?.info(
-                `[CatDogSystem] Setting vibrator intensity: ${currentIntensity} → ${newIntensity} (source: ${intensitySource})`,
-            );
-
-            // Apply new intensity - try multiple methods based on detected source
-            let success = false;
-
-            // Method 1: Extended.SetType for typed vibrators
-            if (
-                vibratorItem?.Extended &&
-                typeof vibratorItem.Extended.SetType === "function"
-            ) {
+            if (results.some((result) => result.status === "completed")) {
                 try {
-                    vibratorItem.Extended.SetType(newIntensity);
-                    this.logger?.info(
-                        `[CatDogSystem] ✓ Escalated via Extended.SetType`,
+                    await this.sendCatDogNotification(
+                        character,
+                        `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`,
                     );
-                    success = true;
-                } catch (e) {
-                    this.logger?.warn(
-                        `[CatDogSystem] Extended.SetType failed:`,
-                        e as any,
-                    );
+                } catch (error) {
+                    this.logger.warn("CatDog vibration notification failed", {
+                        memberNumber: character.MemberNumber,
+                        error,
+                    });
                 }
             }
+            if (failure) return failure;
 
-            // Method 2: setProperty for custom vibrators with TypeRecord
-            if (
-                !success &&
-                typeof vibratorItem?.setProperty === "function" &&
-                typeof vibratorItem?.getProperty === "function"
-            ) {
-                try {
-                    const typeRecord = vibratorItem.getProperty(
-                        "TypeRecord",
-                    ) ?? { v: 0 };
-                    const newTypeRecord = {
-                        ...typeRecord,
-                        v: newIntensity,
-                    };
-                    vibratorItem.setProperty("TypeRecord", newTypeRecord);
-                    this.logger?.info(
-                        `[CatDogSystem] ✓ Escalated via TypeRecord property`,
-                    );
-                    success = true;
-                } catch (e) {
-                    this.logger?.warn(
-                        `[CatDogSystem] TypeRecord setProperty failed:`,
-                        e as any,
-                    );
-                }
-            }
-
-            // Method 3: Direct Mode assignment
-            if (!success && (vibratorItem as any)?.Mode !== undefined) {
-                try {
-                    (vibratorItem as any).Mode = newIntensity;
-                    this.logger?.info(
-                        `[CatDogSystem] ✓ Escalated via direct Mode assignment`,
-                    );
-                    success = true;
-                } catch (e) {
-                    this.logger?.warn(
-                        `[CatDogSystem] Mode assignment failed:`,
-                        e as any,
-                    );
-                }
-            }
-
-            // Method 4: Direct Intensity assignment
-            if (!success && (vibratorItem as any)?.Intensity !== undefined) {
-                try {
-                    (vibratorItem as any).Intensity = newIntensity;
-                    this.logger?.info(
-                        `[CatDogSystem] ✓ Escalated via direct Intensity assignment`,
-                    );
-                    success = true;
-                } catch (e) {
-                    this.logger?.warn(
-                        `[CatDogSystem] Intensity assignment failed:`,
-                        e as any,
-                    );
-                }
-            }
-
-            // Method 5: Direct property assignment
-            if (!success && vibratorItem?.Property !== undefined) {
-                try {
-                    vibratorItem.Property = newIntensity;
-                    this.logger?.info(
-                        `[CatDogSystem] ✓ Escalated via direct Property assignment`,
-                    );
-                    success = true;
-                } catch (e) {
-                    this.logger?.warn(
-                        `[CatDogSystem] Direct Property assignment failed:`,
-                        e as any,
-                    );
-                }
-            }
-
-            if (!success) {
-                this.logger?.warn(
-                    `[CatDogSystem] ⚠️  Could not escalate vibrator ${assetName} - no recognized method worked`,
-                );
-            }
-        } catch (e) {
-            this.logger?.info(
-                "[CatDogSystem] Error in escalateVibrator:",
-                e as any,
+            return createActionResult(
+                results.every((result) => result.status === "already_satisfied")
+                    ? "already_satisfied"
+                    : "completed",
+                createActionMetadata(context, "catdog.vibrator", startedAt),
+                { reason: `Updated ${results.length} vibration control(s)` },
             );
+        } catch (error) {
+            return createActionResult(
+                "failed",
+                createActionMetadata(context, "catdog.vibrator", startedAt),
+                {
+                    reason:
+                        error instanceof Error ? error.message : String(error),
+                    failureKind: "permanent",
+                    retryable: false,
+                },
+            );
+        } finally {
+            lease?.release();
         }
     }
 }

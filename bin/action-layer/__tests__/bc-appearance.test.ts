@@ -23,6 +23,7 @@ function makeCharacter(initial: FakeItem[] = []) {
                 if (!item) return null;
                 return {
                     Name: item.Name,
+                    getData: () => item,
                     setProperty: (property: string, value: unknown) => {
                         item.Property ??= {};
                         item.Property[property] = value;
@@ -525,6 +526,61 @@ test("accepts a matching inbound appearance item update", async () => {
 
     const result = await pending;
     assert.equal(result.status, "completed");
+    assert.equal(connector.listenerCount(), 0);
+});
+
+test("updates configured vibrator properties and confirms the resulting state", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector, [
+        {
+            Group: "ItemVulva",
+            Name: "VibratingEgg",
+            Property: {
+                TypeRecord: { vibrating: 0 },
+                Mode: "Off",
+                Intensity: -1,
+                Effect: ["Egged"],
+            },
+        },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+    });
+
+    const pending = adapter.updateExtendedProperties(
+        runtime as never,
+        { group: "ItemVulva", asset: "VibratingEgg" },
+        {
+            TypeRecord: { vibrating: 1 },
+            Mode: "Low",
+            Intensity: 0,
+            Effect: ["Egged", "Vibrating"],
+        },
+        { TypeRecord: { vibrating: 0 }, Mode: "Off" },
+        {
+            ...confirmedPolicy("set-vibrator-low"),
+            requireFreshObservation: false,
+        },
+    );
+    connector.emit("AppearanceItemUpdateReceived", {
+        direction: "inbound",
+        targetMemberNumber: 11,
+        group: "ItemVulva",
+        name: "VibratingEgg",
+        action: "update",
+        timestamp: 100,
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.deepEqual(runtime.items[0].Property, {
+        TypeRecord: { vibrating: 1 },
+        Mode: "Low",
+        Intensity: 0,
+        Effect: ["Egged", "Vibrating"],
+    });
+    assert.deepEqual(runtime.events, ["items", "appearance"]);
     assert.equal(connector.listenerCount(), 0);
 });
 

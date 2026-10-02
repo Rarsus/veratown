@@ -7,6 +7,7 @@ import {
     type AppearanceItemIdentity,
     type AppearanceMutationPolicy,
     type AppearanceObservation,
+    type ExtendedItemProperties,
 } from "../domain";
 import {
     planAppearanceAdditions,
@@ -218,6 +219,102 @@ function generatePassword(): string {
     ).join("");
 }
 
+const protectedExtendedProperties = new Set([
+    "LockedBy",
+    "LockMemberNumber",
+    "LockSet",
+    "Password",
+    "RemoveItem",
+    "RemoveOnUnlock",
+    "ShowTimer",
+]);
+
+function resolveExtendedDefinition(
+    item: AppearanceItemIdentity,
+): Record<string, any> | undefined {
+    let group = item.group;
+    let asset = item.asset;
+    const visited = new Set<string>();
+
+    while (true) {
+        const key = `${group}\u0000${asset}`;
+        if (visited.has(key)) return undefined;
+        visited.add(key);
+        const definition = getExtendedAssetDef({
+            Group: group as never,
+            Name: asset as never,
+        } as BC_AppearanceItem) as Record<string, any> | null;
+        if (!definition) return undefined;
+        const copy = definition.CopyConfig;
+        if (!copy) return definition;
+        group = copy.GroupName ?? group;
+        asset = copy.AssetName;
+    }
+}
+
+function supportedExtendedProperties(
+    definition: Record<string, any>,
+): Set<string> {
+    const supported = new Set<string>(
+        Object.keys(definition.BaselineProperty ?? {}),
+    );
+    const collectOptions = (options: unknown): void => {
+        if (!Array.isArray(options)) return;
+        for (const option of options) {
+            if (option && typeof option === "object") {
+                for (const key of Object.keys((option as any).Property ?? {})) {
+                    supported.add(key);
+                }
+            }
+        }
+    };
+
+    collectOptions(definition.Options);
+    for (const module of definition.Modules ?? []) {
+        collectOptions(module.Options);
+    }
+    if (definition.Archetype === "vibrating") {
+        for (const key of ["TypeRecord", "Mode", "Intensity", "Effect"]) {
+            supported.add(key);
+        }
+    }
+    supported.add("TypeRecord");
+    return supported;
+}
+
+function matchesPropertyValues(actual: unknown, expected: unknown): boolean {
+    if (Array.isArray(expected)) {
+        return (
+            Array.isArray(actual) &&
+            actual.length === expected.length &&
+            expected.every((value, index) =>
+                matchesPropertyValues(actual[index], value),
+            )
+        );
+    }
+    if (expected && typeof expected === "object") {
+        if (!actual || typeof actual !== "object" || Array.isArray(actual)) {
+            return false;
+        }
+        return Object.entries(expected).every(([key, value]) =>
+            matchesPropertyValues(
+                (actual as Record<string, unknown>)[key],
+                value,
+            ),
+        );
+    }
+    return actual === expected;
+}
+
+function matchesPropertySubset(
+    actual: Record<string, unknown>,
+    expected: Record<string, unknown>,
+): boolean {
+    return Object.entries(expected).every(([key, value]) =>
+        matchesPropertyValues(actual[key], value),
+    );
+}
+
 function configureAddedItem(
     item: any,
     identity: AppearanceItemIdentity,
@@ -373,9 +470,10 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         character: API_Character,
         target: AppearanceItemIdentity,
         operationId: string,
-        action: "add" | "remove",
+        action: "add" | "remove" | "update",
         startedAt: number,
         timeoutMs: number,
+        acceptUpdate?: (items: readonly BC_AppearanceItem[]) => boolean,
     ): ConfirmationWaiter {
         const connector = this.connectorFor(character);
         if (!connector) {
@@ -421,8 +519,17 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             observedAt: number,
         ): void => {
             if (observedAt < startedAt) return;
-            const expectedPresent = action === "add";
-            if (hasIdentity(items, target) !== expectedPresent) return;
+            const containsTarget = items.some(
+                (item) =>
+                    item.Group === target.group && item.Name === target.asset,
+            );
+            const accepted =
+                action === "add"
+                    ? containsTarget
+                    : action === "remove"
+                      ? !containsTarget
+                      : containsTarget && acceptUpdate?.(items) === true;
+            if (!accepted) return;
             const outcome = this.confirmationRegistry.confirm({
                 ...key,
                 observedAt,
@@ -440,7 +547,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 diagnostic?.direction !== "inbound" ||
                 diagnostic.targetMemberNumber !== character.MemberNumber ||
                 diagnostic.group !== target.group ||
-                (action === "add" && diagnostic.name !== target.asset) ||
+                (action !== "remove" && diagnostic.name !== target.asset) ||
                 (action === "remove" && diagnostic.action !== "remove")
             ) {
                 return;
@@ -673,10 +780,11 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         character: API_Character,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-        action: "add" | "remove",
+        action: "add" | "remove" | "update",
         apply: () => void,
         context: ActionContext,
         startedAt: number,
+        acceptUpdate?: (items: readonly BC_AppearanceItem[]) => boolean,
     ): Promise<ActionResult<AppearanceObservation>> {
         const timeoutMs = Math.min(
             this.confirmationTimeoutMs,
@@ -690,8 +798,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                   action,
                   startedAt,
                   timeoutMs,
+                  acceptUpdate,
               )
             : undefined;
+        const actionId =
+            action === "update"
+                ? "appearance.updateExtendedProperties"
+                : `appearance.${action}`;
 
         try {
             apply();
@@ -701,7 +814,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             waiter?.cancel();
             return failedMutation(
                 context,
-                `appearance.${action}`,
+                actionId,
                 startedAt,
                 error instanceof Error ? error.message : String(error),
                 "permanent",
@@ -713,11 +826,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         if (!waiter) {
             return createActionResult(
                 "in_progress",
-                createActionMetadata(
-                    context,
-                    `appearance.${action}`,
-                    startedAt,
-                ),
+                createActionMetadata(context, actionId, startedAt),
                 {
                     value: toObservation(observed, this.now()),
                     reason: "Local BC appearance mutation dispatched; server confirmation pending",
@@ -732,7 +841,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 "completed",
                 createActionMetadata(
                     context,
-                    `appearance.${action}`,
+                    actionId,
                     startedAt,
                     1,
                     confirmation.observation.observedAt,
@@ -758,7 +867,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         }
         return failedMutation(
             context,
-            `appearance.${action}`,
+            actionId,
             startedAt,
             confirmation.reason,
             "transient",
@@ -980,6 +1089,123 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             }
             return execute(freshResult.items);
         });
+    }
+
+    public async updateExtendedProperties(
+        character: API_Character,
+        item: AppearanceItemIdentity,
+        properties: ExtendedItemProperties,
+        expectedProperties: ExtendedItemProperties | undefined,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const startedAt = this.now();
+        const context = contextForPolicy(policy, this.now);
+        const actionId = "appearance.updateExtendedProperties";
+        const definition = resolveExtendedDefinition(item);
+        if (!definition) {
+            return blocked(
+                context,
+                actionId,
+                `Extended item definition unavailable: ${item.group}/${item.asset}`,
+                this.now(),
+            );
+        }
+        const supported = supportedExtendedProperties(definition);
+        const propertyNames = Object.keys(properties);
+        if (
+            propertyNames.length === 0 ||
+            propertyNames.some(
+                (key) =>
+                    !supported.has(key) || protectedExtendedProperties.has(key),
+            )
+        ) {
+            return blocked(
+                context,
+                actionId,
+                "Extended property update contains unsupported or protected properties",
+                this.now(),
+            );
+        }
+
+        const currentItems = character.Appearance.MakeAppearanceBundle();
+        const currentItem = currentItems.find(
+            (candidate) =>
+                candidate.Group === item.group && candidate.Name === item.asset,
+        );
+        if (!currentItem) {
+            return blocked(
+                context,
+                actionId,
+                `Extended item is no longer equipped: ${item.group}/${item.asset}`,
+                this.now(),
+            );
+        }
+        const currentProperties = propertyOf(currentItem);
+        if (
+            expectedProperties &&
+            !matchesPropertySubset(
+                currentProperties,
+                expectedProperties as Record<string, unknown>,
+            )
+        ) {
+            return blocked(
+                context,
+                actionId,
+                "Extended item properties changed before the update",
+                this.now(),
+            );
+        }
+        if (matchesPropertySubset(currentProperties, properties)) {
+            return createActionResult(
+                "already_satisfied",
+                createActionMetadata(context, actionId, startedAt),
+                { value: toObservation(currentItems, this.now()) },
+            );
+        }
+
+        const runtimeItem = character.Appearance.InventoryGet(
+            item.group as never,
+        );
+        if (
+            !runtimeItem ||
+            runtimeItem.Name !== item.asset ||
+            typeof runtimeItem.setProperty !== "function"
+        ) {
+            return blocked(
+                context,
+                actionId,
+                `Extended item cannot be updated: ${item.group}/${item.asset}`,
+                this.now(),
+            );
+        }
+
+        return this.dispatchMutation(
+            character,
+            item,
+            policy,
+            "update",
+            () => {
+                for (const [key, value] of Object.entries(properties)) {
+                    runtimeItem.setProperty(key as never, value as never);
+                }
+            },
+            context,
+            startedAt,
+            (items) => {
+                const observedItem = items.find(
+                    (candidate) =>
+                        candidate.Group === item.group &&
+                        candidate.Name === item.asset,
+                );
+                return (
+                    observedItem !== undefined &&
+                    matchesPropertySubset(
+                        propertyOf(observedItem),
+                        properties as Record<string, unknown>,
+                    )
+                );
+            },
+        );
     }
 
     public async setHiddenLayers(

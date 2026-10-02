@@ -277,7 +277,7 @@ export class Veratown {
         private readonly actionLayerReleaseRemovalEnabled = false,
         private readonly actionLayerCommunicationNotificationsEnabled = false,
         private readonly actionLayerInventoryEnabled = false,
-        private readonly actionLayerFeatureAppearanceEnabled = false,
+        private readonly actionLayerFeatureAppearanceEnabled = true,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;

@@ -5,6 +5,7 @@ import type {
     AppearanceItemIdentity,
     AppearanceMutationPolicy,
     AppearanceObservation,
+    ExtendedItemProperties,
 } from "./domain";
 import { ActionScheduler } from "./scheduler";
 
@@ -88,6 +89,29 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
             context.memberNumber,
             policy.operationId,
             () => this.adapter.remove(character, item, policy),
+        );
+    }
+
+    public updateExtendedProperties(
+        character: TRuntimeCharacter,
+        item: AppearanceItemIdentity,
+        properties: ExtendedItemProperties,
+        expectedProperties: ExtendedItemProperties | undefined,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const context = contextFromPolicy(policy);
+        validateContext(context);
+        return this.scheduler.schedule(
+            context.memberNumber,
+            policy.operationId,
+            () =>
+                this.adapter.updateExtendedProperties(
+                    character,
+                    item,
+                    properties,
+                    expectedProperties,
+                    policy,
+                ),
         );
     }
 

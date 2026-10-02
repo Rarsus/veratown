@@ -142,7 +142,7 @@ export const configSchema = z
         action_layer_communication_notifications_enabled: z
             .boolean()
             .default(false),
-        action_layer_feature_appearance_enabled: z.boolean().default(false),
+        action_layer_feature_appearance_enabled: z.boolean().default(true),
         action_layer_inventory_enabled: z.boolean().default(false),
         casino: z
             .object({

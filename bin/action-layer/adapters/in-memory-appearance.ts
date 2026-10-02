@@ -7,6 +7,7 @@ import {
     type AppearanceItemIdentity,
     type AppearanceMutationPolicy,
     type AppearanceObservation,
+    type ExtendedItemProperties,
 } from "../domain";
 import { executeAction } from "../executor";
 import {
@@ -15,6 +16,35 @@ import {
     type ObservedAppearanceItem,
 } from "../appearance-planner";
 import { createActionExecutionPolicy } from "../policy";
+
+interface InMemoryAppearanceItem extends ObservedAppearanceItem {
+    properties?: Record<string, unknown>;
+}
+
+function matchesProperties(
+    actual: Record<string, unknown>,
+    expected: ExtendedItemProperties,
+): boolean {
+    return Object.entries(expected).every(([key, value]) => {
+        const actualValue = actual[key];
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            return (
+                actualValue !== null &&
+                typeof actualValue === "object" &&
+                !Array.isArray(actualValue) &&
+                matchesProperties(
+                    actualValue as Record<string, unknown>,
+                    value as ExtendedItemProperties,
+                )
+            );
+        }
+        return Array.isArray(value)
+            ? Array.isArray(actualValue) &&
+                  value.length === actualValue.length &&
+                  value.every((entry, index) => entry === actualValue[index])
+            : actualValue === value;
+    });
+}
 
 export interface InMemoryAppearanceAdapterOptions {
     readonly memberNumber: number;
@@ -100,7 +130,7 @@ export class InMemoryAppearanceActionAdapter<
     private readonly memberNumber: number;
     private readonly confirmationDelayMs: number;
     private readonly failureMode: InMemoryAppearanceAdapterOptions["failureMode"];
-    private items: ObservedAppearanceItem[];
+    private items: InMemoryAppearanceItem[];
     private hiddenLayers: string[];
 
     public constructor(options: InMemoryAppearanceAdapterOptions) {
@@ -236,6 +266,82 @@ export class InMemoryAppearanceActionAdapter<
                     (current) =>
                         `${current.group}\u0000${current.asset}\u0000${current.extendedType ?? ""}` !==
                         targetKey,
+                );
+                return toObservation(this.items, this.hiddenLayers);
+            },
+        );
+    }
+
+    public updateExtendedProperties(
+        _character: TRuntimeCharacter,
+        item: AppearanceItemIdentity,
+        properties: ExtendedItemProperties,
+        expectedProperties: ExtendedItemProperties | undefined,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const context = contextFromPolicy(policy, this.memberNumber);
+        const current = this.items.find(
+            (candidate) =>
+                candidate.group === item.group &&
+                candidate.asset === item.asset,
+        );
+        if (!current) {
+            return Promise.resolve(
+                blockedResult(
+                    context,
+                    "appearance.updateExtendedProperties",
+                    "Extended item is not equipped",
+                ),
+            );
+        }
+        const currentProperties = current.properties ?? {};
+        if (
+            expectedProperties &&
+            !matchesProperties(currentProperties, expectedProperties)
+        ) {
+            return Promise.resolve(
+                blockedResult(
+                    context,
+                    "appearance.updateExtendedProperties",
+                    "Extended item properties changed before the update",
+                ),
+            );
+        }
+        if (matchesProperties(currentProperties, properties)) {
+            return Promise.resolve(
+                createActionResult(
+                    "already_satisfied",
+                    createActionMetadata(
+                        context,
+                        "appearance.updateExtendedProperties",
+                        Date.now(),
+                    ),
+                    { value: toObservation(this.items, this.hiddenLayers) },
+                ),
+            );
+        }
+
+        return executeAction(
+            context,
+            "appearance.updateExtendedProperties",
+            policy,
+            async (signal) => {
+                await waitForConfirmation(
+                    this.confirmationDelayMs,
+                    this.failureMode,
+                    signal,
+                );
+                this.items = this.items.map((candidate) =>
+                    candidate.group === item.group &&
+                    candidate.asset === item.asset
+                        ? {
+                              ...candidate,
+                              properties: {
+                                  ...(candidate.properties ?? {}),
+                                  ...properties,
+                              },
+                          }
+                        : candidate,
                 );
                 return toObservation(this.items, this.hiddenLayers);
             },

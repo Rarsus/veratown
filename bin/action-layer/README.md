@@ -43,7 +43,7 @@ Cage retain their own timing, recovery, and persistence rules.
 
 CatDog bondage additions and Cage crate add/remove operations can use the
 appearance action service behind `action_layer_feature_appearance_enabled`,
-which defaults to `false`. Monitor clothing removal uses the appearance
+which defaults to `true`; setting it to `false` opts out. Monitor clothing removal uses the appearance
 contract directly as an opt-in location action. Appearance actions preserve
 server confirmation and synchronization requirements; Cage session persistence
 continues through `GameStateMutationService`.
