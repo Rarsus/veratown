@@ -16,9 +16,29 @@ function makeCharacter(initial: FakeItem[] = []) {
         Appearance: {
             MakeAppearanceBundle: () => items.map((item) => ({ ...item })),
             flushUpdates: () => events.push("items"),
+            InventoryGet: (group: string) => {
+                const item = items.find(
+                    (candidate) => candidate.Group === group,
+                );
+                if (!item) return null;
+                return {
+                    Name: item.Name,
+                    setProperty: (property: string, value: unknown) => {
+                        item.Property ??= {};
+                        item.Property[property] = value;
+                    },
+                };
+            },
             AddItem: (item: FakeItem) => {
-                items.push({ ...item });
-                return {};
+                const added = { ...item };
+                items.push(added);
+                return {
+                    Name: added.Name,
+                    setProperty: (property: string, value: unknown) => {
+                        added.Property ??= {};
+                        added.Property[property] = value;
+                    },
+                };
             },
             RemoveItem: (group: string) => {
                 const index = items.findIndex((item) => item.Group === group);
@@ -354,7 +374,7 @@ test("does not mutate when a required fresh observation times out", async () => 
     let addCalls = 0;
     runtime.Appearance.AddItem = () => {
         addCalls += 1;
-        return {};
+        return { Name: "Script", setProperty: () => undefined };
     };
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
@@ -398,6 +418,38 @@ test("accepts a matching post-cache CharacterSync and cleans up listeners", asyn
 
     const result = await pending;
     assert.equal(result.status, "completed");
+    assert.equal(connector.listenerCount(), 0);
+});
+
+test("merges hidden layers and confirms the desired state from CharacterSync", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector, [
+        {
+            Group: "ItemScript",
+            Name: "Script",
+            Property: { Hide: ["OtherLayer", "BodyUpper"] },
+        },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+    });
+
+    const pending = adapter.setHiddenLayers(
+        runtime as never,
+        ["BodyUpper", "ArmsLeft"],
+        true,
+        confirmedPolicy("hide-casino-layers"),
+    );
+    connector.emit("CharacterSync", runtime);
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.deepEqual(result.value?.hiddenLayers, [
+        "OtherLayer",
+        "BodyUpper",
+        "ArmsLeft",
+    ]);
     assert.equal(connector.listenerCount(), 0);
 });
 

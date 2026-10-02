@@ -168,8 +168,17 @@ function toObservation(
     items: readonly BC_AppearanceItem[],
     observedAt: number,
 ): AppearanceObservation {
+    const scriptItem = items.find(
+        (item) => item.Group === "ItemScript" && item.Name === "Script",
+    );
+    const hidden = scriptItem ? propertyOf(scriptItem).Hide : undefined;
     return {
         items: items.map(toIdentity),
+        hiddenLayers:
+            Array.isArray(hidden) &&
+            hidden.every((layer) => typeof layer === "string")
+                ? [...hidden]
+                : [],
         observedAt,
     };
 }
@@ -491,6 +500,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         character: API_Character,
         startedAt: number,
         timeoutMs: number,
+        acceptObservation?: (items: readonly BC_AppearanceItem[]) => boolean,
     ): FreshObservationWaiter {
         const connector = this.connectorFor(character);
         if (!connector) {
@@ -528,6 +538,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             observedAt: number,
         ): void => {
             if (observedAt < startedAt) return;
+            if (acceptObservation && !acceptObservation(items)) return;
             finish({
                 outcome: "accepted",
                 observation: toObservation(items, observedAt),
@@ -951,5 +962,142 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             }
             return execute(freshResult.items);
         });
+    }
+
+    public async setHiddenLayers(
+        character: API_Character,
+        layers: readonly string[],
+        hidden: boolean,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const startedAt = this.now();
+        const context = contextForPolicy(policy, this.now);
+        const before = character.Appearance.MakeAppearanceBundle();
+        const current = new Set(toObservation(before, startedAt).hiddenLayers);
+        const alreadySatisfied = layers.every(
+            (layer) => current.has(layer) === hidden,
+        );
+        if (alreadySatisfied) {
+            return createActionResult(
+                "already_satisfied",
+                createActionMetadata(
+                    context,
+                    "appearance.setHiddenLayers",
+                    startedAt,
+                ),
+                { value: toObservation(before, startedAt) },
+            );
+        }
+
+        const desired = new Set(current);
+        for (const layer of layers) {
+            if (hidden) desired.add(layer);
+            else desired.delete(layer);
+        }
+        const matchesDesired = (
+            items: readonly BC_AppearanceItem[],
+        ): boolean => {
+            const observed = new Set(
+                toObservation(items, this.now()).hiddenLayers,
+            );
+            return (
+                observed.size === desired.size &&
+                [...desired].every((layer) => observed.has(layer))
+            );
+        };
+        const timeoutMs = Math.min(
+            this.confirmationTimeoutMs,
+            Math.max(1, policy.timeoutMs),
+        );
+        const waiter = policy.requireServerConfirmation
+            ? this.waitForFreshObservation(
+                  character,
+                  startedAt,
+                  timeoutMs,
+                  matchesDesired,
+              )
+            : undefined;
+
+        try {
+            let scriptItem = character.Appearance.InventoryGet("ItemScript");
+            if (!scriptItem || scriptItem.Name !== "Script") {
+                const asset = AssetGet("ItemScript", "Script");
+                if (!asset)
+                    throw new Error("ItemScript/Script asset unavailable");
+                scriptItem = character.Appearance.AddItem(asset as never);
+            }
+            if (!scriptItem) {
+                throw new Error("ItemScript/Script could not be added");
+            }
+            scriptItem.setProperty("Hide", [...desired] as never);
+            character.Appearance.flushUpdates();
+            character.sendAppearanceUpdate();
+        } catch (error) {
+            waiter?.cancel();
+            return failedMutation(
+                context,
+                "appearance.setHiddenLayers",
+                startedAt,
+                error instanceof Error ? error.message : String(error),
+                "permanent",
+                false,
+            );
+        }
+
+        const observed = character.Appearance.MakeAppearanceBundle();
+        if (!waiter) {
+            return createActionResult(
+                "in_progress",
+                createActionMetadata(
+                    context,
+                    "appearance.setHiddenLayers",
+                    startedAt,
+                ),
+                {
+                    value: toObservation(observed, this.now()),
+                    reason: "Local BC appearance mutation dispatched; server confirmation pending",
+                    retryable: false,
+                },
+            );
+        }
+
+        const confirmation = await waiter.promise;
+        if (confirmation.outcome === "accepted") {
+            return createActionResult(
+                "completed",
+                createActionMetadata(
+                    context,
+                    "appearance.setHiddenLayers",
+                    startedAt,
+                    1,
+                    confirmation.observation.observedAt,
+                ),
+                { value: confirmation.observation, retryable: false },
+            );
+        }
+        if (confirmation.outcome === "timed_out") {
+            return createActionResult(
+                "timed_out",
+                createActionMetadata(
+                    context,
+                    "appearance.setHiddenLayers",
+                    startedAt,
+                ),
+                {
+                    value: toObservation(observed, this.now()),
+                    reason: confirmation.reason,
+                    failureKind: "timeout",
+                    retryable: true,
+                },
+            );
+        }
+        return failedMutation(
+            context,
+            "appearance.setHiddenLayers",
+            startedAt,
+            confirmation.reason,
+            "transient",
+            true,
+        );
     }
 }

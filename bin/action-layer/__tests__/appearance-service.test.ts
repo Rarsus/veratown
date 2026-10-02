@@ -38,6 +38,32 @@ test("routes appearance operations through the scheduler and adapter", async () 
     });
 });
 
+test("sets and restores hidden layers through the appearance service", async () => {
+    const adapter = new InMemoryAppearanceActionAdapter({
+        memberNumber: 1,
+        initialHiddenLayers: ["OtherLayer"],
+    });
+    const service = new AppearanceActionService(adapter);
+
+    const hidden = await service.setHiddenLayers(
+        {},
+        ["BodyUpper"],
+        true,
+        policy("hide-body"),
+    );
+    const restored = await service.setHiddenLayers(
+        {},
+        ["BodyUpper"],
+        false,
+        policy("restore-body"),
+    );
+
+    assert.equal(hidden.status, "completed");
+    assert.deepEqual(hidden.value?.hiddenLayers, ["OtherLayer", "BodyUpper"]);
+    assert.equal(restored.status, "completed");
+    assert.deepEqual(restored.value?.hiddenLayers, ["OtherLayer"]);
+});
+
 test("serializes same-character mutations while allowing other characters", async () => {
     const firstAdapter = new InMemoryAppearanceActionAdapter({
         memberNumber: 1,

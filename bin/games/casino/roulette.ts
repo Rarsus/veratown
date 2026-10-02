@@ -248,46 +248,7 @@ export class RouletteGame implements Game {
         this.casino.setTextColor("#ffffff");
 
         this.conn.Player.setScriptPermissions(true, false);
-
-        const scriptItem = this.conn.Player.Appearance.AddItem(
-            AssetGet("ItemScript", "Script"),
-        );
-        scriptItem.setProperty("Hide", [
-            "Height",
-            "BodyUpper",
-            "ArmsLeft",
-            "ArmsRight",
-            "HandsLeft",
-            "HandsRight",
-            "BodyLower",
-            "HairFront",
-            "HairBack",
-            "Eyebrows",
-            "Eyes",
-            "Eyes2",
-            "Mouth",
-            "Nipples",
-            "Pussy",
-            "Pronouns",
-            "Head",
-            "Blush",
-            "Fluids",
-            "Emoticon",
-            "ItemNeck",
-            "ItemHead",
-            "Cloth",
-            "Bra",
-            "Socks",
-            "Shoes",
-            "ClothAccessory",
-            "Necklace",
-            "ClothLower",
-            "Panties",
-            "Suit",
-            "Gloves",
-        ]);
-        this.conn.Player.Appearance.MakeAppearanceBundle();
-        this.conn.Player.sendAppearanceUpdate();
+        await this.casino.hideCasinoAppearanceLayers();
         await this.casino.setBio();
     }
 
