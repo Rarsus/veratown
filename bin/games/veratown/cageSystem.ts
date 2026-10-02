@@ -647,6 +647,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             ) {
                 this.logger.error(
                     "Manual cage release is pending crate removal",
+                    undefined,
                     {
                         memberNumber: character.MemberNumber,
                         observedAtMs: this.timer.now(),
@@ -985,12 +986,16 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 character.Appearance.getItemData("ItemDevices")?.Name ===
                     "FuturisticCrate"
             ) {
-                this.logger.error("Cage release is pending crate removal", {
-                    memberNumber,
-                    cageName,
-                    authoritativeExpiryMs: cage.authoritativeExpiry,
-                    observedAtMs: this.timer.now(),
-                });
+                this.logger.error(
+                    "Cage release is pending crate removal",
+                    undefined,
+                    {
+                        memberNumber,
+                        cageName,
+                        authoritativeExpiryMs: cage.authoritativeExpiry,
+                        observedAtMs: this.timer.now(),
+                    },
+                );
                 await this.timer.wait(10 * 1000);
                 continue;
             }

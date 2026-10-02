@@ -292,6 +292,37 @@ test("CatDog discovers devices from current appearance data rather than stale wr
     });
 });
 
+test("CatDog stays silent when no vibration control is present", async () => {
+    const adapter = new RecordingCommunicationAdapter();
+    const communication = new CommunicationActionService(adapter);
+    const appearance = recordingAppearanceService();
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+        featureAppearanceEnabled: true,
+    });
+    const system = new CatDogSystem(
+        connector(() => undefined),
+        undefined,
+        communication,
+        rollout,
+        appearance.service as any,
+    );
+    const target = character(48);
+    target.Appearance.MakeAppearanceBundle = () => [];
+
+    const result = await (system as any).performVibratorAction(
+        target,
+        vibratorAction,
+        "cat",
+        actionContext(48),
+    );
+
+    assert.equal(result.status, "already_satisfied");
+    assert.equal(appearance.updates.length, 0);
+    assert.deepEqual(adapter.requests, []);
+    communication.close();
+});
+
 test("CatDog increases intensity without replacing an Advanced vibrator mode", async () => {
     const appearance = recordingAppearanceService();
     const rollout = new ActionLayerRolloutController({

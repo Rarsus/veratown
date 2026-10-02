@@ -1106,17 +1106,6 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             }
 
             if (results.length === 0) {
-                try {
-                    await this.sendCatDogNotification(
-                        character,
-                        `*The ${petType} looks for a vibration control, but I couldn't find one to activate. ${action.message}*`,
-                    );
-                } catch (error) {
-                    this.logger.warn("CatDog vibration notification failed", {
-                        memberNumber: character.MemberNumber,
-                        error,
-                    });
-                }
                 return createActionResult(
                     "already_satisfied",
                     createActionMetadata(context, "catdog.vibrator", startedAt),
