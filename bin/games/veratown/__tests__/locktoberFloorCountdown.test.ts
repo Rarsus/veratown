@@ -70,12 +70,37 @@ test("Locktober floor writer uses letters, digits, and the letter I separator", 
 
 test("Locktober countdown can be enabled and disabled as a room feature", () => {
     const writes: unknown[] = [];
+    const mapData = { Tiles: "\0".repeat(1_600) };
+    let mapUpdate: (() => void) | undefined;
     const system = new LocktoberCountdownSystem(
         {
             chatRoom: {
                 map: {
-                    mapData: {},
-                    setTile: (...args: unknown[]) => writes.push(args),
+                    mapData,
+                    on: (_event: string, handler: () => void) => {
+                        mapUpdate = handler;
+                    },
+                    off: () => {
+                        mapUpdate = undefined;
+                    },
+                    setTile: (
+                        position: { X: number; Y: number },
+                        tileName: string,
+                        tileType: string,
+                    ) => {
+                        writes.push({ position, tileName, tileType });
+                        const tileId =
+                            tileType === "FloorNumber"
+                                ? 1110 + Number(tileName.slice("Number".length))
+                                : tileName === "Blank"
+                                  ? 1200
+                                  : 1201 + tileName.charCodeAt(6) - 65;
+                        const index = position.X + position.Y * 40;
+                        mapData.Tiles =
+                            mapData.Tiles.slice(0, index) +
+                            String.fromCharCode(tileId) +
+                            mapData.Tiles.slice(index + 1);
+                    },
                 },
             },
         } as any,
@@ -87,9 +112,16 @@ test("Locktober countdown can be enabled and disabled as a room feature", () => 
     assert.equal(system.getDiagnostics().timerScheduled, true);
     assert.equal(writes.length, 20);
 
+    mapData.Tiles = "\0".repeat(1_600);
+    mapUpdate?.();
+    assert.equal(writes.length, 40);
+    mapUpdate?.();
+    assert.equal(writes.length, 40);
+
     system.enabled = false;
     assert.equal(system.getDiagnostics().timerScheduled, false);
-    assert.equal(writes.length, 20);
+    assert.equal(writes.length, 40);
+    assert.equal(mapUpdate, undefined);
 
     system.enabled = true;
     assert.equal(system.getDiagnostics().timerScheduled, true);

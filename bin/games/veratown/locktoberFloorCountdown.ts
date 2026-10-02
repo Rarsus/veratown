@@ -1,4 +1,4 @@
-import type { API_Connector } from "bc-bot";
+import type { API_Connector, API_Map } from "bc-bot";
 import type { VeratownFeatureSystem } from "./featureSystem";
 
 export const LOCKTOBER_REGION = {
@@ -13,6 +13,7 @@ const MINUTE_MS = 60 * 1_000;
 const MAX_TIMEOUT_MS = 2_147_000_000;
 
 export interface FloorTileWriter {
+    readonly mapData?: { Tiles?: string };
     setTile(
         position: { X: number; Y: number },
         tileName: string,
@@ -60,6 +61,14 @@ export function updateLocktoberFloorTiles(
                 X: LOCKTOBER_REGION.topLeft.X + column,
                 Y: LOCKTOBER_REGION.topLeft.Y + row,
             };
+            const tileIndex = position.X + position.Y * MAP_WIDTH;
+            const tileId = /^[0-9]$/.test(character)
+                ? 1110 + Number(character)
+                : character === " "
+                  ? 1200
+                  : 1201 + character.charCodeAt(0) - "A".charCodeAt(0);
+            if (map.mapData?.Tiles?.charCodeAt(tileIndex) === tileId) continue;
+
             if (/^[0-9]$/.test(character)) {
                 map.setTile(position, `Number${character}`, "FloorNumber");
             } else {
@@ -79,6 +88,8 @@ export class LocktoberCountdownSystem implements VeratownFeatureSystem {
     public readonly label = "Locktober countdown";
     private enabledState = true;
     private timer?: NodeJS.Timeout;
+    private attachedMap?: API_Map;
+    private readonly onMapUpdate = (): void => this.refresh();
 
     public constructor(
         private readonly conn: API_Connector,
@@ -102,13 +113,20 @@ export class LocktoberCountdownSystem implements VeratownFeatureSystem {
 
     public attachToRoom(): void {
         this.stopTimer();
+        this.detachMapListener();
         if (!this.enabled) return;
+        const map = this.conn.chatRoom?.map;
+        if (map) {
+            this.attachedMap = map;
+            map.on("MapUpdate", this.onMapUpdate);
+        }
         this.refresh();
         this.scheduleNextUpdate();
     }
 
     public detachFromRoom(): void {
         this.stopTimer();
+        this.detachMapListener();
     }
 
     public shutdown(): void {
@@ -129,8 +147,13 @@ export class LocktoberCountdownSystem implements VeratownFeatureSystem {
     }
 
     private refresh(): void {
-        const map = this.conn.chatRoom?.map;
+        const map = this.attachedMap ?? this.conn.chatRoom?.map;
         if (map) updateLocktoberFloorTiles(map, this.now());
+    }
+
+    private detachMapListener(): void {
+        this.attachedMap?.off("MapUpdate", this.onMapUpdate);
+        this.attachedMap = undefined;
     }
 
     private scheduleNextUpdate(): void {
