@@ -16,7 +16,7 @@ import {
     CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
-    OctoberCountdownMonitorProvider,
+    LocktoberCountdownMonitorProvider,
 } from "../locationMonitorSystem";
 import type { VeratownLocationDoc } from "../veratownLocationStore";
 
@@ -43,37 +43,37 @@ function location(
     };
 }
 
-test("October countdown provider uses UTC calendar days", () => {
-    const provider = new OctoberCountdownMonitorProvider(
+test("Locktober countdown provider uses UTC calendar days", () => {
+    const provider = new LocktoberCountdownMonitorProvider(
         () => new Date("2026-10-02T00:00:00.000Z"),
     );
     assert.equal(
         provider.getDisplay(),
-        "There are 30 days left until October 2026 ends (UTC).",
+        "There are 30 days left until Locktober 2026 ends (UTC).",
     );
 
-    const partialDayProvider = new OctoberCountdownMonitorProvider(
+    const partialDayProvider = new LocktoberCountdownMonitorProvider(
         () => new Date("2026-10-02T12:00:00.000Z"),
     );
     assert.equal(
         partialDayProvider.getDisplay(),
-        "There are 29 days left until October 2026 ends (UTC).",
+        "There are 29 days left until Locktober 2026 ends (UTC).",
     );
 
-    const finalDayProvider = new OctoberCountdownMonitorProvider(
+    const finalDayProvider = new LocktoberCountdownMonitorProvider(
         () => new Date("2026-10-31T23:59:59.000Z"),
     );
     assert.equal(
         finalDayProvider.getDisplay(),
-        "October 2026 ends in less than 1 day (UTC).",
+        "Locktober 2026 ends in less than 1 day (UTC).",
     );
 
-    const afterEndProvider = new OctoberCountdownMonitorProvider(
+    const afterEndProvider = new LocktoberCountdownMonitorProvider(
         () => new Date("2026-11-01T00:00:00.000Z"),
     );
     assert.equal(
         afterEndProvider.getDisplay(),
-        "October 2026 has ended (UTC).",
+        "Locktober 2026 has ended (UTC).",
     );
 });
 

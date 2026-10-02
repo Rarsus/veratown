@@ -73,26 +73,26 @@ export class CallbackMonitorProvider implements LocationMonitorProvider {
 
 const UTC_DAY_MS = 24 * 60 * 60 * 1_000;
 
-export class OctoberCountdownMonitorProvider implements LocationMonitorProvider {
-    public readonly key = "october_countdown";
+export class LocktoberCountdownMonitorProvider implements LocationMonitorProvider {
+    public readonly key = "locktober_countdown";
 
     public constructor(private readonly now: () => Date = () => new Date()) {}
 
     public getDisplay(): string {
         const now = this.now();
         const year = now.getUTCFullYear();
-        const octoberEnd = Date.UTC(year, 10, 1);
-        const remainingMs = octoberEnd - now.getTime();
+        const locktoberEnd = Date.UTC(year, 10, 1);
+        const remainingMs = locktoberEnd - now.getTime();
 
-        if (remainingMs <= 0) return `October ${year} has ended (UTC).`;
+        if (remainingMs <= 0) return `Locktober ${year} has ended (UTC).`;
 
         const days = Math.floor(remainingMs / UTC_DAY_MS);
         if (days === 0) {
-            return `October ${year} ends in less than 1 day (UTC).`;
+            return `Locktober ${year} ends in less than 1 day (UTC).`;
         }
         const unit = days === 1 ? "day" : "days";
         const verb = days === 1 ? "is" : "are";
-        return `There ${verb} ${days} ${unit} left until October ${year} ends (UTC).`;
+        return `There ${verb} ${days} ${unit} left until Locktober ${year} ends (UTC).`;
     }
 }
 
