@@ -306,7 +306,19 @@ export class Veratown {
         ) {
             this.container.register(
                 DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
-                new AppearanceActionService(new BCAppearanceActionAdapter()),
+                new AppearanceActionService(
+                    new BCAppearanceActionAdapter({
+                        observationConnectors: [
+                            connections.main,
+                            connections.shower,
+                            connections.casino,
+                            connections.secondRoom,
+                        ].filter(
+                            (connection): connection is API_Connector =>
+                                connection !== undefined,
+                        ),
+                    }),
+                ),
             );
         }
         if (!this.container.has(DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE)) {

@@ -393,17 +393,33 @@ export class BunnyPunishmentWorkflow {
                                     },
                                 },
                             );
-                        if (
-                            result.status !== "completed" &&
-                            result.status !== "already_satisfied" &&
-                            result.status !== "in_progress"
+                        if (result.status === "in_progress") {
+                            if (!result.confirmation) {
+                                mutationErrors.push(
+                                    "Bunny restraint dispatch is pending without a confirmation outcome",
+                                );
+                                break;
+                            }
+                            const confirmation = await result.confirmation;
+                            if (confirmation.status !== "confirmed") {
+                                mutationErrors.push(
+                                    confirmation.reason ||
+                                        `unconfirmed add ${bunnyPieceKey(piece)}`,
+                                );
+                                break;
+                            }
+                            confirmedActionAppearance = confirmation.value;
+                        } else if (
+                            result.status === "completed" ||
+                            result.status === "already_satisfied"
                         ) {
+                            confirmedActionAppearance = result.value;
+                        } else {
                             throw new Error(
                                 result.reason ??
                                     `failed to add ${bunnyPieceKey(piece)}`,
                             );
                         }
-                        confirmedActionAppearance = result.value;
                         configuredPieces.push(bunnyPieceKey(piece));
                     } catch (error) {
                         mutationErrors.push(

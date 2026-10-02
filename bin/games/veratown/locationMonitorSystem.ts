@@ -453,7 +453,6 @@ export class LocationMonitorSystem
                         maxAttempts: 1,
                         retryDelayMs: 0,
                         preserveLockedItems: true,
-                        requireFreshObservation: true,
                         requireServerConfirmation: true,
                     },
                 },

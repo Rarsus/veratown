@@ -207,6 +207,7 @@ export interface AppearanceItemUpdateDiagnostic {
     connectionId: string;
     direction: "outbound" | "inbound";
     requestId?: string;
+    sourceMemberNumber?: number;
     targetMemberNumber: number;
     group: string;
     name?: string;
@@ -252,6 +253,7 @@ function appearanceItemUpdateDiagnostic(
     direction: AppearanceItemUpdateDiagnostic["direction"],
     update: ServerCharacterItemUpdate,
     requestId?: string,
+    sourceMemberNumber?: number,
 ): AppearanceItemUpdateDiagnostic {
     const property = (update.Property ?? {}) as Record<string, unknown>;
     const hasName = typeof update.Name === "string" && update.Name.length > 0;
@@ -262,6 +264,7 @@ function appearanceItemUpdateDiagnostic(
         connectionId,
         direction,
         ...(requestId === undefined ? {} : { requestId }),
+        ...(sourceMemberNumber === undefined ? {} : { sourceMemberNumber }),
         targetMemberNumber: update.Target,
         group: update.Group,
         ...(hasName ? { name: update.Name } : {}),
@@ -823,6 +826,16 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomSyncItem = (update: ServerChatRoomSyncItemResponse) => {
         // console.log("Chat room sync item", update);
         this._chatRoom?.characterItemUpdate(update.Item);
+        this.emit(
+            "AppearanceItemUpdateReceived",
+            appearanceItemUpdateDiagnostic(
+                this.connectionId,
+                "inbound",
+                update.Item,
+                undefined,
+                update.Source,
+            ),
+        );
         if (update.Item.Target === this._player!.MemberNumber) {
             const payload = {
                 AssetFamily: "Female3DCG",

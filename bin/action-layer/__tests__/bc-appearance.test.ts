@@ -65,11 +65,35 @@ function makePolicy(operationId: string) {
 }
 
 class FakeConnector {
-    public connectionId = "fake-connector";
+    public readonly connectionId: string;
+    public readonly Player: { MemberNumber: number };
+    public readonly chatRoom: {
+        Name: string;
+        getCharacter: (memberNumber: number) => any;
+    };
     private readonly listeners = new Map<
         string,
         Set<(...args: any[]) => void>
     >();
+    private readonly characters = new Map<number, unknown>();
+
+    public constructor(
+        connectionId = "fake-connector",
+        memberNumber = 99,
+        roomName = "test-room",
+    ) {
+        this.connectionId = connectionId;
+        this.Player = { MemberNumber: memberNumber };
+        this.chatRoom = {
+            Name: roomName,
+            getCharacter: (targetMemberNumber) =>
+                this.characters.get(targetMemberNumber),
+        };
+    }
+
+    public setCharacter(memberNumber: number, character: unknown): void {
+        this.characters.set(memberNumber, character);
+    }
 
     public on(event: string, listener: (...args: any[]) => void): this {
         const listeners = this.listeners.get(event) ?? new Set();
@@ -111,6 +135,20 @@ function confirmedPolicy(operationId: string) {
         requireServerConfirmation: true,
         timeoutMs: 20,
     };
+}
+
+function emitPeerAppearanceSync(
+    observer: FakeConnector,
+    sourceMemberNumber: number,
+    character: ReturnType<typeof makeCharacter> & { MemberNumber: number },
+): void {
+    observer.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: character.MemberNumber,
+        sourceMemberNumber,
+        timestamp: 100,
+        appearance: character.Appearance.MakeAppearanceBundle(),
+    });
 }
 
 test("dispatches an empty-group add without claiming server confirmation", async () => {
@@ -344,7 +382,7 @@ test("does not replace an occupied group during add", async () => {
     ]);
 });
 
-test("plans a fresh add from the authoritative snapshot and preserves clothing", async () => {
+test("plans from the current snapshot without waiting for another observation", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector, [
         { Group: "ItemArms", Name: "StaleGloves" },
@@ -354,37 +392,19 @@ test("plans a fresh add from the authoritative snapshot and preserves clothing",
         confirmationTimeoutMs: 20,
     });
 
-    const pending = adapter.add(
+    const result = await adapter.add(
         runtime as never,
         { group: "ItemArms", asset: "Gloves" },
-        {
-            ...makePolicy("fresh-add"),
-            requireFreshObservation: true,
-        },
+        makePolicy("cached-add"),
     );
-    runtime.items.splice(0, runtime.items.length, {
-        Group: "Cloth",
-        Name: "Dress",
-    });
-    connector.emit("AppearanceSyncReceived", {
-        direction: "inbound",
-        memberNumber: 11,
-        timestamp: 100,
-        appearance: runtime.Appearance.MakeAppearanceBundle(),
-    });
-
-    const result = await pending;
-    assert.equal(result.status, "in_progress");
-    assert.deepEqual(
-        runtime.items.map(({ Group, Name }) => ({ Group, Name })),
-        [
-            { Group: "Cloth", Name: "Dress" },
-            { Group: "ItemArms", Name: "Gloves" },
-        ],
-    );
+    assert.equal(result.status, "blocked");
+    assert.deepEqual(runtime.items, [
+        { Group: "ItemArms", Name: "StaleGloves" },
+    ]);
+    assert.equal(connector.listenerCount(), 0);
 });
 
-test("does not mutate when a required fresh observation times out", async () => {
+test("dispatches immediately and returns pending confirmation when no echo arrives", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);
     let addCalls = 0;
@@ -400,23 +420,23 @@ test("does not mutate when a required fresh observation times out", async () => 
     const result = await adapter.add(
         runtime as never,
         { group: "ItemArms", asset: "Gloves" },
-        {
-            ...makePolicy("fresh-timeout"),
-            requireFreshObservation: true,
-        },
+        makePolicy("unconfirmed-add"),
     );
 
-    assert.equal(result.status, "timed_out");
-    assert.equal(addCalls, 0);
+    assert.equal(result.status, "in_progress");
+    assert.equal(addCalls, 1);
+    assert.equal((await result.confirmation)?.status, "unconfirmed");
     assert.equal(connector.listenerCount(), 0);
 });
 
-test("accepts a matching post-cache CharacterSync and cleans up listeners", async () => {
+test("accepts a source-attributed peer appearance sync and cleans up listeners", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);
+    const observer = new FakeConnector("observer", 12);
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
         confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
     });
 
     const pending = adapter.add(
@@ -424,21 +444,68 @@ test("accepts a matching post-cache CharacterSync and cleans up listeners", asyn
         { group: "ItemArms", asset: "Gloves" },
         confirmedPolicy("confirmed-add"),
     );
-    connector.emit("AppearanceSyncReceived", {
-        direction: "inbound",
-        memberNumber: 11,
-        timestamp: 100,
-        appearance: runtime.Appearance.MakeAppearanceBundle(),
-    });
     connector.emit("CharacterSync", runtime);
+    emitPeerAppearanceSync(observer, connector.Player.MemberNumber, runtime);
 
     const result = await pending;
     assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_character_sync");
     assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
 });
 
-test("merges hidden layers and confirms the desired state from CharacterSync", async () => {
+test("returns immediately and resolves only after a peer appearance sync", async () => {
     const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector);
+    const observer = new FakeConnector("observer", 12);
+    const wrongRoomObserver = new FakeConnector(
+        "wrong-room-observer",
+        13,
+        "different-room",
+    );
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+        observationConnectors: [observer, wrongRoomObserver],
+    });
+
+    const result = await adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        makePolicy("async-confirmed-add"),
+    );
+
+    assert.equal(result.status, "in_progress");
+    let settled = false;
+    void result.confirmation?.then(() => {
+        settled = true;
+    });
+    connector.emit("CharacterSync", runtime);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.equal(settled, false);
+    emitPeerAppearanceSync(
+        wrongRoomObserver,
+        connector.Player.MemberNumber,
+        runtime,
+    );
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.equal(settled, false);
+    emitPeerAppearanceSync(
+        observer,
+        connector.Player.MemberNumber + 1,
+        runtime,
+    );
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.equal(settled, false);
+    emitPeerAppearanceSync(observer, connector.Player.MemberNumber, runtime);
+    assert.equal((await result.confirmation)?.status, "confirmed");
+    assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
+});
+
+test("merges hidden layers and confirms the desired state from a peer sync", async () => {
+    const connector = new FakeConnector();
+    const observer = new FakeConnector("observer", 12);
     const runtime = makeConnectedCharacter(connector, [
         {
             Group: "ItemScript",
@@ -449,6 +516,7 @@ test("merges hidden layers and confirms the desired state from CharacterSync", a
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
         confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
     });
 
     const pending = adapter.setHiddenLayers(
@@ -457,7 +525,7 @@ test("merges hidden layers and confirms the desired state from CharacterSync", a
         true,
         confirmedPolicy("hide-casino-layers"),
     );
-    connector.emit("CharacterSync", runtime);
+    emitPeerAppearanceSync(observer, connector.Player.MemberNumber, runtime);
 
     const result = await pending;
     assert.equal(result.status, "completed");
@@ -471,12 +539,17 @@ test("merges hidden layers and confirms the desired state from CharacterSync", a
 
 test("does not confirm from an appearance packet before the character cache updates", async () => {
     const connector = new FakeConnector();
+    const observer = new FakeConnector("observer", 12);
     const runtime = makeConnectedCharacter(connector, [
         { Group: "ItemArms", Name: "Gloves" },
     ]);
+    const staleAppearance = structuredClone(
+        runtime.Appearance.MakeAppearanceBundle(),
+    );
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
         confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
     });
 
     const pending = adapter.remove(
@@ -489,16 +562,23 @@ test("does not confirm from an appearance packet before the character cache upda
         settled = true;
     });
 
-    connector.emit("AppearanceSyncReceived", {
+    observer.emit("AppearanceSyncReceived", {
         direction: "inbound",
         memberNumber: 11,
+        sourceMemberNumber: connector.Player.MemberNumber,
         timestamp: 100,
-        appearance: [],
+        appearance: staleAppearance,
     });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     assert.equal(settled, false);
 
-    connector.emit("CharacterSync", runtime);
+    observer.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: 11,
+        sourceMemberNumber: connector.Player.MemberNumber,
+        timestamp: 101,
+        appearance: [],
+    });
     const result = await pending;
     assert.equal(result.status, "completed");
 });
@@ -506,9 +586,15 @@ test("does not confirm from an appearance packet before the character cache upda
 test("accepts a matching inbound appearance item update", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);
+    const observer = new FakeConnector("observer", 12);
+    const observedRuntime = makeConnectedCharacter(observer, [
+        { Group: "ItemArms", Name: "Gloves" },
+    ]);
+    observer.setCharacter(11, observedRuntime);
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
         confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
     });
 
     const pending = adapter.add(
@@ -516,8 +602,9 @@ test("accepts a matching inbound appearance item update", async () => {
         { group: "ItemArms", asset: "Gloves" },
         confirmedPolicy("confirmed-item-add"),
     );
-    connector.emit("AppearanceItemUpdateReceived", {
+    observer.emit("AppearanceItemUpdateReceived", {
         direction: "inbound",
+        sourceMemberNumber: connector.Player.MemberNumber,
         targetMemberNumber: 11,
         group: "ItemArms",
         name: "Gloves",
@@ -527,11 +614,13 @@ test("accepts a matching inbound appearance item update", async () => {
 
     const result = await pending;
     assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_item_broadcast");
     assert.equal(connector.listenerCount(), 0);
 });
 
 test("updates configured vibrator properties and confirms the resulting state", async () => {
     const connector = new FakeConnector();
+    const observer = new FakeConnector("observer", 12);
     const runtime = makeConnectedCharacter(connector, [
         { Group: "Cloth", Name: "PlayerDress" },
         {
@@ -545,9 +634,15 @@ test("updates configured vibrator properties and confirms the resulting state", 
             },
         },
     ]);
+    const observedRuntime = makeConnectedCharacter(
+        observer,
+        structuredClone(runtime.items),
+    );
+    observer.setCharacter(11, observedRuntime);
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
         confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
     });
 
     const pending = adapter.updateExtendedProperties(
@@ -560,13 +655,17 @@ test("updates configured vibrator properties and confirms the resulting state", 
             Effect: ["Egged", "Vibrating"],
         },
         { TypeRecord: { vibrating: 0 }, Mode: "Off" },
-        {
-            ...confirmedPolicy("set-vibrator-low"),
-            requireFreshObservation: false,
-        },
+        confirmedPolicy("set-vibrator-low"),
     );
-    connector.emit("AppearanceItemUpdateReceived", {
+    observedRuntime.items[1].Property = {
+        TypeRecord: { vibrating: 1 },
+        Mode: "Low",
+        Intensity: 0,
+        Effect: ["Egged", "Vibrating"],
+    };
+    observer.emit("AppearanceItemUpdateReceived", {
         direction: "inbound",
+        sourceMemberNumber: connector.Player.MemberNumber,
         targetMemberNumber: 11,
         group: "ItemVulva",
         name: "VibratingEgg",
@@ -576,6 +675,7 @@ test("updates configured vibrator properties and confirms the resulting state", 
 
     const result = await pending;
     assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_item_broadcast");
     assert.deepEqual(runtime.items[1].Property, {
         TypeRecord: { vibrating: 1 },
         Mode: "Low",
@@ -589,6 +689,7 @@ test("updates configured vibrator properties and confirms the resulting state", 
 
 test("extended property updates send only the targeted item update", async () => {
     const connector = new FakeConnector();
+    const observer = new FakeConnector("observer", 12);
     const runtime = makeConnectedCharacter(connector, [
         { Group: "Cloth", Name: "PlayerDress" },
         {
@@ -597,17 +698,16 @@ test("extended property updates send only the targeted item update", async () =>
             Property: { TypeRecord: { vibrating: 0 } },
         },
     ]);
-    const adapter = new BCAppearanceActionAdapter({ now: () => 100 });
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        observationConnectors: [observer],
+    });
     const waiter = setImmediate(() =>
-        connector.emit("AppearanceItemUpdateReceived", {
-            connectionId: connector.connectionId,
-            direction: "inbound",
-            targetMemberNumber: 11,
-            group: "ItemVulva",
-            name: "VibratingEgg",
-            itemKeys: ["ItemVulva/VibratingEgg"],
-            timestamp: 101,
-        }),
+        emitPeerAppearanceSync(
+            observer,
+            connector.Player.MemberNumber,
+            runtime,
+        ),
     );
 
     const result = await adapter.updateExtendedProperties(
@@ -620,6 +720,7 @@ test("extended property updates send only the targeted item update", async () =>
 
     clearImmediate(waiter);
     assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_character_sync");
     assert.deepEqual(runtime.events, ["item:ItemVulva"]);
     assert.deepEqual(runtime.items[0], {
         Group: "Cloth",
@@ -627,7 +728,7 @@ test("extended property updates send only the targeted item update", async () =>
     });
 });
 
-test("times out confirmation and removes every listener", async () => {
+test("returns unconfirmed after the confirmation deadline and removes every listener", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);
     const adapter = new BCAppearanceActionAdapter({
@@ -641,17 +742,19 @@ test("times out confirmation and removes every listener", async () => {
         confirmedPolicy("timeout-add"),
     );
 
-    assert.equal(result.status, "timed_out");
-    assert.equal(result.failureKind, "timeout");
+    assert.equal(result.status, "unconfirmed");
+    assert.equal(result.retryable, false);
     assert.equal(connector.listenerCount(), 0);
 });
 
-test("disconnect fails the current operation but allows a new epoch to recover", async () => {
+test("disconnect leaves a dispatched operation unconfirmed and allows a new epoch", async () => {
     const connector = new FakeConnector();
+    const observer = new FakeConnector("observer", 12);
     const runtime = makeConnectedCharacter(connector);
     const adapter = new BCAppearanceActionAdapter({
         now: () => 100,
         confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
     });
 
     const first = adapter.add(
@@ -661,8 +764,8 @@ test("disconnect fails the current operation but allows a new epoch to recover",
     );
     connector.emit("Disconnected", "transport-error");
     const firstResult = await first;
-    assert.equal(firstResult.status, "failed");
-    assert.equal(firstResult.failureKind, "transient");
+    assert.equal(firstResult.status, "unconfirmed");
+    assert.equal(firstResult.retryable, false);
     assert.equal(connector.listenerCount(), 0);
 
     connector.emit("Connected");
@@ -671,13 +774,7 @@ test("disconnect fails the current operation but allows a new epoch to recover",
         { group: "ItemArms", asset: "Gloves" },
         confirmedPolicy("reconnect-remove"),
     );
-    connector.emit("AppearanceSyncReceived", {
-        direction: "inbound",
-        memberNumber: 11,
-        timestamp: 100,
-        appearance: runtime.Appearance.MakeAppearanceBundle(),
-    });
-    connector.emit("CharacterSync", runtime);
+    emitPeerAppearanceSync(observer, connector.Player.MemberNumber, runtime);
 
     const secondResult = await second;
     assert.equal(secondResult.status, "completed");

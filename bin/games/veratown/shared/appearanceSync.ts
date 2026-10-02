@@ -48,7 +48,7 @@ const deferredAppearanceMutationContexts = new WeakMap<
 >();
 const pendingAppearanceConfirmations = new WeakMap<
     API_Character,
-    AppearanceMutationContext
+    Set<AppearanceMutationContext>
 >();
 let mutationSequence = 0;
 
@@ -215,7 +215,28 @@ export function takeAppearanceMutationContext(
 export function hasPendingAppearanceConfirmation(
     character: API_Character,
 ): boolean {
-    return pendingAppearanceConfirmations.has(character);
+    return (pendingAppearanceConfirmations.get(character)?.size ?? 0) > 0;
+}
+
+function trackPendingAppearanceConfirmation(
+    character: API_Character,
+    context: AppearanceMutationContext,
+): void {
+    let pending = pendingAppearanceConfirmations.get(character);
+    if (!pending) {
+        pending = new Set();
+        pendingAppearanceConfirmations.set(character, pending);
+    }
+    pending.add(context);
+}
+
+function clearPendingAppearanceConfirmation(
+    character: API_Character,
+    context: AppearanceMutationContext,
+): void {
+    const pending = pendingAppearanceConfirmations.get(character);
+    pending?.delete(context);
+    if (pending?.size === 0) pendingAppearanceConfirmations.delete(character);
 }
 
 function createMutationContext(
@@ -417,6 +438,71 @@ async function executeAppearanceMutation(
                           options.actionLayer.policy,
                       );
             const observed = character.Appearance.MakeAppearanceBundle();
+            if (actionResult.status === "in_progress") {
+                if (!actionResult.confirmation) {
+                    throw new Error(
+                        "Action-layer appearance mutation is pending without a confirmation outcome",
+                    );
+                }
+                context.expectedAppearance =
+                    filterValidAppearanceItems(observed);
+                context.verificationStatus = "observed";
+                trackPendingAppearanceConfirmation(character, context);
+                void actionResult.confirmation
+                    .then(async (confirmation) => {
+                        if (confirmation.status !== "confirmed") {
+                            clearPendingAppearanceConfirmation(
+                                character,
+                                context,
+                            );
+                            context.verificationStatus = "timeout";
+                            logger.warn(
+                                "Appearance mutation remains unconfirmed; local state was not persisted as authoritative",
+                                {
+                                    memberNumber: character.MemberNumber,
+                                    operationId: context.operationId,
+                                    reason: confirmation.reason,
+                                },
+                            );
+                            return;
+                        }
+                        context.observedAppearance =
+                            character.Appearance.MakeAppearanceBundle();
+                        context.verificationStatus = "confirmed";
+                        try {
+                            await (
+                                onSynchronized ??
+                                appearanceStateSynchronizers.get(character)
+                            )?.(character, context, context.observedAppearance);
+                        } catch (error) {
+                            logger.error(
+                                "Failed to persist confirmed asynchronous appearance mutation",
+                                error,
+                                {
+                                    memberNumber: character.MemberNumber,
+                                    operationId: context.operationId,
+                                },
+                            );
+                        } finally {
+                            clearPendingAppearanceConfirmation(
+                                character,
+                                context,
+                            );
+                        }
+                    })
+                    .catch((error) => {
+                        clearPendingAppearanceConfirmation(character, context);
+                        logger.error(
+                            "Appearance confirmation observer failed",
+                            error,
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId: context.operationId,
+                            },
+                        );
+                    });
+                return true;
+            }
             context.expectedAppearance = observed;
             context.observedAppearance = observed;
             context.verificationStatus =
@@ -424,6 +510,18 @@ async function executeAppearanceMutation(
                 actionResult.status === "already_satisfied"
                     ? "confirmed"
                     : "mismatch";
+            if (actionResult.status === "unconfirmed") {
+                context.verificationStatus = "timeout";
+                logger.warn(
+                    "Appearance mutation was dispatched but not confirmed; local state was not persisted as authoritative",
+                    {
+                        memberNumber: character.MemberNumber,
+                        operationId: context.operationId,
+                        reason: actionResult.reason,
+                    },
+                );
+                return true;
+            }
             if (
                 actionResult.status !== "completed" &&
                 actionResult.status !== "already_satisfied"
@@ -481,7 +579,7 @@ async function executeAppearanceMutation(
             });
             if (shouldAwaitServerSync) {
                 const attempts = Math.max(1, options.serverSyncAttempts ?? 2);
-                pendingAppearanceConfirmations.set(character, context);
+                trackPendingAppearanceConfirmation(character, context);
                 try {
                     let lastError: unknown;
                     for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -560,7 +658,7 @@ async function executeAppearanceMutation(
                     }
                     if (lastError) throw lastError;
                 } finally {
-                    pendingAppearanceConfirmations.delete(character);
+                    clearPendingAppearanceConfirmation(character, context);
                 }
             }
         }

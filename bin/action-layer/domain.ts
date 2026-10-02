@@ -11,6 +11,7 @@ export type ActionStatus =
     | "already_satisfied"
     | "cancelled"
     | "in_progress"
+    | "unconfirmed"
     | "blocked"
     | "rejected"
     | "timed_out"
@@ -26,6 +27,9 @@ export type ActionFailureKind =
 
 export type ActionSource =
     "bunny" | "release" | "feature" | "admin" | "external" | "system";
+
+export type AppearanceConfirmationAuthority =
+    "room_item_broadcast" | "room_character_sync";
 
 export interface ActionMetadata {
     readonly operationId: string;
@@ -44,7 +48,21 @@ export interface ActionResult<T> {
     readonly reason?: string;
     readonly failureKind?: ActionFailureKind;
     readonly retryable?: boolean;
+    readonly confirmationAuthority?: AppearanceConfirmationAuthority;
+    readonly confirmation?: Promise<ActionConfirmation<T>>;
 }
+
+export type ActionConfirmation<T> =
+    | {
+          readonly status: "confirmed";
+          readonly authority: AppearanceConfirmationAuthority;
+          readonly value: T;
+      }
+    | {
+          readonly status: "unconfirmed";
+          readonly value?: T;
+          readonly reason: string;
+      };
 
 export interface ActionContext {
     readonly operationId: string;
@@ -105,7 +123,6 @@ export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
     readonly lockMode?: AppearanceLockMode;
     readonly itemOptions?: AppearanceItemMutationOptions;
     readonly cleanupAllowed?: boolean;
-    readonly requireFreshObservation?: boolean;
 }
 
 export interface AppearanceObservation {

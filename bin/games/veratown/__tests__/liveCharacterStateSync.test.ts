@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { test } from "node:test";
-import { syncAppearanceMutation } from "../shared/appearanceSync";
+import {
+    hasPendingAppearanceConfirmation,
+    syncAppearanceMutation,
+} from "../shared/appearanceSync";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
 import {
     beginAppearanceScope,
@@ -177,6 +180,82 @@ test("syncAppearanceMutation delegates declared mutations to the action adapter"
 
     assert.equal(actionCalls, 1);
     assert.equal(legacyMutationCalled, false);
+});
+
+test("syncAppearanceMutation persists a nonblocking action only after confirmation", async () => {
+    const character = createCharacter(9, { X: 1, Y: 1 }, [
+        { Group: "ItemArms", Name: "Cuffs" },
+    ]);
+    let resolveConfirmation!: (value: {
+        status: "confirmed";
+        authority: "room_character_sync";
+        value: { items: []; hiddenLayers: []; observedAt: number };
+    }) => void;
+    const confirmation = new Promise<{
+        status: "confirmed";
+        authority: "room_character_sync";
+        value: { items: []; hiddenLayers: []; observedAt: number };
+    }>((resolve) => {
+        resolveConfirmation = resolve;
+    });
+    const persistedContext: { value?: { verificationStatus?: string } } = {};
+    let finishPersistence!: () => void;
+    const persistenceFinished = new Promise<void>((resolve) => {
+        finishPersistence = resolve;
+    });
+
+    const dispatched = await syncAppearanceMutation(
+        character as any,
+        () => undefined,
+        0,
+        async (_current, context) => {
+            persistedContext.value = context;
+            finishPersistence();
+        },
+        {
+            skipAuthorizationPreflight: true,
+            actionLayer: {
+                service: {
+                    remove: async () => ({
+                        status: "in_progress" as const,
+                        metadata: {
+                            operationId: "appearance-bridge-9",
+                            actionId: "appearance.remove",
+                            memberNumber: 9,
+                            attempt: 1,
+                            startedAt: 1,
+                        },
+                        confirmation,
+                    }),
+                } as any,
+                operation: "remove",
+                item: { group: "ItemArms", asset: "Cuffs" },
+                policy: {
+                    operationId: "appearance-bridge-9",
+                    memberNumber: 9,
+                    source: "release",
+                    reason: "bridge-pending-test",
+                    timeoutMs: 100,
+                    maxAttempts: 1,
+                    retryDelayMs: 0,
+                    requireServerConfirmation: false,
+                },
+            },
+        },
+    );
+
+    assert.equal(dispatched, true);
+    assert.equal(Object.hasOwn(persistedContext, "value"), false);
+    assert.equal(hasPendingAppearanceConfirmation(character as any), true);
+    resolveConfirmation({
+        status: "confirmed",
+        authority: "room_character_sync",
+        value: { items: [], hiddenLayers: [], observedAt: 2 },
+    });
+    await persistenceFinished;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(persistedContext.value?.verificationStatus, "confirmed");
+    assert.equal(hasPendingAppearanceConfirmation(character as any), false);
 });
 
 test("syncAppearanceMutation waits for matching authoritative CharacterSync", async () => {

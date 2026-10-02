@@ -1,3 +1,5 @@
+import type { AppearanceConfirmationAuthority } from "./domain";
+
 export interface AppearanceConfirmationKey {
     readonly operationId: string;
     readonly memberNumber: number;
@@ -25,6 +27,7 @@ export interface AppearanceAdapterCapabilities {
     readonly addsItems: boolean;
     readonly removesItems: boolean;
     readonly confirmsAuthoritatively: boolean;
+    readonly confirmationAuthorities?: readonly AppearanceConfirmationAuthority[];
     readonly tracksConnectionEpoch: boolean;
 }
 

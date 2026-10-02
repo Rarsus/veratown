@@ -419,7 +419,6 @@ export class ReleaseWorkflowSystem
                     retryDelayMs: 0,
                     preserveLockedItems: false,
                     requireServerConfirmation: true,
-                    requireFreshObservation: false,
                 },
             );
             const success =
@@ -479,7 +478,6 @@ export class ReleaseWorkflowSystem
                     retryDelayMs: 0,
                     preserveLockedItems: false,
                     requireServerConfirmation: true,
-                    requireFreshObservation: false,
                 },
             );
             if (

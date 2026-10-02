@@ -2,7 +2,9 @@ import {
     createActionMetadata,
     createActionResult,
     type ActionContext,
+    type ActionConfirmation,
     type ActionResult,
+    type AppearanceConfirmationAuthority,
     type AppearanceActionAdapter,
     type AppearanceItemIdentity,
     type AppearanceMutationPolicy,
@@ -24,6 +26,7 @@ import type { API_Character, BC_AppearanceItem } from "bc-bot";
 export interface BCAppearanceAdapterOptions {
     readonly now?: () => number;
     readonly confirmationTimeoutMs?: number;
+    readonly observationConnectors?: readonly BCConnectorEvents[];
 }
 
 type BCProperty = Record<string, unknown>;
@@ -36,8 +39,13 @@ type ConnectorEvent =
     | "Disconnected"
     | "ReconnectFailed";
 
-interface BCConnectorEvents {
+export interface BCConnectorEvents {
     readonly connectionId?: string;
+    readonly Player?: { readonly MemberNumber: number };
+    readonly chatRoom?: {
+        readonly Name?: string;
+        getCharacter(memberNumber: number): API_Character | undefined;
+    };
     readonly isConnected?: () => boolean;
     on(event: ConnectorEvent, listener: (...args: any[]) => void): unknown;
     off(event: ConnectorEvent, listener: (...args: any[]) => void): unknown;
@@ -58,23 +66,11 @@ type ConfirmationWaitResult =
     | {
           readonly outcome: "accepted";
           readonly observation: AppearanceObservation;
+          readonly authority: AppearanceConfirmationAuthority;
       }
     | { readonly outcome: "timed_out"; readonly reason: string }
     | { readonly outcome: "disconnected"; readonly reason: string }
     | { readonly outcome: "unavailable"; readonly reason: string };
-
-type FreshObservationWaitResult =
-    | {
-          readonly outcome: "accepted";
-          readonly observation: AppearanceObservation;
-          readonly items: readonly BC_AppearanceItem[];
-      }
-    | Exclude<ConfirmationWaitResult, { readonly outcome: "accepted" }>;
-
-interface FreshObservationWaiter {
-    readonly promise: Promise<FreshObservationWaitResult>;
-    readonly cancel: () => void;
-}
 
 function propertyOf(item: BC_AppearanceItem): BCProperty {
     return (item.Property ?? {}) as BCProperty;
@@ -405,12 +401,14 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         addsItems: true,
         removesItems: true,
         confirmsAuthoritatively: true,
+        confirmationAuthorities: ["room_item_broadcast", "room_character_sync"],
         tracksConnectionEpoch: true,
     } as const;
 
     private readonly now: () => number;
     private readonly confirmationTimeoutMs: number;
     private readonly confirmationRegistry: AppearanceConfirmationRegistry;
+    private readonly observationConnectors: readonly BCConnectorEvents[];
     private readonly connectorEpochs = new WeakMap<
         object,
         ConnectorEpochState
@@ -419,6 +417,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
     public constructor(options: BCAppearanceAdapterOptions = {}) {
         this.now = options.now ?? Date.now;
         this.confirmationTimeoutMs = options.confirmationTimeoutMs ?? 5_000;
+        this.observationConnectors = options.observationConnectors ?? [];
         if (
             !Number.isInteger(this.confirmationTimeoutMs) ||
             this.confirmationTimeoutMs < 1
@@ -487,6 +486,14 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         }
 
         const epoch = this.epochFor(connector);
+        const actorMemberNumber = connector.Player?.MemberNumber;
+        const roomName = connector.chatRoom?.Name;
+        const observers = [...new Set(this.observationConnectors)].filter(
+            (observer) =>
+                observer !== connector &&
+                roomName !== undefined &&
+                observer.chatRoom?.Name === roomName,
+        );
         const key: AppearanceConfirmationKey = {
             operationId,
             memberNumber: character.MemberNumber,
@@ -496,6 +503,14 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
 
         let settled = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
+        const itemUpdateListeners = new Map<
+            BCConnectorEvents,
+            (diagnostic: any) => void
+        >();
+        const appearanceSyncListeners = new Map<
+            BCConnectorEvents,
+            (diagnostic: any) => void
+        >();
         let resolveWaiter!: (result: ConfirmationWaitResult) => void;
         const promise = new Promise<ConfirmationWaitResult>((resolve) => {
             resolveWaiter = resolve;
@@ -505,8 +520,17 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             if (settled) return;
             settled = true;
             if (timer !== undefined) clearTimeout(timer);
-            connector.off("AppearanceItemUpdateReceived", onItemUpdate);
-            connector.off("CharacterSync", onCharacterSync);
+            for (const observer of observers) {
+                const itemListener = itemUpdateListeners.get(observer);
+                if (itemListener) {
+                    observer.off("AppearanceItemUpdateReceived", itemListener);
+                }
+                const appearanceListener =
+                    appearanceSyncListeners.get(observer);
+                if (appearanceListener) {
+                    observer.off("AppearanceSyncReceived", appearanceListener);
+                }
+            }
             connector.off("Connected", onConnected);
             connector.off("Disconnected", onDisconnected);
             connector.off("ReconnectFailed", onReconnectFailed);
@@ -517,6 +541,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         const accept = (
             items: readonly BC_AppearanceItem[],
             observedAt: number,
+            authority: AppearanceConfirmationAuthority,
         ): void => {
             if (observedAt < startedAt) return;
             const containsTarget = items.some(
@@ -538,40 +563,60 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 finish({
                     outcome: "accepted",
                     observation: toObservation(items, observedAt),
+                    authority,
                 });
             }
         };
 
-        const onItemUpdate = (diagnostic: any): void => {
-            if (
-                diagnostic?.direction !== "inbound" ||
-                diagnostic.targetMemberNumber !== character.MemberNumber ||
-                diagnostic.group !== target.group ||
-                (action !== "remove" && diagnostic.name !== target.asset) ||
-                (action === "remove" && diagnostic.action !== "remove")
-            ) {
-                return;
-            }
-
-            // The connector emits this event before rebuilding its cached
-            // character, so read the authoritative local view on the next
-            // microtask after the packet has been applied.
-            queueMicrotask(() => {
+        for (const observer of observers) {
+            const onItemUpdate = (diagnostic: any): void => {
+                if (
+                    actorMemberNumber === undefined ||
+                    diagnostic?.direction !== "inbound" ||
+                    diagnostic.sourceMemberNumber !== actorMemberNumber ||
+                    diagnostic.targetMemberNumber !== character.MemberNumber ||
+                    diagnostic.group !== target.group ||
+                    (action !== "remove" && diagnostic.name !== target.asset) ||
+                    (action === "remove" && diagnostic.action !== "remove")
+                ) {
+                    return;
+                }
+                const observedCharacter = observer.chatRoom?.getCharacter(
+                    character.MemberNumber,
+                );
+                if (!observedCharacter) return;
                 accept(
-                    character.Appearance.MakeAppearanceBundle(),
+                    observedCharacter.Appearance.MakeAppearanceBundle(),
                     Number.isFinite(diagnostic.timestamp)
                         ? diagnostic.timestamp
                         : this.now(),
+                    "room_item_broadcast",
                 );
-            });
-        };
+            };
+            itemUpdateListeners.set(observer, onItemUpdate);
+            observer.on("AppearanceItemUpdateReceived", onItemUpdate);
 
-        const onCharacterSync = (syncedCharacter: API_Character): void => {
-            if (syncedCharacter?.MemberNumber !== character.MemberNumber)
-                return;
-            const items = syncedCharacter.Appearance.MakeAppearanceBundle();
-            accept(items, this.now());
-        };
+            const onAppearanceSync = (diagnostic: any): void => {
+                if (
+                    actorMemberNumber === undefined ||
+                    diagnostic?.direction !== "inbound" ||
+                    diagnostic.sourceMemberNumber !== actorMemberNumber ||
+                    diagnostic.memberNumber !== character.MemberNumber ||
+                    !Array.isArray(diagnostic.appearance)
+                ) {
+                    return;
+                }
+                accept(
+                    diagnostic.appearance,
+                    Number.isFinite(diagnostic.timestamp)
+                        ? diagnostic.timestamp
+                        : this.now(),
+                    "room_character_sync",
+                );
+            };
+            appearanceSyncListeners.set(observer, onAppearanceSync);
+            observer.on("AppearanceSyncReceived", onAppearanceSync);
+        }
 
         const onConnected = (): void => {
             const state = this.connectorEpochs.get(connector as object);
@@ -599,8 +644,6 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             onDisconnected();
         };
 
-        connector.on("AppearanceItemUpdateReceived", onItemUpdate);
-        connector.on("CharacterSync", onCharacterSync);
         connector.on("Connected", onConnected);
         connector.on("Disconnected", onDisconnected);
         connector.on("ReconnectFailed", onReconnectFailed);
@@ -621,161 +664,6 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         };
     }
 
-    private waitForFreshObservation(
-        character: API_Character,
-        startedAt: number,
-        timeoutMs: number,
-        acceptObservation?: (items: readonly BC_AppearanceItem[]) => boolean,
-    ): FreshObservationWaiter {
-        const connector = this.connectorFor(character);
-        if (!connector) {
-            return {
-                promise: Promise.resolve({
-                    outcome: "unavailable",
-                    reason: "BC connector events are unavailable",
-                }),
-                cancel: () => undefined,
-            };
-        }
-
-        this.epochFor(connector);
-        let settled = false;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        let resolveWaiter!: (result: FreshObservationWaitResult) => void;
-        const promise = new Promise<FreshObservationWaitResult>((resolve) => {
-            resolveWaiter = resolve;
-        });
-
-        const finish = (result: FreshObservationWaitResult): void => {
-            if (settled) return;
-            settled = true;
-            if (timer !== undefined) clearTimeout(timer);
-            connector.off("AppearanceSyncReceived", onAppearancePacket);
-            connector.off("CharacterSync", onCharacterSync);
-            connector.off("Connected", onConnected);
-            connector.off("Disconnected", onDisconnected);
-            connector.off("ReconnectFailed", onReconnectFailed);
-            resolveWaiter(result);
-        };
-
-        const accept = (
-            items: readonly BC_AppearanceItem[],
-            observedAt: number,
-        ): void => {
-            if (observedAt < startedAt) return;
-            if (acceptObservation && !acceptObservation(items)) return;
-            finish({
-                outcome: "accepted",
-                observation: toObservation(items, observedAt),
-                items: [...items],
-            });
-        };
-
-        const onAppearancePacket = (diagnostic: any): void => {
-            if (
-                diagnostic?.direction !== "inbound" ||
-                diagnostic.memberNumber !== character.MemberNumber ||
-                !Array.isArray(diagnostic.appearance)
-            ) {
-                return;
-            }
-            accept(
-                diagnostic.appearance as BC_AppearanceItem[],
-                Number.isFinite(diagnostic.timestamp)
-                    ? diagnostic.timestamp
-                    : this.now(),
-            );
-        };
-
-        const onCharacterSync = (syncedCharacter: API_Character): void => {
-            if (syncedCharacter?.MemberNumber !== character.MemberNumber)
-                return;
-            accept(
-                syncedCharacter.Appearance.MakeAppearanceBundle(),
-                this.now(),
-            );
-        };
-
-        const onConnected = (): void => {
-            const state = this.connectorEpochs.get(connector as object);
-            if (state) state.disconnected = false;
-        };
-
-        const onDisconnected = (): void => {
-            const state = this.connectorEpochs.get(connector as object);
-            if (state && !state.disconnected) {
-                state.epoch += 1;
-                state.disconnected = true;
-            }
-            finish({
-                outcome: "disconnected",
-                reason: "BC connector disconnected before fresh observation",
-            });
-        };
-
-        const onReconnectFailed = (): void => {
-            onDisconnected();
-        };
-
-        connector.on("AppearanceSyncReceived", onAppearancePacket);
-        connector.on("CharacterSync", onCharacterSync);
-        connector.on("Connected", onConnected);
-        connector.on("Disconnected", onDisconnected);
-        connector.on("ReconnectFailed", onReconnectFailed);
-        timer = setTimeout(() => {
-            finish({
-                outcome: "timed_out",
-                reason: `Fresh appearance observation exceeded ${timeoutMs}ms`,
-            });
-        }, timeoutMs);
-
-        return {
-            promise,
-            cancel: () =>
-                finish({
-                    outcome: "unavailable",
-                    reason: "Fresh appearance observation cancelled",
-                }),
-        };
-    }
-
-    private freshObservationFailure(
-        context: ActionContext,
-        actionId: string,
-        startedAt: number,
-        result: FreshObservationWaitResult,
-    ): ActionResult<AppearanceObservation> {
-        if (result.outcome === "accepted") {
-            return failedMutation(
-                context,
-                actionId,
-                startedAt,
-                "Fresh appearance observation was unexpectedly accepted as a failure",
-                "transient",
-                true,
-            );
-        }
-        if (result.outcome === "timed_out") {
-            return createActionResult(
-                "timed_out",
-                createActionMetadata(context, actionId, startedAt),
-                {
-                    reason: result.reason,
-                    failureKind: "timeout",
-                    retryable: true,
-                },
-            );
-        }
-        return failedMutation(
-            context,
-            actionId,
-            startedAt,
-            result.reason,
-            "transient",
-            true,
-        );
-    }
-
     private async dispatchMutation(
         character: API_Character,
         item: AppearanceItemIdentity,
@@ -790,17 +678,15 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             this.confirmationTimeoutMs,
             Math.max(1, policy.timeoutMs),
         );
-        const waiter = policy.requireServerConfirmation
-            ? this.waitForConfirmation(
-                  character,
-                  item,
-                  policy.operationId,
-                  action,
-                  startedAt,
-                  timeoutMs,
-                  acceptUpdate,
-              )
-            : undefined;
+        const waiter = this.waitForConfirmation(
+            character,
+            item,
+            policy.operationId,
+            action,
+            startedAt,
+            timeoutMs,
+            acceptUpdate,
+        );
         const actionId =
             action === "update"
                 ? "appearance.updateExtendedProperties"
@@ -810,10 +696,12 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             apply();
             if (action !== "update") {
                 character.Appearance.flushUpdates();
-                if (waiter) character.sendAppearanceUpdate();
+                if (policy.requireServerConfirmation) {
+                    character.sendAppearanceUpdate();
+                }
             }
         } catch (error) {
-            waiter?.cancel();
+            waiter.cancel();
             return failedMutation(
                 context,
                 actionId,
@@ -825,20 +713,37 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         }
 
         const observed = character.Appearance.MakeAppearanceBundle();
-        if (!waiter) {
+        const localObservation = toObservation(observed, this.now());
+        if (!policy.requireServerConfirmation) {
+            const confirmation: Promise<
+                ActionConfirmation<AppearanceObservation>
+            > = waiter.promise.then((result) =>
+                result.outcome === "accepted"
+                    ? {
+                          status: "confirmed",
+                          authority: result.authority,
+                          value: result.observation,
+                      }
+                    : {
+                          status: "unconfirmed",
+                          value: localObservation,
+                          reason: result.reason,
+                      },
+            );
             return createActionResult(
                 "in_progress",
                 createActionMetadata(context, actionId, startedAt),
                 {
-                    value: toObservation(observed, this.now()),
+                    value: localObservation,
                     reason: "Local BC appearance mutation dispatched; server confirmation pending",
                     retryable: false,
+                    confirmation,
                 },
             );
         }
 
-        const confirmation = await waiter.promise;
-        if (confirmation.outcome === "accepted") {
+        const confirmationResult = await waiter.promise;
+        if (confirmationResult.outcome === "accepted") {
             return createActionResult(
                 "completed",
                 createActionMetadata(
@@ -846,34 +751,23 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                     actionId,
                     startedAt,
                     1,
-                    confirmation.observation.observedAt,
-                ),
-                { value: confirmation.observation, retryable: false },
-            );
-        }
-        if (confirmation.outcome === "timed_out") {
-            return createActionResult(
-                "timed_out",
-                createActionMetadata(
-                    context,
-                    `appearance.${action}`,
-                    startedAt,
+                    confirmationResult.observation.observedAt,
                 ),
                 {
-                    value: toObservation(observed, this.now()),
-                    reason: confirmation.reason,
-                    failureKind: "timeout",
-                    retryable: true,
+                    value: confirmationResult.observation,
+                    retryable: false,
+                    confirmationAuthority: confirmationResult.authority,
                 },
             );
         }
-        return failedMutation(
-            context,
-            actionId,
-            startedAt,
-            confirmation.reason,
-            "transient",
-            true,
+        return createActionResult(
+            "unconfirmed",
+            createActionMetadata(context, actionId, startedAt),
+            {
+                value: localObservation,
+                reason: confirmationResult.reason,
+                retryable: false,
+            },
         );
     }
 
@@ -966,25 +860,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             );
         };
 
-        if (!policy.requireFreshObservation) {
-            return execute(character.Appearance.MakeAppearanceBundle());
-        }
-
-        return this.waitForFreshObservation(
-            character,
-            startedAt,
-            Math.min(this.confirmationTimeoutMs, Math.max(1, policy.timeoutMs)),
-        ).promise.then((freshResult) => {
-            if (freshResult.outcome !== "accepted") {
-                return this.freshObservationFailure(
-                    context,
-                    "appearance.add",
-                    startedAt,
-                    freshResult,
-                );
-            }
-            return execute(freshResult.items);
-        });
+        return execute(character.Appearance.MakeAppearanceBundle());
     }
 
     public remove(
@@ -1072,25 +948,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             );
         };
 
-        if (!policy.requireFreshObservation) {
-            return execute(character.Appearance.MakeAppearanceBundle());
-        }
-
-        return this.waitForFreshObservation(
-            character,
-            startedAt,
-            Math.min(this.confirmationTimeoutMs, Math.max(1, policy.timeoutMs)),
-        ).promise.then((freshResult) => {
-            if (freshResult.outcome !== "accepted") {
-                return this.freshObservationFailure(
-                    context,
-                    "appearance.remove",
-                    startedAt,
-                    freshResult,
-                );
-            }
-            return execute(freshResult.items);
-        });
+        return execute(character.Appearance.MakeAppearanceBundle());
     }
 
     public async updateExtendedProperties(
@@ -1256,14 +1114,15 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             this.confirmationTimeoutMs,
             Math.max(1, policy.timeoutMs),
         );
-        const waiter = policy.requireServerConfirmation
-            ? this.waitForFreshObservation(
-                  character,
-                  startedAt,
-                  timeoutMs,
-                  matchesDesired,
-              )
-            : undefined;
+        const waiter = this.waitForConfirmation(
+            character,
+            { group: "ItemScript", asset: "Script" },
+            policy.operationId,
+            "update",
+            startedAt,
+            timeoutMs,
+            matchesDesired,
+        );
 
         try {
             let scriptItem = character.Appearance.InventoryGet("ItemScript");
@@ -1280,7 +1139,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             character.Appearance.flushUpdates();
             character.sendAppearanceUpdate();
         } catch (error) {
-            waiter?.cancel();
+            waiter.cancel();
             return failedMutation(
                 context,
                 "appearance.setHiddenLayers",
@@ -1292,7 +1151,23 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         }
 
         const observed = character.Appearance.MakeAppearanceBundle();
-        if (!waiter) {
+        const localObservation = toObservation(observed, this.now());
+        if (!policy.requireServerConfirmation) {
+            const confirmation: Promise<
+                ActionConfirmation<AppearanceObservation>
+            > = waiter.promise.then((result) =>
+                result.outcome === "accepted"
+                    ? {
+                          status: "confirmed",
+                          authority: result.authority,
+                          value: result.observation,
+                      }
+                    : {
+                          status: "unconfirmed",
+                          value: localObservation,
+                          reason: result.reason,
+                      },
+            );
             return createActionResult(
                 "in_progress",
                 createActionMetadata(
@@ -1301,15 +1176,16 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                     startedAt,
                 ),
                 {
-                    value: toObservation(observed, this.now()),
+                    value: localObservation,
                     reason: "Local BC appearance mutation dispatched; server confirmation pending",
                     retryable: false,
+                    confirmation,
                 },
             );
         }
 
-        const confirmation = await waiter.promise;
-        if (confirmation.outcome === "accepted") {
+        const confirmationResult = await waiter.promise;
+        if (confirmationResult.outcome === "accepted") {
             return createActionResult(
                 "completed",
                 createActionMetadata(
@@ -1317,34 +1193,27 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                     "appearance.setHiddenLayers",
                     startedAt,
                     1,
-                    confirmation.observation.observedAt,
-                ),
-                { value: confirmation.observation, retryable: false },
-            );
-        }
-        if (confirmation.outcome === "timed_out") {
-            return createActionResult(
-                "timed_out",
-                createActionMetadata(
-                    context,
-                    "appearance.setHiddenLayers",
-                    startedAt,
+                    confirmationResult.observation.observedAt,
                 ),
                 {
-                    value: toObservation(observed, this.now()),
-                    reason: confirmation.reason,
-                    failureKind: "timeout",
-                    retryable: true,
+                    value: confirmationResult.observation,
+                    retryable: false,
+                    confirmationAuthority: confirmationResult.authority,
                 },
             );
         }
-        return failedMutation(
-            context,
-            "appearance.setHiddenLayers",
-            startedAt,
-            confirmation.reason,
-            "transient",
-            true,
+        return createActionResult(
+            "unconfirmed",
+            createActionMetadata(
+                context,
+                "appearance.setHiddenLayers",
+                startedAt,
+            ),
+            {
+                value: localObservation,
+                reason: confirmationResult.reason,
+                retryable: false,
+            },
         );
     }
 }

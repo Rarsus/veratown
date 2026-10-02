@@ -515,7 +515,6 @@ test("CatDog bondage uses the shared appearance action when rollout is enabled",
                 timeoutMs: 5_000,
                 maxAttempts: 1,
                 retryDelayMs: 0,
-                requireFreshObservation: false,
                 requireServerConfirmation: true,
                 itemOptions: {
                     difficulty: 18,

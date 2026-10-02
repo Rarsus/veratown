@@ -282,8 +282,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 maxAttempts: 1,
                 retryDelayMs: 0,
                 preserveLockedItems: action.operation !== "remove",
-                requireFreshObservation: true,
-                requireServerConfirmation: true,
+                requireServerConfirmation: false,
                 ...(action.itemOptions === undefined
                     ? {}
                     : { itemOptions: action.itemOptions }),

@@ -919,7 +919,6 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                                 timeoutMs: 5_000,
                                 maxAttempts: 1,
                                 retryDelayMs: 0,
-                                requireFreshObservation: false,
                                 requireServerConfirmation: true,
                                 itemOptions: {
                                     difficulty: action.difficulty,

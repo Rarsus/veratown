@@ -5,12 +5,14 @@ import {
     CommunicationActionService,
 } from "../../../action-layer";
 import type {
+    ActionConfirmation,
     ActionContext,
     ActionResult,
     CommunicationActionAdapter,
     CommunicationObservation,
     MessageRequest,
 } from "../../../action-layer/domain";
+import type { AppearanceObservation } from "../../../action-layer/domain";
 import { BunnyParkSystem } from "../bunnyParkSystem";
 import {
     BunnyPunishmentService,
@@ -965,6 +967,79 @@ test("active Bunny artifacts prevent a second restraint application", async () =
         created.added.filter((key) => key === "ItemArms/HeavyYoke").length,
         restraintApplicationsAfterFirst,
     );
+});
+
+test("Bunny punishment does not persist an artifact for an unconfirmed action", async () => {
+    const created = createCharacter(23);
+    let recordedArtifact: unknown;
+    let dispatched = 0;
+    let resolveConfirmation!: (
+        confirmation: ActionConfirmation<AppearanceObservation>,
+    ) => void;
+    const confirmation = new Promise<ActionConfirmation<AppearanceObservation>>(
+        (resolve) => {
+            resolveConfirmation = resolve;
+        },
+    );
+    const service = new BunnyPunishmentService(
+        createMessageConnection(created.character) as any,
+        {
+            getState: async () => ({ punishmentCount: 0 }),
+            recordArtifact: async (artifact: unknown) => {
+                recordedArtifact = artifact;
+            },
+            updateArtifact: async () => {},
+            incrementCount: async () => {},
+            recordAudit: async () => {},
+        },
+        undefined,
+        deterministicRandom(0),
+        0,
+        undefined,
+        undefined,
+        {
+            appearanceService: {
+                add: async () => {
+                    dispatched += 1;
+                    return {
+                        status: "in_progress",
+                        value: {
+                            items: [],
+                            hiddenLayers: [],
+                            observedAt: 1,
+                        },
+                        confirmation,
+                    };
+                },
+            },
+            rollout: {
+                begin: () => ({
+                    path: "action",
+                    release: () => {},
+                }),
+            },
+        } as any,
+    );
+
+    const pending = service.punish(
+        created.character,
+        BUNNY_RESTRAINT_CONFIGS[0],
+    );
+    for (let attempt = 0; attempt < 10 && dispatched === 0; attempt += 1) {
+        await Promise.resolve();
+    }
+
+    assert.equal(dispatched, 1);
+    assert.equal(recordedArtifact, undefined);
+    resolveConfirmation({
+        status: "unconfirmed",
+        reason: "no peer room confirmation",
+    });
+
+    const result = await pending;
+    assert.equal(result.success, false);
+    assert.equal(dispatched, 1);
+    assert.equal(recordedArtifact, undefined);
 });
 
 test("configured bunny locations trigger appearance and persistence updates", async () => {
