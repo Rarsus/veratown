@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import { durationString } from "../../../utils";
 import {
     ActionLayerRolloutController,
@@ -18,6 +18,13 @@ import {
     classifyContainmentRecovery,
     type CageTimer,
 } from "../cageSystem";
+import {
+    clearTestAppearanceConfirmation,
+    registerTestAppearanceConfirmation,
+} from "./appearanceConfirmationFixture";
+
+beforeEach(registerTestAppearanceConfirmation);
+afterEach(clearTestAppearanceConfirmation);
 
 class RecordingCommunicationAdapter implements CommunicationActionAdapter {
     public readonly requests: MessageRequest[] = [];
@@ -85,12 +92,14 @@ function createCharacter(
 ) {
     const messages: string[] = [];
     let crate: any;
-    const connection = {
-        Player: {
-            MemberNumber: options.sourceMemberNumber ?? memberNumber,
-        },
-        SendMessage: (_type: string, message: string) => messages.push(message),
+    const connection = new EventEmitter() as EventEmitter & {
+        Player: { MemberNumber: number };
+        SendMessage: (type: string, message: string) => void;
     };
+    connection.Player = {
+        MemberNumber: options.sourceMemberNumber ?? memberNumber,
+    };
+    connection.SendMessage = (_type, message) => messages.push(message);
     const character = {
         MemberNumber: memberNumber,
         MapPos: { X: 0, Y: 0 },
@@ -100,7 +109,14 @@ function createCharacter(
         allowFullWardrobeAccess: options.allowFullWardrobeAccess ?? true,
         GetAllowItem: async () => options.allowItem ?? true,
         Tell: (_type: string, message: string) => messages.push(message),
-        sendAppearanceUpdate: () => {},
+        sendAppearanceUpdate: () => {
+            connection.emit("AppearanceSyncReceived", {
+                direction: "inbound",
+                memberNumber,
+                sourceMemberNumber: connection.Player.MemberNumber,
+                appearance: character.Appearance.MakeAppearanceBundle(),
+            });
+        },
         Appearance: {
             AddItem: () => {
                 crate = {
@@ -128,7 +144,16 @@ function createCharacter(
             RemoveItem: () => {
                 crate = undefined;
             },
-            MakeAppearanceBundle: () => [],
+            MakeAppearanceBundle: () =>
+                crate
+                    ? [
+                          {
+                              Group: "ItemDevices",
+                              Name: crate.Name,
+                              Property: structuredClone(crate.Property ?? {}),
+                          },
+                      ]
+                    : [],
         },
     };
     return {
@@ -305,6 +330,63 @@ test("CageSystem leaves release pending when crate removal fails", async () => {
     await timer.advance(expiry + 50);
     assert.deepEqual(mutations.exits, []);
     assert.equal(character.messages.length, 0);
+});
+
+test("CageSystem does not retry crate removal while peer confirmation is unconfirmed", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const created = createCharacter(251026);
+    const expiry = 100;
+    created.setCrate({
+        Name: "FuturisticCrate",
+        Property: { LockedBy: "SafewordPadlock" },
+    });
+    const rollout = new ActionLayerRolloutController({
+        featureAppearanceEnabled: true,
+    });
+    const removals: unknown[] = [];
+    const appearanceService = {
+        add: async () => ({ status: "completed" }),
+        remove: async (_character: unknown, item: unknown) => {
+            removals.push(item);
+            return {
+                status: "unconfirmed",
+                reason: "No peer room confirmation",
+                retryable: false,
+            };
+        },
+    };
+    const system = new CageSystem(
+        created.connection as any,
+        mutations as any,
+        undefined,
+        timer,
+        true,
+        true,
+        undefined,
+        rollout,
+        appearanceService as any,
+    );
+    (system as any).cagedCharacters.set(created.character.MemberNumber, {
+        character: created.character,
+        cageName: "Cage 1",
+        authoritativeExpiry: expiry,
+    });
+    const pending = (system as any).releaseWhenExpired(
+        created.character,
+        "Cage 1",
+    );
+
+    await timer.advance(expiry);
+    await pending;
+    await timer.advance(60_000);
+
+    assert.equal(removals.length, 1);
+    assert.deepEqual(mutations.exits, []);
+    assert.equal(
+        created.character.Appearance.getItemData("ItemDevices")?.Name,
+        "FuturisticCrate",
+    );
 });
 
 test("CageSystem does not report release when authoritative appearance retains the crate", async () => {

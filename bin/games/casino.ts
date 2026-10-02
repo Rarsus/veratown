@@ -189,13 +189,12 @@ export class Casino implements GamePlugin {
                 timeoutMs: 5_000,
                 maxAttempts: 1,
                 retryDelayMs: 0,
-                requireServerConfirmation: false,
+                requireServerConfirmation: true,
             },
         );
         if (
             result.status !== "completed" &&
-            result.status !== "already_satisfied" &&
-            result.status !== "in_progress"
+            result.status !== "already_satisfied"
         ) {
             throw new Error(
                 result.reason ?? `Casino appearance update ${result.status}`,

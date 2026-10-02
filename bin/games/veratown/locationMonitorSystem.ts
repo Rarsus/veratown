@@ -351,8 +351,7 @@ export class LocationMonitorSystem
             const actionCompleted = actionResult.results.some(
                 (result) =>
                     result.status === "completed" ||
-                    result.status === "already_satisfied" ||
-                    result.status === "in_progress",
+                    result.status === "already_satisfied",
             );
             if (dispatched || actionCompleted) {
                 this.lastDisplayedAt.set(cooldownKey, Date.now());
@@ -465,10 +464,7 @@ export class LocationMonitorSystem
                 },
             );
 
-            if (
-                result.status === "completed" ||
-                result.status === "in_progress"
-            ) {
+            if (result.status === "completed") {
                 return result;
             }
             if (

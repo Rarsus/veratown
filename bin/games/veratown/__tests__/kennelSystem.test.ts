@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import test from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
     ActionLayerRolloutController,
     CommunicationActionService,
@@ -13,6 +13,13 @@ import type {
     MessageRequest,
 } from "../../../action-layer/domain";
 import { KennelSystem } from "../kennelSystem";
+import {
+    clearTestAppearanceConfirmation,
+    registerTestAppearanceConfirmation,
+} from "./appearanceConfirmationFixture";
+
+beforeEach(registerTestAppearanceConfirmation);
+afterEach(clearTestAppearanceConfirmation);
 
 class RecordingCommunicationAdapter implements CommunicationActionAdapter {
     public readonly requests: MessageRequest[] = [];

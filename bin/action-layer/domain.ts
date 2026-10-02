@@ -57,6 +57,7 @@ export type ActionConfirmation<T> =
           readonly status: "confirmed";
           readonly authority: AppearanceConfirmationAuthority;
           readonly value: T;
+          readonly observed?: unknown;
       }
     | {
           readonly status: "unconfirmed";
@@ -130,6 +131,10 @@ export interface AppearanceObservation {
     readonly hiddenLayers: readonly string[];
     readonly observedAt: number;
 }
+
+export type AppearanceSnapshotPredicate = (
+    appearance: readonly unknown[],
+) => boolean;
 
 export type ExtendedItemProperties = Readonly<Record<string, unknown>>;
 
@@ -216,6 +221,8 @@ export interface InventoryActionAdapter<TRuntimeCharacter = unknown> {
 }
 
 export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
+    registerObservationConnectors?(connectors: readonly unknown[]): void;
+
     observe(
         character: TRuntimeCharacter,
         context: ActionContext,
@@ -246,6 +253,13 @@ export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
         layers: readonly string[],
         hidden: boolean,
         policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>>;
+
+    confirmAppearance?(
+        character: TRuntimeCharacter,
+        context: ActionContext,
+        timeoutMs: number,
+        predicate: AppearanceSnapshotPredicate,
     ): Promise<ActionResult<AppearanceObservation>>;
 }
 

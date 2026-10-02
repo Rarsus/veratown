@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
     ActionLayerRolloutController,
     CommunicationActionService,
@@ -21,6 +21,13 @@ import {
 } from "../bunnyPunishmentService";
 import { BUNNY_POSITIONS, BUNNY_RESTRAINT_CONFIGS } from "../veratownConfig";
 import { getAppearanceMutationContext } from "../shared/appearanceSync";
+import {
+    clearTestAppearanceConfirmation,
+    registerTestAppearanceConfirmation,
+} from "./appearanceConfirmationFixture";
+
+beforeEach(registerTestAppearanceConfirmation);
+afterEach(clearTestAppearanceConfirmation);
 
 class RecordingCommunicationAdapter implements CommunicationActionAdapter {
     public readonly requests: MessageRequest[] = [];

@@ -19,6 +19,8 @@ import {
     AppearanceVerificationResult,
 } from "./appearanceLifecycle";
 import type {
+    ActionContext,
+    ActionSource,
     AppearanceActionService,
     AppearanceItemIdentity,
     AppearanceMutationPolicy,
@@ -28,6 +30,22 @@ const logger = createLogger("appearanceSync");
 
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 const DEFAULT_SERVER_SYNC_TIMEOUT_MS = 2_000;
+let appearanceConfirmationService:
+    AppearanceActionService<API_Character> | undefined;
+
+export class AppearanceConfirmationError extends Error {
+    public constructor(message: string) {
+        super(message);
+        this.name = "AppearanceConfirmationError";
+    }
+}
+
+export function registerAppearanceConfirmationService(
+    service: AppearanceActionService<API_Character> | undefined,
+): void {
+    appearanceConfirmationService = service;
+}
+
 export type AppearanceStateSynchronizer = (
     character: API_Character,
     context?: AppearanceMutationContext,
@@ -113,6 +131,9 @@ function createAppliedItemsPredicate(
             return previous === undefined || !sameAppliedItem(previous, item);
         },
     );
+    const removedGroups = [...beforeByGroup.keys()].filter(
+        (group) => !expectedByGroup.has(group),
+    );
 
     return (observed) => {
         const observedByGroup = new Map(
@@ -121,18 +142,20 @@ function createAppliedItemsPredicate(
                 item,
             ]),
         );
-        return changedGroups.every(([group, expectedItem]) => {
-            const observedItem = observedByGroup.get(group);
-            if (sameAppliedItem(observedItem, expectedItem)) return true;
+        return (
+            changedGroups.every(([group, expectedItem]) => {
+                const observedItem = observedByGroup.get(group);
+                if (sameAppliedItem(observedItem, expectedItem)) return true;
 
-            // An occupied slot may reject the new item. That is an accepted
-            // outcome, and the observed previous item remains authoritative.
-            const previousItem = beforeByGroup.get(group);
-            return (
-                previousItem !== undefined &&
-                sameAppliedItem(observedItem, previousItem)
-            );
-        });
+                // An occupied slot may reject the new item. That is an accepted
+                // outcome, and the observed previous item remains authoritative.
+                const previousItem = beforeByGroup.get(group);
+                return (
+                    previousItem !== undefined &&
+                    sameAppliedItem(observedItem, previousItem)
+                );
+            }) && removedGroups.every((group) => !observedByGroup.has(group))
+        );
     };
 }
 
@@ -342,7 +365,6 @@ export async function syncAppearanceMutation(
         sendFullAppearanceUpdate?: boolean;
         awaitServerSync?: boolean;
         serverSyncTimeoutMs?: number;
-        serverSyncAttempts?: number;
         verifyAppliedItems?: boolean;
         serverSyncPredicate?: (
             appearance: readonly BC_AppearanceItem[],
@@ -398,7 +420,6 @@ async function executeAppearanceMutation(
         sendFullAppearanceUpdate?: boolean;
         awaitServerSync?: boolean;
         serverSyncTimeoutMs?: number;
-        serverSyncAttempts?: number;
         verifyAppliedItems?: boolean;
         serverSyncPredicate?: (
             appearance: readonly BC_AppearanceItem[],
@@ -444,6 +465,42 @@ async function executeAppearanceMutation(
                         "Action-layer appearance mutation is pending without a confirmation outcome",
                     );
                 }
+                const mustAwaitConfirmation =
+                    options?.awaitServerSync === true ||
+                    options.actionLayer.policy.requireServerConfirmation ===
+                        true;
+                if (mustAwaitConfirmation) {
+                    const confirmation = await actionResult.confirmation;
+                    if (confirmation.status !== "confirmed") {
+                        context.verificationStatus = "timeout";
+                        logger.warn(
+                            "Appearance mutation remains unconfirmed; local state was not persisted as authoritative",
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId: context.operationId,
+                                reason: confirmation.reason,
+                            },
+                        );
+                        if (options?.throwOnSyncFailure) {
+                            throw new Error(confirmation.reason);
+                        }
+                        return false;
+                    }
+                    const confirmedAppearance = Array.isArray(
+                        confirmation.observed,
+                    )
+                        ? (confirmation.observed as BC_AppearanceItem[])
+                        : character.Appearance.MakeAppearanceBundle();
+                    context.expectedAppearance =
+                        filterValidAppearanceItems(confirmedAppearance);
+                    context.observedAppearance = confirmedAppearance;
+                    context.verificationStatus = "confirmed";
+                    await (
+                        onSynchronized ??
+                        appearanceStateSynchronizers.get(character)
+                    )?.(character, context, confirmedAppearance);
+                    return true;
+                }
                 context.expectedAppearance =
                     filterValidAppearanceItems(observed);
                 context.verificationStatus = "observed";
@@ -466,8 +523,11 @@ async function executeAppearanceMutation(
                             );
                             return;
                         }
-                        context.observedAppearance =
-                            character.Appearance.MakeAppearanceBundle();
+                        context.observedAppearance = Array.isArray(
+                            confirmation.observed,
+                        )
+                            ? (confirmation.observed as BC_AppearanceItem[])
+                            : character.Appearance.MakeAppearanceBundle();
                         context.verificationStatus = "confirmed";
                         try {
                             await (
@@ -503,8 +563,11 @@ async function executeAppearanceMutation(
                     });
                 return true;
             }
-            context.expectedAppearance = observed;
-            context.observedAppearance = observed;
+            const confirmedAppearance = Array.isArray(actionResult.observed)
+                ? (actionResult.observed as BC_AppearanceItem[])
+                : observed;
+            context.expectedAppearance = confirmedAppearance;
+            context.observedAppearance = confirmedAppearance;
             context.verificationStatus =
                 actionResult.status === "completed" ||
                 actionResult.status === "already_satisfied"
@@ -520,7 +583,13 @@ async function executeAppearanceMutation(
                         reason: actionResult.reason,
                     },
                 );
-                return true;
+                if (options?.throwOnSyncFailure) {
+                    throw new Error(
+                        actionResult.reason ??
+                            "Action-layer appearance mutation was not confirmed",
+                    );
+                }
+                return false;
             }
             if (
                 actionResult.status !== "completed" &&
@@ -531,7 +600,7 @@ async function executeAppearanceMutation(
                         `Action-layer appearance ${options.actionLayer.operation} did not complete`,
                 );
             }
-            await onSynchronized?.(character, context, observed);
+            await onSynchronized?.(character, context, confirmedAppearance);
             return true;
         }
 
@@ -553,9 +622,15 @@ async function executeAppearanceMutation(
             );
             return previous === undefined || !sameAppliedItem(previous, item);
         });
+        const removedItemGroups = validBeforeAppearance.filter(
+            (previous) =>
+                !validExpectedAppearance.some(
+                    (item) => item.Group === previous.Group,
+                ),
+        );
         const shouldVerifyAppliedItems =
             options?.verifyAppliedItems !== false &&
-            changedItemGroups.length > 0;
+            changedItemGroups.length + removedItemGroups.length > 0;
         const shouldAwaitServerSync =
             options?.awaitServerSync === true || shouldVerifyAppliedItems;
         const serverSyncPredicate =
@@ -578,88 +653,33 @@ async function executeAppearanceMutation(
                 awaitServerSync: shouldAwaitServerSync,
             });
             if (shouldAwaitServerSync) {
-                const attempts = Math.max(1, options.serverSyncAttempts ?? 2);
                 trackPendingAppearanceConfirmation(character, context);
                 try {
-                    let lastError: unknown;
-                    for (let attempt = 1; attempt <= attempts; attempt++) {
-                        try {
-                            const serverSync = waitForServerAppearanceSync(
-                                character,
-                                context,
-                                serverSyncPredicate,
-                                options.serverSyncTimeoutMs,
-                            );
-                            if (context.expectedAppearance) {
-                                const appearance =
-                                    character.Appearance as typeof character.Appearance & {
-                                        applyBundle?: (
-                                            items: BC_AppearanceItem[],
-                                            cfg?: unknown,
-                                            skipGroups?: unknown[],
-                                            sendUpdate?: boolean,
-                                        ) => boolean;
-                                    };
-                                if (
-                                    typeof appearance.applyBundle === "function"
-                                ) {
-                                    appearance.applyBundle(
-                                        context.expectedAppearance,
-                                        undefined,
-                                        [],
-                                        false,
-                                    );
-                                } else {
-                                    logger.error(
-                                        "Cannot restore expected appearance before retry",
-                                        new Error(
-                                            "Appearance.applyBundle is unavailable",
-                                        ),
-                                        {
-                                            memberNumber:
-                                                character.MemberNumber,
-                                            operationId: context.operationId,
-                                            attempt,
-                                        },
-                                    );
-                                }
-                            }
-                            logger.debug(
-                                "Dispatching authoritative appearance retry",
-                                {
-                                    memberNumber: character.MemberNumber,
-                                    operationId: context.operationId,
-                                    attempt,
-                                    appearance: summarizeAppearance(
-                                        context.expectedAppearance ?? [],
-                                    ),
-                                },
-                            );
-                            character.sendAppearanceUpdate();
-                            await serverSync;
-                            context.verificationStatus = "confirmed";
-                            lastError = undefined;
-                            break;
-                        } catch (error) {
-                            lastError = error;
-                            if (attempt < attempts) {
-                                logger.warn(
-                                    "Retrying authoritative appearance update",
-                                    {
-                                        memberNumber: character.MemberNumber,
-                                        operationId: context.operationId,
-                                        attempt,
-                                        attempts,
-                                    },
-                                );
-                                await wait(delayMs);
-                            }
-                        }
-                    }
-                    if (lastError) throw lastError;
+                    const serverSync = waitForServerAppearanceSync(
+                        character,
+                        context,
+                        serverSyncPredicate,
+                        options.serverSyncTimeoutMs,
+                    );
+                    character.sendAppearanceUpdate();
+                    await serverSync;
+                    context.verificationStatus = "confirmed";
                 } finally {
                     clearPendingAppearanceConfirmation(character, context);
                 }
+            }
+        } else if (shouldAwaitServerSync) {
+            trackPendingAppearanceConfirmation(character, context);
+            try {
+                await waitForServerAppearanceSync(
+                    character,
+                    context,
+                    serverSyncPredicate,
+                    options?.serverSyncTimeoutMs,
+                );
+                context.verificationStatus = "confirmed";
+            } finally {
+                clearPendingAppearanceConfirmation(character, context);
             }
         }
 
@@ -733,171 +753,46 @@ async function waitForServerAppearanceSync(
     predicate?: (appearance: readonly BC_AppearanceItem[]) => boolean,
     timeoutMs = DEFAULT_SERVER_SYNC_TIMEOUT_MS,
 ): Promise<void> {
-    const connector = character.connection as any;
-    if (
-        !connector ||
-        typeof connector.on !== "function" ||
-        typeof connector.off !== "function"
-    ) {
-        logger.warn(
-            "Cannot confirm appearance update without connector events",
-            {
-                memberNumber: character.MemberNumber,
-                operationId: context.operationId,
-                source: context.source,
-                reason: context.reason,
-            },
+    if (!appearanceConfirmationService) {
+        throw new AppearanceConfirmationError(
+            "Appearance action service is not registered for confirmation",
         );
-        return;
     }
-
-    await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        let rawPacketObserved = false;
-        const finish = (error?: Error) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            connector.off("CharacterSync", onSync);
-            connector.off("AppearanceUpdateSent", onPacketSent);
-            connector.off("AppearanceSyncReceived", onPacket);
-            connector.off("AppearanceItemUpdateSent", onItemUpdateSent);
-            connector.off("AppearanceItemUpdateReceived", onItemUpdateReceived);
-            if (error) reject(error);
-            else resolve();
-        };
-        const onPacket = (diagnostic: any) => {
-            if (
-                diagnostic?.memberNumber === character.MemberNumber &&
-                Array.isArray(diagnostic.appearance)
-            ) {
-                rawPacketObserved = true;
-                context.observedAppearance = diagnostic.appearance;
-                context.verificationStatus = predicate?.(diagnostic.appearance)
-                    ? "confirmed"
-                    : "mismatch";
-                if (!predicate || context.verificationStatus === "confirmed") {
-                    finish();
-                }
-            }
-            logger.debug("Received raw appearance sync packet", {
-                memberNumber: character.MemberNumber,
-                operationId: context.operationId,
-                diagnostic,
-            });
-        };
-        const onPacketSent = (diagnostic: unknown) => {
-            logger.debug("Observed outbound appearance update packet", {
-                memberNumber: character.MemberNumber,
-                operationId: context.operationId,
-                diagnostic,
-            });
-        };
-        const onItemUpdateSent = (diagnostic: unknown) => {
-            logger.debug("Observed outbound appearance item update", {
-                memberNumber: character.MemberNumber,
-                operationId: context.operationId,
-                diagnostic,
-            });
-        };
-        const onItemUpdateReceived = (diagnostic: any) => {
-            if (diagnostic?.targetMemberNumber !== character.MemberNumber)
-                return;
-            logger.debug("Received appearance item update response", {
-                memberNumber: character.MemberNumber,
-                operationId: context.operationId,
-                diagnostic,
-            });
-        };
-        const onSync = (syncedCharacter: API_Character) => {
-            if (syncedCharacter?.MemberNumber !== character.MemberNumber) {
-                logger.debug("Ignoring unrelated CharacterSync", {
-                    memberNumber: character.MemberNumber,
-                    operationId: context.operationId,
-                    syncedMemberNumber: syncedCharacter?.MemberNumber,
-                });
-                return;
-            }
-            const syncedAppearance =
-                syncedCharacter.Appearance.MakeAppearanceBundle();
-            if (!context.observedAppearance) {
-                context.observedAppearance = syncedAppearance;
-            }
-            let matches = true;
-            if (predicate) {
-                try {
-                    matches = predicate(syncedAppearance);
-                } catch (error) {
-                    logger.warn("Appearance confirmation predicate threw", {
-                        memberNumber: character.MemberNumber,
-                        operationId: context.operationId,
-                        error:
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
-                    });
-                    matches = false;
-                }
-            }
-            logger.debug("Received CharacterSync for appearance mutation", {
-                memberNumber: character.MemberNumber,
-                operationId: context.operationId,
-                matches,
-                appearance: summarizeAppearance(syncedAppearance),
-            });
-            if (matches && (!predicate || !rawPacketObserved)) {
-                logger.debug("Authoritative appearance confirmation accepted", {
-                    memberNumber: character.MemberNumber,
-                    operationId: context.operationId,
-                });
-                finish();
-            } else {
-                logger.warn(
-                    "Authoritative appearance confirmation mismatched",
-                    {
-                        memberNumber: character.MemberNumber,
-                        operationId: context.operationId,
-                        expectedSource: context.source,
-                        expectedReason: context.reason,
-                        appearance: summarizeAppearance(syncedAppearance),
-                    },
-                );
-            }
-        };
-        const timer = setTimeout(
-            () => {
-                logger.error(
-                    "Authoritative appearance confirmation timed out",
-                    new Error(
-                        `Server appearance confirmation timed out for ${character.MemberNumber}`,
-                    ),
-                    {
-                        memberNumber: character.MemberNumber,
-                        operationId: context.operationId,
-                        source: context.source,
-                        reason: context.reason,
-                        timeoutMs,
-                    },
-                );
-                finish(
-                    new Error(
-                        `Server appearance confirmation timed out for ${character.MemberNumber}`,
-                    ),
-                );
-            },
-            Math.max(1, timeoutMs),
-        );
-        connector.on("CharacterSync", onSync);
-        connector.on("AppearanceUpdateSent", onPacketSent);
-        connector.on("AppearanceSyncReceived", onPacket);
-        logger.debug("Waiting for authoritative CharacterSync", {
-            memberNumber: character.MemberNumber,
+    const source: ActionSource =
+        context.source === "bunny" || context.source === "release"
+            ? context.source
+            : context.source === "unknown_external_mutation"
+              ? "external"
+              : "feature";
+    const result = await appearanceConfirmationService.confirmAppearance(
+        character,
+        {
             operationId: context.operationId,
-            source: context.source,
+            memberNumber: character.MemberNumber,
+            source,
             reason: context.reason,
-            timeoutMs,
-        });
-    });
+            deadlineAt: Date.now() + timeoutMs,
+        },
+        timeoutMs,
+        (snapshot) =>
+            predicate?.(snapshot as readonly BC_AppearanceItem[]) ?? true,
+    );
+    if (
+        result.status !== "completed" &&
+        result.status !== "already_satisfied"
+    ) {
+        throw new AppearanceConfirmationError(
+            result.reason ??
+                `Server appearance confirmation did not complete for ${character.MemberNumber}`,
+        );
+    }
+    if (!Array.isArray(result.observed)) {
+        throw new AppearanceConfirmationError(
+            `Server appearance confirmation did not return a snapshot for ${character.MemberNumber}`,
+        );
+    }
+    context.observedAppearance = result.observed as BC_AppearanceItem[];
+    context.verificationStatus = "confirmed";
 }
 
 /**

@@ -282,7 +282,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 maxAttempts: 1,
                 retryDelayMs: 0,
                 preserveLockedItems: action.operation !== "remove",
-                requireServerConfirmation: false,
+                requireServerConfirmation: true,
                 ...(action.itemOptions === undefined
                     ? {}
                     : { itemOptions: action.itemOptions }),
@@ -296,7 +296,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         }
 
         try {
-            return await syncAppearanceMutation(
+            const mutationSucceeded = await syncAppearanceMutation(
                 character,
                 mutation,
                 50,
@@ -308,6 +308,18 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     ...(actionLayer === undefined ? {} : { actionLayer }),
                 },
             );
+            if (
+                mutationSucceeded &&
+                actionLayer === undefined &&
+                syncOptions.awaitServerSync === true &&
+                syncOptions.serverSyncPredicate
+            ) {
+                return verifyAppearance(
+                    character,
+                    syncOptions.serverSyncPredicate,
+                ).verified;
+            }
+            return mutationSucceeded;
         } finally {
             lease?.release();
         }
@@ -615,45 +627,42 @@ export class CageSystem extends AbstractTileFeatureSystem {
         ) {
             this.releasingCharacters.add(character.MemberNumber);
             try {
-                await this.syncCageAppearanceMutation(
-                    character,
-                    () => {
-                        character.Appearance.RemoveItem("ItemDevices");
-                    },
-                    {
-                        operation: "remove",
-                        item: {
-                            group: "ItemDevices",
-                            asset: "FuturisticCrate",
+                const crateRemovalVerified =
+                    await this.syncCageAppearanceMutation(
+                        character,
+                        () => {
+                            character.Appearance.RemoveItem("ItemDevices");
                         },
-                    },
-                    "manual cage release",
-                    {
-                        sendFullAppearanceUpdate: true,
-                        awaitServerSync: true,
-                        serverSyncPredicate: (appearance) =>
-                            !appearance.some(
-                                (item) => item.Group === "ItemDevices",
-                            ),
-                    },
-                );
+                        {
+                            operation: "remove",
+                            item: {
+                                group: "ItemDevices",
+                                asset: "FuturisticCrate",
+                            },
+                        },
+                        "manual cage release",
+                        {
+                            sendFullAppearanceUpdate: true,
+                            awaitServerSync: true,
+                            serverSyncPredicate: (appearance) =>
+                                !appearance.some(
+                                    (item) => item.Group === "ItemDevices",
+                                ),
+                        },
+                    );
+                if (!crateRemovalVerified) {
+                    this.logger.error(
+                        "Manual cage release remains pending confirmation",
+                        undefined,
+                        {
+                            memberNumber: character.MemberNumber,
+                            observedAtMs: this.timer.now(),
+                        },
+                    );
+                    return;
+                }
             } finally {
                 this.releasingCharacters.delete(character.MemberNumber);
-            }
-
-            if (
-                character.Appearance.getItemData("ItemDevices")?.Name ===
-                "FuturisticCrate"
-            ) {
-                this.logger.error(
-                    "Manual cage release is pending crate removal",
-                    undefined,
-                    {
-                        memberNumber: character.MemberNumber,
-                        observedAtMs: this.timer.now(),
-                    },
-                );
-                return;
             }
             await this.mutationService?.exitCage(character.MemberNumber);
             this.cagedCharacters.delete(character.MemberNumber);
@@ -938,39 +947,31 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 crateRemovalVerified = false;
                 this.releasingCharacters.add(memberNumber);
                 try {
-                    await this.syncCageAppearanceMutation(
-                        character,
-                        () => {
-                            character.Appearance.RemoveItem("ItemDevices");
-                        },
-                        {
-                            operation: "remove",
-                            item: {
-                                group: "ItemDevices",
-                                asset: "FuturisticCrate",
+                    crateRemovalVerified =
+                        await this.syncCageAppearanceMutation(
+                            character,
+                            () => {
+                                character.Appearance.RemoveItem("ItemDevices");
                             },
-                        },
-                        "cage timer release",
-                        {
-                            releaseCause: "timer",
-                            sendFullAppearanceUpdate: true,
-                            awaitServerSync: true,
-                            serverSyncPredicate: (appearance) =>
-                                !appearance.some(
-                                    (item) => item.Group === "ItemDevices",
-                                ),
-                            throwOnSyncFailure: true,
-                        },
-                    );
-                    crateRemovalVerified = verifyAppearance(
-                        character,
-                        (appearance) =>
-                            !appearance.some(
-                                (item) =>
-                                    item.Group === "ItemDevices" &&
-                                    item.Name === "FuturisticCrate",
-                            ),
-                    ).verified;
+                            {
+                                operation: "remove",
+                                item: {
+                                    group: "ItemDevices",
+                                    asset: "FuturisticCrate",
+                                },
+                            },
+                            "cage timer release",
+                            {
+                                releaseCause: "timer",
+                                sendFullAppearanceUpdate: true,
+                                awaitServerSync: true,
+                                serverSyncPredicate: (appearance) =>
+                                    !appearance.some(
+                                        (item) => item.Group === "ItemDevices",
+                                    ),
+                                throwOnSyncFailure: true,
+                            },
+                        );
                 } catch (error) {
                     this.logger.error("Cage crate removal failed", error, {
                         memberNumber,
@@ -981,11 +982,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     this.releasingCharacters.delete(memberNumber);
                 }
             }
-            if (
-                !crateRemovalVerified ||
-                character.Appearance.getItemData("ItemDevices")?.Name ===
-                    "FuturisticCrate"
-            ) {
+            if (!crateRemovalVerified) {
                 this.logger.error(
                     "Cage release is pending crate removal",
                     undefined,
@@ -996,8 +993,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         observedAtMs: this.timer.now(),
                     },
                 );
-                await this.timer.wait(10 * 1000);
-                continue;
+                return;
             }
 
             const removedAtMs = this.timer.now();

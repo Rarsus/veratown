@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { test } from "node:test";
+import { AppearanceActionService } from "../../../action-layer/appearance-service";
+import { BCAppearanceActionAdapter } from "../../../action-layer/adapters/bc-appearance";
 import {
     hasPendingAppearanceConfirmation,
+    registerAppearanceConfirmationService,
     syncAppearanceMutation,
 } from "../shared/appearanceSync";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
@@ -258,13 +261,85 @@ test("syncAppearanceMutation persists a nonblocking action only after confirmati
     assert.equal(hasPendingAppearanceConfirmation(character as any), false);
 });
 
-test("syncAppearanceMutation waits for matching authoritative CharacterSync", async () => {
+test("syncAppearanceMutation awaits a nonblocking action when confirmation is required", async () => {
+    const character = createCharacter(10, { X: 1, Y: 1 }, []);
+    let resolveConfirmation!: (value: {
+        status: "confirmed";
+        authority: "room_character_sync";
+        value: { items: []; hiddenLayers: []; observedAt: number };
+    }) => void;
+    const confirmation = new Promise<{
+        status: "confirmed";
+        authority: "room_character_sync";
+        value: { items: []; hiddenLayers: []; observedAt: number };
+    }>((resolve) => {
+        resolveConfirmation = resolve;
+    });
+    let persisted = false;
+    const mutation = syncAppearanceMutation(
+        character as any,
+        () => undefined,
+        0,
+        async () => {
+            persisted = true;
+        },
+        {
+            skipAuthorizationPreflight: true,
+            awaitServerSync: true,
+            actionLayer: {
+                service: {
+                    remove: async () => ({
+                        status: "in_progress" as const,
+                        metadata: {
+                            operationId: "appearance-bridge-10",
+                            actionId: "appearance.remove",
+                            memberNumber: 10,
+                            attempt: 1,
+                            startedAt: 1,
+                        },
+                        confirmation,
+                    }),
+                } as any,
+                operation: "remove",
+                item: { group: "ItemArms", asset: "Cuffs" },
+                policy: {
+                    operationId: "appearance-bridge-10",
+                    memberNumber: 10,
+                    source: "release",
+                    reason: "await-confirmation-test",
+                    timeoutMs: 100,
+                    maxAttempts: 1,
+                    retryDelayMs: 0,
+                    requireServerConfirmation: false,
+                },
+            },
+        },
+    );
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(persisted, false);
+    resolveConfirmation({
+        status: "confirmed",
+        authority: "room_character_sync",
+        value: { items: [], hiddenLayers: [], observedAt: 2 },
+    });
+
+    assert.equal(await mutation, true);
+    assert.equal(persisted, true);
+});
+
+test("syncAppearanceMutation does not retry after confirmation is unobserved", async () => {
     const connection = new EventEmitter() as EventEmitter & {
         Player: { MemberNumber: number };
+        chatRoom: { Name: string };
     };
     connection.Player = { MemberNumber: 7 };
+    connection.chatRoom = { Name: "appearance-test-room" };
+    const confirmationService = new AppearanceActionService(
+        new BCAppearanceActionAdapter({ confirmationTimeoutMs: 20 }),
+    );
+    registerAppearanceConfirmationService(confirmationService);
     let appearance: any[] = [];
-    let remoteAppearance: any[] = [];
     let sendAttempts = 0;
     const character: any = {
         MemberNumber: 7,
@@ -278,55 +353,111 @@ test("syncAppearanceMutation waits for matching authoritative CharacterSync", as
         },
         sendAppearanceUpdate: () => {
             sendAttempts += 1;
-            if (sendAttempts === 1) {
-                appearance = [];
-            }
-            connection.emit("CharacterSync", {
-                MemberNumber: 999,
-                Appearance: {
-                    MakeAppearanceBundle: () => [],
-                },
-            });
-            connection.emit("CharacterSync", {
-                MemberNumber: 7,
-                Appearance: {
-                    MakeAppearanceBundle: () =>
-                        structuredClone(remoteAppearance),
-                },
-            });
-            remoteAppearance = appearance;
-            connection.emit("CharacterSync", {
-                MemberNumber: 7,
-                Appearance: {
-                    MakeAppearanceBundle: () =>
-                        structuredClone(remoteAppearance),
-                },
-            });
         },
     };
 
-    await syncAppearanceMutation(
-        character,
-        () => {
-            appearance = [{ Group: "ItemArms", Name: "HeavyYoke" }];
-        },
-        0,
-        undefined,
-        {
-            sendFullAppearanceUpdate: true,
-            awaitServerSync: true,
-            serverSyncTimeoutMs: 20,
-            serverSyncAttempts: 2,
-            serverSyncPredicate: (syncedAppearance) =>
-                syncedAppearance.some(
-                    (item) =>
-                        item.Group === "ItemArms" && item.Name === "HeavyYoke",
-                ),
-        },
-    );
+    try {
+        await assert.rejects(
+            syncAppearanceMutation(
+                character,
+                () => {
+                    appearance = [{ Group: "ItemArms", Name: "HeavyYoke" }];
+                },
+                0,
+                undefined,
+                {
+                    sendFullAppearanceUpdate: true,
+                    awaitServerSync: true,
+                    serverSyncTimeoutMs: 20,
+                    serverSyncPredicate: (syncedAppearance) =>
+                        syncedAppearance.some(
+                            (item) =>
+                                item.Group === "ItemArms" &&
+                                item.Name === "HeavyYoke",
+                        ),
+                },
+            ),
+            /confirmation exceeded/,
+        );
+        assert.equal(sendAttempts, 1);
+    } finally {
+        registerAppearanceConfirmationService(undefined);
+    }
+});
 
-    assert.deepEqual(appearance, [{ Group: "ItemArms", Name: "HeavyYoke" }]);
-    assert.equal(sendAttempts, 2);
+test("syncAppearanceMutation accepts a matching same-room peer sync", async () => {
+    const connection = new EventEmitter() as EventEmitter & {
+        Player: { MemberNumber: number };
+        chatRoom: { Name: string };
+    };
+    connection.Player = { MemberNumber: 70 };
+    connection.chatRoom = { Name: "appearance-test-room" };
+    let appearance: any[] = [];
+    const character: any = {
+        MemberNumber: 70,
+        connection,
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+            flushUpdates: () => {},
+        },
+        sendAppearanceUpdate: () => {},
+    };
+    const peer = new EventEmitter() as EventEmitter & {
+        Player: { MemberNumber: number };
+        chatRoom: { Name: string; getCharacter: () => undefined };
+    };
+    peer.Player = { MemberNumber: 71 };
+    peer.chatRoom = {
+        Name: "appearance-test-room",
+        getCharacter: () => undefined,
+    };
+    const confirmationService = new AppearanceActionService(
+        new BCAppearanceActionAdapter({ confirmationTimeoutMs: 50 }),
+    );
+    confirmationService.registerObservationConnectors([peer]);
+    registerAppearanceConfirmationService(confirmationService);
+    let persistedAppearance: readonly any[] | undefined;
+
+    try {
+        const mutation = syncAppearanceMutation(
+            character,
+            () => {
+                appearance = [{ Group: "ItemArms", Name: "HeavyYoke" }];
+            },
+            0,
+            async (_current, _context, observedAppearance) => {
+                persistedAppearance = observedAppearance;
+            },
+            {
+                skipAuthorizationPreflight: true,
+                sendFullAppearanceUpdate: true,
+                awaitServerSync: true,
+                serverSyncTimeoutMs: 50,
+                serverSyncPredicate: (observed) =>
+                    observed.some(
+                        (item) =>
+                            item.Group === "ItemArms" &&
+                            item.Name === "HeavyYoke",
+                    ),
+            },
+        );
+
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        peer.emit("AppearanceSyncReceived", {
+            connectionId: "peer-connector",
+            direction: "inbound",
+            memberNumber: 70,
+            sourceMemberNumber: 70,
+            appearance: structuredClone(appearance),
+        });
+
+        assert.equal(await mutation, true);
+        assert.deepEqual(persistedAppearance, [
+            { Group: "ItemArms", Name: "HeavyYoke" },
+        ]);
+    } finally {
+        registerAppearanceConfirmationService(undefined);
+    }
 });
 
 test("LiveCharacterStateSync serializes overlapping observations by arrival order", async () => {
@@ -419,8 +550,10 @@ test("LiveCharacterStateSync ignores ambient snapshots during authoritative conf
     });
     const connection = new EventEmitter() as EventEmitter & {
         Player: { MemberNumber: number };
+        chatRoom: { Name: string };
     };
     connection.Player = { MemberNumber: 6 };
+    connection.chatRoom = { Name: "appearance-test-room" };
     character.connection = connection;
     character.sendAppearanceUpdate = () => {
         void sendCompleted;
@@ -437,24 +570,32 @@ test("LiveCharacterStateSync ignores ambient snapshots during authoritative conf
         store,
         60_000,
     );
-
-    const mutation = syncAppearanceMutation(
-        character as any,
-        () => undefined,
-        0,
-        undefined,
-        {
-            sendFullAppearanceUpdate: true,
-            awaitServerSync: true,
-            serverSyncTimeoutMs: 100,
-        },
+    const confirmationService = new AppearanceActionService(
+        new BCAppearanceActionAdapter({ confirmationTimeoutMs: 100 }),
     );
+    registerAppearanceConfirmationService(confirmationService);
 
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(await sync.syncCharacter(character as any), false);
-    assert.equal(persisted, 0);
-    releaseSend?.();
-    await assert.rejects(mutation);
+    try {
+        const mutation = syncAppearanceMutation(
+            character as any,
+            () => undefined,
+            0,
+            undefined,
+            {
+                sendFullAppearanceUpdate: true,
+                awaitServerSync: true,
+                serverSyncTimeoutMs: 100,
+            },
+        );
+
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(await sync.syncCharacter(character as any), false);
+        assert.equal(persisted, 0);
+        releaseSend?.();
+        await assert.rejects(mutation, /confirmation exceeded/);
+    } finally {
+        registerAppearanceConfirmationService(undefined);
+    }
 });
 
 test("LiveCharacterStateSync reconciles every owned bot when room characters omit them", async () => {

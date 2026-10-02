@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import { isClothing } from "../../../../src/assetHelpers";
 import { ReleaseSystem } from "../veratownReleaseSystem";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
 import { LiveAppearanceRemovalCoordinator } from "../shared";
+import {
+    AppearanceConfirmationError,
+    registerAppearanceConfirmationService,
+} from "../shared/appearanceSync";
 import { ActionLayerRolloutController } from "../../../action-layer";
 import {
     InMemoryWorkflowJournalStorage,
@@ -15,6 +19,47 @@ import {
     normalizeReleaseAppearanceItem,
     releaseItemIdentity,
 } from "../shared/releaseRemovalPolicy";
+
+beforeEach(() => {
+    registerAppearanceConfirmationService({
+        confirmAppearance: async (
+            character: any,
+            context: any,
+            _timeoutMs: number,
+            predicate: (appearance: readonly unknown[]) => boolean,
+        ) => {
+            const appearance = character.Appearance.MakeAppearanceBundle();
+            const matches = predicate(appearance);
+            return {
+                status: matches ? "completed" : "unconfirmed",
+                metadata: {
+                    operationId: context.operationId,
+                    actionId: "appearance.confirm",
+                    memberNumber: context.memberNumber,
+                    attempt: 1,
+                    startedAt: Date.now(),
+                    completedAt: Date.now(),
+                },
+                reason: matches
+                    ? undefined
+                    : "Simulated peer snapshot mismatch",
+                observed: appearance,
+                value: {
+                    items: appearance.map((item: any) => ({
+                        group: item.Group,
+                        asset: item.Name,
+                    })),
+                    hiddenLayers: [],
+                    observedAt: Date.now(),
+                },
+            };
+        },
+    } as any);
+});
+
+afterEach(() => {
+    registerAppearanceConfirmationService(undefined);
+});
 
 function createCharacter(initialAppearance: any[], failingGroup?: string) {
     let appearance = structuredClone(initialAppearance);
@@ -364,6 +409,37 @@ test("live removal retries a partial mutation and is idempotent after success", 
     });
 
     assert.equal(attempts, 2);
+    assert.deepEqual(appearance, []);
+});
+
+test("live removal does not retry after room confirmation is unavailable", async () => {
+    registerAppearanceConfirmationService(undefined);
+    let appearance: any[] = [
+        { Group: "ItemArms", Name: "UnconfirmedCuffs", Property: {} },
+    ];
+    let removeCalls = 0;
+    const character: any = {
+        MemberNumber: 146,
+        connection: { Player: { MemberNumber: 146 } },
+        Appearance: {
+            MakeAppearanceBundle: () => structuredClone(appearance),
+            RemoveItem: (group: string) => {
+                removeCalls += 1;
+                appearance = appearance.filter((item) => item.Group !== group);
+            },
+        },
+    };
+    const coordinator = new LiveAppearanceRemovalCoordinator(3);
+
+    await assert.rejects(
+        coordinator.remove(character, "release-146-unconfirmed", {
+            group: "ItemArms",
+            name: "UnconfirmedCuffs",
+        }),
+        AppearanceConfirmationError,
+    );
+
+    assert.equal(removeCalls, 1);
     assert.deepEqual(appearance, []);
 });
 

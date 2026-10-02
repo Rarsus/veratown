@@ -450,7 +450,52 @@ test("accepts a source-attributed peer appearance sync and cleans up listeners",
     const result = await pending;
     assert.equal(result.status, "completed");
     assert.equal(result.confirmationAuthority, "room_character_sync");
+    assert.deepEqual(result.observed, [{ Group: "ItemArms", Name: "Gloves" }]);
     assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
+});
+
+test("confirmAppearance returns the authoritative snapshot observed by a secondary connector", async () => {
+    const connector = new FakeConnector("actor", 11);
+    const runtime = makeConnectedCharacter(connector, [
+        {
+            Group: "ItemDevices",
+            Name: "FuturisticCrate",
+            Property: { LockedBy: "SafewordPadlock" },
+        },
+    ]);
+    const observer = new FakeConnector("secondary", 22);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
+    });
+
+    const pending = adapter.confirmAppearance(
+        runtime as never,
+        {
+            operationId: "secondary-peer-confirmation",
+            memberNumber: 11,
+            source: "feature",
+            reason: "confirm cage removal",
+            deadlineAt: 120,
+        },
+        20,
+        (appearance) =>
+            !appearance.some((item: any) => item.Group === "ItemDevices"),
+    );
+    observer.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: 11,
+        sourceMemberNumber: connector.Player.MemberNumber,
+        timestamp: 101,
+        appearance: [],
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_character_sync");
+    assert.deepEqual(result.observed, []);
     assert.equal(observer.listenerCount(), 0);
 });
 

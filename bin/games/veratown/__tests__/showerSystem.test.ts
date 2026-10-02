@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
     ActionLayerRolloutController,
     CommunicationActionService,
@@ -12,6 +12,13 @@ import type {
     MessageRequest,
 } from "../../../action-layer/domain";
 import { ShowerSystem } from "../showerSystem";
+import {
+    clearTestAppearanceConfirmation,
+    registerTestAppearanceConfirmation,
+} from "./appearanceConfirmationFixture";
+
+beforeEach(registerTestAppearanceConfirmation);
+afterEach(clearTestAppearanceConfirmation);
 
 class RecordingCommunicationAdapter implements CommunicationActionAdapter {
     public readonly requests: MessageRequest[] = [];

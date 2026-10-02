@@ -1,5 +1,6 @@
 import { API_Character } from "bc-bot";
 import {
+    AppearanceConfirmationError,
     syncAppearanceMutation,
     filterValidAppearanceItems,
 } from "./appearanceSync";
@@ -219,6 +220,10 @@ export class LiveAppearanceRemovalCoordinator {
                 }
             } catch (error) {
                 lastError = error;
+                if (error instanceof AppearanceConfirmationError) {
+                    await finishWorkflow("failed");
+                    throw error;
+                }
             }
         }
 

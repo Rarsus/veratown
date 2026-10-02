@@ -96,6 +96,7 @@ import {
     type ContainmentReadinessDiagnostic,
 } from "./veratown/containmentReadiness";
 import {
+    registerAppearanceConfirmationService,
     syncAppearanceMutation,
     filterOwnerLocked,
 } from "./veratown/shared/appearanceSync";
@@ -301,6 +302,15 @@ export class Veratown {
                 }),
             );
         }
+        const appearanceObservationConnectors = [
+            connections.main,
+            connections.shower,
+            connections.casino,
+            connections.secondRoom,
+        ].filter(
+            (connection): connection is API_Connector =>
+                connection !== undefined,
+        );
         if (
             !this.container.has(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
         ) {
@@ -308,19 +318,18 @@ export class Veratown {
                 DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
                 new AppearanceActionService(
                     new BCAppearanceActionAdapter({
-                        observationConnectors: [
-                            connections.main,
-                            connections.shower,
-                            connections.casino,
-                            connections.secondRoom,
-                        ].filter(
-                            (connection): connection is API_Connector =>
-                                connection !== undefined,
-                        ),
+                        observationConnectors: appearanceObservationConnectors,
                     }),
                 ),
             );
         }
+        const appearanceActionService = this.container.get<
+            AppearanceActionService<API_Character>
+        >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE);
+        appearanceActionService.registerObservationConnectors(
+            appearanceObservationConnectors,
+        );
+        registerAppearanceConfirmationService(appearanceActionService);
         if (!this.container.has(DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE)) {
             this.container.register(
                 DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE,

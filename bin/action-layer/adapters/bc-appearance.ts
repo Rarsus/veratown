@@ -9,6 +9,7 @@ import {
     type AppearanceItemIdentity,
     type AppearanceMutationPolicy,
     type AppearanceObservation,
+    type AppearanceSnapshotPredicate,
     type ExtendedItemProperties,
 } from "../domain";
 import {
@@ -67,6 +68,7 @@ type ConfirmationWaitResult =
           readonly outcome: "accepted";
           readonly observation: AppearanceObservation;
           readonly authority: AppearanceConfirmationAuthority;
+          readonly appearance: readonly BC_AppearanceItem[];
       }
     | { readonly outcome: "timed_out"; readonly reason: string }
     | { readonly outcome: "disconnected"; readonly reason: string }
@@ -408,7 +410,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
     private readonly now: () => number;
     private readonly confirmationTimeoutMs: number;
     private readonly confirmationRegistry: AppearanceConfirmationRegistry;
-    private readonly observationConnectors: readonly BCConnectorEvents[];
+    private readonly observationConnectors = new Set<BCConnectorEvents>();
     private readonly connectorEpochs = new WeakMap<
         object,
         ConnectorEpochState
@@ -417,7 +419,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
     public constructor(options: BCAppearanceAdapterOptions = {}) {
         this.now = options.now ?? Date.now;
         this.confirmationTimeoutMs = options.confirmationTimeoutMs ?? 5_000;
-        this.observationConnectors = options.observationConnectors ?? [];
+        this.registerObservationConnectors(options.observationConnectors ?? []);
         if (
             !Number.isInteger(this.confirmationTimeoutMs) ||
             this.confirmationTimeoutMs < 1
@@ -425,6 +427,19 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             throw new Error("confirmationTimeoutMs must be a positive integer");
         }
         this.confirmationRegistry = new AppearanceConfirmationRegistry();
+    }
+
+    public registerObservationConnectors(connectors: readonly unknown[]): void {
+        for (const candidate of connectors) {
+            const connector = candidate as BCConnectorEvents | undefined;
+            if (
+                connector &&
+                typeof connector.on === "function" &&
+                typeof connector.off === "function"
+            ) {
+                this.observationConnectors.add(connector);
+            }
+        }
     }
 
     private connectorFor(
@@ -467,12 +482,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
 
     private waitForConfirmation(
         character: API_Character,
-        target: AppearanceItemIdentity,
+        target: AppearanceItemIdentity | undefined,
         operationId: string,
-        action: "add" | "remove" | "update",
+        action: "add" | "remove" | "update" | "confirm",
         startedAt: number,
         timeoutMs: number,
         acceptUpdate?: (items: readonly BC_AppearanceItem[]) => boolean,
+        acceptSnapshot?: (items: readonly BC_AppearanceItem[]) => boolean,
     ): ConfirmationWaiter {
         const connector = this.connectorFor(character);
         if (!connector) {
@@ -488,7 +504,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         const epoch = this.epochFor(connector);
         const actorMemberNumber = connector.Player?.MemberNumber;
         const roomName = connector.chatRoom?.Name;
-        const observers = [...new Set(this.observationConnectors)].filter(
+        const observers = [...this.observationConnectors].filter(
             (observer) =>
                 observer !== connector &&
                 roomName !== undefined &&
@@ -544,16 +560,21 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             authority: AppearanceConfirmationAuthority,
         ): void => {
             if (observedAt < startedAt) return;
-            const containsTarget = items.some(
-                (item) =>
-                    item.Group === target.group && item.Name === target.asset,
-            );
+            const containsTarget = target
+                ? items.some(
+                      (item) =>
+                          item.Group === target.group &&
+                          item.Name === target.asset,
+                  )
+                : false;
             const accepted =
-                action === "add"
-                    ? containsTarget
-                    : action === "remove"
-                      ? !containsTarget
-                      : containsTarget && acceptUpdate?.(items) === true;
+                action === "confirm"
+                    ? acceptSnapshot?.(items) === true
+                    : action === "add"
+                      ? containsTarget
+                      : action === "remove"
+                        ? !containsTarget
+                        : containsTarget && acceptUpdate?.(items) === true;
             if (!accepted) return;
             const outcome = this.confirmationRegistry.confirm({
                 ...key,
@@ -564,6 +585,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                     outcome: "accepted",
                     observation: toObservation(items, observedAt),
                     authority,
+                    appearance: [...items],
                 });
             }
         };
@@ -575,9 +597,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                     diagnostic?.direction !== "inbound" ||
                     diagnostic.sourceMemberNumber !== actorMemberNumber ||
                     diagnostic.targetMemberNumber !== character.MemberNumber ||
-                    diagnostic.group !== target.group ||
-                    (action !== "remove" && diagnostic.name !== target.asset) ||
-                    (action === "remove" && diagnostic.action !== "remove")
+                    (action !== "confirm" &&
+                        (target === undefined ||
+                            diagnostic.group !== target.group ||
+                            (action !== "remove" &&
+                                diagnostic.name !== target.asset) ||
+                            (action === "remove" &&
+                                diagnostic.action !== "remove")))
                 ) {
                     return;
                 }
@@ -723,6 +749,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                           status: "confirmed",
                           authority: result.authority,
                           value: result.observation,
+                          observed: result.appearance,
                       }
                     : {
                           status: "unconfirmed",
@@ -755,6 +782,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 ),
                 {
                     value: confirmationResult.observation,
+                    observed: confirmationResult.appearance,
                     retryable: false,
                     confirmationAuthority: confirmationResult.authority,
                 },
@@ -783,6 +811,52 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 createActionMetadata(context, "appearance.observe", observedAt),
                 { value: toObservation(bundle, observedAt), retryable: false },
             ),
+        );
+    }
+
+    public async confirmAppearance(
+        character: API_Character,
+        context: ActionContext,
+        timeoutMs: number,
+        predicate: AppearanceSnapshotPredicate,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const startedAt = this.now();
+        const waiter = this.waitForConfirmation(
+            character,
+            undefined,
+            context.operationId,
+            "confirm",
+            startedAt,
+            timeoutMs,
+            undefined,
+            (items) => predicate(items),
+        );
+        const confirmation = await waiter.promise;
+        if (confirmation.outcome === "accepted") {
+            return createActionResult(
+                "completed",
+                createActionMetadata(
+                    context,
+                    "appearance.confirm",
+                    startedAt,
+                    1,
+                    confirmation.observation.observedAt,
+                ),
+                {
+                    value: confirmation.observation,
+                    observed: confirmation.appearance,
+                    retryable: false,
+                    confirmationAuthority: confirmation.authority,
+                },
+            );
+        }
+        return createActionResult(
+            "unconfirmed",
+            createActionMetadata(context, "appearance.confirm", startedAt),
+            {
+                reason: confirmation.reason,
+                retryable: false,
+            },
         );
     }
 
@@ -1161,6 +1235,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                           status: "confirmed",
                           authority: result.authority,
                           value: result.observation,
+                          observed: result.appearance,
                       }
                     : {
                           status: "unconfirmed",
@@ -1197,6 +1272,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 ),
                 {
                     value: confirmationResult.observation,
+                    observed: confirmationResult.appearance,
                     retryable: false,
                     confirmationAuthority: confirmationResult.authority,
                 },

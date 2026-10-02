@@ -5,6 +5,7 @@ import type {
     AppearanceItemIdentity,
     AppearanceMutationPolicy,
     AppearanceObservation,
+    AppearanceSnapshotPredicate,
     ExtendedItemProperties,
 } from "./domain";
 import { ActionScheduler } from "./scheduler";
@@ -50,6 +51,10 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         options: AppearanceActionServiceOptions = {},
     ) {
         this.scheduler = options.scheduler ?? new ActionScheduler();
+    }
+
+    public registerObservationConnectors(connectors: readonly unknown[]): void {
+        this.adapter.registerObservationConnectors?.(connectors);
     }
 
     public observe(
@@ -132,6 +137,45 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
             () =>
                 this.adapter.setHiddenLayers(character, layers, hidden, policy),
         );
+    }
+
+    public confirmAppearance(
+        character: TRuntimeCharacter,
+        context: ActionContext,
+        timeoutMs: number,
+        predicate: AppearanceSnapshotPredicate,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        validateContext(context);
+        if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+            throw new Error("timeoutMs must be a positive integer");
+        }
+        if (this.adapter.confirmAppearance) {
+            return this.adapter.confirmAppearance(
+                character,
+                context,
+                Math.min(
+                    timeoutMs,
+                    Math.max(1, context.deadlineAt - Date.now()),
+                ),
+                predicate,
+            );
+        }
+
+        const now = Date.now();
+        return Promise.resolve({
+            status: "rejected",
+            metadata: {
+                operationId: context.operationId,
+                actionId: "appearance.confirm",
+                memberNumber: context.memberNumber,
+                attempt: context.attempt ?? 1,
+                startedAt: now,
+                completedAt: now,
+            },
+            reason: "Appearance adapter does not support room confirmation",
+            failureKind: "permanent",
+            retryable: false,
+        });
     }
 
     public snapshot(): ReturnType<ActionScheduler["snapshot"]> {
