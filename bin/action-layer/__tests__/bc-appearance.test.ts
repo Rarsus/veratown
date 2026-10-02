@@ -28,6 +28,7 @@ function makeCharacter(initial: FakeItem[] = []) {
                         item.Property ??= {};
                         item.Property[property] = value;
                     },
+                    flushUpdate: () => events.push(`item:${group}`),
                 };
             },
             AddItem: (item: FakeItem) => {
@@ -532,6 +533,7 @@ test("accepts a matching inbound appearance item update", async () => {
 test("updates configured vibrator properties and confirms the resulting state", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector, [
+        { Group: "Cloth", Name: "PlayerDress" },
         {
             Group: "ItemVulva",
             Name: "VibratingEgg",
@@ -574,41 +576,55 @@ test("updates configured vibrator properties and confirms the resulting state", 
 
     const result = await pending;
     assert.equal(result.status, "completed");
-    assert.deepEqual(runtime.items[0].Property, {
+    assert.deepEqual(runtime.items[1].Property, {
         TypeRecord: { vibrating: 1 },
         Mode: "Low",
         Intensity: 0,
         Effect: ["Egged", "Vibrating"],
     });
-    assert.deepEqual(runtime.events, ["items", "appearance"]);
+    assert.deepEqual(runtime.events, ["item:ItemVulva"]);
+    assert.equal(runtime.items[0].Name, "PlayerDress");
     assert.equal(connector.listenerCount(), 0);
 });
 
-test("flushes item updates before sending the compatibility appearance snapshot", async () => {
+test("extended property updates send only the targeted item update", async () => {
     const connector = new FakeConnector();
-    const runtime = makeConnectedCharacter(connector);
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "Cloth", Name: "PlayerDress" },
+        {
+            Group: "ItemVulva",
+            Name: "VibratingEgg",
+            Property: { TypeRecord: { vibrating: 0 } },
+        },
+    ]);
     const adapter = new BCAppearanceActionAdapter({ now: () => 100 });
     const waiter = setImmediate(() =>
         connector.emit("AppearanceItemUpdateReceived", {
             connectionId: connector.connectionId,
             direction: "inbound",
             targetMemberNumber: 11,
-            group: "ItemArms",
-            name: "Gloves",
-            itemKeys: ["ItemArms/Gloves"],
+            group: "ItemVulva",
+            name: "VibratingEgg",
+            itemKeys: ["ItemVulva/VibratingEgg"],
             timestamp: 101,
         }),
     );
 
-    const result = await adapter.add(
+    const result = await adapter.updateExtendedProperties(
         runtime as never,
-        { group: "ItemArms", asset: "Gloves" },
+        { group: "ItemVulva", asset: "VibratingEgg" },
+        { TypeRecord: { vibrating: 1 } },
+        undefined,
         confirmedPolicy("ordered-add"),
     );
 
     clearImmediate(waiter);
     assert.equal(result.status, "completed");
-    assert.deepEqual(runtime.events, ["items", "appearance"]);
+    assert.deepEqual(runtime.events, ["item:ItemVulva"]);
+    assert.deepEqual(runtime.items[0], {
+        Group: "Cloth",
+        Name: "PlayerDress",
+    });
 });
 
 test("times out confirmation and removes every listener", async () => {

@@ -17,6 +17,7 @@ import {
     API_Character,
     AssetGet,
     getExtendedAssetDef,
+    type BC_AppearanceItem,
 } from "bc-bot";
 import {
     ActionLayerRolloutController,
@@ -71,7 +72,7 @@ interface CatDogVibratorAction extends CatDogAction {
 type CatDogActionUnion =
     CatDogEmoteAction | CatDogBondageAction | CatDogVibratorAction;
 
-type CatDogAppearanceItem = API_Character["Appearance"]["Appearance"][number];
+type CatDogAppearanceItem = BC_AppearanceItem;
 
 interface CatDogExtendedModuleOption {
     readonly Property?: Record<string, unknown>;
@@ -140,7 +141,7 @@ function extendedDefinitionFor(
 function itemPropertyRecord(
     item: CatDogAppearanceItem,
 ): Record<string, unknown> {
-    const properties = item.getData().Property;
+    const properties = item.Property;
     return properties && typeof properties === "object"
         ? (properties as Record<string, unknown>)
         : {};
@@ -1028,7 +1029,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             }
 
             const results: ActionResult<unknown>[] = [];
-            const appearance = character.Appearance.Appearance ?? [];
+            const appearance = character.Appearance.MakeAppearanceBundle();
             for (const item of appearance) {
                 const definition = extendedDefinitionFor(item.Group, item.Name);
                 if (!definition) continue;

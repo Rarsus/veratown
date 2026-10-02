@@ -808,8 +808,10 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
 
         try {
             apply();
-            character.Appearance.flushUpdates();
-            if (waiter) character.sendAppearanceUpdate();
+            if (action !== "update") {
+                character.Appearance.flushUpdates();
+                if (waiter) character.sendAppearanceUpdate();
+            }
         } catch (error) {
             waiter?.cancel();
             return failedMutation(
@@ -1188,6 +1190,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 for (const [key, value] of Object.entries(properties)) {
                     runtimeItem.setProperty(key as never, value as never);
                 }
+                runtimeItem.flushUpdate();
             },
             context,
             startedAt,

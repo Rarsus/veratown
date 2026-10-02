@@ -65,12 +65,15 @@ function character(
     const vibrator = {
         Name: asset,
         Group: group,
-        getData: () => ({ Property: property }),
+        getData: () => ({ Group: group, Name: asset, Property: property }),
     };
     return {
         MemberNumber: memberNumber,
         Name: "Player",
-        Appearance: { Appearance: [vibrator] },
+        Appearance: {
+            Appearance: [vibrator],
+            MakeAppearanceBundle: () => [vibrator.getData()],
+        },
     } as any;
 }
 
@@ -224,6 +227,36 @@ test("CatDog does not bypass the action layer when appearance rollout is disable
 
     assert.equal(result.status, "rejected");
     assert.deepEqual(sent, []);
+});
+
+test("CatDog discovers devices from current appearance data rather than stale wrappers", async () => {
+    const appearance = recordingAppearanceService();
+    const rollout = new ActionLayerRolloutController({
+        featureAppearanceEnabled: true,
+    });
+    const system = new CatDogSystem(
+        connector(() => undefined),
+        undefined,
+        undefined,
+        rollout,
+        appearance.service as any,
+    );
+    const target = character(43);
+    target.Appearance.Appearance = [];
+
+    const result = await (system as any).performVibratorAction(
+        target,
+        vibratorAction,
+        "cat",
+        actionContext(43),
+    );
+
+    assert.equal(result.status, "completed");
+    assert.equal(appearance.updates.length, 1);
+    assert.deepEqual(appearance.updates[0].item, {
+        group: "ItemVulva",
+        asset: "VibratingEgg",
+    });
 });
 
 test("CatDog increases intensity without replacing an Advanced vibrator mode", async () => {
