@@ -29,4 +29,6 @@ vertical slice has contract tests, failure-injection coverage, and an explicit
 migration task. Do not add compatibility imports here to make an old caller
 fit. Create a dedicated adapter or migrate the caller in a separate change.
 
-The package is currently opt-in and has no runtime registration.
+Services may be registered at runtime, but each migration remains separately
+gated. The inventory canary is disabled by default and only owns the Roulette
+wheel addition when explicitly enabled.

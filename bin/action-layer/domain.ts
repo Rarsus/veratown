@@ -109,6 +109,88 @@ export interface AppearanceObservation {
     readonly observedAt: number;
 }
 
+export interface InventoryItemIdentity {
+    readonly group: string;
+    readonly asset: string;
+    readonly extendedType?: string;
+}
+
+export interface InventoryItem {
+    readonly identity: InventoryItemIdentity;
+    readonly ownerMemberNumber: number;
+    readonly quantity: number;
+    readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+export interface InventoryObservation {
+    readonly ownerMemberNumber: number;
+    readonly roomName: string;
+    readonly observedAt: number;
+    readonly authority: "authoritative" | "local_cache";
+    readonly connectionEpoch: number;
+    readonly items: readonly InventoryItem[];
+}
+
+export interface InventoryPermissionDecision {
+    readonly actorMemberNumber: number;
+    readonly ownerMemberNumber: number;
+    readonly roomName: string;
+    readonly decision: "allow" | "deny";
+    readonly reason?: string;
+}
+
+export interface InventoryActionContext extends ActionContext {
+    readonly actorMemberNumber: number;
+    readonly ownerMemberNumber: number;
+    readonly roomName: string;
+    readonly permission?: InventoryPermissionDecision;
+    readonly maxObservationAgeMs?: number;
+    readonly requireServerConfirmation?: boolean;
+}
+
+export interface InventoryMutationPolicy
+    extends InventoryActionContext, ActionExecutionPolicy {
+    readonly expectedQuantity?: number;
+    readonly expectedObservation?: InventoryObservation;
+}
+
+export interface InventoryTransferPolicy extends InventoryMutationPolicy {
+    readonly recipientMemberNumber: number;
+}
+
+export interface InventoryTransferObservation {
+    readonly source: InventoryObservation;
+    readonly recipient: InventoryObservation;
+}
+
+export interface InventoryActionAdapter<TRuntimeCharacter = unknown> {
+    observe(
+        character: TRuntimeCharacter,
+        context: InventoryActionContext,
+    ): Promise<ActionResult<InventoryObservation>>;
+
+    add(
+        character: TRuntimeCharacter,
+        item: InventoryItem,
+        policy: InventoryMutationPolicy,
+    ): Promise<ActionResult<InventoryObservation>>;
+
+    remove(
+        character: TRuntimeCharacter,
+        identity: InventoryItemIdentity,
+        quantity: number,
+        policy: InventoryMutationPolicy,
+    ): Promise<ActionResult<InventoryObservation>>;
+
+    transfer(
+        source: TRuntimeCharacter,
+        recipient: TRuntimeCharacter,
+        identity: InventoryItemIdentity,
+        quantity: number,
+        policy: InventoryTransferPolicy,
+    ): Promise<ActionResult<InventoryTransferObservation>>;
+}
+
 export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
     observe(
         character: TRuntimeCharacter,

@@ -17,7 +17,7 @@ import * as assert from "node:assert/strict";
 import { RouletteGame } from "../roulette";
 import { CommandValidator } from "../../shared/commandValidator";
 
-test("Roulette: preserves a preconfigured LuckyWheel instead of applying the default", () => {
+test("Roulette: preserves a preconfigured LuckyWheel instead of applying the default", async () => {
     const configuredWheel = {
         Group: "ItemDevices",
         Name: "LuckyWheel",
@@ -38,11 +38,11 @@ test("Roulette: preserves a preconfigured LuckyWheel instead of applying the def
         {} as any,
     );
 
-    assert.strictEqual(game.getWheel(), configuredWheel);
+    assert.strictEqual(await game.getWheel(), configuredWheel);
     assert.strictEqual(applyBundleCalls, 0);
 });
 
-test("Roulette: applies the default when no LuckyWheel is present", () => {
+test("Roulette: applies the default when no LuckyWheel is present", async () => {
     const unrelatedItem = {
         Group: "ItemDevices",
         Name: "OtherDevice",
@@ -63,7 +63,7 @@ test("Roulette: applies the default when no LuckyWheel is present", () => {
         {} as any,
     );
 
-    assert.throws(() => game.getWheel(), /Failed to equip the LuckyWheel/);
+    await assert.rejects(game.getWheel(), /Failed to equip the LuckyWheel/);
     assert.strictEqual(applyBundleCalls, 1);
 });
 

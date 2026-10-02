@@ -63,6 +63,7 @@ export interface ConfigFile {
     action_layer_bunny_restraints_enabled?: boolean;
     action_layer_release_removal_enabled?: boolean;
     action_layer_communication_notifications_enabled?: boolean;
+    action_layer_inventory_enabled?: boolean;
 
     casino?: CasinoConfig;
     dare?: DareConfig;
@@ -140,6 +141,7 @@ export const configSchema = z
         action_layer_communication_notifications_enabled: z
             .boolean()
             .default(false),
+        action_layer_inventory_enabled: z.boolean().default(false),
         casino: z
             .object({
                 cocktail: z.string().trim().min(1).optional(),
