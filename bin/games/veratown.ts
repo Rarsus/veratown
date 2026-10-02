@@ -82,7 +82,7 @@ import {
     CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
-    OctoberCountdownMonitorProvider,
+    LocktoberCountdownMonitorProvider,
 } from "./veratown/locationMonitorSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import { LiveCharacterStateSync } from "./veratown/liveCharacterStateSync";
@@ -920,7 +920,7 @@ export class Veratown {
                                 "Cage information is currently unavailable.",
                         ),
                         new BotHelpMonitorProvider(() => Veratown.description),
-                        new OctoberCountdownMonitorProvider(),
+                        new LocktoberCountdownMonitorProvider(),
                         new CallbackMonitorProvider(
                             "kidnappers_status",
                             () =>
