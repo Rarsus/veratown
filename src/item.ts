@@ -521,6 +521,13 @@ export function AssetGet(
     };
 }
 
+export function hasExtendedAssetGroup(groupName: string): boolean {
+    return (
+        Object.hasOwn(AssetFemale3DCGExtended, groupName) ||
+        Object.hasOwn(PostR132ExtendedAssetDefinitions, groupName)
+    );
+}
+
 // Some modded clients send appearance data with item groups that aren't real
 // clothing/asset groups (eg. "Luzi" echo slots, or the "\u5916\u89c2\u5de5\u5177"
 // ("appearance tool") pseudo-group). We don't support these, but there's no

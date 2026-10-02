@@ -291,6 +291,53 @@ test("CatDog increases intensity without replacing an Advanced vibrator mode", a
     });
 });
 
+test("CatDog skips non-asset and empty appearance entries before extended lookup", async () => {
+    const appearance = recordingAppearanceService();
+    const rollout = new ActionLayerRolloutController({
+        featureAppearanceEnabled: true,
+    });
+    const system = new CatDogSystem(
+        connector(() => undefined),
+        undefined,
+        undefined,
+        rollout,
+        appearance.service as any,
+    );
+    const target = character(47);
+    target.Appearance.MakeAppearanceBundle = () => [
+        { Group: "Pussy", Name: "Pussy2" },
+        { Group: "ArmsLeft", Name: "" },
+        {
+            Group: "ItemVulva",
+            Name: "VibratingEgg",
+            Property: {
+                TypeRecord: { vibrating: 0 },
+                Mode: "Off",
+                Intensity: -1,
+                Effect: ["Egged"],
+            },
+        },
+    ];
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+
+    try {
+        const result = await (system as any).performVibratorAction(
+            target,
+            vibratorAction,
+            "cat",
+            actionContext(47),
+        );
+
+        assert.equal(result.status, "completed");
+        assert.equal(appearance.updates.length, 1);
+        assert.deepEqual(warnings, []);
+    } finally {
+        console.warn = originalWarn;
+    }
+});
+
 test("CatDog updates all vibration modules in one guarded appearance action", async () => {
     const appearance = recordingAppearanceService();
     const rollout = new ActionLayerRolloutController({
@@ -435,7 +482,7 @@ test("CatDog bondage uses the shared appearance action when rollout is enabled",
                 timeoutMs: 5_000,
                 maxAttempts: 1,
                 retryDelayMs: 0,
-                requireFreshObservation: true,
+                requireFreshObservation: false,
                 requireServerConfirmation: true,
                 itemOptions: {
                     difficulty: 18,

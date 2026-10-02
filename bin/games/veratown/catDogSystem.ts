@@ -17,6 +17,7 @@ import {
     API_Character,
     AssetGet,
     getExtendedAssetDef,
+    hasExtendedAssetGroup,
     type BC_AppearanceItem,
 } from "bc-bot";
 import {
@@ -918,7 +919,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                                 timeoutMs: 5_000,
                                 maxAttempts: 1,
                                 retryDelayMs: 0,
-                                requireFreshObservation: true,
+                                requireFreshObservation: false,
                                 requireServerConfirmation: true,
                                 itemOptions: {
                                     difficulty: action.difficulty,
@@ -1031,6 +1032,13 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             const results: ActionResult<unknown>[] = [];
             const appearance = character.Appearance.MakeAppearanceBundle();
             for (const item of appearance) {
+                if (
+                    !item.Group ||
+                    !item.Name ||
+                    !hasExtendedAssetGroup(item.Group)
+                ) {
+                    continue;
+                }
                 const definition = extendedDefinitionFor(item.Group, item.Name);
                 if (!definition) continue;
 
