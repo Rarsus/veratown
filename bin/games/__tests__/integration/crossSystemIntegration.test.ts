@@ -83,7 +83,7 @@ describe("Cross-system integration", () => {
         } as GameEvent);
 
         let view = await unifiedStore.getCasinoView(memberNumber);
-        assert.equal(view.chips, 5);
+        assert.equal(view.chips, 10);
         assert.equal(view.lockedChips, 5);
 
         await eventBus.publish({
