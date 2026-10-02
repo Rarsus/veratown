@@ -66,45 +66,12 @@ import type {
 } from "../action-layer";
 import { AppearanceActionService } from "../action-layer/appearance-service";
 import { BCAppearanceActionAdapter } from "../action-layer/adapters/bc-appearance";
+import { VERATOWN_HIDDEN_APPEARANCE_LAYERS } from "./veratown/veratownConfig";
 
 const logger = createLogger("Casino");
 
 const FREE_CHIPS = 20;
 const CASINO_WELCOME_DEDUPE_MS = 5_000;
-const CASINO_HIDDEN_LAYERS = [
-    "Height",
-    "BodyUpper",
-    "ArmsLeft",
-    "ArmsRight",
-    "HandsLeft",
-    "HandsRight",
-    "BodyLower",
-    "HairFront",
-    "HairBack",
-    "Eyebrows",
-    "Eyes",
-    "Eyes2",
-    "Mouth",
-    "Nipples",
-    "Pussy",
-    "Pronouns",
-    "Head",
-    "Blush",
-    "Fluids",
-    "Emoticon",
-    "ItemNeck",
-    "ItemHead",
-    "Cloth",
-    "Bra",
-    "Socks",
-    "Shoes",
-    "ClothAccessory",
-    "Necklace",
-    "ClothLower",
-    "Panties",
-    "Suit",
-    "Gloves",
-];
 
 export function getItemsBlockingForfeit(
     char: API_Character,
@@ -212,7 +179,7 @@ export class Casino implements GamePlugin {
         const memberNumber = this.conn.Player.MemberNumber;
         const result = await this.appearanceActionService.setHiddenLayers(
             this.conn.Player,
-            CASINO_HIDDEN_LAYERS,
+            VERATOWN_HIDDEN_APPEARANCE_LAYERS,
             true,
             {
                 operationId: `casino-hidden-layers-${memberNumber}-${++this.casinoAppearanceOperation}`,

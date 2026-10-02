@@ -15,7 +15,7 @@
 import { RoleplaychallengeGameRoom } from "./hub/logic/roleplaychallengeGameRoom";
 import { Dare } from "./games/dare";
 import { readFile } from "fs/promises";
-import type { API_Connector } from "bc-bot";
+import type { API_Character, API_Connector } from "bc-bot";
 import { ConfigFile, configurationIssue, validateConfig } from "./config";
 import { Db } from "mongodb";
 import { Veratown } from "./games/veratown";
@@ -58,6 +58,8 @@ import { StartupProgress } from "./startupProgress";
 import { MongoWorkflowJournalStorage } from "./games/shared/mongoWorkflowJournalStorage";
 import { WorkflowJournal } from "./games/shared/durableWorkflowJournal";
 import { VeratownWorkflowRecovery } from "./games/veratown/shared/veratownWorkflowRecovery";
+import { AppearanceActionService } from "./action-layer/appearance-service";
+import { VERATOWN_HIDDEN_APPEARANCE_LAYERS } from "./games/veratown/veratownConfig";
 
 const SERVER_URL = {
     live: "https://bondage-club-server.herokuapp.com/",
@@ -670,6 +672,54 @@ async function initializeVeratownGame(
         config.action_layer_communication_notifications_enabled,
         config.action_layer_inventory_enabled,
     );
+    if (roomKey === "main" && connections.shower) {
+        const narrator = connections.shower.Player;
+        const memberNumber = narrator.MemberNumber;
+        try {
+            narrator.setScriptPermissions(true, false);
+            const appearanceService = container.get<
+                AppearanceActionService<API_Character>
+            >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE);
+            const appearanceResult = await appearanceService.setHiddenLayers(
+                narrator,
+                VERATOWN_HIDDEN_APPEARANCE_LAYERS,
+                true,
+                {
+                    operationId: `user2-hidden-appearance-${memberNumber}`,
+                    memberNumber,
+                    source: "feature",
+                    reason: "Hide Veratown narrator appearance",
+                    timeoutMs: 5_000,
+                    maxAttempts: 1,
+                    retryDelayMs: 0,
+                    requireServerConfirmation: true,
+                },
+            );
+            if (
+                appearanceResult.status === "completed" ||
+                appearanceResult.status === "already_satisfied"
+            ) {
+                logger.info("Confirmed hidden appearance for user2 narrator", {
+                    memberNumber,
+                    hiddenLayers: VERATOWN_HIDDEN_APPEARANCE_LAYERS.length,
+                });
+            } else {
+                logger.warn(
+                    "Could not confirm hidden appearance for user2 narrator",
+                    {
+                        memberNumber,
+                        status: appearanceResult.status,
+                        reason: appearanceResult.reason,
+                    },
+                );
+            }
+        } catch (error) {
+            logger.warn("Failed to update user2 narrator appearance", {
+                memberNumber,
+                reason: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
     logger.info("Starting Veratown game initialization", {
         roomKey,
         bot: connections.main.Player.Name,

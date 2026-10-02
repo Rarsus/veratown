@@ -21,6 +21,41 @@ import { MapRegion, API_Character, BC_AppearanceItem } from "bc-bot";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { VeratownRegion } from "./regionManager";
 
+export const VERATOWN_HIDDEN_APPEARANCE_LAYERS = [
+    "Height",
+    "BodyUpper",
+    "ArmsLeft",
+    "ArmsRight",
+    "HandsLeft",
+    "HandsRight",
+    "BodyLower",
+    "HairFront",
+    "HairBack",
+    "Eyebrows",
+    "Eyes",
+    "Eyes2",
+    "Mouth",
+    "Nipples",
+    "Pussy",
+    "Pronouns",
+    "Head",
+    "Blush",
+    "Fluids",
+    "Emoticon",
+    "ItemNeck",
+    "ItemHead",
+    "Cloth",
+    "Bra",
+    "Socks",
+    "Shoes",
+    "ClothAccessory",
+    "Necklace",
+    "ClothLower",
+    "Panties",
+    "Suit",
+    "Gloves",
+] as const;
+
 export const RECEPTIONIST_POSITION = { X: 10, Y: 8 };
 
 // The gambling area hosted by a separate Casino bot (see main.ts); Veratown's
