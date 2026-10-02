@@ -71,6 +71,31 @@ export class CallbackMonitorProvider implements LocationMonitorProvider {
     }
 }
 
+const UTC_DAY_MS = 24 * 60 * 60 * 1_000;
+
+export class OctoberCountdownMonitorProvider implements LocationMonitorProvider {
+    public readonly key = "october_countdown";
+
+    public constructor(private readonly now: () => Date = () => new Date()) {}
+
+    public getDisplay(): string {
+        const now = this.now();
+        const year = now.getUTCFullYear();
+        const octoberEnd = Date.UTC(year, 10, 1);
+        const remainingMs = octoberEnd - now.getTime();
+
+        if (remainingMs <= 0) return `October ${year} has ended (UTC).`;
+
+        const days = Math.floor(remainingMs / UTC_DAY_MS);
+        if (days === 0) {
+            return `October ${year} ends in less than 1 day (UTC).`;
+        }
+        const unit = days === 1 ? "day" : "days";
+        const verb = days === 1 ? "is" : "are";
+        return `There ${verb} ${days} ${unit} left until October ${year} ends (UTC).`;
+    }
+}
+
 const DEFAULT_MONITOR_COOLDOWN_MS = 3000;
 
 export class LocationMonitorSystem
@@ -87,6 +112,7 @@ export class LocationMonitorSystem
     );
     private readonly lastDisplayedAt = new Map<string, number>();
     private readonly activeDisplays = new Set<string>();
+    private operationSequence = 0;
     private monitorLocations: VeratownLocationDoc[] = [];
     private boundMap?: API_Map;
     private boundRoom?: API_Connector["chatRoom"];
@@ -265,7 +291,7 @@ export class LocationMonitorSystem
             const message = await provider.getDisplay({ character, location });
             if (!message.trim()) return;
 
-            const operationId = `location-monitor:${location.key}:${character.MemberNumber}`;
+            const operationId = `location-monitor:${location.key}:${character.MemberNumber}:${++this.operationSequence}`;
             const lease = this.rollout?.begin(
                 "communication-notifications",
                 operationId,

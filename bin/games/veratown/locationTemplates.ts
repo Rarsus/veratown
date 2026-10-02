@@ -412,7 +412,8 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
     help_monitor: {
         type: "help_monitor",
         label: "Help Monitor",
-        description: "A help information display",
+        description:
+            "A location-triggered whisper. data.displayKey selects bot_help, october_countdown, or another registered monitor provider.",
         fields: [
             "region (TopLeft/BottomRight)",
             "data.displayKey",

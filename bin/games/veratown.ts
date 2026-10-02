@@ -55,7 +55,6 @@ import {
     getLifecycleObjectId,
 } from "./veratown/featureSystem";
 import { VeratownMapStore } from "./veratown/mapStore";
-import { LocktoberCountdownSystem } from "./veratown/locktoberFloorCountdown";
 import {
     normalizeVeratownRoomKey,
     VeratownRoomStore,
@@ -83,6 +82,7 @@ import {
     CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
+    OctoberCountdownMonitorProvider,
 } from "./veratown/locationMonitorSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import { LiveCharacterStateSync } from "./veratown/liveCharacterStateSync";
@@ -160,7 +160,7 @@ export class Veratown {
         "/bot release - Emergency release: teleport to punishment room, then strip to escape",
         "/bot changelog - View recent map changes",
         "/bot status - View bot connection, location, and feature status",
-        "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, keypadDoor, locktober, dare, casino",
+        "/bot feature list - Available room features: cage, kennel, shower, bed, bunnyPark, window, trashcan, keypadDoor, dare, casino",
         "/bot code <code> - Open the keypad door while standing on a keypad",
         "Keypad doors accept group codes at configured keypad locations.",
         "",
@@ -256,7 +256,6 @@ export class Veratown {
     // and can't be saved/persisted across restarts.
     private mapStore?: VeratownMapStore;
     private roomStore?: VeratownRoomStore;
-    private locktoberCountdownSystem?: LocktoberCountdownSystem;
 
     // Stores location data (cages, keypads, monitors, etc.) in the database,
     // with config fallback. Only set when mongo_uri/mongo_db are configured.
@@ -912,32 +911,49 @@ export class Veratown {
         );
         this.locationMonitorSystem = this.initFeature(
             () =>
-                new LocationMonitorSystem(this.conn, [
-                    new CageOccupancyMonitorProvider(
-                        () =>
-                            this.cageSystem?.getOccupancyDisplay() ??
-                            "Cage information is currently unavailable.",
-                    ),
-                    new BotHelpMonitorProvider(() => Veratown.description),
-                    new CallbackMonitorProvider(
-                        "kidnappers_status",
-                        () =>
-                            this.kidnappers?.getStatus() ??
-                            "Kidnappers is currently unavailable.",
-                    ),
-                    new CallbackMonitorProvider(
-                        "kidnappers_commands",
-                        () =>
-                            this.kidnappers?.getHelpText() ??
-                            "Kidnappers commands are currently unavailable.",
-                    ),
-                    new CallbackMonitorProvider(
-                        "kidnappers_guide",
-                        () =>
-                            this.kidnappers?.getPlayerGuide() ??
-                            "The Kidnappers game is currently unavailable.",
-                    ),
-                ]),
+                new LocationMonitorSystem(
+                    this.conn,
+                    [
+                        new CageOccupancyMonitorProvider(
+                            () =>
+                                this.cageSystem?.getOccupancyDisplay() ??
+                                "Cage information is currently unavailable.",
+                        ),
+                        new BotHelpMonitorProvider(() => Veratown.description),
+                        new OctoberCountdownMonitorProvider(),
+                        new CallbackMonitorProvider(
+                            "kidnappers_status",
+                            () =>
+                                this.kidnappers?.getStatus() ??
+                                "Kidnappers is currently unavailable.",
+                        ),
+                        new CallbackMonitorProvider(
+                            "kidnappers_commands",
+                            () =>
+                                this.kidnappers?.getHelpText() ??
+                                "Kidnappers commands are currently unavailable.",
+                        ),
+                        new CallbackMonitorProvider(
+                            "kidnappers_guide",
+                            () =>
+                                this.kidnappers?.getPlayerGuide() ??
+                                "The Kidnappers game is currently unavailable.",
+                        ),
+                    ],
+                    undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    )
+                        ? this.container.get<CommunicationActionService>(
+                              DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                          )
+                        : undefined,
+                    this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                        ? this.container.get<ActionLayerRolloutController>(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          )
+                        : undefined,
+                ),
         );
 
         // Link ReleaseSystem to ShowerSystem for parole violation checking
@@ -965,12 +981,6 @@ export class Veratown {
                     ),
             );
         }
-        if (this.roomKey === "main") {
-            this.locktoberCountdownSystem = this.initFeature(
-                () => new LocktoberCountdownSystem(this.conn),
-            );
-        }
-
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
         // are updated to match the new map layout.
@@ -1192,7 +1202,6 @@ export class Veratown {
     }
 
     public async shutdown(): Promise<void> {
-        this.locktoberCountdownSystem?.shutdown();
         if (
             this.container.has(DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE)
         ) {
@@ -1601,7 +1610,6 @@ export class Veratown {
 
     private onChatRoomJoined = async () => {
         this.detachContainmentFeatures();
-        this.locktoberCountdownSystem?.attachToRoom();
         await this.setupCharacter();
         this.attachContainmentFeatures();
         await this.reloadLocations();
@@ -1639,7 +1647,6 @@ export class Veratown {
     };
 
     private onBotDisconnected = () => {
-        this.locktoberCountdownSystem?.detachFromRoom();
         this.detachContainmentFeatures();
         this.locationMonitorSystem?.detachFromRoom?.();
         this.setContainmentFeaturesEnabled(false);
@@ -1770,7 +1777,6 @@ export class Veratown {
             const mapData =
                 storedMapData ?? JSON.parse(decompressFromBase64(MAP));
             this.conn.chatRoom!.map.setMapFromData(mapData);
-            this.locktoberCountdownSystem?.attachToRoom();
         } catch (e) {
             logger.warn("Map data not loaded, using fallback", {
                 error: String(e),
