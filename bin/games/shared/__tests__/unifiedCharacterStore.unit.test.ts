@@ -83,6 +83,7 @@ function createStore() {
     return {
         store: new UnifiedCharacterStore(db as any, new EventBus()),
         profile,
+        profiles,
         events,
         clearProfile: () => {
             profile = null;
@@ -251,8 +252,27 @@ test("UnifiedCharacterStore rejects escape attempts without bondage or chips", a
     profile.casino.chips = 5;
     assert.deepEqual(await store.spendChipsToEscape(1, 10), {
         success: false,
-        message: "Insufficient chips. You need 10 chips but have 5.",
+        message:
+            "Insufficient chips. You need 10 available chips but have 5 available.",
         bondageRemoved: 0,
+    });
+});
+
+test("UnifiedCharacterStore does not spend chips locked for bondage", async () => {
+    const { store, profile } = createStore();
+    profile.casino.chips = 15;
+    profile.casino.lockedChips = 10;
+
+    assert.deepEqual(await store.spendChipsToEscape(1, 6), {
+        success: false,
+        message:
+            "Insufficient chips. You need 6 available chips but have 5 available.",
+        bondageRemoved: 0,
+    });
+    assert.deepEqual(await store.spendChipsToEscape(1, 5), {
+        success: true,
+        message: "Successfully escaped 1 bondage item(s) for 5 chips!",
+        bondageRemoved: 1,
     });
 });
 
@@ -603,4 +623,108 @@ test("UnifiedCharacterStore persists bio, inventory, and effect mutations", asyn
     assert.equal(await store.cancelEffect(7, "effect-1", "test"), true);
     assert.equal(await store.expireEffects(7, Date.now() + 2_000), 1);
     assert.ok(events.some((event) => event.type === "effect_expired"));
+});
+
+test("release-removal mutations persist attempts and completion snapshots", async () => {
+    const { store, profile, profiles } = createStore();
+    profile.veratown.releaseParoleState = {};
+    (profiles as any).updateOne = async (_filter: unknown, update: any) => {
+        if (!Array.isArray(update)) {
+            for (const [path, value] of Object.entries(update.$set ?? {})) {
+                const parts = path.split(".");
+                let target = profile;
+                for (const part of parts.slice(0, -1)) {
+                    target = target[part] ?? (target[part] = {});
+                }
+                target[parts.at(-1)!] = value;
+            }
+            for (const [path, amount] of Object.entries(update.$inc ?? {})) {
+                const parts = path.split(".");
+                let target = profile;
+                for (const part of parts.slice(0, -1)) {
+                    target = target[part] ?? (target[part] = {});
+                }
+                const key = parts.at(-1)!;
+                target[key] = (target[key] ?? 0) + Number(amount);
+            }
+        }
+        return { matchedCount: 1, modifiedCount: 1 };
+    };
+    const service = new GameStateMutationServiceImpl(store, new EventBus());
+    const unlockedItem = { group: "ItemArms", name: "LeatherCuffs" };
+    const lockedItem = { group: "ItemLegs", name: "Rope" };
+    const plan = {
+        plannedUnlockedItems: [unlockedItem, unlockedItem],
+        preservedLockedItems: [lockedItem],
+    };
+
+    const planned = await service.beginReleaseRemoval(1, "release-1", plan);
+    assert.equal(planned.status, "planned");
+    assert.equal(planned.plannedUnlockedItems.length, 1);
+    assert.equal(planned.preservedLockedItems.length, 1);
+    assert.equal(
+        (await service.beginReleaseRemoval(1, "duplicate", plan)).operationId,
+        "release-1",
+    );
+    assert.equal(
+        (await service.getActiveReleaseRemoval(1))?.operationId,
+        "release-1",
+    );
+
+    const failedAttempt = await service.recordReleaseRemovalAttempt(
+        1,
+        "release-1",
+        unlockedItem,
+        { success: false, error: "still equipped" },
+    );
+    assert.equal(failedAttempt.status, "verification_failed");
+    assert.equal(failedAttempt.remainingItems.length, 1);
+    assert.equal(
+        (
+            await service.recordReleaseRemovalAttempt(
+                1,
+                "release-1",
+                unlockedItem,
+                { success: false, error: "still equipped" },
+            )
+        ).attempt,
+        1,
+    );
+
+    const removed = await service.recordReleaseRemovalAttempt(
+        1,
+        "release-1",
+        unlockedItem,
+        { success: true },
+    );
+    assert.equal(removed.status, "removing");
+    assert.equal(removed.remainingItems.length, 0);
+    assert.equal(removed.completedRemovals.length, 1);
+    await assert.rejects(
+        store.completeReleaseRemoval(1, "release-1", {
+            remainingItems: [unlockedItem],
+        }),
+        /Cannot complete release removal with 1 remaining items/,
+    );
+
+    const completed = await service.completeReleaseRemoval(1, "release-1", {
+        currentAppearance: [],
+        currentRestraints: [],
+        remainingItems: [],
+    });
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.completedRemovals.length, 1);
+    assert.equal(await service.getActiveReleaseRemoval(1), undefined);
+
+    await service.beginReleaseRemoval(1, "release-2", {
+        plannedUnlockedItems: [],
+        preservedLockedItems: [],
+    });
+    const failed = await service.failReleaseRemoval(
+        1,
+        "release-2",
+        "verification failed",
+    );
+    assert.equal(failed.status, "verification_failed");
+    assert.equal(failed.lastError, "verification failed");
 });

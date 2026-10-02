@@ -91,6 +91,25 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         );
     }
 
+    public setHiddenLayers(
+        character: TRuntimeCharacter,
+        layers: readonly string[],
+        hidden: boolean,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const context = contextFromPolicy(policy);
+        validateContext(context);
+        if (layers.some((layer) => !layer.trim())) {
+            throw new Error("Appearance layer names must not be empty");
+        }
+        return this.scheduler.schedule(
+            context.memberNumber,
+            policy.operationId,
+            () =>
+                this.adapter.setHiddenLayers(character, layers, hidden, policy),
+        );
+    }
+
     public snapshot(): ReturnType<ActionScheduler["snapshot"]> {
         return this.scheduler.snapshot();
     }

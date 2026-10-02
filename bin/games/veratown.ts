@@ -84,6 +84,7 @@ import {
     CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
+    LocktoberCountdownMonitorProvider,
 } from "./veratown/locationMonitorSystem";
 import { PlayerRoleSystem } from "./veratown/playerRoleSystem";
 import { LiveCharacterStateSync } from "./veratown/liveCharacterStateSync";
@@ -920,32 +921,49 @@ export class Veratown {
         );
         this.locationMonitorSystem = this.initFeature(
             () =>
-                new LocationMonitorSystem(this.conn, [
-                    new CageOccupancyMonitorProvider(
-                        () =>
-                            this.cageSystem?.getOccupancyDisplay() ??
-                            "Cage information is currently unavailable.",
-                    ),
-                    new BotHelpMonitorProvider(() => Veratown.description),
-                    new CallbackMonitorProvider(
-                        "kidnappers_status",
-                        () =>
-                            this.kidnappers?.getStatus() ??
-                            "Kidnappers is currently unavailable.",
-                    ),
-                    new CallbackMonitorProvider(
-                        "kidnappers_commands",
-                        () =>
-                            this.kidnappers?.getHelpText() ??
-                            "Kidnappers commands are currently unavailable.",
-                    ),
-                    new CallbackMonitorProvider(
-                        "kidnappers_guide",
-                        () =>
-                            this.kidnappers?.getPlayerGuide() ??
-                            "The Kidnappers game is currently unavailable.",
-                    ),
-                ]),
+                new LocationMonitorSystem(
+                    this.conn,
+                    [
+                        new CageOccupancyMonitorProvider(
+                            () =>
+                                this.cageSystem?.getOccupancyDisplay() ??
+                                "Cage information is currently unavailable.",
+                        ),
+                        new BotHelpMonitorProvider(() => Veratown.description),
+                        new LocktoberCountdownMonitorProvider(),
+                        new CallbackMonitorProvider(
+                            "kidnappers_status",
+                            () =>
+                                this.kidnappers?.getStatus() ??
+                                "Kidnappers is currently unavailable.",
+                        ),
+                        new CallbackMonitorProvider(
+                            "kidnappers_commands",
+                            () =>
+                                this.kidnappers?.getHelpText() ??
+                                "Kidnappers commands are currently unavailable.",
+                        ),
+                        new CallbackMonitorProvider(
+                            "kidnappers_guide",
+                            () =>
+                                this.kidnappers?.getPlayerGuide() ??
+                                "The Kidnappers game is currently unavailable.",
+                        ),
+                    ],
+                    undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                    )
+                        ? this.container.get<CommunicationActionService>(
+                              DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
+                          )
+                        : undefined,
+                    this.container.has(DIServiceKeys.ACTION_LAYER_ROLLOUT)
+                        ? this.container.get<ActionLayerRolloutController>(
+                              DIServiceKeys.ACTION_LAYER_ROLLOUT,
+                          )
+                        : undefined,
+                ),
         );
 
         // Link ReleaseSystem to ShowerSystem for parole violation checking
@@ -973,7 +991,6 @@ export class Veratown {
                     ),
             );
         }
-
         // TODO: exhibit tile triggers, dressing/redressing pads, and the
         // hallway/common area doors are disabled until their coordinates
         // are updated to match the new map layout.

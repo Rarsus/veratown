@@ -64,11 +64,47 @@ import type {
     ActionLayerRolloutController,
     InventoryActionService,
 } from "../action-layer";
+import { AppearanceActionService } from "../action-layer/appearance-service";
+import { BCAppearanceActionAdapter } from "../action-layer/adapters/bc-appearance";
 
 const logger = createLogger("Casino");
 
 const FREE_CHIPS = 20;
 const CASINO_WELCOME_DEDUPE_MS = 5_000;
+const CASINO_HIDDEN_LAYERS = [
+    "Height",
+    "BodyUpper",
+    "ArmsLeft",
+    "ArmsRight",
+    "HandsLeft",
+    "HandsRight",
+    "BodyLower",
+    "HairFront",
+    "HairBack",
+    "Eyebrows",
+    "Eyes",
+    "Eyes2",
+    "Mouth",
+    "Nipples",
+    "Pussy",
+    "Pronouns",
+    "Head",
+    "Blush",
+    "Fluids",
+    "Emoticon",
+    "ItemNeck",
+    "ItemHead",
+    "Cloth",
+    "Bra",
+    "Socks",
+    "Shoes",
+    "ClothAccessory",
+    "Necklace",
+    "ClothLower",
+    "Panties",
+    "Suit",
+    "Gloves",
+];
 
 export function getItemsBlockingForfeit(
     char: API_Character,
@@ -119,6 +155,8 @@ export class Casino implements GamePlugin {
     public unifiedStore: UnifiedCharacterStore;
     private mutationService: GameStateMutationService;
     private readonly bioManager: BioManager;
+    private readonly appearanceActionService: AppearanceActionService<API_Character>;
+    private casinoAppearanceOperation = 0;
     private cocktailOfTheDay: Cocktail | undefined;
     private cocktailOfTheDayKey?: string;
     private readonly cocktailCatalog: CocktailCatalogService;
@@ -170,6 +208,34 @@ export class Casino implements GamePlugin {
         return this.bioManager;
     }
 
+    public async hideCasinoAppearanceLayers(): Promise<void> {
+        const memberNumber = this.conn.Player.MemberNumber;
+        const result = await this.appearanceActionService.setHiddenLayers(
+            this.conn.Player,
+            CASINO_HIDDEN_LAYERS,
+            true,
+            {
+                operationId: `casino-hidden-layers-${memberNumber}-${++this.casinoAppearanceOperation}`,
+                memberNumber,
+                source: "feature",
+                reason: "Casino visual appearance",
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+                requireServerConfirmation: false,
+            },
+        );
+        if (
+            result.status !== "completed" &&
+            result.status !== "already_satisfied" &&
+            result.status !== "in_progress"
+        ) {
+            throw new Error(
+                result.reason ?? `Casino appearance update ${result.status}`,
+            );
+        }
+    }
+
     public constructor(
         private conn: API_Connector,
         db: Db,
@@ -198,6 +264,13 @@ export class Casino implements GamePlugin {
             this.unifiedStore,
             this.mutationService,
         );
+        this.appearanceActionService = container?.has(
+            DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+        )
+            ? container.get<AppearanceActionService<API_Character>>(
+                  DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+              )
+            : new AppearanceActionService(new BCAppearanceActionAdapter());
         this.messageSender = new MessageSender(conn);
         this.venueSystem = container?.has(DIServiceKeys.CASINO_VENUE_SYSTEM)
             ? container.get<CasinoVenueSystem>(

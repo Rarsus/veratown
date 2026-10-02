@@ -71,6 +71,51 @@ test("preserves locked state and rejects protected removal", async () => {
     assert.deepEqual(adapter.snapshot(), [{ ...item, lockState: "locked" }]);
 });
 
+test("sets and restores requested hidden layers without disturbing others", async () => {
+    const adapter = new InMemoryAppearanceActionAdapter({
+        memberNumber: 5,
+        initialHiddenLayers: ["BodyUpper", "OtherLayer"],
+    });
+
+    const hidden = await adapter.setHiddenLayers(
+        {},
+        ["BodyUpper", "ArmsLeft"],
+        true,
+        policy("hide-layers"),
+    );
+    assert.equal(hidden.status, "completed");
+    assert.deepEqual(hidden.value?.hiddenLayers, [
+        "BodyUpper",
+        "OtherLayer",
+        "ArmsLeft",
+    ]);
+
+    const restored = await adapter.setHiddenLayers(
+        {},
+        ["BodyUpper"],
+        false,
+        policy("restore-layer"),
+    );
+    assert.equal(restored.status, "completed");
+    assert.deepEqual(restored.value?.hiddenLayers, ["OtherLayer", "ArmsLeft"]);
+});
+
+test("returns already-satisfied for an existing hidden-layer state", async () => {
+    const adapter = new InMemoryAppearanceActionAdapter({
+        memberNumber: 5,
+        initialHiddenLayers: ["BodyUpper"],
+    });
+
+    const result = await adapter.setHiddenLayers(
+        {},
+        ["BodyUpper"],
+        true,
+        policy("hide-already-hidden"),
+    );
+
+    assert.equal(result.status, "already_satisfied");
+});
+
 test("returns a timeout without applying a delayed mutation", async () => {
     const item = { group: "ItemArms", asset: "SlowGloves" };
     const adapter = new InMemoryAppearanceActionAdapter({

@@ -19,12 +19,14 @@ import { createActionExecutionPolicy } from "../policy";
 export interface InMemoryAppearanceAdapterOptions {
     readonly memberNumber: number;
     readonly initialItems?: readonly ObservedAppearanceItem[];
+    readonly initialHiddenLayers?: readonly string[];
     readonly confirmationDelayMs?: number;
     readonly failureMode?: "connector-loss";
 }
 
 function toObservation(
     items: readonly ObservedAppearanceItem[],
+    hiddenLayers: readonly string[],
 ): AppearanceObservation {
     return {
         items: items.map(({ group, asset, extendedType }) => ({
@@ -32,6 +34,7 @@ function toObservation(
             asset,
             ...(extendedType === undefined ? {} : { extendedType }),
         })),
+        hiddenLayers: [...hiddenLayers],
         observedAt: Date.now(),
     };
 }
@@ -98,6 +101,7 @@ export class InMemoryAppearanceActionAdapter<
     private readonly confirmationDelayMs: number;
     private readonly failureMode: InMemoryAppearanceAdapterOptions["failureMode"];
     private items: ObservedAppearanceItem[];
+    private hiddenLayers: string[];
 
     public constructor(options: InMemoryAppearanceAdapterOptions) {
         if (
@@ -117,6 +121,7 @@ export class InMemoryAppearanceActionAdapter<
         this.confirmationDelayMs = options.confirmationDelayMs ?? 0;
         this.failureMode = options.failureMode;
         this.items = [...(options.initialItems ?? [])];
+        this.hiddenLayers = [...(options.initialHiddenLayers ?? [])];
     }
 
     public observe(
@@ -127,7 +132,7 @@ export class InMemoryAppearanceActionAdapter<
             context,
             "appearance.observe",
             createActionExecutionPolicy(),
-            async () => toObservation(this.items),
+            async () => toObservation(this.items, this.hiddenLayers),
         );
     }
 
@@ -152,7 +157,7 @@ export class InMemoryAppearanceActionAdapter<
                 createActionResult(
                     "already_satisfied",
                     createActionMetadata(context, "appearance.add", Date.now()),
-                    { value: toObservation(this.items) },
+                    { value: toObservation(this.items, this.hiddenLayers) },
                 ),
             );
         }
@@ -177,7 +182,7 @@ export class InMemoryAppearanceActionAdapter<
                                 : "unlocked",
                     },
                 ];
-                return toObservation(this.items);
+                return toObservation(this.items, this.hiddenLayers);
             },
         );
     }
@@ -211,7 +216,7 @@ export class InMemoryAppearanceActionAdapter<
                         "appearance.remove",
                         Date.now(),
                     ),
-                    { value: toObservation(this.items) },
+                    { value: toObservation(this.items, this.hiddenLayers) },
                 ),
             );
         }
@@ -232,7 +237,52 @@ export class InMemoryAppearanceActionAdapter<
                         `${current.group}\u0000${current.asset}\u0000${current.extendedType ?? ""}` !==
                         targetKey,
                 );
-                return toObservation(this.items);
+                return toObservation(this.items, this.hiddenLayers);
+            },
+        );
+    }
+
+    public setHiddenLayers(
+        _character: TRuntimeCharacter,
+        layers: readonly string[],
+        hidden: boolean,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const context = contextFromPolicy(policy, this.memberNumber);
+        const current = new Set(this.hiddenLayers);
+        const alreadySatisfied = layers.every(
+            (layer) => current.has(layer) === hidden,
+        );
+        if (alreadySatisfied) {
+            return Promise.resolve(
+                createActionResult(
+                    "already_satisfied",
+                    createActionMetadata(
+                        context,
+                        "appearance.setHiddenLayers",
+                        Date.now(),
+                    ),
+                    { value: toObservation(this.items, this.hiddenLayers) },
+                ),
+            );
+        }
+
+        return executeAction(
+            context,
+            "appearance.setHiddenLayers",
+            policy,
+            async (signal) => {
+                await waitForConfirmation(
+                    this.confirmationDelayMs,
+                    this.failureMode,
+                    signal,
+                );
+                for (const layer of layers) {
+                    if (hidden) current.add(layer);
+                    else current.delete(layer);
+                }
+                this.hiddenLayers = [...current];
+                return toObservation(this.items, this.hiddenLayers);
             },
         );
     }

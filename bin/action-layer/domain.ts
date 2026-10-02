@@ -105,6 +105,7 @@ export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
 
 export interface AppearanceObservation {
     readonly items: readonly AppearanceItemIdentity[];
+    readonly hiddenLayers: readonly string[];
     readonly observedAt: number;
 }
 
@@ -205,6 +206,13 @@ export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
     remove(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>>;
+
+    setHiddenLayers(
+        character: TRuntimeCharacter,
+        layers: readonly string[],
+        hidden: boolean,
         policy: AppearanceMutationPolicy,
     ): Promise<ActionResult<AppearanceObservation>>;
 }

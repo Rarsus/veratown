@@ -16,6 +16,7 @@ import {
     CallbackMonitorProvider,
     CageOccupancyMonitorProvider,
     LocationMonitorSystem,
+    LocktoberCountdownMonitorProvider,
 } from "../locationMonitorSystem";
 import type { VeratownLocationDoc } from "../veratownLocationStore";
 
@@ -41,6 +42,40 @@ function location(
         updatedAt: Date.now(),
     };
 }
+
+test("Locktober countdown provider uses UTC calendar days", () => {
+    const provider = new LocktoberCountdownMonitorProvider(
+        () => new Date("2026-10-02T00:00:00.000Z"),
+    );
+    assert.equal(
+        provider.getDisplay(),
+        "There are 30 days left until Locktober 2026 ends (UTC).",
+    );
+
+    const partialDayProvider = new LocktoberCountdownMonitorProvider(
+        () => new Date("2026-10-02T12:00:00.000Z"),
+    );
+    assert.equal(
+        partialDayProvider.getDisplay(),
+        "There are 29 days left until Locktober 2026 ends (UTC).",
+    );
+
+    const finalDayProvider = new LocktoberCountdownMonitorProvider(
+        () => new Date("2026-10-31T23:59:59.000Z"),
+    );
+    assert.equal(
+        finalDayProvider.getDisplay(),
+        "Locktober 2026 ends in less than 1 day (UTC).",
+    );
+
+    const afterEndProvider = new LocktoberCountdownMonitorProvider(
+        () => new Date("2026-11-01T00:00:00.000Z"),
+    );
+    assert.equal(
+        afterEndProvider.getDisplay(),
+        "Locktober 2026 has ended (UTC).",
+    );
+});
 
 test("location monitors register regions and dispatch provider content", async () => {
     const triggers: Array<{
@@ -197,9 +232,13 @@ test("enabled communication rollout routes monitor notifications through actions
         communicationService,
         rollout,
     );
+    const monitorLocation = location("help", "bot_help");
+    monitorLocation.data!.cooldownMs = 0;
 
     system.registerTriggers();
-    await system.reloadLocations([location("help", "bot_help")]);
+    await system.reloadLocations([monitorLocation]);
+    callback!({ MemberNumber: 4 });
+    await new Promise((resolve) => setImmediate(resolve));
     callback!({ MemberNumber: 4 });
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -209,7 +248,13 @@ test("enabled communication rollout routes monitor notifications through actions
             channel: "whisper",
             text: "Bot help",
             targetMemberNumber: 4,
-            deduplicationKey: "location-monitor:help:4",
+            deduplicationKey: "location-monitor:help:4:1",
+        },
+        {
+            channel: "whisper",
+            text: "Bot help",
+            targetMemberNumber: 4,
+            deduplicationKey: "location-monitor:help:4:2",
         },
     ]);
 });
