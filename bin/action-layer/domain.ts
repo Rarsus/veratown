@@ -74,6 +74,11 @@ export type AppearanceLockType =
 
 export interface AppearanceItemMutationOptions {
     readonly color?: string;
+    readonly difficulty?: number;
+    readonly properties?: {
+        readonly typeRecord?: Readonly<Record<string, number>>;
+        readonly mode?: string;
+    };
     readonly craft?: {
         readonly name: string;
         readonly description: string;
@@ -347,6 +352,43 @@ export interface MapActionAdapter extends MapObjectActionAdapter {
         policy: ActionExecutionPolicy,
     ): Promise<ActionResult<unknown>>;
 }
+
+export type AppearanceActionOptions = Omit<
+    AppearanceMutationPolicy,
+    "operationId" | "memberNumber" | "source" | "reason"
+>;
+
+export type MovementActionOptions = Omit<
+    MovementActionPolicy,
+    "operationId" | "memberNumber" | "source" | "reason"
+>;
+
+export type CharacterAction =
+    | {
+          readonly type: "appearance.add";
+          readonly item: AppearanceItemIdentity;
+          readonly options: AppearanceActionOptions;
+      }
+    | {
+          readonly type: "appearance.remove";
+          readonly item: AppearanceItemIdentity;
+          readonly options: AppearanceActionOptions;
+      }
+    | {
+          readonly type: "appearance.set_hidden_layers";
+          readonly layers: readonly string[];
+          readonly hidden: boolean;
+          readonly options: AppearanceActionOptions;
+      }
+    | {
+          readonly type: "communication.send";
+          readonly request: MessageRequest;
+      }
+    | {
+          readonly type: "movement.move";
+          readonly destination: CharacterPosition;
+          readonly options: MovementActionOptions;
+      };
 
 export function createActionMetadata(
     context: ActionContext,

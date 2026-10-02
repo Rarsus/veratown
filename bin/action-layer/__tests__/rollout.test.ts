@@ -56,3 +56,17 @@ test("communication notifications default to legacy", () => {
         "legacy",
     );
 });
+
+test("feature appearance actions default to legacy and can be enabled", () => {
+    const rollout = new ActionLayerRolloutController();
+    assert.equal(
+        rollout.begin("feature-appearance", "appearance-legacy").path,
+        "legacy",
+    );
+
+    rollout.setEnabled("feature-appearance", true);
+    assert.equal(
+        rollout.begin("feature-appearance", "appearance-action").path,
+        "action",
+    );
+});

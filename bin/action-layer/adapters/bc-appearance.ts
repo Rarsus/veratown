@@ -224,6 +224,24 @@ function configureAddedItem(
     policy: AppearanceMutationPolicy,
 ): void {
     if (identity.extendedType) item.Extended?.SetType(identity.extendedType);
+    if (policy.itemOptions?.difficulty !== undefined) {
+        item.SetDifficulty?.(policy.itemOptions.difficulty);
+    }
+    const properties = policy.itemOptions?.properties;
+    if (
+        properties?.typeRecord !== undefined ||
+        properties?.mode !== undefined
+    ) {
+        if (typeof item.setProperty !== "function") {
+            throw new Error("BC appearance item does not support properties");
+        }
+        if (properties.typeRecord !== undefined) {
+            item.setProperty("TypeRecord", properties.typeRecord);
+        }
+        if (properties.mode !== undefined) {
+            item.setProperty("Mode", properties.mode);
+        }
+    }
     if (policy.itemOptions?.color !== undefined) {
         item.SetColor?.(policy.itemOptions.color);
     }

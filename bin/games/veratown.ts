@@ -277,6 +277,7 @@ export class Veratown {
         private readonly actionLayerReleaseRemovalEnabled = false,
         private readonly actionLayerCommunicationNotificationsEnabled = false,
         private readonly actionLayerInventoryEnabled = false,
+        private readonly actionLayerFeatureAppearanceEnabled = false,
     ) {
         this.conn = connections.main;
         this.conn2 = connections.shower;
@@ -293,6 +294,8 @@ export class Veratown {
                         this.actionLayerReleaseRemovalEnabled,
                     communicationNotificationsEnabled:
                         this.actionLayerCommunicationNotificationsEnabled,
+                    featureAppearanceEnabled:
+                        this.actionLayerFeatureAppearanceEnabled,
                     inventoryEnabled: this.actionLayerInventoryEnabled,
                 }),
             );
@@ -604,6 +607,13 @@ export class Veratown {
                               DIServiceKeys.ACTION_LAYER_ROLLOUT,
                           )
                         : undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                    )
+                        ? this.container.get<
+                              AppearanceActionService<API_Character>
+                          >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
+                        : undefined,
                 ),
         );
         this.kennelSystem = this.initFeature(
@@ -871,6 +881,13 @@ export class Veratown {
                               DIServiceKeys.ACTION_LAYER_ROLLOUT,
                           )
                         : undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                    )
+                        ? this.container.get<
+                              AppearanceActionService<API_Character>
+                          >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
+                        : undefined,
                 ),
         );
         this.furnitureBondageSystem = this.initFeature(
@@ -962,6 +979,13 @@ export class Veratown {
                         ? this.container.get<ActionLayerRolloutController>(
                               DIServiceKeys.ACTION_LAYER_ROLLOUT,
                           )
+                        : undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                    )
+                        ? this.container.get<
+                              AppearanceActionService<API_Character>
+                          >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
                         : undefined,
                 ),
         );

@@ -123,3 +123,84 @@ test("CatDog vibrator notifications retain the legacy path when rollout is disab
         "Whisper:*The dog cuddles you and by mistake triggers your device... The intensity rises.*",
     ]);
 });
+
+test("CatDog bondage uses the shared appearance action when rollout is enabled", async () => {
+    const additions: Array<{ item: unknown; policy: Record<string, unknown> }> =
+        [];
+    const appearanceService = {
+        add: async (
+            _character: unknown,
+            item: unknown,
+            policy: Record<string, unknown>,
+        ) => {
+            additions.push({ item, policy });
+            return {
+                status: "completed",
+                metadata: {
+                    operationId: String(policy.operationId),
+                    actionId: "appearance.add",
+                    memberNumber: Number(policy.memberNumber),
+                    attempt: 1,
+                    startedAt: 1,
+                    completedAt: 2,
+                },
+                value: { items: [], hiddenLayers: [], observedAt: 2 },
+            };
+        },
+    };
+    const rollout = new ActionLayerRolloutController({
+        featureAppearanceEnabled: true,
+    });
+    const system = new CatDogSystem(
+        connector(() => undefined),
+        undefined,
+        undefined,
+        rollout,
+        appearanceService as any,
+    );
+
+    await (system as any).performBondageAction(character(43), {
+        type: "bondage",
+        pieces: [
+            {
+                group: "ItemArms",
+                asset: "LeatherCuffs",
+                extendedType: "Straps",
+                color: "Blue",
+            },
+        ],
+        difficulty: 18,
+        color: "Red",
+        craftDescription: "Pet cuffs",
+    });
+
+    assert.deepEqual(additions, [
+        {
+            item: {
+                group: "ItemArms",
+                asset: "LeatherCuffs",
+                extendedType: "Straps",
+            },
+            policy: {
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+                requireFreshObservation: true,
+                requireServerConfirmation: true,
+                itemOptions: {
+                    difficulty: 18,
+                    color: "Blue",
+                    craft: {
+                        name: "LeatherCuffs",
+                        description: "Pet cuffs",
+                    },
+                },
+                operationId: "catdog-bondage:43:1:0",
+                memberNumber: 43,
+                source: "feature",
+                reason: "catdog bondage action",
+            },
+        },
+    ]);
+    assert.deepEqual(rollout.snapshot().activeOperationIds, []);
+});

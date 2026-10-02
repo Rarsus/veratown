@@ -4,6 +4,8 @@ import {
     ActionLayerRolloutController,
     CommunicationActionService,
 } from "../../../action-layer";
+import { AppearanceActionService } from "../../../action-layer/appearance-service";
+import { InMemoryAppearanceActionAdapter } from "../../../action-layer/adapters/in-memory-appearance";
 import type {
     ActionContext,
     ActionResult,
@@ -108,6 +110,119 @@ test("location monitors register regions and dispatch provider content", async (
         TopLeft: { X: 16, Y: 16 },
         BottomRight: { X: 16, Y: 16 },
     });
+});
+
+test("location monitor can whisper and remove one random clothing item", async () => {
+    let callback: ((character: unknown) => void) | undefined;
+    const map = {
+        addEnterRegionTrigger: (_region: unknown, next: any) => {
+            callback = next;
+        },
+        removeEnterRegionTrigger: () => {},
+    };
+    const sent: string[] = [];
+    const adapter = new InMemoryAppearanceActionAdapter({
+        memberNumber: 6,
+        initialItems: [
+            { group: "Cloth", asset: "Top", lockState: "unlocked" },
+            { group: "ClothLower", asset: "Skirt", lockState: "unlocked" },
+        ],
+    });
+    const system = new LocationMonitorSystem(
+        {
+            chatRoom: { map },
+            SendMessage: (_type: string, message: string) => sent.push(message),
+        } as any,
+        [new BotHelpMonitorProvider(() => "The air conditioner hums.")],
+        undefined,
+        undefined,
+        undefined,
+        new AppearanceActionService(adapter),
+    );
+    const monitorLocation = location("aircon", "bot_help");
+    monitorLocation.data!.actions = [{ type: "remove_random_clothing" }];
+
+    system.registerTriggers();
+    await system.reloadLocations([monitorLocation]);
+    callback!({
+        MemberNumber: 6,
+        Appearance: {
+            MakeAppearanceBundle: () => [],
+            Appearance: [
+                {
+                    Group: "Cloth",
+                    Name: "Top",
+                    Asset: { IsClothing: true },
+                },
+                {
+                    Group: "ClothLower",
+                    Name: "Skirt",
+                    Asset: { IsClothing: true },
+                },
+            ],
+        },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.deepEqual(sent, ["The air conditioner hums."]);
+    assert.equal(adapter.snapshot().length, 1);
+});
+
+test("random clothing action skips protected items and removes an unlocked item", async () => {
+    let callback: ((character: unknown) => void) | undefined;
+    const map = {
+        addEnterRegionTrigger: (_region: unknown, next: any) => {
+            callback = next;
+        },
+        removeEnterRegionTrigger: () => {},
+    };
+    const adapter = new InMemoryAppearanceActionAdapter({
+        memberNumber: 7,
+        initialItems: [
+            { group: "Cloth", asset: "LockedTop", lockState: "locked" },
+            {
+                group: "ClothLower",
+                asset: "UnlockedSkirt",
+                lockState: "unlocked",
+            },
+        ],
+    });
+    const system = new LocationMonitorSystem(
+        { chatRoom: { map }, SendMessage: () => {} } as any,
+        [new BotHelpMonitorProvider(() => "")],
+        undefined,
+        undefined,
+        undefined,
+        new AppearanceActionService(adapter),
+    );
+    const monitorLocation = location("aircon", "bot_help");
+    monitorLocation.data!.actions = [{ type: "remove_random_clothing" }];
+
+    system.registerTriggers();
+    await system.reloadLocations([monitorLocation]);
+    callback!({
+        MemberNumber: 7,
+        Appearance: {
+            MakeAppearanceBundle: () => [],
+            Appearance: [
+                {
+                    Group: "Cloth",
+                    Name: "LockedTop",
+                    Asset: { IsClothing: true },
+                },
+                {
+                    Group: "ClothLower",
+                    Name: "UnlockedSkirt",
+                    Asset: { IsClothing: true },
+                },
+            ],
+        },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.deepEqual(adapter.snapshot(), [
+        { group: "Cloth", asset: "LockedTop", lockState: "locked" },
+    ]);
 });
 
 test("location monitors throttle repeated display triggers per character", async () => {

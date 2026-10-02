@@ -29,6 +29,7 @@ test("configuration applies deterministic safe defaults", () => {
         config.action_layer_communication_notifications_enabled,
         false,
     );
+    assert.equal(config.action_layer_feature_appearance_enabled, false);
     assert.equal(config.action_layer_inventory_enabled, false);
 });
 
@@ -48,6 +49,15 @@ test("configuration accepts enabling communication notifications explicitly", ()
     });
 
     assert.equal(config.action_layer_communication_notifications_enabled, true);
+});
+
+test("configuration accepts enabling feature appearance actions explicitly", () => {
+    const config = validateConfig({
+        ...validConfig(),
+        action_layer_feature_appearance_enabled: true,
+    });
+
+    assert.equal(config.action_layer_feature_appearance_enabled, true);
 });
 
 test("configuration accepts disabling managed release workers", () => {

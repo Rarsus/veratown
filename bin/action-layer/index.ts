@@ -7,6 +7,8 @@ export * from "./inventory-planner";
 export * from "./inventory-service";
 export * from "./movement-service";
 export * from "./communication-service";
+export * from "./communication-migration";
+export * from "./character-action-executor";
 export * from "./reply-correlation";
 export * from "./policy";
 export * from "./workflow";

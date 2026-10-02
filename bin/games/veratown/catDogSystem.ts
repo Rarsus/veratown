@@ -15,13 +15,23 @@
 import { API_Connector, API_Character, AssetGet } from "bc-bot";
 import {
     ActionLayerRolloutController,
-    CommunicationActionService,
+    CharacterActionExecutor,
+    createActionMetadata,
+    createActionResult,
+    sendFeatureWhisper,
+    type AppearanceActionService,
+    type CommunicationActionService,
 } from "../../action-layer";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 import { createIdempotentMonitor } from "./shared/idempotentMonitor";
+import {
+    executeConfiguredActionSequence,
+    parseConfiguredActionList,
+    type ConfiguredAction,
+} from "./shared/configuredActions";
 
-interface CatDogAction {
+interface CatDogAction extends ConfiguredAction {
     type: "emote" | "bondage" | "vibrator";
 }
 
@@ -68,6 +78,7 @@ interface CatDogTile {
 export class CatDogSystem extends AbstractTileFeatureSystem {
     private tiles: CatDogTile[] = [];
     private catDogNotificationSequence = 0;
+    private catDogActionSequence = 0;
     private readonly petTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -75,14 +86,19 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
     private botOriginalY: number = 0;
     private readonly monitor =
         createIdempotentMonitor<API_Character>("CatDogSystem");
+    private readonly characterActions: CharacterActionExecutor<API_Character>;
 
     public constructor(
         conn: API_Connector,
         private botConn?: API_Connector,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
+        private readonly appearanceService?: AppearanceActionService<API_Character>,
     ) {
         super(conn, "catDog", "Cat/Dog tiles");
+        this.characterActions = new CharacterActionExecutor({
+            appearance: this.appearanceService,
+        });
         this.logger?.info("[CatDogSystem] Initializing CatDogSystem");
         this.petTrigger = this.guardTileHandler(this.onCharacterStepOnPet);
         this.logger?.info(
@@ -196,27 +212,16 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         const data = location.data ?? {};
 
         // Parse actions from data.actions array
-        const actions: CatDogActionUnion[] = [];
-
-        if (Array.isArray(data.actions)) {
-            for (const action of data.actions) {
-                if (
-                    typeof action === "object" &&
-                    action !== null &&
-                    "type" in action
-                ) {
-                    try {
-                        const parsed = this.parseAction(action);
-                        if (parsed) actions.push(parsed);
-                    } catch (e) {
-                        this.logger?.error(
-                            `[CatDogSystem] Failed to parse action for ${location.key}:`,
-                            e as any,
-                        );
-                    }
-                }
-            }
+        const parsed = parseConfiguredActionList(data.actions, (action) =>
+            this.parseAction(action),
+        );
+        for (const action of parsed.rejected) {
+            this.logger?.warn(
+                `[CatDogSystem] Ignoring invalid action for ${location.key}`,
+                action as any,
+            );
         }
+        const actions = [...parsed.actions];
 
         // If no valid actions, config is invalid
         if (actions.length === 0) {
@@ -348,26 +353,53 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             );
 
             try {
-                // Execute each action
-                for (const action of tile.config.actions) {
-                    this.logger?.info(
-                        `[CatDogSystem] Executing action: ${action.type}`,
-                    );
-                    if (action.type === "emote") {
-                        await this.performEmoteAction(
-                            character,
-                            action,
-                            tile.petType,
+                const sequence = await executeConfiguredActionSequence(
+                    tile.config.actions,
+                    {
+                        operationId: `catdog:${tile.location.key}:${character.MemberNumber}:${++this.catDogActionSequence}`,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: `${tile.petType} tile interaction`,
+                        deadlineAt: Date.now() + 30_000,
+                    },
+                    async (action, context) => {
+                        this.logger?.info(
+                            `[CatDogSystem] Executing action: ${action.type}`,
                         );
-                    } else if (action.type === "bondage") {
-                        this.performBondageAction(character, action);
-                    } else if (action.type === "vibrator") {
-                        await this.performVibratorAction(
-                            character,
-                            action,
-                            tile.petType,
+                        if (action.type === "emote") {
+                            await this.performEmoteAction(
+                                character,
+                                action,
+                                tile.petType,
+                            );
+                        } else if (action.type === "bondage") {
+                            await this.performBondageAction(character, action);
+                        } else if (action.type === "vibrator") {
+                            await this.performVibratorAction(
+                                character,
+                                action,
+                                tile.petType,
+                            );
+                        }
+                        return createActionResult(
+                            "completed",
+                            createActionMetadata(
+                                context,
+                                action.type,
+                                Date.now(),
+                            ),
                         );
-                    }
+                    },
+                    { continueOnFailure: true },
+                );
+                if (!sequence.success) {
+                    this.logger.warn("Pet interaction had failed actions", {
+                        memberNumber: character.MemberNumber,
+                        petType: tile.petType,
+                        statuses: sequence.results.map(
+                            (result) => result.status,
+                        ),
+                    });
                 }
 
                 this.logger.info("Pet interaction completed", {
@@ -533,68 +565,88 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         text: string,
     ): Promise<void> {
         const operationId = `catdog-notification:${character.MemberNumber}:${++this.catDogNotificationSequence}`;
-        const lease = this.rollout?.begin(
-            "communication-notifications",
+        await sendFeatureWhisper({
+            communicationService: this.communicationService,
+            rollout: this.rollout,
             operationId,
-        );
+            memberNumber: character.MemberNumber,
+            reason: "catdog vibrator notification",
+            text,
+            sendLegacy: () =>
+                this.messageSender.whisperToCharacter(character, text),
+            warn: (warning, details) =>
+                this.logger.warn(warning, details as any),
+        });
+    }
+
+    private async performBondageAction(
+        character: API_Character,
+        action: CatDogBondageAction,
+    ): Promise<void> {
+        const operationId = `catdog-bondage:${character.MemberNumber}:${++this.catDogActionSequence}`;
+        const lease = this.rollout?.begin("feature-appearance", operationId);
         try {
             if (
                 lease?.path === "action" &&
-                this.communicationService !== undefined
+                this.appearanceService !== undefined
             ) {
-                const result = await this.communicationService.send(
-                    {
-                        channel: "whisper",
-                        text,
-                        targetMemberNumber: character.MemberNumber,
-                        deduplicationKey: operationId,
-                    },
-                    {
-                        operationId,
-                        memberNumber: character.MemberNumber,
-                        source: "feature",
-                        reason: "catdog vibrator notification",
-                        deadlineAt: Date.now() + 5000,
-                    },
-                );
-                if (result.status !== "completed") {
-                    this.logger.warn(
-                        "CatDog communication action did not complete",
+                for (const [index, piece] of action.pieces.entries()) {
+                    const result = await this.characterActions.execute(
+                        character,
                         {
-                            operationId,
+                            type: "appearance.add",
+                            item: {
+                                group: piece.group,
+                                asset: piece.asset,
+                                ...(piece.extendedType === undefined
+                                    ? {}
+                                    : { extendedType: piece.extendedType }),
+                            },
+                            options: {
+                                timeoutMs: 5_000,
+                                maxAttempts: 1,
+                                retryDelayMs: 0,
+                                requireFreshObservation: true,
+                                requireServerConfirmation: true,
+                                itemOptions: {
+                                    difficulty: action.difficulty,
+                                    color: piece.color ?? action.color,
+                                    craft: {
+                                        name: piece.asset,
+                                        description: action.craftDescription,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            operationId: `${operationId}:${index}`,
                             memberNumber: character.MemberNumber,
-                            deliveryStatus:
-                                result.value?.deliveryStatus ?? "unknown",
-                            reason: result.reason,
+                            source: "feature",
+                            reason: "catdog bondage action",
+                            deadlineAt: Date.now() + 5_000,
                         },
                     );
+                    if (
+                        result.status !== "completed" &&
+                        result.status !== "already_satisfied"
+                    ) {
+                        this.logger.warn(
+                            "CatDog appearance action did not complete",
+                            {
+                                operationId: result.metadata.operationId,
+                                memberNumber: character.MemberNumber,
+                                group: piece.group,
+                                asset: piece.asset,
+                                status: result.status,
+                                reason: result.reason,
+                            },
+                        );
+                    }
+                    await this.wait(50);
                 }
-            } else {
-                const result = this.messageSender.whisperToCharacter(
-                    character,
-                    text,
-                );
-                if (!result.success) {
-                    this.logger.warn(
-                        "CatDog notification failed on legacy path",
-                        {
-                            operationId,
-                            memberNumber: character.MemberNumber,
-                            reason: result.message,
-                        },
-                    );
-                }
+                return;
             }
-        } finally {
-            lease?.release();
-        }
-    }
 
-    private performBondageAction(
-        character: API_Character,
-        action: CatDogBondageAction,
-    ): void {
-        try {
             for (const piece of action.pieces) {
                 try {
                     const item = character.Appearance.AddItem(
@@ -625,6 +677,8 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                 "[CatDogSystem] Failed to perform bondage action",
                 e as any,
             );
+        } finally {
+            lease?.release();
         }
     }
 

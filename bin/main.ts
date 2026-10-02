@@ -671,6 +671,7 @@ async function initializeVeratownGame(
         config.action_layer_release_removal_enabled,
         config.action_layer_communication_notifications_enabled,
         config.action_layer_inventory_enabled,
+        config.action_layer_feature_appearance_enabled,
     );
     if (roomKey === "main" && connections.shower) {
         const narrator = connections.shower.Player;

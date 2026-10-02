@@ -707,3 +707,118 @@ test("CageSystem logs and proceeds when item permission is denied", async () => 
     await timer.advance(1_800_050);
     await pending;
 });
+
+test("Cage crate mutations use appearance actions when rollout is enabled", async () => {
+    const created = createCharacter(251025);
+    const rollout = new ActionLayerRolloutController({
+        featureAppearanceEnabled: true,
+    });
+    const calls: Array<{
+        operation: string;
+        item: unknown;
+        policy: Record<string, any>;
+    }> = [];
+    const makeResult = (policy: Record<string, any>) => ({
+        status: "completed",
+        metadata: {
+            operationId: policy.operationId,
+            actionId: "appearance.test",
+            memberNumber: policy.memberNumber,
+            attempt: 1,
+            startedAt: 1,
+            completedAt: 2,
+        },
+        value: { items: [], hiddenLayers: [], observedAt: 2 },
+    });
+    const appearanceService = {
+        add: async (_character: unknown, item: unknown, policy: any) => {
+            calls.push({ operation: "add", item, policy });
+            return makeResult(policy);
+        },
+        remove: async (_character: unknown, item: unknown, policy: any) => {
+            calls.push({ operation: "remove", item, policy });
+            return makeResult(policy);
+        },
+    };
+    const system = new CageSystem(
+        created.connection as any,
+        createMutationService() as any,
+        undefined,
+        undefined,
+        true,
+        true,
+        undefined,
+        rollout,
+        appearanceService as any,
+    );
+    let legacyMutations = 0;
+    const item = {
+        group: "ItemDevices",
+        asset: "FuturisticCrate",
+    };
+
+    const added = await (system as any).syncCageAppearanceMutation(
+        created.character,
+        () => {
+            legacyMutations += 1;
+        },
+        {
+            operation: "add",
+            item,
+            itemOptions: {
+                craft: {
+                    name: "Veratown Futuristic Crate",
+                    description: "A custom crate",
+                },
+                properties: {
+                    typeRecord: { w: 2, l: 3, a: 3, d: 1, t: 1, h: 4 },
+                    mode: "Deny",
+                },
+                lock: {
+                    type: "SafewordPadlock",
+                    memberNumber: 251025,
+                },
+            },
+        },
+        "test crate add",
+    );
+    const removed = await (system as any).syncCageAppearanceMutation(
+        created.character,
+        () => {
+            legacyMutations += 1;
+        },
+        { operation: "remove", item },
+        "test crate release",
+    );
+
+    assert.equal(added, true);
+    assert.equal(removed, true);
+    assert.equal(legacyMutations, 0);
+    assert.deepEqual(
+        calls.map(({ operation, item: actionItem }) => ({
+            operation,
+            item: actionItem,
+        })),
+        [
+            { operation: "add", item },
+            { operation: "remove", item },
+        ],
+    );
+    assert.deepEqual(calls[0].policy.itemOptions, {
+        craft: {
+            name: "Veratown Futuristic Crate",
+            description: "A custom crate",
+        },
+        properties: {
+            typeRecord: { w: 2, l: 3, a: 3, d: 1, t: 1, h: 4 },
+            mode: "Deny",
+        },
+        lock: {
+            type: "SafewordPadlock",
+            memberNumber: 251025,
+        },
+    });
+    assert.equal(calls[0].policy.preserveLockedItems, true);
+    assert.equal(calls[1].policy.preserveLockedItems, false);
+    assert.deepEqual(rollout.snapshot().activeOperationIds, []);
+});

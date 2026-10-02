@@ -35,6 +35,7 @@ import {
     syncAppearanceMutation,
     verifyAppearance,
 } from "./shared/appearanceSync";
+import type { ActionLayerAppearanceMutation } from "./shared/appearanceSync";
 import { applyConsentPadlock } from "../shared/consentPadlock";
 import {
     classifyContainmentRemoval,
@@ -44,12 +45,27 @@ import type { CageSession } from "../shared/unifiedCharacterTypes";
 import type {
     ActionLayerRolloutController,
     CommunicationActionService,
+    AppearanceActionService,
+    AppearanceItemIdentity,
+    AppearanceItemMutationOptions,
+    AppearanceMutationPolicy,
 } from "../../action-layer";
+import { sendFeatureWhisper } from "../../action-layer";
 
 export interface CageTimer {
     now(): number;
     wait(milliseconds: number): Promise<void>;
 }
+
+interface CageAppearanceAction {
+    readonly operation: "add" | "remove";
+    readonly item: AppearanceItemIdentity;
+    readonly itemOptions?: AppearanceItemMutationOptions;
+}
+
+type CageAppearanceSyncOptions = NonNullable<
+    Parameters<typeof syncAppearanceMutation>[4]
+>;
 
 export type ContainmentRecoveryClassification =
     | "not-contained"
@@ -220,6 +236,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
     private boundCageInformationTrigger?: (...args: any[]) => void;
     private boundRoomListenerAttached = false;
     private readonly releasingCharacters = new Set<number>();
+    private cageAppearanceActionSequence = 0;
     private lastSuccessfulBindAt?: number;
     private lastSuccessfulReconciliationAt?: number;
 
@@ -232,6 +249,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         private readonly managedReleaseWorkersEnabled = true,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
+        private readonly appearanceService?: AppearanceActionService<API_Character>,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -242,6 +260,58 @@ export class CageSystem extends AbstractTileFeatureSystem {
             this.key,
             this.onCharacterViewCageInformation as any,
         );
+    }
+
+    private async syncCageAppearanceMutation(
+        character: API_Character,
+        mutation: () => void | Promise<void>,
+        action: CageAppearanceAction,
+        reason: string,
+        syncOptions: CageAppearanceSyncOptions = {},
+    ): Promise<boolean> {
+        const operationId = `cage-appearance:${character.MemberNumber}:${++this.cageAppearanceActionSequence}`;
+        const lease = this.rollout?.begin("feature-appearance", operationId);
+        let actionLayer: ActionLayerAppearanceMutation | undefined;
+        if (lease?.path === "action" && this.appearanceService !== undefined) {
+            const policy: AppearanceMutationPolicy = {
+                operationId,
+                memberNumber: character.MemberNumber,
+                source: "feature",
+                reason,
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+                preserveLockedItems: action.operation !== "remove",
+                requireFreshObservation: true,
+                requireServerConfirmation: true,
+                ...(action.itemOptions === undefined
+                    ? {}
+                    : { itemOptions: action.itemOptions }),
+            };
+            actionLayer = {
+                service: this.appearanceService,
+                operation: action.operation,
+                item: action.item,
+                policy,
+            };
+        }
+
+        try {
+            return await syncAppearanceMutation(
+                character,
+                mutation,
+                50,
+                this.stateSync,
+                {
+                    ...syncOptions,
+                    operationId,
+                    reason,
+                    ...(actionLayer === undefined ? {} : { actionLayer }),
+                },
+            );
+        } finally {
+            lease?.release();
+        }
     }
 
     public registerTriggers(): void {
@@ -546,13 +616,19 @@ export class CageSystem extends AbstractTileFeatureSystem {
         ) {
             this.releasingCharacters.add(character.MemberNumber);
             try {
-                await syncAppearanceMutation(
+                await this.syncCageAppearanceMutation(
                     character,
                     () => {
                         character.Appearance.RemoveItem("ItemDevices");
                     },
-                    50,
-                    this.stateSync,
+                    {
+                        operation: "remove",
+                        item: {
+                            group: "ItemDevices",
+                            asset: "FuturisticCrate",
+                        },
+                    },
+                    "manual cage release",
                     {
                         sendFullAppearanceUpdate: true,
                         awaitServerSync: true,
@@ -624,7 +700,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
         const durationDescription =
             cage?.durationDescription ?? "an undetermined length of time";
 
-        this.messageSender.whisperToCharacter(
+        await this.sendCageNotification(
             character,
             `NOTICE: You are approaching the entrance to ${cageName}. ` +
                 `Veratown Facility Containment Protocol 7-Alpha requires that all visitors be informed of ` +
@@ -644,6 +720,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 `By proceeding past this point and remaining stationary, you acknowledge that you have read, ` +
                 `understood, and voluntarily accept these terms. Proceed with caution, or step back now if ` +
                 `you do not consent.`,
+            `cage-entry-warning:${character.MemberNumber}`,
+            "cage entry warning",
         );
     };
 
@@ -707,7 +785,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 }
                 authoritativeExpiry = session.expiresAt;
             } else {
-                await syncAppearanceMutation(
+                await this.syncCageAppearanceMutation(
                     character,
                     () => {
                         const crate = character.Appearance.AddItem(
@@ -731,8 +809,35 @@ export class CageSystem extends AbstractTileFeatureSystem {
                             memberNumber: character.MemberNumber,
                         });
                     },
-                    50,
-                    this.stateSync,
+                    {
+                        operation: "add",
+                        item: {
+                            group: "ItemDevices",
+                            asset: "FuturisticCrate",
+                        },
+                        itemOptions: {
+                            craft: {
+                                name: "Veratown Futuristic Crate",
+                                description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+                            },
+                            properties: {
+                                typeRecord: {
+                                    w: 2,
+                                    l: 3,
+                                    a: 3,
+                                    d: 1,
+                                    t: 1,
+                                    h: 4,
+                                },
+                                mode: "Deny",
+                            },
+                            lock: {
+                                type: "SafewordPadlock",
+                                memberNumber: character.MemberNumber,
+                            },
+                        },
+                    },
+                    "cage entry crate",
                     {
                         skipAuthorizationPreflight: true,
                         requireFullWardrobeAccess: false,
@@ -790,36 +895,18 @@ export class CageSystem extends AbstractTileFeatureSystem {
         operationId: string,
         reason: string,
     ): Promise<void> {
-        const lease = this.rollout?.begin(
-            "communication-notifications",
+        await sendFeatureWhisper({
+            communicationService: this.communicationService,
+            rollout: this.rollout,
             operationId,
-        );
-        try {
-            if (
-                lease?.path === "action" &&
-                this.communicationService !== undefined
-            ) {
-                await this.communicationService.send(
-                    {
-                        channel: "whisper",
-                        text,
-                        targetMemberNumber: character.MemberNumber,
-                        deduplicationKey: operationId,
-                    },
-                    {
-                        operationId,
-                        memberNumber: character.MemberNumber,
-                        source: "feature",
-                        reason,
-                        deadlineAt: Date.now() + 5000,
-                    },
-                );
-            } else {
-                this.messageSender.whisperToCharacter(character, text);
-            }
-        } finally {
-            lease?.release();
-        }
+            memberNumber: character.MemberNumber,
+            reason,
+            text,
+            sendLegacy: () =>
+                this.messageSender.whisperToCharacter(character, text),
+            warn: (warning, details) =>
+                this.logger.warn(warning, details as any),
+        });
     }
 
     private async releaseWhenExpired(
@@ -851,13 +938,19 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 crateRemovalVerified = false;
                 this.releasingCharacters.add(memberNumber);
                 try {
-                    await syncAppearanceMutation(
+                    await this.syncCageAppearanceMutation(
                         character,
                         () => {
                             character.Appearance.RemoveItem("ItemDevices");
                         },
-                        50,
-                        this.stateSync,
+                        {
+                            operation: "remove",
+                            item: {
+                                group: "ItemDevices",
+                                asset: "FuturisticCrate",
+                            },
+                        },
+                        "cage timer release",
                         {
                             releaseCause: "timer",
                             sendFullAppearanceUpdate: true,
@@ -1095,7 +1188,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 );
             }
             if (!liveCrate) {
-                await syncAppearanceMutation(
+                await this.syncCageAppearanceMutation(
                     character,
                     () => {
                         const crate = character.Appearance.AddItem(
@@ -1118,8 +1211,35 @@ export class CageSystem extends AbstractTileFeatureSystem {
                             memberNumber: character.MemberNumber,
                         });
                     },
-                    50,
-                    this.stateSync,
+                    {
+                        operation: "add",
+                        item: {
+                            group: "ItemDevices",
+                            asset: "FuturisticCrate",
+                        },
+                        itemOptions: {
+                            craft: {
+                                name: "Veratown Futuristic Crate",
+                                description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
+                            },
+                            properties: {
+                                typeRecord: {
+                                    w: 2,
+                                    l: 3,
+                                    a: 3,
+                                    d: 1,
+                                    t: 1,
+                                    h: 4,
+                                },
+                                mode: "Deny",
+                            },
+                            lock: {
+                                type: "SafewordPadlock",
+                                memberNumber: character.MemberNumber,
+                            },
+                        },
+                    },
+                    "cage recovery crate",
                 );
                 this.logger.info("Cage appearance reconciled", {
                     memberNumber: character.MemberNumber,

@@ -413,11 +413,12 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
         type: "help_monitor",
         label: "Help Monitor",
         description:
-            "A location-triggered whisper. data.displayKey selects bot_help, october_countdown, or another registered monitor provider.",
+            "A location-triggered whisper with optional character actions. data.displayKey selects a registered monitor provider; data.actions supports remove_random_clothing.",
         fields: [
             "region (TopLeft/BottomRight)",
             "data.displayKey",
             "data.cooldownMs",
+            "data.actions (optional)",
         ],
         example: {
             key: "bot_help_monitor",
@@ -430,6 +431,7 @@ const LOCATION_TEMPLATES: Record<LocationType, LocationTemplate> = {
                 bottomRightY: 16,
                 displayKey: "bot_help",
                 cooldownMs: 3000,
+                actions: [],
             },
             enabled: true,
         },

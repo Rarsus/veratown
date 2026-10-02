@@ -11,6 +11,7 @@
     "action_layer_bunny_restraints_enabled": false,
     "action_layer_release_removal_enabled": false,
     "action_layer_communication_notifications_enabled": false,
+    "action_layer_feature_appearance_enabled": false,
     "action_layer_inventory_enabled": false,
     "dare": {
         "region": {

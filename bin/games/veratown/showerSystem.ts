@@ -34,6 +34,7 @@ import { createIdempotentMonitor } from "./shared";
 import type { AppearanceStateSynchronizer } from "./shared/appearanceSync";
 import { syncAppearanceMutation } from "./shared/appearanceSync";
 import { beginAppearanceScope } from "./shared/appearanceLifecycle";
+import { sendFeatureWhisper } from "../../action-layer";
 import type {
     ActionLayerRolloutController,
     CommunicationActionService,
@@ -289,60 +290,17 @@ export class ShowerSystem extends AbstractTileFeatureSystem {
         text: string,
     ): Promise<void> {
         const operationId = `shower-notification:${character.MemberNumber}:${++this.showerNotificationSequence}`;
-        const lease = this.rollout?.begin(
-            "communication-notifications",
+        await sendFeatureWhisper({
+            communicationService: this.communicationService,
+            rollout: this.rollout,
             operationId,
-        );
-        try {
-            if (
-                lease?.path === "action" &&
-                this.communicationService !== undefined
-            ) {
-                const result = await this.communicationService.send(
-                    {
-                        channel: "whisper",
-                        text,
-                        targetMemberNumber: character.MemberNumber,
-                        deduplicationKey: operationId,
-                    },
-                    {
-                        operationId,
-                        memberNumber: character.MemberNumber,
-                        source: "feature",
-                        reason: "shower notification",
-                        deadlineAt: Date.now() + 5000,
-                    },
-                );
-                if (result.status !== "completed") {
-                    this.logger.warn(
-                        "Shower communication action did not complete",
-                        {
-                            operationId,
-                            memberNumber: character.MemberNumber,
-                            deliveryStatus:
-                                result.value?.deliveryStatus ?? "unknown",
-                            reason: result.reason,
-                        },
-                    );
-                }
-            } else {
-                const result = this.messageSender.whisperToCharacter(
-                    character,
-                    text,
-                );
-                if (!result.success) {
-                    this.logger.warn(
-                        "Shower notification failed on legacy path",
-                        {
-                            operationId,
-                            memberNumber: character.MemberNumber,
-                            reason: result.message,
-                        },
-                    );
-                }
-            }
-        } finally {
-            lease?.release();
-        }
+            memberNumber: character.MemberNumber,
+            reason: "shower notification",
+            text,
+            sendLegacy: () =>
+                this.messageSender.whisperToCharacter(character, text),
+            warn: (warning, details) =>
+                this.logger.warn(warning, details as any),
+        });
     }
 }

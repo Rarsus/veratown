@@ -6,13 +6,25 @@ import {
     MapRegion,
 } from "bc-bot";
 import { createLogger } from "../../logging";
-import type {
+import {
     ActionLayerRolloutController,
+    AppearanceActionService,
+    CharacterActionExecutor,
     CommunicationActionService,
+    createActionMetadata,
+    createActionResult,
+    sendFeatureWhisper,
+    type ActionContext,
+    type ActionResult,
     MapRegion as ActionMapRegion,
     MapTriggerCallback,
     MapTriggerScope,
 } from "../../action-layer";
+import {
+    executeConfiguredActionSequence,
+    parseConfiguredActionList,
+    type ConfiguredAction,
+} from "./shared/configuredActions";
 import {
     BCMapTriggerActionAdapter,
     MapTriggerRegistry,
@@ -26,6 +38,7 @@ import {
     getLifecycleObjectId,
     guardHandler,
 } from "./featureSystem";
+import { isClothing } from "./shared/featureHelpers";
 import { VeratownLocationDoc } from "./veratownLocationStore";
 
 export interface LocationMonitorProviderContext {
@@ -38,6 +51,10 @@ export interface LocationMonitorProvider {
     getDisplay(
         context: LocationMonitorProviderContext,
     ): string | Promise<string>;
+}
+
+export interface LocationMonitorAction extends ConfiguredAction {
+    readonly type: "remove_random_clothing";
 }
 
 export class CageOccupancyMonitorProvider implements LocationMonitorProvider {
@@ -112,6 +129,7 @@ export class LocationMonitorSystem
     );
     private readonly lastDisplayedAt = new Map<string, number>();
     private readonly activeDisplays = new Set<string>();
+    private readonly characterActions: CharacterActionExecutor<API_Character>;
     private operationSequence = 0;
     private monitorLocations: VeratownLocationDoc[] = [];
     private boundMap?: API_Map;
@@ -135,8 +153,12 @@ export class LocationMonitorSystem
         private readonly defaultCooldownMs = DEFAULT_MONITOR_COOLDOWN_MS,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
+        private readonly appearanceService?: AppearanceActionService<API_Character>,
     ) {
         super(conn, "locationMonitor", "Location monitors");
+        this.characterActions = new CharacterActionExecutor({
+            appearance: this.appearanceService,
+        });
         for (const provider of providers) {
             this.providers.set(provider.key, provider);
         }
@@ -289,60 +311,194 @@ export class LocationMonitorSystem
         this.activeDisplays.add(cooldownKey);
         try {
             const message = await provider.getDisplay({ character, location });
-            if (!message.trim()) return;
+            const actions = this.getActions(location);
+            if (!message.trim() && actions.length === 0) return;
 
             const operationId = `location-monitor:${location.key}:${character.MemberNumber}:${++this.operationSequence}`;
-            const lease = this.rollout?.begin(
-                "communication-notifications",
-                operationId,
-            );
             let dispatched = false;
-            try {
-                if (
-                    lease?.path === "action" &&
-                    this.communicationService !== undefined
-                ) {
-                    const result = await this.communicationService.send(
-                        {
-                            channel: "whisper",
-                            text: message,
-                            targetMemberNumber: character.MemberNumber,
-                            deduplicationKey: operationId,
-                        },
-                        {
-                            operationId,
-                            memberNumber: character.MemberNumber,
-                            source: "feature",
-                            reason: `location monitor ${location.key}`,
-                            deadlineAt: Date.now() + 5000,
-                        },
-                    );
-                    if (result.status !== "completed") {
-                        this.logger.warn(
-                            "Communication action did not complete",
-                            {
-                                operationId,
-                                locationKey: location.key,
-                                deliveryStatus:
-                                    result.value?.deliveryStatus ?? "unknown",
-                                reason: result.reason,
-                            },
-                        );
-                    }
-                    dispatched =
-                        result.status === "completed" ||
-                        result.status === "already_satisfied";
-                } else {
-                    await this.sendMessage(character.MemberNumber, message);
-                    dispatched = true;
-                }
-            } finally {
-                lease?.release();
+            if (message.trim()) {
+                dispatched = await sendFeatureWhisper({
+                    communicationService: this.communicationService,
+                    rollout: this.rollout,
+                    operationId,
+                    memberNumber: character.MemberNumber,
+                    reason: `location monitor ${location.key}`,
+                    text: message,
+                    sendLegacy: async () => {
+                        await this.sendMessage(character.MemberNumber, message);
+                    },
+                    warn: (warning, details) =>
+                        this.logger.warn(warning, {
+                            ...details,
+                            locationKey: location.key,
+                        }),
+                });
             }
-            if (dispatched) this.lastDisplayedAt.set(cooldownKey, Date.now());
+
+            const actionResult = await executeConfiguredActionSequence(
+                actions,
+                {
+                    operationId,
+                    memberNumber: character.MemberNumber,
+                    source: "feature",
+                    reason: `location monitor ${location.key}`,
+                    deadlineAt: Date.now() + 30_000,
+                },
+                (action, context) =>
+                    this.runAction(character, location, action, context),
+                { continueOnFailure: true },
+            );
+            const actionCompleted = actionResult.results.some(
+                (result) =>
+                    result.status === "completed" ||
+                    result.status === "already_satisfied" ||
+                    result.status === "in_progress",
+            );
+            if (dispatched || actionCompleted) {
+                this.lastDisplayedAt.set(cooldownKey, Date.now());
+            }
         } finally {
             this.activeDisplays.delete(cooldownKey);
         }
+    }
+
+    private getActions(location: VeratownLocationDoc): LocationMonitorAction[] {
+        const configured = location.data?.actions;
+        const parsed = parseConfiguredActionList(
+            configured,
+            (candidate): LocationMonitorAction | null => {
+                if (
+                    typeof candidate === "object" &&
+                    candidate !== null &&
+                    "type" in candidate &&
+                    candidate.type === "remove_random_clothing"
+                ) {
+                    return { type: "remove_random_clothing" };
+                }
+                return null;
+            },
+        );
+        for (const action of parsed.rejected) {
+            this.logger.warn("Ignoring unknown location monitor action", {
+                locationKey: location.key,
+                action,
+            });
+        }
+        return [...parsed.actions];
+    }
+
+    private async runAction(
+        character: API_Character,
+        location: VeratownLocationDoc,
+        action: LocationMonitorAction,
+        context: ActionContext,
+    ): Promise<ActionResult<unknown>> {
+        if (action.type === "remove_random_clothing") {
+            return this.removeRandomClothing(character, location, context);
+        }
+        return createActionResult(
+            "rejected",
+            createActionMetadata(context, action.type, Date.now()),
+            { reason: `Unsupported action type: ${action.type}` },
+        );
+    }
+
+    private async removeRandomClothing(
+        character: API_Character,
+        location: VeratownLocationDoc,
+        context: ActionContext,
+    ): Promise<ActionResult<unknown>> {
+        if (!this.appearanceService) {
+            this.logger.warn(
+                "Cannot run clothing action without appearance service",
+                { locationKey: location.key, operationId: context.operationId },
+            );
+            return createActionResult(
+                "failed",
+                createActionMetadata(
+                    context,
+                    "appearance.remove_random_clothing",
+                    Date.now(),
+                ),
+                { reason: "Appearance action service is unavailable" },
+            );
+        }
+
+        character.Appearance.MakeAppearanceBundle();
+        const remaining = character.Appearance.Appearance.filter((item) =>
+            isClothing(item),
+        );
+        if (remaining.length === 0) {
+            return createActionResult(
+                "already_satisfied",
+                createActionMetadata(
+                    context,
+                    "appearance.remove_random_clothing",
+                    Date.now(),
+                ),
+                { reason: "No clothing items are available to remove" },
+            );
+        }
+
+        for (let attempt = 0; remaining.length > 0; attempt += 1) {
+            const index = Math.floor(Math.random() * remaining.length);
+            const [item] = remaining.splice(index, 1);
+            const result = await this.characterActions.execute(
+                character,
+                {
+                    type: "appearance.remove",
+                    item: { group: item.Group, asset: item.Name },
+                    options: {
+                        timeoutMs: 5_000,
+                        maxAttempts: 1,
+                        retryDelayMs: 0,
+                        preserveLockedItems: true,
+                        requireFreshObservation: true,
+                        requireServerConfirmation: true,
+                    },
+                },
+                {
+                    operationId: `${context.operationId}:candidate:${attempt}`,
+                    memberNumber: character.MemberNumber,
+                    source: "feature",
+                    reason: `location monitor ${location.key}: remove random clothing`,
+                    deadlineAt: Date.now() + 5_000,
+                },
+            );
+
+            if (
+                result.status === "completed" ||
+                result.status === "in_progress"
+            ) {
+                return result;
+            }
+            if (
+                result.status === "blocked" ||
+                result.status === "already_satisfied"
+            ) {
+                continue;
+            }
+
+            this.logger.warn("Random clothing removal did not complete", {
+                locationKey: location.key,
+                operationId: context.operationId,
+                group: item.Group,
+                asset: item.Name,
+                status: result.status,
+                reason: result.reason,
+            });
+            return result;
+        }
+
+        return createActionResult(
+            "blocked",
+            createActionMetadata(
+                context,
+                "appearance.remove_random_clothing",
+                Date.now(),
+            ),
+            { reason: "All available clothing items were protected" },
+        );
     }
 
     private getProviderKey(location: VeratownLocationDoc): string | undefined {

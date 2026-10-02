@@ -128,7 +128,7 @@ test("dispatches an empty-group add without claiming server confirmation", async
     assert.equal(adapter.capabilities.confirmsAuthoritatively, true);
 });
 
-test("applies extended type, color, craft, and safeword lock metadata", async () => {
+test("applies extended type, difficulty, properties, color, craft, and safeword lock metadata", async () => {
     const state: FakeItem[] = [];
     let addedDescriptor: unknown;
     const runtime = {
@@ -153,8 +153,14 @@ test("applies extended type, color, craft, and safeword lock metadata", async ()
                     SetColor: (value: string) => {
                         data.Property!.Color = value;
                     },
+                    SetDifficulty: (value: number) => {
+                        data.Property!.Difficulty = value;
+                    },
                     SetCraft: (value: unknown) => {
                         data.Property!.Craft = value;
+                    },
+                    setProperty: (property: string, value: unknown) => {
+                        data.Property![property] = value;
                     },
                     lock: (
                         type: string,
@@ -184,7 +190,12 @@ test("applies extended type, color, craft, and safeword lock metadata", async ()
         {
             ...makePolicy("metadata-add"),
             itemOptions: {
+                difficulty: 18,
                 color: "#FF69B4",
+                properties: {
+                    typeRecord: { w: 2, l: 3, a: 3, d: 1, t: 1, h: 4 },
+                    mode: "Deny",
+                },
                 craft: {
                     name: "HeavySpreaderMetal",
                     description: "Created by a Bunny hater",
@@ -202,7 +213,10 @@ test("applies extended type, color, craft, and safeword lock metadata", async ()
     assert.ok(addedDescriptor);
     assert.deepEqual(state[0].Property, {
         Type: "Wide",
+        Difficulty: 18,
         Color: "#FF69B4",
+        TypeRecord: { w: 2, l: 3, a: 3, d: 1, t: 1, h: 4 },
+        Mode: "Deny",
         Craft: {
             Name: "HeavySpreaderMetal",
             Description: "Created by a Bunny hater",

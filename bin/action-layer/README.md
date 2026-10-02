@@ -32,3 +32,18 @@ fit. Create a dedicated adapter or migrate the caller in a separate change.
 Services may be registered at runtime, but each migration remains separately
 gated. The inventory canary is disabled by default and only owns the Roulette
 wheel addition when explicitly enabled.
+
+## Shared Character Actions
+
+`CharacterActionExecutor` routes one typed appearance, communication, or
+movement action to the service that owns that contract. It does not sequence
+actions or own feature state. Veratown's configured-action helper owns ordered
+action lists and failure continuation; longer workflows such as Shower and
+Cage retain their own timing, recovery, and persistence rules.
+
+CatDog bondage additions and Cage crate add/remove operations can use the
+appearance action service behind `action_layer_feature_appearance_enabled`,
+which defaults to `false`. Monitor clothing removal uses the appearance
+contract directly as an opt-in location action. Appearance actions preserve
+server confirmation and synchronization requirements; Cage session persistence
+continues through `GameStateMutationService`.

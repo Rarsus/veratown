@@ -2,6 +2,7 @@ export type ActionLayerOperation =
     | "bunny-restraints"
     | "release-removal"
     | "communication-notifications"
+    | "feature-appearance"
     | "inventory";
 
 export type ActionLayerPath = "legacy" | "action";
@@ -10,6 +11,7 @@ export interface ActionLayerRolloutOptions {
     readonly bunnyRestraintsEnabled?: boolean;
     readonly releaseRemovalEnabled?: boolean;
     readonly communicationNotificationsEnabled?: boolean;
+    readonly featureAppearanceEnabled?: boolean;
     readonly inventoryEnabled?: boolean;
 }
 
@@ -30,6 +32,7 @@ const OPERATIONS: readonly ActionLayerOperation[] = [
     "bunny-restraints",
     "release-removal",
     "communication-notifications",
+    "feature-appearance",
     "inventory",
 ];
 
@@ -48,6 +51,7 @@ export class ActionLayerRolloutController {
             "release-removal": options.releaseRemovalEnabled === true,
             "communication-notifications":
                 options.communicationNotificationsEnabled === true,
+            "feature-appearance": options.featureAppearanceEnabled === true,
             inventory: options.inventoryEnabled === true,
         };
     }
