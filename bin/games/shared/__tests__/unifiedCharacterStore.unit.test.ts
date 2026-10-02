@@ -251,7 +251,7 @@ test("UnifiedCharacterStore rejects escape attempts without bondage or chips", a
     profile.casino.chips = 5;
     assert.deepEqual(await store.spendChipsToEscape(1, 10), {
         success: false,
-        message: "Insufficient chips. You need 10 chips but have 5.",
+        message: "Insufficient chips. You need 10 available chips but have 5 available.",
         bondageRemoved: 0,
     });
 });
