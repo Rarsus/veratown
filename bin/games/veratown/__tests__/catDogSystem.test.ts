@@ -211,6 +211,39 @@ test("CatDog standard vibrator updates use the appearance contract and notify on
     service.close();
 });
 
+test("CatDog notifies when the vibrator update times out without claiming success", async () => {
+    const adapter = new RecordingCommunicationAdapter();
+    const service = new CommunicationActionService(adapter);
+    const rollout = new ActionLayerRolloutController({
+        communicationNotificationsEnabled: true,
+        featureAppearanceEnabled: true,
+    });
+    const appearance = recordingAppearanceService("timed_out");
+    const system = new CatDogSystem(
+        connector(() => {}),
+        undefined,
+        service,
+        rollout,
+        appearance.service as any,
+    );
+
+    const result = await (system as any).performVibratorAction(
+        character(43),
+        vibratorAction,
+        "cat",
+        actionContext(43),
+    );
+
+    assert.equal(result.status, "timed_out");
+    assert.equal(adapter.requests.length, 1);
+    assert.match(
+        adapter.requests[0].text,
+        /couldn't confirm that it responded/,
+    );
+    assert.doesNotMatch(adapter.requests[0].text, /triggers your device/);
+    service.close();
+});
+
 test("CatDog does not bypass the action layer when appearance rollout is disabled", async () => {
     const sent: string[] = [];
     const system = new CatDogSystem(

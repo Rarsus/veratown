@@ -332,7 +332,10 @@ test("enabled communication rollout routes monitor notifications through actions
             };
         },
     };
-    const communicationService = new CommunicationActionService(adapter);
+    const helpText = Array.from({ length: 300 }, () => "Help line").join("\n");
+    const communicationService = new CommunicationActionService(adapter, {
+        maxTextLength: 10_000,
+    });
     const rollout = new ActionLayerRolloutController({
         communicationNotificationsEnabled: true,
     });
@@ -342,10 +345,14 @@ test("enabled communication rollout routes monitor notifications through actions
             SendMessage: (_type: string, message: string) =>
                 legacyMessages.push(message),
         } as any,
-        [new BotHelpMonitorProvider(() => "Bot help")],
+        [new BotHelpMonitorProvider(() => helpText)],
         undefined,
         communicationService,
         rollout,
+    );
+    assert.equal(
+        new BotHelpMonitorProvider(() => "x".repeat(2405)).getDisplay().length,
+        2405,
     );
     const monitorLocation = location("help", "bot_help");
     monitorLocation.data!.cooldownMs = 0;
@@ -361,13 +368,13 @@ test("enabled communication rollout routes monitor notifications through actions
     assert.deepEqual(requests, [
         {
             channel: "whisper",
-            text: "Bot help",
+            text: helpText,
             targetMemberNumber: 4,
             deduplicationKey: "location-monitor:help:4:1",
         },
         {
             channel: "whisper",
-            text: "Bot help",
+            text: helpText,
             targetMemberNumber: 4,
             deduplicationKey: "location-monitor:help:4:2",
         },

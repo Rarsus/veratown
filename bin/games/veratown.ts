@@ -1,3 +1,4 @@
+import type { RoomDefinition } from "bc-bot";
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -323,6 +324,7 @@ export class Veratown {
                 DIServiceKeys.ACTION_LAYER_COMMUNICATION_SERVICE,
                 new CommunicationActionService(
                     new BCCommunicationActionAdapter(this.conn),
+                    { maxTextLength: 10_000 },
                 ),
             );
         }

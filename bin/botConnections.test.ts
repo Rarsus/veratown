@@ -12,7 +12,12 @@ import {
 } from "./botConnections";
 import { ValidationError } from "./errors";
 import { ConfigFile } from "./config";
-import { formatWhisperContent, normalizeWhisperContent } from "bc-bot";
+import {
+    API_Connector,
+    formatWhisperContent,
+    normalizeWhisperContent,
+    splitMessageIntoChunks,
+} from "bc-bot";
 import { waitForConnectionStability } from "./botConnections";
 
 function config(overrides: Partial<ConfigFile>): ConfigFile {
@@ -121,6 +126,51 @@ test("map whispers use a transport wrapper around clean content", () => {
     assert.equal(content, "(Position: [12, 34])");
     assert.equal(content.slice(1, -1).includes("("), false);
     assert.equal(content.slice(1, -1).includes(")"), false);
+});
+
+test("long messages split at line breaks without losing content", () => {
+    const firstLine = "a".repeat(1200);
+    const secondLine = "b".repeat(1200);
+    const message = `${firstLine}\n${secondLine}\nDone`;
+    const chunks = splitMessageIntoChunks(message, 2000);
+
+    assert.deepEqual(chunks, [`${firstLine}\n`, `${secondLine}\nDone`]);
+    assert.equal(chunks.join(""), message);
+    assert.ok(chunks.every((chunk) => chunk.length <= 2000));
+});
+
+test("long single lines split at the limit when no line break fits", () => {
+    const chunks = splitMessageIntoChunks("abcdefghij", 4);
+
+    assert.deepEqual(chunks, ["abcd", "efgh", "ij"]);
+});
+
+test("connector emits long map whispers as wrapped targeted chunks", () => {
+    const emitted: Array<Record<string, any>> = [];
+    const connector = Object.create(API_Connector.prototype) as API_Connector;
+    Object.assign(connector as any, {
+        _chatRoom: { usesMaps: () => true },
+        wrappedSock: {
+            emit: (event: string, payload: Record<string, any>) => {
+                assert.equal(event, "ChatRoomChat");
+                emitted.push(payload);
+            },
+        },
+    });
+    const message = `${"a".repeat(1997)}\nmore`;
+
+    connector.SendMessage("Whisper", message, 123);
+
+    assert.equal(emitted.length, 2);
+    assert.ok(emitted.every((packet) => packet.Type === "Whisper"));
+    assert.ok(emitted.every((packet) => packet.Target === 123));
+    assert.ok(emitted.every((packet) => packet.Content.length <= 2000));
+    assert.ok(emitted.every((packet) => packet.Content.startsWith("(")));
+    assert.ok(emitted.every((packet) => packet.Content.endsWith(")")));
+    assert.equal(
+        emitted.map((packet) => packet.Content.slice(1, -1)).join(""),
+        normalizeWhisperContent(message),
+    );
 });
 
 test("connection readiness waits for the connector event instead of polling", async () => {

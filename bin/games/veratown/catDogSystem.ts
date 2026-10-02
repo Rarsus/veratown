@@ -1107,6 +1107,17 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
             }
 
             if (results.length === 0) {
+                try {
+                    await this.sendCatDogNotification(
+                        character,
+                        `*The ${petType} looks for a vibration control, but I couldn't find one to activate. ${action.message}*`,
+                    );
+                } catch (error) {
+                    this.logger.warn("CatDog vibration notification failed", {
+                        memberNumber: character.MemberNumber,
+                        error,
+                    });
+                }
                 return createActionResult(
                     "already_satisfied",
                     createActionMetadata(context, "catdog.vibrator", startedAt),
@@ -1119,18 +1130,24 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                     result.status !== "completed" &&
                     result.status !== "already_satisfied",
             );
-            if (results.some((result) => result.status === "completed")) {
-                try {
-                    await this.sendCatDogNotification(
-                        character,
-                        `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`,
-                    );
-                } catch (error) {
-                    this.logger.warn("CatDog vibration notification failed", {
-                        memberNumber: character.MemberNumber,
-                        error,
-                    });
-                }
+            const hasCompletedUpdate = results.some(
+                (result) => result.status === "completed",
+            );
+            const allAlreadySatisfied = results.every(
+                (result) => result.status === "already_satisfied",
+            );
+            const notificationText = hasCompletedUpdate
+                ? `*The ${petType} cuddles you and by mistake triggers your device... ${action.message}*`
+                : allAlreadySatisfied
+                  ? `*The ${petType} cuddles you. Your device is already at that setting. ${action.message}*`
+                  : `*The ${petType} tries to trigger your device, but I couldn't confirm that it responded. ${action.message}*`;
+            try {
+                await this.sendCatDogNotification(character, notificationText);
+            } catch (error) {
+                this.logger.warn("CatDog vibration notification failed", {
+                    memberNumber: character.MemberNumber,
+                    error,
+                });
             }
             if (failure) return failure;
 
