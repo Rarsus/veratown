@@ -28,6 +28,17 @@ function makeCharacter(initial: FakeItem[] = []) {
                         item.Property ??= {};
                         item.Property[property] = value;
                     },
+                    lock: (
+                        lockType: string,
+                        memberNumber: number,
+                        properties: Record<string, unknown>,
+                    ) => {
+                        item.Property ??= {};
+                        Object.assign(item.Property, properties, {
+                            LockedBy: lockType,
+                            LockMemberNumber: memberNumber,
+                        });
+                    },
                     flushUpdate: () => events.push(`item:${group}`),
                 };
             },
@@ -497,6 +508,61 @@ test("confirmAppearance returns the authoritative snapshot observed by a seconda
     assert.equal(result.confirmationAuthority, "room_character_sync");
     assert.deepEqual(result.observed, []);
     assert.equal(observer.listenerCount(), 0);
+});
+
+test("locks an existing timed item through the action contract and peer confirms it", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const runtime = makeConnectedCharacter(connector, [
+        {
+            Group: "ItemDevices",
+            Name: "FuturisticCrate",
+            Property: { RemoveTimer: 1234 },
+        },
+    ]);
+    const observer = new FakeConnector("secondary", 22);
+    observer.setCharacter(11, runtime);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
+    });
+
+    const pending = adapter.lockExistingItem(
+        runtime as never,
+        { group: "ItemDevices", asset: "FuturisticCrate" },
+        { type: "SafewordPadlock", memberNumber: 99, password: "test" },
+        {
+            ...confirmedPolicy("lock-existing-crate"),
+            memberNumber: 11,
+            timeoutMs: 20,
+        },
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    observer.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: 11,
+        sourceMemberNumber: connector.Player.MemberNumber,
+        timestamp: 101,
+        appearance: runtime.Appearance.MakeAppearanceBundle(),
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_character_sync");
+    assert.deepEqual(result.observed, [
+        {
+            Group: "ItemDevices",
+            Name: "FuturisticCrate",
+            Property: {
+                LockedBy: "SafewordPadlock",
+                LockMemberNumber: 99,
+                LockSet: true,
+                Password: "test",
+                RemoveItem: true,
+                RemoveOnUnlock: true,
+            },
+        },
+    ]);
 });
 
 test("returns immediately and resolves only after a peer appearance sync", async () => {

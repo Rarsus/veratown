@@ -3,6 +3,7 @@ import type {
     ActionResult,
     AppearanceActionAdapter,
     AppearanceItemIdentity,
+    AppearanceLockOptions,
     AppearanceMutationPolicy,
     AppearanceObservation,
     AppearanceSnapshotPredicate,
@@ -94,6 +95,38 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
             context.memberNumber,
             policy.operationId,
             () => this.adapter.remove(character, item, policy),
+        );
+    }
+
+    public lockExistingItem(
+        character: TRuntimeCharacter,
+        item: AppearanceItemIdentity,
+        lock: AppearanceLockOptions,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const context = contextFromPolicy(policy);
+        validateContext(context);
+        if (!this.adapter.lockExistingItem) {
+            const now = Date.now();
+            return Promise.resolve({
+                status: "rejected",
+                metadata: {
+                    operationId: context.operationId,
+                    actionId: "appearance.lockExistingItem",
+                    memberNumber: context.memberNumber,
+                    attempt: 1,
+                    startedAt: now,
+                    completedAt: now,
+                },
+                reason: "Appearance adapter does not support locking existing items",
+                failureKind: "permanent",
+                retryable: false,
+            });
+        }
+        return this.scheduler.schedule(
+            context.memberNumber,
+            policy.operationId,
+            () => this.adapter.lockExistingItem!(character, item, lock, policy),
         );
     }
 

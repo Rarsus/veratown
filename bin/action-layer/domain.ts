@@ -91,6 +91,14 @@ export interface AppearanceItemIdentity {
 export type AppearanceLockType =
     "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
 
+export interface AppearanceLockOptions {
+    readonly type: AppearanceLockType;
+    readonly memberNumber: number;
+    readonly password?: string;
+    readonly hint?: string;
+    readonly showTimer?: boolean;
+}
+
 export interface AppearanceItemMutationOptions {
     readonly color?: string;
     readonly difficulty?: number;
@@ -102,13 +110,7 @@ export interface AppearanceItemMutationOptions {
         readonly name: string;
         readonly description: string;
     };
-    readonly lock?: {
-        readonly type: AppearanceLockType;
-        readonly memberNumber: number;
-        readonly password?: string;
-        readonly hint?: string;
-        readonly showTimer?: boolean;
-    };
+    readonly lock?: AppearanceLockOptions;
 }
 
 export type AppearanceLockMode = "none" | "safeword" | "exclusive" | "password";
@@ -237,6 +239,13 @@ export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
     remove(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>>;
+
+    lockExistingItem?(
+        character: TRuntimeCharacter,
+        item: AppearanceItemIdentity,
+        lock: AppearanceLockOptions,
         policy: AppearanceMutationPolicy,
     ): Promise<ActionResult<AppearanceObservation>>;
 

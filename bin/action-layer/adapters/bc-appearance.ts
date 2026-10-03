@@ -7,6 +7,7 @@ import {
     type AppearanceConfirmationAuthority,
     type AppearanceActionAdapter,
     type AppearanceItemIdentity,
+    type AppearanceLockOptions,
     type AppearanceMutationPolicy,
     type AppearanceObservation,
     type AppearanceSnapshotPredicate,
@@ -348,7 +349,10 @@ function configureAddedItem(
     }
 
     const lock = policy.itemOptions?.lock;
-    if (!lock) return;
+    if (lock) configureItemLock(item, lock);
+}
+
+function configureItemLock(item: any, lock: AppearanceLockOptions): void {
     if (typeof item.lock !== "function") {
         throw new Error("BC appearance item does not support locking");
     }
@@ -362,6 +366,22 @@ function configureAddedItem(
             : { ShowTimer: lock.showTimer ?? false }),
         LockSet: true,
     });
+}
+
+function expectedLockProperties(
+    lock: AppearanceLockOptions,
+): Record<string, unknown> {
+    return {
+        LockedBy: lock.type,
+        LockMemberNumber: lock.memberNumber,
+        LockSet: true,
+        RemoveItem: true,
+        ...(lock.type === "SafewordPadlock"
+            ? { RemoveOnUnlock: true }
+            : { ShowTimer: lock.showTimer ?? false }),
+        ...(lock.password === undefined ? {} : { Password: lock.password }),
+        ...(lock.hint === undefined ? {} : { Hint: lock.hint }),
+    };
 }
 
 function identityKey(item: AppearanceItemIdentity): string {
@@ -1023,6 +1043,106 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         };
 
         return execute(character.Appearance.MakeAppearanceBundle());
+    }
+
+    public async lockExistingItem(
+        character: API_Character,
+        item: AppearanceItemIdentity,
+        lock: AppearanceLockOptions,
+        policy: AppearanceMutationPolicy,
+    ): Promise<ActionResult<AppearanceObservation>> {
+        const startedAt = this.now();
+        const context = contextForPolicy(policy, this.now);
+        const actionId = "appearance.lockExistingItem";
+        const before = character.Appearance.MakeAppearanceBundle();
+        const currentItem = before.find(
+            (candidate) =>
+                candidate.Group === item.group && candidate.Name === item.asset,
+        );
+        if (!currentItem) {
+            return blocked(
+                context,
+                actionId,
+                `Appearance item is no longer equipped: ${item.group}/${item.asset}`,
+                this.now(),
+            );
+        }
+
+        const expectedLock = expectedLockProperties(lock);
+        if (
+            matchesPropertySubset(propertyOf(currentItem), expectedLock) &&
+            propertyOf(currentItem).RemoveTimer === undefined
+        ) {
+            return createActionResult(
+                "already_satisfied",
+                createActionMetadata(context, actionId, startedAt),
+                { value: toObservation(before, startedAt) },
+            );
+        }
+
+        const currentRuntimeItem = character.Appearance.InventoryGet(
+            item.group as never,
+        );
+        if (
+            !currentRuntimeItem ||
+            currentRuntimeItem.Name !== item.asset ||
+            typeof currentRuntimeItem.lock !== "function"
+        ) {
+            return blocked(
+                context,
+                actionId,
+                `Appearance item cannot be locked: ${item.group}/${item.asset}`,
+                this.now(),
+            );
+        }
+
+        return this.dispatchMutation(
+            character,
+            item,
+            policy,
+            "update",
+            () => {
+                const latest = character.Appearance.MakeAppearanceBundle();
+                const latestItem = latest.find(
+                    (candidate) =>
+                        candidate.Group === item.group &&
+                        candidate.Name === item.asset,
+                );
+                if (
+                    !latestItem ||
+                    JSON.stringify(propertyOf(latestItem)) !==
+                        JSON.stringify(propertyOf(currentItem))
+                ) {
+                    throw new Error(
+                        "Appearance item changed before the lock update",
+                    );
+                }
+                configureItemLock(currentRuntimeItem, lock);
+                const updatedItem = currentRuntimeItem.getData?.();
+                if (updatedItem?.Property) {
+                    delete (updatedItem.Property as Record<string, unknown>)
+                        .RemoveTimer;
+                }
+                currentRuntimeItem.flushUpdate();
+            },
+            context,
+            startedAt,
+            (items) => {
+                const observedItem = items.find(
+                    (candidate) =>
+                        candidate.Group === item.group &&
+                        candidate.Name === item.asset,
+                );
+                return (
+                    observedItem !== undefined &&
+                    matchesPropertySubset(
+                        propertyOf(observedItem),
+                        expectedLock,
+                    ) &&
+                    propertyOf(observedItem).RemoveTimer === undefined
+                );
+            },
+        );
     }
 
     public async updateExtendedProperties(

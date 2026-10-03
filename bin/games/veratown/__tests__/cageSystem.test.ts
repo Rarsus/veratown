@@ -183,6 +183,81 @@ function createMutationService() {
     };
 }
 
+function createAppearanceActionService() {
+    const makeResult = (character: any, policy: Record<string, any>) => {
+        const appearance = character.Appearance.MakeAppearanceBundle();
+        return {
+            status: "completed",
+            metadata: {
+                operationId: policy.operationId,
+                actionId: "appearance.test",
+                memberNumber: policy.memberNumber,
+                attempt: 1,
+                startedAt: Date.now(),
+                completedAt: Date.now(),
+            },
+            observed: appearance,
+            value: {
+                items: appearance.map((item: any) => ({
+                    group: item.Group,
+                    asset: item.Name,
+                })),
+                hiddenLayers: [],
+                observedAt: Date.now(),
+            },
+        };
+    };
+    const configure = (crate: any, policy: Record<string, any>) => {
+        const options = policy.itemOptions;
+        for (const [key, value] of Object.entries(
+            options?.properties?.typeRecord ?? {},
+        )) {
+            crate.setProperty("TypeRecord", {
+                ...(crate.Property.TypeRecord ?? {}),
+                [key]: value,
+            });
+        }
+        if (options?.properties?.mode !== undefined) {
+            crate.setProperty("Mode", options.properties.mode);
+        }
+        if (options?.lock) {
+            crate.lock(options.lock.type, options.lock.memberNumber, {
+                Password: options.lock.password ?? "test-password",
+                RemoveItem: true,
+                RemoveOnUnlock: true,
+                LockSet: true,
+            });
+        }
+    };
+    return {
+        add: async (character: any, _item: unknown, policy: any) => {
+            const crate = character.Appearance.AddItem();
+            configure(crate, policy);
+            return makeResult(character, policy);
+        },
+        remove: async (character: any, item: any, policy: any) => {
+            character.Appearance.RemoveItem(item.group);
+            return makeResult(character, policy);
+        },
+        lockExistingItem: async (
+            character: any,
+            item: any,
+            lock: any,
+            policy: any,
+        ) => {
+            const crate = character.Appearance.getItemData(item.group);
+            crate.lock(lock.type, lock.memberNumber, {
+                Password: lock.password ?? "test-password",
+                RemoveItem: true,
+                RemoveOnUnlock: true,
+                LockSet: true,
+            });
+            delete crate.Property.RemoveTimer;
+            return makeResult(character, policy);
+        },
+    };
+}
+
 function createLifecycleConnector() {
     const createRoom = () => {
         const room = new EventEmitter() as any;
@@ -254,6 +329,7 @@ function startRelease(
         true,
         communicationService,
         rollout,
+        createAppearanceActionService() as any,
     );
     (system as any).cagedCharacters.set(character.character.MemberNumber, {
         character: character.character,
@@ -439,6 +515,11 @@ test("CageSystem recovers a persisted cage expiry without duplicate entry notice
         mutations as any,
         undefined,
         timer,
+        true,
+        true,
+        undefined,
+        undefined,
+        createAppearanceActionService() as any,
     );
     const pending = (system as any).recoverCagedCharacter(character.character);
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -472,6 +553,11 @@ test("CageSystem restores a missing crate from persisted containment state", asy
         mutations as any,
         undefined,
         timer,
+        true,
+        true,
+        undefined,
+        undefined,
+        createAppearanceActionService() as any,
     );
 
     void (system as any).recoverCagedCharacter(character.character);
@@ -706,6 +792,7 @@ test("CageSystem routes release status notifications through actions", async () 
     const service = new CommunicationActionService(adapter);
     const rollout = new ActionLayerRolloutController({
         communicationNotificationsEnabled: true,
+        featureAppearanceEnabled: true,
     });
     created.setCrate({
         Name: "FuturisticCrate",
@@ -748,6 +835,11 @@ test("CageSystem allows a targeted item when full wardrobe access is disabled", 
         mutations as any,
         undefined,
         timer,
+        true,
+        true,
+        undefined,
+        undefined,
+        createAppearanceActionService() as any,
     );
 
     const pending = (system as any).onCharacterEnterCage(created.character);
@@ -775,6 +867,11 @@ test("CageSystem logs and proceeds when item permission is denied", async () => 
         mutations as any,
         undefined,
         timer,
+        true,
+        true,
+        undefined,
+        undefined,
+        createAppearanceActionService() as any,
     );
 
     const pending = (system as any).onCharacterEnterCage(created.character);
@@ -790,7 +887,7 @@ test("CageSystem logs and proceeds when item permission is denied", async () => 
     await pending;
 });
 
-test("Cage crate mutations use appearance actions when rollout is enabled", async () => {
+test("Cage crate creation, removal, and lock migration use typed appearance actions", async () => {
     const created = createCharacter(251025);
     const rollout = new ActionLayerRolloutController({
         featureAppearanceEnabled: true,
@@ -799,6 +896,7 @@ test("Cage crate mutations use appearance actions when rollout is enabled", asyn
         operation: string;
         item: unknown;
         policy: Record<string, any>;
+        lock?: unknown;
     }> = [];
     const makeResult = (policy: Record<string, any>) => ({
         status: "completed",
@@ -811,6 +909,7 @@ test("Cage crate mutations use appearance actions when rollout is enabled", asyn
             completedAt: 2,
         },
         value: { items: [], hiddenLayers: [], observedAt: 2 },
+        observed: [],
     });
     const appearanceService = {
         add: async (_character: unknown, item: unknown, policy: any) => {
@@ -819,6 +918,15 @@ test("Cage crate mutations use appearance actions when rollout is enabled", asyn
         },
         remove: async (_character: unknown, item: unknown, policy: any) => {
             calls.push({ operation: "remove", item, policy });
+            return makeResult(policy);
+        },
+        lockExistingItem: async (
+            _character: unknown,
+            item: unknown,
+            lock: unknown,
+            policy: any,
+        ) => {
+            calls.push({ operation: "lock", item, lock, policy });
             return makeResult(policy);
         },
     };
@@ -833,17 +941,13 @@ test("Cage crate mutations use appearance actions when rollout is enabled", asyn
         rollout,
         appearanceService as any,
     );
-    let legacyMutations = 0;
     const item = {
         group: "ItemDevices",
         asset: "FuturisticCrate",
     };
 
-    const added = await (system as any).syncCageAppearanceMutation(
+    await (system as any).executeCageAppearanceAction(
         created.character,
-        () => {
-            legacyMutations += 1;
-        },
         {
             operation: "add",
             item,
@@ -864,26 +968,34 @@ test("Cage crate mutations use appearance actions when rollout is enabled", asyn
         },
         "test crate add",
     );
-    const removed = await (system as any).syncCageAppearanceMutation(
+    await (system as any).executeCageAppearanceAction(
         created.character,
-        () => {
-            legacyMutations += 1;
-        },
         { operation: "remove", item },
         "test crate release",
     );
-
-    assert.equal(added, true);
-    assert.equal(removed, true);
-    assert.equal(legacyMutations, 0);
+    await (system as any).executeCageAppearanceAction(
+        created.character,
+        {
+            operation: "lock",
+            item,
+            lock: { type: "SafewordPadlock", memberNumber: 251025 },
+        },
+        "test legacy crate lock migration",
+    );
     assert.deepEqual(
-        calls.map(({ operation, item: actionItem }) => ({
+        calls.map(({ operation, item: actionItem, lock }) => ({
             operation,
             item: actionItem,
+            ...(lock === undefined ? {} : { lock }),
         })),
         [
             { operation: "add", item },
             { operation: "remove", item },
+            {
+                operation: "lock",
+                item,
+                lock: { type: "SafewordPadlock", memberNumber: 251025 },
+            },
         ],
     );
     assert.deepEqual(calls[0].policy.itemOptions, {

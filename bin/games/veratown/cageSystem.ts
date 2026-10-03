@@ -18,7 +18,7 @@ import {
     API_Chatroom,
     API_Map,
     API_AppearanceItem,
-    AssetGet,
+    BC_AppearanceItem,
 } from "bc-bot";
 import { wait } from "../../hub/utils";
 import { durationString, remainingTimeString } from "../../utils";
@@ -32,11 +32,8 @@ import { GameStateMutationService } from "../shared/gameStateMutationService";
 import {
     AppearanceStateSynchronizer,
     preflightAppearanceMutation,
-    syncAppearanceMutation,
-    verifyAppearance,
 } from "./shared/appearanceSync";
-import type { ActionLayerAppearanceMutation } from "./shared/appearanceSync";
-import { applyConsentPadlock } from "../shared/consentPadlock";
+import type { AppearanceMutationContext } from "./shared/appearanceLifecycle";
 import {
     classifyContainmentRemoval,
     readLegacyRemoveTimer,
@@ -48,6 +45,7 @@ import type {
     AppearanceActionService,
     AppearanceItemIdentity,
     AppearanceItemMutationOptions,
+    AppearanceLockOptions,
     AppearanceMutationPolicy,
 } from "../../action-layer";
 import { sendFeatureWhisper } from "../../action-layer";
@@ -58,14 +56,16 @@ export interface CageTimer {
 }
 
 interface CageAppearanceAction {
-    readonly operation: "add" | "remove";
+    readonly operation: "add" | "remove" | "lock";
     readonly item: AppearanceItemIdentity;
     readonly itemOptions?: AppearanceItemMutationOptions;
+    readonly lock?: AppearanceLockOptions;
 }
 
-type CageAppearanceSyncOptions = NonNullable<
-    Parameters<typeof syncAppearanceMutation>[4]
->;
+interface CageAppearanceActionOptions {
+    readonly releaseCause?: AppearanceMutationContext["releaseCause"];
+    readonly requireEmptyDeviceSlot?: boolean;
+}
 
 export type ContainmentRecoveryClassification =
     | "not-contained"
@@ -262,17 +262,25 @@ export class CageSystem extends AbstractTileFeatureSystem {
         );
     }
 
-    private async syncCageAppearanceMutation(
+    private async executeCageAppearanceAction(
         character: API_Character,
-        mutation: () => void | Promise<void>,
         action: CageAppearanceAction,
         reason: string,
-        syncOptions: CageAppearanceSyncOptions = {},
-    ): Promise<boolean> {
+        options: CageAppearanceActionOptions = {},
+    ): Promise<readonly BC_AppearanceItem[]> {
         const operationId = `cage-appearance:${character.MemberNumber}:${++this.cageAppearanceActionSequence}`;
         const lease = this.rollout?.begin("feature-appearance", operationId);
-        let actionLayer: ActionLayerAppearanceMutation | undefined;
-        if (lease?.path === "action" && this.appearanceService !== undefined) {
+        try {
+            if (!this.appearanceService) {
+                throw new Error(
+                    "Cage appearance action service is unavailable",
+                );
+            }
+            if (this.rollout && lease?.path !== "action") {
+                throw new Error(
+                    "Cage appearance actions are disabled by rollout",
+                );
+            }
             const policy: AppearanceMutationPolicy = {
                 operationId,
                 memberNumber: character.MemberNumber,
@@ -287,39 +295,90 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     ? {}
                     : { itemOptions: action.itemOptions }),
             };
-            actionLayer = {
-                service: this.appearanceService,
-                operation: action.operation,
-                item: action.item,
-                policy,
-            };
-        }
-
-        try {
-            const mutationSucceeded = await syncAppearanceMutation(
-                character,
-                mutation,
-                50,
-                this.stateSync,
-                {
-                    ...syncOptions,
-                    operationId,
-                    reason,
-                    ...(actionLayer === undefined ? {} : { actionLayer }),
-                },
-            );
-            if (
-                mutationSucceeded &&
-                actionLayer === undefined &&
-                syncOptions.awaitServerSync === true &&
-                syncOptions.serverSyncPredicate
-            ) {
-                return verifyAppearance(
-                    character,
-                    syncOptions.serverSyncPredicate,
-                ).verified;
+            const result =
+                action.operation === "add"
+                    ? await this.appearanceService.add(
+                          character,
+                          action.item,
+                          policy,
+                      )
+                    : action.operation === "remove"
+                      ? await this.appearanceService.remove(
+                            character,
+                            action.item,
+                            policy,
+                        )
+                      : action.lock
+                        ? await this.appearanceService.lockExistingItem(
+                              character,
+                              action.item,
+                              action.lock,
+                              policy,
+                          )
+                        : undefined;
+            if (!result) {
+                throw new Error("Cage lock action is missing lock options");
             }
-            return mutationSucceeded;
+
+            let observedAppearance: readonly BC_AppearanceItem[] | undefined;
+            if (result.status === "in_progress") {
+                const confirmation = await result.confirmation;
+                if (confirmation?.status !== "confirmed") {
+                    throw new Error(
+                        confirmation?.reason ??
+                            result.reason ??
+                            "Cage appearance action remains unconfirmed",
+                    );
+                }
+                observedAppearance = Array.isArray(confirmation.observed)
+                    ? (confirmation.observed as BC_AppearanceItem[])
+                    : undefined;
+            } else if (
+                result.status === "completed" ||
+                result.status === "already_satisfied"
+            ) {
+                observedAppearance = Array.isArray(result.observed)
+                    ? (result.observed as BC_AppearanceItem[])
+                    : character.Appearance.MakeAppearanceBundle();
+            } else {
+                throw new Error(
+                    result.reason ?? `Cage appearance action ${result.status}`,
+                );
+            }
+            if (!observedAppearance) {
+                throw new Error(
+                    "Cage action did not return an appearance snapshot",
+                );
+            }
+            if (
+                options.requireEmptyDeviceSlot &&
+                observedAppearance.some((item) => item.Group === "ItemDevices")
+            ) {
+                throw new Error(
+                    "Cage device slot remains occupied after release",
+                );
+            }
+
+            await wait(50);
+            const mutationContext: AppearanceMutationContext = {
+                operationId,
+                correlationId: `appearance:${operationId}`,
+                timestamp: Date.now(),
+                source: action.operation === "remove" ? "release" : "veratown",
+                reason,
+                ...(options.releaseCause === undefined
+                    ? {}
+                    : { releaseCause: options.releaseCause }),
+                expectedAppearance: [...observedAppearance],
+                observedAppearance: [...observedAppearance],
+                verificationStatus: "confirmed",
+            };
+            await this.stateSync?.(
+                character,
+                mutationContext,
+                observedAppearance,
+            );
+            return observedAppearance;
         } finally {
             lease?.release();
         }
@@ -627,40 +686,21 @@ export class CageSystem extends AbstractTileFeatureSystem {
         ) {
             this.releasingCharacters.add(character.MemberNumber);
             try {
-                const crateRemovalVerified =
-                    await this.syncCageAppearanceMutation(
-                        character,
-                        () => {
-                            character.Appearance.RemoveItem("ItemDevices");
+                await this.executeCageAppearanceAction(
+                    character,
+                    {
+                        operation: "remove",
+                        item: {
+                            group: "ItemDevices",
+                            asset: "FuturisticCrate",
                         },
-                        {
-                            operation: "remove",
-                            item: {
-                                group: "ItemDevices",
-                                asset: "FuturisticCrate",
-                            },
-                        },
-                        "manual cage release",
-                        {
-                            sendFullAppearanceUpdate: true,
-                            awaitServerSync: true,
-                            serverSyncPredicate: (appearance) =>
-                                !appearance.some(
-                                    (item) => item.Group === "ItemDevices",
-                                ),
-                        },
-                    );
-                if (!crateRemovalVerified) {
-                    this.logger.error(
-                        "Manual cage release remains pending confirmation",
-                        undefined,
-                        {
-                            memberNumber: character.MemberNumber,
-                            observedAtMs: this.timer.now(),
-                        },
-                    );
-                    return;
-                }
+                    },
+                    "manual cage release",
+                    {
+                        releaseCause: "admin",
+                        requireEmptyDeviceSlot: true,
+                    },
+                );
             } finally {
                 this.releasingCharacters.delete(character.MemberNumber);
             }
@@ -794,30 +834,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 }
                 authoritativeExpiry = session.expiresAt;
             } else {
-                await this.syncCageAppearanceMutation(
+                await this.executeCageAppearanceAction(
                     character,
-                    () => {
-                        const crate = character.Appearance.AddItem(
-                            AssetGet("ItemDevices", "FuturisticCrate"),
-                        );
-                        crate.SetCraft({
-                            Name: `Veratown Futuristic Crate`,
-                            Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
-                        });
-                        crate.setProperty("TypeRecord", {
-                            w: 2, // Big window
-                            l: 3,
-                            a: 3,
-                            d: 1,
-                            t: 1,
-                            h: 4,
-                        });
-                        crate.setProperty("Mode", "Deny");
-
-                        applyConsentPadlock(crate, {
-                            memberNumber: character.MemberNumber,
-                        });
-                    },
                     {
                         operation: "add",
                         item: {
@@ -847,10 +865,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         },
                     },
                     "cage entry crate",
-                    {
-                        skipAuthorizationPreflight: true,
-                        requireFullWardrobeAccess: false,
-                    },
                 );
             }
             this.cagedCharacters.set(character.MemberNumber, {
@@ -947,31 +961,22 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 crateRemovalVerified = false;
                 this.releasingCharacters.add(memberNumber);
                 try {
-                    crateRemovalVerified =
-                        await this.syncCageAppearanceMutation(
-                            character,
-                            () => {
-                                character.Appearance.RemoveItem("ItemDevices");
+                    await this.executeCageAppearanceAction(
+                        character,
+                        {
+                            operation: "remove",
+                            item: {
+                                group: "ItemDevices",
+                                asset: "FuturisticCrate",
                             },
-                            {
-                                operation: "remove",
-                                item: {
-                                    group: "ItemDevices",
-                                    asset: "FuturisticCrate",
-                                },
-                            },
-                            "cage timer release",
-                            {
-                                releaseCause: "timer",
-                                sendFullAppearanceUpdate: true,
-                                awaitServerSync: true,
-                                serverSyncPredicate: (appearance) =>
-                                    !appearance.some(
-                                        (item) => item.Group === "ItemDevices",
-                                    ),
-                                throwOnSyncFailure: true,
-                            },
-                        );
+                        },
+                        "cage timer release",
+                        {
+                            releaseCause: "timer",
+                            requireEmptyDeviceSlot: true,
+                        },
+                    );
+                    crateRemovalVerified = true;
                 } catch (error) {
                     this.logger.error("Cage crate removal failed", error, {
                         memberNumber,
@@ -1188,29 +1193,8 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 );
             }
             if (!liveCrate) {
-                await this.syncCageAppearanceMutation(
+                await this.executeCageAppearanceAction(
                     character,
-                    () => {
-                        const crate = character.Appearance.AddItem(
-                            AssetGet("ItemDevices", "FuturisticCrate"),
-                        );
-                        crate.SetCraft({
-                            Name: `Veratown Futuristic Crate`,
-                            Description: `A very interesting Crate, specially made for ${character} to ensure the wearer's safety.`,
-                        });
-                        crate.setProperty("TypeRecord", {
-                            w: 2,
-                            l: 3,
-                            a: 3,
-                            d: 1,
-                            t: 1,
-                            h: 4,
-                        });
-                        crate.setProperty("Mode", "Deny");
-                        applyConsentPadlock(crate, {
-                            memberNumber: character.MemberNumber,
-                        });
-                    },
                     {
                         operation: "add",
                         item: {
@@ -1252,48 +1236,40 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 ).removeTimer !== undefined &&
                 typeof character.Appearance.InventoryGet === "function"
             ) {
-                await syncAppearanceMutation(
-                    character,
-                    () => {
-                        const crate =
-                            character.Appearance.InventoryGet?.("ItemDevices");
-                        if (!crate || crate.Name !== "FuturisticCrate") {
-                            throw new Error(
-                                "Cage device unavailable during migration",
-                            );
-                        }
-                        applyConsentPadlock(crate, {
-                            memberNumber: character.MemberNumber,
-                        });
-                    },
-                    50,
-                    this.stateSync,
-                    { throwOnSyncFailure: true },
+                const observedAppearance =
+                    await this.executeCageAppearanceAction(
+                        character,
+                        {
+                            operation: "lock",
+                            item: {
+                                group: "ItemDevices",
+                                asset: "FuturisticCrate",
+                            },
+                            lock: {
+                                type: "SafewordPadlock",
+                                memberNumber: character.MemberNumber,
+                            },
+                        },
+                        "cage legacy lock migration",
+                    );
+                const crate = observedAppearance.find(
+                    (item) =>
+                        item.Group === "ItemDevices" &&
+                        item.Name === "FuturisticCrate",
                 );
-                const verification = verifyAppearance(
-                    character,
-                    (appearance) => {
-                        const crate = appearance.find(
-                            (item) =>
-                                item.Group === "ItemDevices" &&
-                                item.Name === "FuturisticCrate",
-                        );
-                        return (
-                            crate?.Property?.LockedBy === "SafewordPadlock" &&
-                            crate?.Property?.RemoveTimer === undefined &&
-                            typeof crate?.Property?.Password === "string" &&
-                            /^[A-Za-z0-9]{1,8}$/.test(crate.Property.Password)
-                        );
-                    },
-                );
-                if (!verification.verified) {
+                if (
+                    crate?.Property?.LockedBy !== "SafewordPadlock" ||
+                    crate.Property.RemoveTimer !== undefined ||
+                    typeof crate.Property.Password !== "string" ||
+                    !/^[A-Za-z0-9]{1,8}$/.test(crate.Property.Password)
+                ) {
                     throw new Error(
-                        `Cage legacy lock migration was not verified: ${verification.status}`,
+                        "Cage legacy lock migration was not confirmed",
                     );
                 }
                 this.logger.info("Cage legacy lock migrated", {
                     memberNumber: character.MemberNumber,
-                    verification,
+                    verified: true,
                 });
             }
             this.cagedCharacters.set(character.MemberNumber, {
