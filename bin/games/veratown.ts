@@ -275,7 +275,7 @@ export class Veratown {
         roomKey: string = "main",
         private readonly managedReleaseWorkersEnabled = true,
         private readonly bunnyDebugUnlockDurationMs?: number,
-        private readonly actionLayerBunnyRestraintsEnabled = false,
+        private readonly actionLayerBunnyRestraintsEnabled = true,
         private readonly actionLayerReleaseRemovalEnabled = false,
         private readonly actionLayerCommunicationNotificationsEnabled = false,
         private readonly actionLayerInventoryEnabled = false,

@@ -137,7 +137,7 @@ export const configSchema = z
         discord_audit_channel_id: nonEmptyString.optional(),
         managed_release_workers_enabled: z.boolean().default(true),
         bunny_debug_unlock_duration_ms: z.number().int().positive().optional(),
-        action_layer_bunny_restraints_enabled: z.boolean().default(false),
+        action_layer_bunny_restraints_enabled: z.boolean().default(true),
         action_layer_release_removal_enabled: z.boolean().default(false),
         action_layer_communication_notifications_enabled: z
             .boolean()

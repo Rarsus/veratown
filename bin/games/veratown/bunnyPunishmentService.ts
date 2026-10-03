@@ -7,7 +7,6 @@ import {
     getExtendedAssetDef,
 } from "bc-bot";
 import type { AppearanceMutationContext } from "./shared/appearanceLifecycle";
-import { syncAppearanceMutation } from "./shared/appearanceSync";
 import {
     BUNNY_RESTRAINT_CONFIGS,
     BUNNY_ROPE_COLOR,
@@ -21,10 +20,7 @@ import {
 } from "./bunnyPunishmentEngine";
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
 import type { EventBus, GameEventListener } from "../shared/eventBus";
-import {
-    applyConsentPadlock,
-    resolveConsentPadlockType,
-} from "../shared/consentPadlock";
+import { resolveConsentPadlockType } from "../shared/consentPadlock";
 import type {
     BunnyPunishmentAuditDetails,
     BunnyPunishmentRepository,
@@ -34,7 +30,6 @@ import type {
     ActionLayerRolloutController,
     AppearanceActionService,
 } from "../../action-layer";
-import type { AppearanceObservation } from "../../action-layer/domain";
 import type { VeratownWorkflowRecovery } from "./shared/veratownWorkflowRecovery";
 
 export interface BunnyActionLayerMigration {
@@ -341,174 +336,143 @@ export class BunnyPunishmentWorkflow {
         let mutationConfirmed = false;
         let authoritativeAppearance:
             AppearanceMutationContext["observedAppearance"] | undefined;
-        let confirmedActionAppearance: AppearanceObservation | undefined;
         const lease = this.actionLayer?.rollout.begin(
             "bunny-restraints",
             operationId,
         );
         try {
-            if (lease?.path === "action") {
-                for (const piece of punishmentConfig.pieces) {
-                    try {
-                        const result =
-                            await this.actionLayer!.appearanceService.add(
-                                character,
-                                {
-                                    group: piece.group,
-                                    asset: piece.asset,
-                                    ...(piece.extendedType === undefined
-                                        ? {}
-                                        : { extendedType: piece.extendedType }),
-                                },
-                                {
-                                    operationId: `${operationId}:${bunnyPieceKey(piece)}`,
-                                    memberNumber: character.MemberNumber,
-                                    source: "bunny",
-                                    reason: "bunny_punishment_applied",
-                                    timeoutMs: 2_000,
-                                    maxAttempts: 1,
-                                    retryDelayMs: 0,
-                                    preserveLockedItems: true,
-                                    requireServerConfirmation: true,
-                                    itemOptions: {
-                                        color: BUNNY_ROPE_COLOR,
-                                        craft: {
-                                            name: piece.asset,
-                                            description:
-                                                BUNNY_ROPE_CRAFT_DESCRIPTION,
-                                        },
-                                        ...(piece.lockType === undefined
-                                            ? {}
-                                            : {
-                                                  lock: {
-                                                      type: piece.lockType,
-                                                      memberNumber:
-                                                          this.conn.Player
-                                                              ?.MemberNumber ??
-                                                          character.MemberNumber,
-                                                  },
-                                              }),
-                                    },
-                                },
-                            );
-                        if (result.status === "in_progress") {
-                            if (!result.confirmation) {
-                                mutationErrors.push(
-                                    "Bunny restraint dispatch is pending without a confirmation outcome",
-                                );
-                                break;
-                            }
-                            const confirmation = await result.confirmation;
-                            if (confirmation.status !== "confirmed") {
-                                mutationErrors.push(
-                                    confirmation.reason ||
-                                        `unconfirmed add ${bunnyPieceKey(piece)}`,
-                                );
-                                break;
-                            }
-                            confirmedActionAppearance = confirmation.value;
-                        } else if (
-                            result.status === "completed" ||
-                            result.status === "already_satisfied"
-                        ) {
-                            confirmedActionAppearance = result.value;
-                        } else {
-                            throw new Error(
-                                result.reason ??
-                                    `failed to add ${bunnyPieceKey(piece)}`,
-                            );
-                        }
-                        configuredPieces.push(bunnyPieceKey(piece));
-                    } catch (error) {
-                        mutationErrors.push(
-                            error instanceof Error
-                                ? error.message
-                                : String(error),
+            const appearanceService = this.actionLayer?.appearanceService;
+            if (!appearanceService || lease?.path !== "action") {
+                throw new Error(
+                    !appearanceService
+                        ? "Bunny appearance action service is unavailable"
+                        : "Bunny restraints are disabled while the action layer is in legacy mode",
+                );
+            }
+            for (const piece of punishmentConfig.pieces) {
+                try {
+                    const asset = AssetGet(piece.group, piece.asset);
+                    if (
+                        !asset ||
+                        !character.IsItemPermissionAccessible(asset)
+                    ) {
+                        permissionDenied = true;
+                        throw new Error(
+                            `permission denied: ${bunnyPieceKey(piece)}`,
                         );
                     }
-                }
-                mutationConfirmed = mutationErrors.length === 0;
-                authoritativeAppearance =
-                    character.Appearance.MakeAppearanceBundle();
-            } else {
-                // LEGACY-BUNNY-DELETE-APPLICATION: Remove after the action
-                // path is promoted and the rollback window is closed.
-                await syncAppearanceMutation(
-                    character,
-                    () => {
-                        for (const piece of punishmentConfig.pieces) {
-                            try {
-                                const asset = AssetGet(
-                                    piece.group,
-                                    piece.asset,
-                                );
-                                if (
-                                    !asset ||
-                                    !character.IsItemPermissionAccessible(asset)
-                                ) {
-                                    permissionDenied = true;
-                                    throw new Error(
-                                        `permission denied: ${bunnyPieceKey(piece)}`,
-                                    );
-                                }
-                                const item =
-                                    character.Appearance.AddItem(asset);
-                                if (!item) {
-                                    throw new Error(
-                                        `failed to add ${bunnyPieceKey(piece)}`,
-                                    );
-                                }
-                                if (piece.extendedType) {
-                                    item.Extended?.SetType(piece.extendedType);
-                                }
-                                item.SetColor(BUNNY_ROPE_COLOR);
-                                item.SetCraft({
-                                    Name: piece.asset,
-                                    Description: BUNNY_ROPE_CRAFT_DESCRIPTION,
-                                });
-                                applyConsentPadlock(item, {
-                                    memberNumber:
-                                        this.conn.Player?.MemberNumber ??
-                                        character.MemberNumber,
-                                    consentTrigger: "safeword",
-                                    lockType: piece.lockType,
-                                });
-                                configuredPieces.push(bunnyPieceKey(piece));
-                            } catch (error) {
-                                mutationErrors.push(
-                                    error instanceof Error
-                                        ? error.message
-                                        : String(error),
-                                );
-                            }
+                    const result = await appearanceService.add(
+                        character,
+                        {
+                            group: piece.group,
+                            asset: piece.asset,
+                            ...(piece.extendedType === undefined
+                                ? {}
+                                : { extendedType: piece.extendedType }),
+                        },
+                        {
+                            operationId: `${operationId}:${bunnyPieceKey(piece)}`,
+                            memberNumber: character.MemberNumber,
+                            source: "bunny",
+                            reason: "bunny_punishment_applied",
+                            timeoutMs: 2_000,
+                            maxAttempts: 1,
+                            retryDelayMs: 0,
+                            preserveLockedItems: true,
+                            requireServerConfirmation: true,
+                            itemOptions: {
+                                color: BUNNY_ROPE_COLOR,
+                                craft: {
+                                    name: piece.asset,
+                                    description: BUNNY_ROPE_CRAFT_DESCRIPTION,
+                                },
+                                ...(piece.lockType === undefined
+                                    ? {}
+                                    : {
+                                          lock: {
+                                              type: piece.lockType,
+                                              memberNumber:
+                                                  this.conn.Player
+                                                      ?.MemberNumber ??
+                                                  character.MemberNumber,
+                                          },
+                                      }),
+                            },
+                        },
+                    );
+                    let observed = result.observed;
+                    if (result.status === "in_progress") {
+                        if (!result.confirmation) {
+                            throw new Error(
+                                "Bunny restraint dispatch is pending without a confirmation outcome",
+                            );
                         }
-                    },
-                    this.syncDelayMs,
-                    async (current, mutationContext) => {
-                        authoritativeAppearance =
-                            mutationContext?.observedAppearance;
-                        return this.stateSync?.(
-                            current,
-                            mutationContext,
-                            authoritativeAppearance,
+                        const confirmation = await result.confirmation;
+                        if (confirmation.status !== "confirmed") {
+                            throw new Error(
+                                confirmation.reason ||
+                                    `unconfirmed add ${bunnyPieceKey(piece)}`,
+                            );
+                        }
+                        observed = confirmation.observed;
+                    }
+                    if (
+                        (result.status !== "completed" &&
+                            result.status !== "already_satisfied" &&
+                            result.status !== "in_progress") ||
+                        !Array.isArray(observed)
+                    ) {
+                        throw new Error(
+                            result.reason ??
+                                `Bunny add lacked confirmed appearance for ${bunnyPieceKey(piece)}`,
                         );
-                    },
-                    {
-                        throwOnSyncFailure: false,
-                        source: "bunny",
-                        reason: "bunny_punishment_applied",
-                        operationId,
-                        exclusiveContextHandoff: true,
-                        requireFullWardrobeAccess: false,
-                        sendFullAppearanceUpdate: true,
-                        awaitServerSync: true,
-                        serverSyncPredicate: (appearance) =>
-                            punishmentConfig.pieces.every((piece) =>
-                                hasBunnyRestraint(appearance, piece),
-                            ),
-                    },
-                );
-                mutationConfirmed = true;
+                    }
+                    authoritativeAppearance = observed as BC_AppearanceItem[];
+                    configuredPieces.push(bunnyPieceKey(piece));
+                    if (this.syncDelayMs > 0) {
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, this.syncDelayMs),
+                        );
+                    }
+                } catch (error) {
+                    mutationErrors.push(
+                        error instanceof Error ? error.message : String(error),
+                    );
+                    if (
+                        error instanceof Error &&
+                        /unconfirmed|confirmation|pending/i.test(error.message)
+                    ) {
+                        break;
+                    }
+                }
+            }
+            mutationConfirmed =
+                configuredPieces.length === punishmentConfig.pieces.length &&
+                mutationErrors.length === 0;
+            if (authoritativeAppearance) {
+                const mutationContext: AppearanceMutationContext = {
+                    operationId,
+                    correlationId: `appearance:${operationId}`,
+                    timestamp: Date.now(),
+                    source: "bunny",
+                    reason: "bunny_punishment_applied",
+                    expectedAppearance: [...authoritativeAppearance],
+                    observedAppearance: [...authoritativeAppearance],
+                    verificationStatus: "confirmed",
+                };
+                try {
+                    await this.stateSync?.(
+                        character,
+                        mutationContext,
+                        authoritativeAppearance,
+                    );
+                } catch (error) {
+                    this.logger.error(
+                        "Failed to persist peer-confirmed Bunny appearance",
+                        error,
+                        { memberNumber: character.MemberNumber, operationId },
+                    );
+                }
             }
         } catch (error) {
             mutationErrors.push(
@@ -542,11 +506,6 @@ export class BunnyPunishmentWorkflow {
                 (candidate) =>
                     candidate.group === group && candidate.asset === asset,
             );
-            if (confirmedActionAppearance) {
-                return confirmedActionAppearance.items.some(
-                    (item) => item.group === group && item.asset === asset,
-                );
-            }
             const appliedAppearance =
                 authoritativeAppearance ??
                 character.Appearance.MakeAppearanceBundle();
@@ -701,53 +660,108 @@ export class BunnyPunishmentWorkflow {
             workflowState =
                 await this.actionLayer.workflowRecovery.resume(workflowState);
         }
+        const appearanceService = this.actionLayer?.appearanceService;
+        if (!appearanceService) {
+            throw new Error(
+                "Bunny release requires the appearance action service",
+            );
+        }
+        let confirmedAppearance = character.Appearance.MakeAppearanceBundle();
         let verified = false;
         for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
-            // LEGACY-BUNNY-DELETE-RELEASE: Replace with the action removal
-            // contract before deleting the legacy Bunny cleanup path.
-            await syncAppearanceMutation(
-                character,
-                () => {
-                    for (const piece of artifact.restraintPieces) {
-                        const [group] = piece.split("/");
-                        character.Appearance.RemoveItem(group as any);
+            let retryableFailure = false;
+            for (const [
+                pieceIndex,
+                piece,
+            ] of artifact.restraintPieces.entries()) {
+                const [group, asset] = piece.split("/");
+                const result = await appearanceService.remove(
+                    character,
+                    { group, asset },
+                    {
+                        operationId: `${operationId}:${pieceIndex}`,
+                        memberNumber: character.MemberNumber,
+                        source: "bunny",
+                        reason: "bunny_punishment_released",
+                        timeoutMs: 5_000,
+                        maxAttempts: 1,
+                        retryDelayMs: 0,
+                        preserveLockedItems: false,
+                        cleanupAllowed: true,
+                        requireServerConfirmation: true,
+                    },
+                );
+                if (
+                    result.status === "completed" ||
+                    result.status === "already_satisfied"
+                ) {
+                    if (Array.isArray(result.observed)) {
+                        confirmedAppearance =
+                            result.observed as BC_AppearanceItem[];
                     }
-                },
-                this.syncDelayMs,
-                async (currentCharacter, context, observedAppearance) =>
-                    this.stateSync?.(
-                        currentCharacter,
-                        context,
-                        observedAppearance,
-                    ),
-                {
-                    throwOnSyncFailure: false,
-                    source: "bunny",
-                    releaseCause: "timer",
-                    reason: "bunny_punishment_released",
-                    operationId,
-                    cleanupAllowed: true,
-                    exclusiveContextHandoff: true,
-                    requireFullWardrobeAccess: false,
-                    sendFullAppearanceUpdate: true,
-                    awaitServerSync: true,
-                    serverSyncPredicate: (appearance) =>
-                        artifact.restraintPieces.every(
-                            ([group]) =>
-                                !appearance.some(
-                                    (item) => item.Group === group,
-                                ),
-                        ),
-                },
-            );
-            const appearance = character.Appearance.MakeAppearanceBundle();
+                    continue;
+                }
+                if (
+                    (result.status === "failed" ||
+                        result.status === "timed_out") &&
+                    result.retryable === true
+                ) {
+                    retryableFailure = true;
+                    break;
+                }
+                retryableFailure = false;
+                verified = false;
+                if (result.status === "unconfirmed") {
+                    if (workflowState && this.actionLayer?.workflowRecovery) {
+                        await this.actionLayer.workflowRecovery.fail(
+                            workflowState,
+                        );
+                    }
+                    this.logger.warn(
+                        "Bunny release dispatched but remains unconfirmed; refusing to retry",
+                        {
+                            memberNumber: character.MemberNumber,
+                            operationId,
+                            piece,
+                            reason: result.reason,
+                        },
+                    );
+                    return;
+                }
+                break;
+            }
+            if (retryableFailure) continue;
+            const releaseContext: AppearanceMutationContext = {
+                operationId,
+                correlationId: `appearance:${operationId}`,
+                timestamp: Date.now(),
+                source: "bunny",
+                reason: "bunny_punishment_released",
+                releaseCause: "timer",
+                expectedAppearance: [...confirmedAppearance],
+                observedAppearance: [...confirmedAppearance],
+                verificationStatus: "confirmed",
+            };
+            try {
+                await this.stateSync?.(
+                    character,
+                    releaseContext,
+                    confirmedAppearance,
+                );
+            } catch (error) {
+                this.logger.error(
+                    "Failed to persist peer-confirmed Bunny release appearance",
+                    error,
+                    { memberNumber: character.MemberNumber, operationId },
+                );
+            }
             verified = artifact.restraintPieces.every((piece) => {
                 const [group, asset] = piece.split("/");
-                return !appearance.some(
+                return !confirmedAppearance.some(
                     (item) => item.Group === group && item.Name === asset,
                 );
             });
-            if (verified) break;
+            break;
         }
         if (!verified) {
             if (workflowState && this.actionLayer?.workflowRecovery) {

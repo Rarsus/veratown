@@ -15,7 +15,6 @@
 import {
     API_Connector,
     API_Character,
-    AssetGet,
     getExtendedAssetDef,
     hasExtendedAssetGroup,
     type BC_AppearanceItem,
@@ -899,96 +898,57 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         const operationId = `catdog-bondage:${character.MemberNumber}:${++this.catDogActionSequence}`;
         const lease = this.rollout?.begin("feature-appearance", operationId);
         try {
-            if (
-                lease?.path === "action" &&
-                this.appearanceService !== undefined
-            ) {
-                for (const [index, piece] of action.pieces.entries()) {
-                    const result = await this.characterActions.execute(
-                        character,
-                        {
-                            type: "appearance.add",
-                            item: {
-                                group: piece.group,
-                                asset: piece.asset,
-                                ...(piece.extendedType === undefined
-                                    ? {}
-                                    : { extendedType: piece.extendedType }),
-                            },
-                            options: {
-                                timeoutMs: 5_000,
-                                maxAttempts: 1,
-                                retryDelayMs: 0,
-                                requireServerConfirmation: true,
-                                itemOptions: {
-                                    difficulty: action.difficulty,
-                                    color: piece.color ?? action.color,
-                                    craft: {
-                                        name: piece.asset,
-                                        description: action.craftDescription,
-                                    },
-                                },
+            if (lease && lease.path !== "action") {
+                throw new Error(
+                    "CatDog bondage requires the appearance action layer",
+                );
+            }
+            if (!this.appearanceService) {
+                throw new Error(
+                    "CatDog bondage appearance service is unavailable",
+                );
+            }
+            for (const [index, piece] of action.pieces.entries()) {
+                const result = await this.appearanceService.add(
+                    character,
+                    {
+                        group: piece.group,
+                        asset: piece.asset,
+                        ...(piece.extendedType === undefined
+                            ? {}
+                            : { extendedType: piece.extendedType }),
+                    },
+                    {
+                        operationId: `${operationId}:${index}`,
+                        memberNumber: character.MemberNumber,
+                        source: "feature",
+                        reason: "catdog bondage action",
+                        timeoutMs: 5_000,
+                        maxAttempts: 1,
+                        retryDelayMs: 0,
+                        preserveLockedItems: true,
+                        requireServerConfirmation: true,
+                        itemOptions: {
+                            difficulty: action.difficulty,
+                            color: piece.color ?? action.color,
+                            craft: {
+                                name: piece.asset,
+                                description: action.craftDescription,
                             },
                         },
-                        {
-                            operationId: `${operationId}:${index}`,
-                            memberNumber: character.MemberNumber,
-                            source: "feature",
-                            reason: "catdog bondage action",
-                            deadlineAt: Date.now() + 5_000,
-                        },
-                    );
-                    if (
-                        result.status !== "completed" &&
-                        result.status !== "already_satisfied"
-                    ) {
-                        this.logger.warn(
-                            "CatDog appearance action did not complete",
-                            {
-                                operationId: result.metadata.operationId,
-                                memberNumber: character.MemberNumber,
-                                group: piece.group,
-                                asset: piece.asset,
-                                status: result.status,
-                                reason: result.reason,
-                            },
-                        );
-                    }
-                    await this.wait(50);
-                }
-                return;
-            }
-
-            for (const piece of action.pieces) {
-                try {
-                    const item = character.Appearance.AddItem(
-                        AssetGet(piece.group as any, piece.asset as any),
-                    );
-
-                    if (piece.extendedType && item?.Extended) {
-                        item.Extended.SetType(piece.extendedType as any);
-                    }
-
-                    item?.SetDifficulty(action.difficulty);
-                    if (piece.color ?? action.color) {
-                        item?.SetColor((piece.color ?? action.color) as any);
-                    }
-                    item?.SetCraft({
-                        Name: piece.asset,
-                        Description: action.craftDescription,
-                    });
-                } catch (e) {
-                    this.logger?.error(
-                        `[CatDogSystem] Failed to add bondage piece ${piece.group}/${piece.asset}`,
-                        e as any,
+                    },
+                );
+                if (
+                    result.status !== "completed" &&
+                    result.status !== "already_satisfied"
+                ) {
+                    throw new Error(
+                        result.reason ??
+                            `CatDog bondage action failed for ${piece.group}/${piece.asset}: ${result.status}`,
                     );
                 }
+                await this.wait(50);
             }
-        } catch (e) {
-            this.logger?.error(
-                "[CatDogSystem] Failed to perform bondage action",
-                e as any,
-            );
         } finally {
             lease?.release();
         }
