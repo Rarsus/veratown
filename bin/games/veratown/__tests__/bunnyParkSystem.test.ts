@@ -288,6 +288,7 @@ function createTestBunnyActionLayer() {
             const observed = character.Appearance.MakeAppearanceBundle();
             return {
                 status: "completed",
+                confirmationAuthority: "room_character_sync",
                 metadata: {
                     operationId: policy.operationId,
                     actionId: "appearance.add",
@@ -313,7 +314,13 @@ function createTestBunnyActionLayer() {
                 !before.some((candidate: any) => candidate.Group === item.group)
             ) {
                 return {
-                    status: "already_satisfied",
+                    status: policy.requireServerConfirmation
+                        ? "unconfirmed"
+                        : "already_satisfied",
+                    reason: policy.requireServerConfirmation
+                        ? "No peer room confirmation"
+                        : undefined,
+                    retryable: false,
                     metadata: {
                         operationId: policy.operationId,
                         actionId: "appearance.remove",
@@ -340,6 +347,9 @@ function createTestBunnyActionLayer() {
             );
             return {
                 status: retryable ? "failed" : "completed",
+                confirmationAuthority: retryable
+                    ? undefined
+                    : "room_character_sync",
                 reason: retryable
                     ? "simulated transient remove failure"
                     : undefined,
@@ -739,6 +749,14 @@ test("Bunny punishment applies the debug unlock duration override", async () => 
 
 test("expired Bunny punishment retries removal before closing its artifact", async () => {
     const created = createCharacter(21, { removeFailures: 1 });
+    created.character.Appearance.AddItem({
+        Group: "ItemArms",
+        Name: "HeavyYoke",
+    });
+    created.character.Appearance.AddItem({
+        Group: "ItemFeet",
+        Name: "HeavySpreaderMetal",
+    });
     let artifact: any = {
         memberNumber: 21,
         operationId: "bunny-test",

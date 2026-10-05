@@ -27,6 +27,7 @@ function createTestAppearanceActionService() {
         const appearance = character.Appearance.MakeAppearanceBundle();
         return {
             status: "completed",
+            confirmationAuthority: "room_character_sync",
             metadata: {
                 operationId: policy.operationId,
                 actionId: "appearance.test",

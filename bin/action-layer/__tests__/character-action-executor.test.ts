@@ -147,6 +147,55 @@ test("routes generic extended-property updates through the appearance service", 
     assert.equal(policy.reason, context.reason);
 });
 
+test("routes teleport actions through the movement service", async () => {
+    const calls: unknown[] = [];
+    const movement = {
+        teleport: async (...args: unknown[]) => {
+            calls.push(args);
+            return {
+                status: "completed",
+                metadata: {
+                    operationId: context.operationId,
+                    actionId: "movement.teleport",
+                    memberNumber: context.memberNumber,
+                    attempt: 1,
+                    startedAt: 1,
+                    completedAt: 2,
+                },
+                value: { x: 8, y: 9 },
+            };
+        },
+    };
+    const executor = new CharacterActionExecutor({ movement } as any);
+    const result = await executor.execute(
+        "character",
+        {
+            type: "movement.teleport",
+            destination: { x: 8, y: 9 },
+            options: {
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+            },
+        },
+        context,
+    );
+
+    assert.equal(result.status, "completed");
+    assert.equal(calls.length, 1);
+    const [character, destination, policy] = calls[0] as [
+        string,
+        { x: number; y: number },
+        Record<string, unknown>,
+    ];
+    assert.equal(character, "character");
+    assert.deepEqual(destination, { x: 8, y: 9 });
+    assert.equal(policy.operationId, context.operationId);
+    assert.equal(policy.memberNumber, context.memberNumber);
+    assert.equal(policy.source, context.source);
+    assert.equal(policy.reason, context.reason);
+});
+
 test("rejects actions when the owning service or a valid source is unavailable", async () => {
     const executor = new CharacterActionExecutor<string>({});
     const missingService = await executor.execute(

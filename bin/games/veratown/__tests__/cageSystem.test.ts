@@ -36,6 +36,7 @@ class RecordingCommunicationAdapter implements CommunicationActionAdapter {
         this.requests.push(request);
         return {
             status: "completed",
+            confirmationAuthority: "room_character_sync",
             metadata: {
                 operationId: context.operationId,
                 actionId: "communication.test",
@@ -188,6 +189,7 @@ function createAppearanceActionService() {
         const appearance = character.Appearance.MakeAppearanceBundle();
         return {
             status: "completed",
+            confirmationAuthority: "room_character_sync",
             metadata: {
                 operationId: policy.operationId,
                 actionId: "appearance.test",
@@ -991,6 +993,7 @@ test("Cage crate creation, removal, and lock migration use typed appearance acti
     }> = [];
     const makeResult = (policy: Record<string, any>) => ({
         status: "completed",
+        confirmationAuthority: "room_character_sync",
         metadata: {
             operationId: policy.operationId,
             actionId: "appearance.test",

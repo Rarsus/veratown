@@ -193,11 +193,13 @@ test("syncAppearanceMutation persists a nonblocking action only after confirmati
         status: "confirmed";
         authority: "room_character_sync";
         value: { items: []; hiddenLayers: []; observedAt: number };
+        observed: { Group: string; Name: string }[];
     }) => void;
     const confirmation = new Promise<{
         status: "confirmed";
         authority: "room_character_sync";
         value: { items: []; hiddenLayers: []; observedAt: number };
+        observed: { Group: string; Name: string }[];
     }>((resolve) => {
         resolveConfirmation = resolve;
     });
@@ -254,6 +256,7 @@ test("syncAppearanceMutation persists a nonblocking action only after confirmati
         status: "confirmed",
         authority: "room_character_sync",
         value: { items: [], hiddenLayers: [], observedAt: 2 },
+        observed: [],
     });
     await persistenceFinished;
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -267,11 +270,13 @@ test("syncAppearanceMutation awaits a nonblocking action when confirmation is re
         status: "confirmed";
         authority: "room_character_sync";
         value: { items: []; hiddenLayers: []; observedAt: number };
+        observed: { Group: string; Name: string }[];
     }) => void;
     const confirmation = new Promise<{
         status: "confirmed";
         authority: "room_character_sync";
         value: { items: []; hiddenLayers: []; observedAt: number };
+        observed: { Group: string; Name: string }[];
     }>((resolve) => {
         resolveConfirmation = resolve;
     });
@@ -322,6 +327,7 @@ test("syncAppearanceMutation awaits a nonblocking action when confirmation is re
         status: "confirmed",
         authority: "room_character_sync",
         value: { items: [], hiddenLayers: [], observedAt: 2 },
+        observed: [],
     });
 
     assert.equal(await mutation, true);
