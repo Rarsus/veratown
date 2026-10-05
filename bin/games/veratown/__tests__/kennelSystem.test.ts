@@ -12,14 +12,129 @@ import type {
     CommunicationObservation,
     MessageRequest,
 } from "../../../action-layer/domain";
-import { KennelSystem } from "../kennelSystem";
+import { KennelSystem as ProductionKennelSystem } from "../kennelSystem";
 import {
     clearTestAppearanceConfirmation,
     registerTestAppearanceConfirmation,
 } from "./appearanceConfirmationFixture";
+import { AppearanceConfirmationError } from "../shared/appearanceSync";
 
 beforeEach(registerTestAppearanceConfirmation);
 afterEach(clearTestAppearanceConfirmation);
+
+function createTestAppearanceActionService() {
+    const makeResult = (character: any, policy: any) => {
+        const appearance = character.Appearance.MakeAppearanceBundle();
+        return {
+            status: "completed",
+            metadata: {
+                operationId: policy.operationId,
+                actionId: "appearance.test",
+                memberNumber: policy.memberNumber,
+                attempt: 1,
+                startedAt: Date.now(),
+                completedAt: Date.now(),
+            },
+            observed: appearance,
+            value: {
+                items: appearance.map((item: any) => ({
+                    group: item.Group,
+                    asset: item.Name,
+                })),
+                hiddenLayers: [],
+                observedAt: Date.now(),
+            },
+        };
+    };
+    const configure = (character: any, policy: any) => {
+        const item = character.Appearance.InventoryGet("ItemDevices");
+        if (!item) return;
+        if (policy.itemOptions?.craft) {
+            item.SetCraft(policy.itemOptions.craft);
+        }
+        for (const [key, value] of Object.entries(
+            policy.itemOptions?.properties?.typeRecord ?? {},
+        )) {
+            const current = item.getData().Property?.TypeRecord ?? {};
+            item.setProperty("TypeRecord", { ...current, [key]: value });
+        }
+        if (policy.itemOptions?.lock) {
+            const lock = policy.itemOptions.lock;
+            item.lock(lock.type, lock.memberNumber, {
+                Password: lock.password ?? "test-password",
+                RemoveItem: true,
+                RemoveOnUnlock: true,
+                LockSet: true,
+            });
+        }
+    };
+    return {
+        add: async (character: any, _item: unknown, policy: any) => {
+            character.Appearance.AddItem();
+            configure(character, policy);
+            return makeResult(character, policy);
+        },
+        remove: async (character: any, item: any, policy: any) => {
+            character.Appearance.RemoveItem(item.group);
+            return makeResult(character, policy);
+        },
+        updateExtendedProperties: async (
+            character: any,
+            _item: unknown,
+            properties: Record<string, unknown>,
+            _expectedProperties: unknown,
+            policy: any,
+        ) => {
+            const item = character.Appearance.InventoryGet("ItemDevices");
+            for (const [key, value] of Object.entries(properties)) {
+                item.setProperty(key, value);
+            }
+            return makeResult(character, policy);
+        },
+        lockExistingItem: async (
+            character: any,
+            _identity: unknown,
+            lock: any,
+            policy: any,
+        ) => {
+            const item = character.Appearance.InventoryGet("ItemDevices");
+            item.lock(lock.type, lock.memberNumber, {
+                Password: lock.password ?? "test-password",
+                RemoveItem: true,
+                RemoveOnUnlock: true,
+                LockSet: true,
+            });
+            delete item.getData().Property.RemoveTimer;
+            return makeResult(character, policy);
+        },
+    };
+}
+
+class KennelSystem extends ProductionKennelSystem {
+    public constructor(
+        connection: any,
+        mutationService?: any,
+        stateSync?: any,
+        delay?: (milliseconds: number) => Promise<void>,
+        allowStaticFallbacks?: boolean,
+        managedReleaseWorkersEnabled?: boolean,
+        communicationService?: any,
+        rollout?: any,
+        appearanceService?: any,
+    ) {
+        super(
+            connection,
+            mutationService,
+            stateSync,
+            delay,
+            allowStaticFallbacks,
+            managedReleaseWorkersEnabled,
+            communicationService,
+            rollout,
+            appearanceService ?? createTestAppearanceActionService(),
+        );
+    }
+}
 
 class RecordingCommunicationAdapter implements CommunicationActionAdapter {
     public readonly requests: MessageRequest[] = [];
@@ -66,7 +181,20 @@ function createCharacter(
         setProperty: (_key: string, value: unknown) => {
             device.Property = {
                 ...(device.Property ?? {}),
-                TypeRecord: value,
+                [_key]: value,
+            };
+        },
+        getData: () => device,
+        lock: (
+            lockType: string,
+            memberNumber: number,
+            properties: Record<string, unknown>,
+        ) => {
+            device.Property = {
+                ...(device.Property ?? {}),
+                ...properties,
+                LockedBy: lockType,
+                LockMemberNumber: memberNumber,
             };
         },
     });
@@ -389,6 +517,46 @@ test("KennelSystem retries a transient door synchronization failure", async () =
 
     assert.equal(syncCalls, 4);
     assert.deepEqual(created.device?.Property?.TypeRecord, { d: 1, p: 1 });
+});
+
+test("KennelSystem does not retry a door update after peer confirmation is unconfirmed", async () => {
+    const created = createCharacter(171);
+    created.character.Appearance.AddItem({
+        Group: "ItemDevices",
+        Name: "Kennel",
+        Property: { TypeRecord: { d: 0, p: 1 } },
+    });
+    let updateCalls = 0;
+    const service = {
+        updateExtendedProperties: async () => {
+            updateCalls += 1;
+            return {
+                status: "unconfirmed",
+                reason: "No same-room observer confirmed the door update",
+                retryable: false,
+                metadata: {} as any,
+            };
+        },
+    };
+    const system = new KennelSystem(
+        createConnector([]).connector as any,
+        undefined,
+        undefined,
+        async () => {},
+        true,
+        true,
+        undefined,
+        new ActionLayerRolloutController({
+            featureAppearanceEnabled: true,
+        }),
+        service as any,
+    );
+
+    await assert.rejects(
+        (system as any).closeDoorAfterDelay(created.character),
+        AppearanceConfirmationError,
+    );
+    assert.equal(updateCalls, 1);
 });
 
 test("KennelSystem abandons delayed closure when the Kennel is replaced", async () => {

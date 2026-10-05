@@ -27,7 +27,18 @@ import {
 } from "./appearanceConfirmationFixture";
 
 beforeEach(registerTestAppearanceConfirmation);
-afterEach(clearTestAppearanceConfirmation);
+const bunnyServices = new Set<BunnyPunishmentService>();
+
+afterEach(async () => {
+    await Promise.all([...bunnyServices].map((service) => service.shutdown()));
+    bunnyServices.clear();
+    clearTestAppearanceConfirmation();
+});
+
+function trackBunnyService(service: BunnyPunishmentService) {
+    bunnyServices.add(service);
+    return service;
+}
 
 class RecordingCommunicationAdapter implements CommunicationActionAdapter {
     public readonly requests: MessageRequest[] = [];
@@ -122,10 +133,16 @@ function createCharacter(
                         data.Property[key] = value;
                     },
                     getData: () => data,
-                    lock: (lockType: string, lockedBy: number) => {
-                        data.Property.LockedBy = lockType;
-                        data.Property.LockMemberNumber = lockedBy;
-                        data.Property.Effect = ["Lock"];
+                    lock: (
+                        lockType: string,
+                        lockedBy: number,
+                        properties: Record<string, unknown> = {},
+                    ) => {
+                        Object.assign(data.Property, properties, {
+                            LockedBy: lockType,
+                            LockMemberNumber: lockedBy,
+                            Effect: ["Lock"],
+                        });
                     },
                 };
                 return item;
@@ -170,10 +187,16 @@ function createCharacter(
                     setProperty: (key: string, value: unknown) => {
                         data.Property[key] = value;
                     },
-                    lock: (lockType: string, lockedBy: number) => {
-                        data.Property.LockedBy = lockType;
-                        data.Property.LockMemberNumber = lockedBy;
-                        data.Property.Effect = ["Lock"];
+                    lock: (
+                        lockType: string,
+                        lockedBy: number,
+                        properties: Record<string, unknown> = {},
+                    ) => {
+                        Object.assign(data.Property, properties, {
+                            LockedBy: lockType,
+                            LockMemberNumber: lockedBy,
+                            Effect: ["Lock"],
+                        });
                     },
                 };
             },
@@ -220,6 +243,135 @@ function createMessageConnection(character: any) {
     };
 }
 
+function createTestBunnyActionLayer() {
+    const appearanceService = {
+        add: async (character: any, item: any, policy: any) => {
+            const wrapper = character.Appearance.AddItem({
+                Group: item.group,
+                Name: item.asset,
+            });
+            if (!wrapper) {
+                return {
+                    status: "failed",
+                    reason: `failed to add ${item.group}/${item.asset}`,
+                    retryable: false,
+                    metadata: {} as any,
+                };
+            }
+            if (item.extendedType) {
+                wrapper.Extended?.SetType(item.extendedType);
+            }
+            const options = policy.itemOptions;
+            if (options?.color !== undefined) {
+                wrapper.SetColor(options.color);
+            }
+            if (options?.craft !== undefined) {
+                wrapper.SetCraft({
+                    Name: options.craft.name,
+                    Description: options.craft.description,
+                });
+            }
+            if (options?.properties?.typeRecord !== undefined) {
+                wrapper.setProperty(
+                    "TypeRecord",
+                    options.properties.typeRecord,
+                );
+            }
+            if (options?.lock !== undefined) {
+                wrapper.lock(options.lock.type, options.lock.memberNumber, {
+                    Password: options.lock.password ?? "ABCDEFGH",
+                    RemoveItem: true,
+                    RemoveOnUnlock: true,
+                    LockSet: true,
+                });
+            }
+            const observed = character.Appearance.MakeAppearanceBundle();
+            return {
+                status: "completed",
+                metadata: {
+                    operationId: policy.operationId,
+                    actionId: "appearance.add",
+                    memberNumber: policy.memberNumber,
+                    attempt: 1,
+                    startedAt: Date.now(),
+                    completedAt: Date.now(),
+                },
+                observed,
+                value: {
+                    items: observed.map((candidate: any) => ({
+                        group: candidate.Group,
+                        asset: candidate.Name,
+                    })),
+                    hiddenLayers: [],
+                    observedAt: Date.now(),
+                },
+            };
+        },
+        remove: async (character: any, item: any, policy: any) => {
+            const before = character.Appearance.MakeAppearanceBundle();
+            if (
+                !before.some((candidate: any) => candidate.Group === item.group)
+            ) {
+                return {
+                    status: "already_satisfied",
+                    metadata: {
+                        operationId: policy.operationId,
+                        actionId: "appearance.remove",
+                        memberNumber: policy.memberNumber,
+                        attempt: 1,
+                        startedAt: Date.now(),
+                        completedAt: Date.now(),
+                    },
+                    observed: before,
+                    value: {
+                        items: before.map((candidate: any) => ({
+                            group: candidate.Group,
+                            asset: candidate.Name,
+                        })),
+                        hiddenLayers: [],
+                        observedAt: Date.now(),
+                    },
+                };
+            }
+            character.Appearance.RemoveItem(item.group);
+            const observed = character.Appearance.MakeAppearanceBundle();
+            const retryable = observed.some(
+                (candidate: any) => candidate.Group === item.group,
+            );
+            return {
+                status: retryable ? "failed" : "completed",
+                reason: retryable
+                    ? "simulated transient remove failure"
+                    : undefined,
+                retryable,
+                metadata: {
+                    operationId: policy.operationId,
+                    actionId: "appearance.remove",
+                    memberNumber: policy.memberNumber,
+                    attempt: 1,
+                    startedAt: Date.now(),
+                    completedAt: Date.now(),
+                },
+                observed,
+                value: {
+                    items: observed.map((candidate: any) => ({
+                        group: candidate.Group,
+                        asset: candidate.Name,
+                    })),
+                    hiddenLayers: [],
+                    observedAt: Date.now(),
+                },
+            };
+        },
+    };
+    return {
+        appearanceService: appearanceService as any,
+        rollout: new ActionLayerRolloutController({
+            bunnyRestraintsEnabled: true,
+        }),
+    };
+}
+
 function createBunnySystem(
     connection: any,
     stateSync: (
@@ -239,13 +391,18 @@ function createBunnySystem(
         incrementCount: async () => {},
         recordAudit: async () => {},
     };
-    const punishmentService = new BunnyPunishmentService(
-        connection as any,
-        repository,
-        stateSync,
-        random,
-        syncDelay,
-        debugUnlockDurationMs,
+    const actionLayer = createTestBunnyActionLayer();
+    const punishmentService = trackBunnyService(
+        new BunnyPunishmentService(
+            connection as any,
+            repository,
+            stateSync,
+            random,
+            syncDelay,
+            debugUnlockDurationMs,
+            undefined,
+            actionLayer,
+        ),
     );
     const system = new BunnyParkSystem(
         connection as any,
@@ -510,7 +667,10 @@ test("bunny punishment applies the universal yoke, spreader, and neck sign", asy
         );
         assert.equal(mutationContext?.source, "bunny");
         assert.equal(mutationContext?.reason, "bunny_punishment_applied");
-        assert.equal(observedAppearance, mutationContext?.observedAppearance);
+        assert.deepEqual(
+            observedAppearance,
+            mutationContext?.observedAppearance,
+        );
         assert.equal(ambientContext, undefined);
         assert.equal(persisted.length, 1, config.name);
         for (const piece of config.pieces) {
@@ -587,20 +747,25 @@ test("expired Bunny punishment retries removal before closing its artifact", asy
         expiresAt: Date.now() - 1,
         restraintPieces: ["ItemArms/HeavyYoke", "ItemFeet/HeavySpreaderMetal"],
     };
-    const service = new BunnyPunishmentService(
-        createMessageConnection(created.character) as any,
-        {
-            getState: async () => ({ punishmentCount: 1, artifact }),
-            updateArtifact: async (updated: any) => {
-                artifact = updated;
+    const service = trackBunnyService(
+        new BunnyPunishmentService(
+            createMessageConnection(created.character) as any,
+            {
+                getState: async () => ({ punishmentCount: 1, artifact }),
+                updateArtifact: async (updated: any) => {
+                    artifact = updated;
+                },
+                recordArtifact: async () => {},
+                incrementCount: async () => {},
+                recordAudit: async () => {},
             },
-            recordArtifact: async () => {},
-            incrementCount: async () => {},
-            recordAudit: async () => {},
-        },
-        async () => {},
-        Math.random,
-        0,
+            async () => {},
+            Math.random,
+            0,
+            undefined,
+            undefined,
+            createTestBunnyActionLayer(),
+        ),
     );
 
     await service.recover(created.character);
@@ -614,9 +779,12 @@ test("expired Bunny punishment retries removal before closing its artifact", asy
 
 test("bunny punishment sends the complete bundle for remote-character persistence", async () => {
     const created = createCharacter(19);
+    let persistedAppearance: readonly any[] | undefined;
     const system = createBunnySystem(
         createMessageConnection(created.character) as any,
-        async () => {},
+        async (_character, _context, observedAppearance) => {
+            persistedAppearance = observedAppearance;
+        },
         deterministicRandom(0),
         0,
     );
@@ -628,11 +796,10 @@ test("bunny punishment sends the complete bundle for remote-character persistenc
 
     assert.equal(result.success, true);
     assert.equal(result.status, "completed");
-    const update = created.appearanceUpdates.at(-1);
-    assert.ok(update);
+    assert.ok(persistedAppearance);
     for (const piece of BUNNY_RESTRAINT_CONFIGS[0].pieces) {
         assert.ok(
-            update.some(
+            persistedAppearance.some(
                 (item: any) =>
                     item.Group === piece.group && item.Name === piece.asset,
             ),
@@ -953,12 +1120,17 @@ test("active Bunny artifacts prevent a second restraint application", async () =
         incrementCount: async () => {},
         recordAudit: async () => {},
     };
-    const service = new BunnyPunishmentService(
-        createMessageConnection(created.character) as any,
-        repository,
-        async () => {},
-        deterministicRandom(0),
-        0,
+    const service = trackBunnyService(
+        new BunnyPunishmentService(
+            createMessageConnection(created.character) as any,
+            repository,
+            async () => {},
+            deterministicRandom(0),
+            0,
+            undefined,
+            undefined,
+            createTestBunnyActionLayer(),
+        ),
     );
     const config = BUNNY_RESTRAINT_CONFIGS[0];
 
@@ -988,44 +1160,46 @@ test("Bunny punishment does not persist an artifact for an unconfirmed action", 
             resolveConfirmation = resolve;
         },
     );
-    const service = new BunnyPunishmentService(
-        createMessageConnection(created.character) as any,
-        {
-            getState: async () => ({ punishmentCount: 0 }),
-            recordArtifact: async (artifact: unknown) => {
-                recordedArtifact = artifact;
-            },
-            updateArtifact: async () => {},
-            incrementCount: async () => {},
-            recordAudit: async () => {},
-        },
-        undefined,
-        deterministicRandom(0),
-        0,
-        undefined,
-        undefined,
-        {
-            appearanceService: {
-                add: async () => {
-                    dispatched += 1;
-                    return {
-                        status: "in_progress",
-                        value: {
-                            items: [],
-                            hiddenLayers: [],
-                            observedAt: 1,
-                        },
-                        confirmation,
-                    };
+    const service = trackBunnyService(
+        new BunnyPunishmentService(
+            createMessageConnection(created.character) as any,
+            {
+                getState: async () => ({ punishmentCount: 0 }),
+                recordArtifact: async (artifact: unknown) => {
+                    recordedArtifact = artifact;
                 },
+                updateArtifact: async () => {},
+                incrementCount: async () => {},
+                recordAudit: async () => {},
             },
-            rollout: {
-                begin: () => ({
-                    path: "action",
-                    release: () => {},
-                }),
-            },
-        } as any,
+            undefined,
+            deterministicRandom(0),
+            0,
+            undefined,
+            undefined,
+            {
+                appearanceService: {
+                    add: async () => {
+                        dispatched += 1;
+                        return {
+                            status: "in_progress",
+                            value: {
+                                items: [],
+                                hiddenLayers: [],
+                                observedAt: 1,
+                            },
+                            confirmation,
+                        };
+                    },
+                },
+                rollout: {
+                    begin: () => ({
+                        path: "action",
+                        release: () => {},
+                    }),
+                },
+            } as any,
+        ),
     );
 
     const pending = service.punish(

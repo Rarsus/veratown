@@ -675,6 +675,13 @@ export class Veratown {
                               DIServiceKeys.ACTION_LAYER_ROLLOUT,
                           )
                         : undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
+                    )
+                        ? this.container.get<
+                              AppearanceActionService<API_Character>
+                          >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
+                        : undefined,
                 ),
         );
         this.showerSystem = this.initFeature(() => {

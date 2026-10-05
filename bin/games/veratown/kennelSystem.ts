@@ -17,7 +17,7 @@ import {
     API_Character,
     API_Chatroom,
     API_Map,
-    AssetGet,
+    BC_AppearanceItem,
 } from "bc-bot";
 import { ConnectionError } from "../../errors";
 import { wait } from "../../hub/utils";
@@ -30,16 +30,21 @@ import { createIdempotentMonitor } from "./shared/idempotentMonitor";
 import {
     AppearanceStateSynchronizer,
     preflightAppearanceMutation,
-    syncAppearanceMutation,
-    verifyAppearance,
 } from "./shared/appearanceSync";
+import { AppearanceConfirmationError } from "./shared/appearanceSync";
+import type { AppearanceMutationContext } from "./shared/appearanceLifecycle";
 import { getLifecycleObjectId } from "./featureSystem";
 import { KennelCommandController } from "./kennelCommands";
 import type {
     ActionLayerRolloutController,
     CommunicationActionService,
+    AppearanceActionService,
+    AppearanceMutationPolicy,
 } from "../../action-layer";
-import { applyConsentPadlock } from "../shared/consentPadlock";
+import type {
+    ActionResult,
+    AppearanceObservation,
+} from "../../action-layer/domain";
 import {
     classifyContainmentRemoval,
     readLegacyRemoveTimer,
@@ -82,6 +87,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
     >();
     private readonly escapedCharacters = new Set<number>();
     private readonly releasingCharacters = new Set<number>();
+    private appearanceActionSequence = 0;
     public constructor(
         conn: API_Connector,
         private readonly mutationService?: GameStateMutationService,
@@ -91,12 +97,110 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         private readonly managedReleaseWorkersEnabled = true,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
+        private readonly appearanceService?: AppearanceActionService<API_Character>,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
         this.kennelExitTrigger = this.guardTileHandler(
             this.onCharacterLeaveKennel,
         );
+    }
+
+    private async executeAppearanceAction(
+        character: API_Character,
+        reason: string,
+        dispatch: (
+            service: AppearanceActionService<API_Character>,
+            policy: AppearanceMutationPolicy,
+        ) => Promise<ActionResult<AppearanceObservation>>,
+        options: {
+            readonly releaseCause?: AppearanceMutationContext["releaseCause"];
+            readonly preserveLockedItems?: boolean;
+            readonly persistSnapshot?: boolean;
+        } = {},
+    ): Promise<readonly BC_AppearanceItem[]> {
+        const operationId = `kennel-appearance:${character.MemberNumber}:${++this.appearanceActionSequence}`;
+        const lease = this.rollout?.begin("feature-appearance", operationId);
+        try {
+            if (!this.appearanceService) {
+                throw new Error(
+                    "Kennel appearance action service is unavailable",
+                );
+            }
+            if (this.rollout && lease?.path !== "action") {
+                throw new Error(
+                    "Kennel appearance actions are disabled by rollout",
+                );
+            }
+            const policy: AppearanceMutationPolicy = {
+                operationId,
+                memberNumber: character.MemberNumber,
+                source: options.releaseCause ? "release" : "feature",
+                reason,
+                timeoutMs: 5_000,
+                maxAttempts: 1,
+                retryDelayMs: 0,
+                preserveLockedItems: options.preserveLockedItems ?? true,
+                requireServerConfirmation: true,
+            };
+            const result = await dispatch(this.appearanceService, policy);
+            let observedAppearance: readonly BC_AppearanceItem[] | undefined;
+            if (result.status === "in_progress") {
+                const confirmation = await result.confirmation;
+                if (confirmation?.status !== "confirmed") {
+                    throw new AppearanceConfirmationError(
+                        confirmation?.reason ??
+                            result.reason ??
+                            "Kennel appearance action remains unconfirmed",
+                    );
+                }
+                observedAppearance = Array.isArray(confirmation.observed)
+                    ? (confirmation.observed as BC_AppearanceItem[])
+                    : undefined;
+            } else if (
+                result.status === "completed" ||
+                result.status === "already_satisfied"
+            ) {
+                observedAppearance = Array.isArray(result.observed)
+                    ? (result.observed as BC_AppearanceItem[])
+                    : character.Appearance.MakeAppearanceBundle();
+            } else if (result.status === "unconfirmed") {
+                throw new AppearanceConfirmationError(
+                    result.reason ?? "Kennel appearance action is unconfirmed",
+                );
+            } else {
+                throw new ConnectionError(
+                    result.reason ??
+                        `Kennel appearance action ${result.status}`,
+                    { memberNumber: character.MemberNumber, operationId },
+                );
+            }
+            if (!observedAppearance) {
+                throw new AppearanceConfirmationError(
+                    "Kennel action did not return an appearance snapshot",
+                );
+            }
+            await wait(50);
+            if (options.persistSnapshot !== false) {
+                const context: AppearanceMutationContext = {
+                    operationId,
+                    correlationId: `appearance:${operationId}`,
+                    timestamp: Date.now(),
+                    source: options.releaseCause ? "release" : "veratown",
+                    reason,
+                    ...(options.releaseCause === undefined
+                        ? {}
+                        : { releaseCause: options.releaseCause }),
+                    expectedAppearance: [...observedAppearance],
+                    observedAppearance: [...observedAppearance],
+                    verificationStatus: "confirmed",
+                };
+                await this.stateSync?.(character, context, observedAppearance);
+            }
+            return observedAppearance;
+        } finally {
+            lease?.release();
+        }
     }
 
     public registerTriggers(): void {
@@ -393,19 +497,22 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             if (legacyExpiry <= Date.now()) {
                 this.releasingCharacters.add(memberNumber);
                 try {
-                    await syncAppearanceMutation(
+                    const observed = await this.executeAppearanceAction(
                         character,
-                        () =>
-                            character.Appearance.RemoveItem(
-                                "ItemDevices" as any,
+                        "expired legacy Kennel release",
+                        (service, policy) =>
+                            service.remove(
+                                character,
+                                { group: "ItemDevices", asset: "Kennel" },
+                                policy,
                             ),
-                        50,
-                        this.stateSync,
-                        {
-                            releaseCause: "timer",
-                            throwOnSyncFailure: true,
-                        },
+                        { releaseCause: "timer", preserveLockedItems: false },
                     );
+                    if (observed.some((item) => item.Group === "ItemDevices")) {
+                        throw new AppearanceConfirmationError(
+                            "Kennel device remained in the confirmed appearance",
+                        );
+                    }
                 } finally {
                     this.releasingCharacters.delete(memberNumber);
                 }
@@ -433,40 +540,28 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 });
                 return;
             }
-            await syncAppearanceMutation(
+            const observed = await this.executeAppearanceAction(
                 character,
-                () => {
-                    const kennel =
-                        character.Appearance.InventoryGet?.("ItemDevices");
-                    if (!kennel || kennel.Name !== "Kennel") {
-                        throw new Error(
-                            "Kennel device unavailable during migration",
-                        );
-                    }
-                    applyConsentPadlock(kennel as any, {
-                        memberNumber,
-                    });
-                },
-                50,
-                this.stateSync,
-                { throwOnSyncFailure: true },
+                "migrate legacy Kennel timer lock",
+                (service, policy) =>
+                    service.lockExistingItem(
+                        character,
+                        { group: "ItemDevices", asset: "Kennel" },
+                        { type: "SafewordPadlock", memberNumber },
+                        policy,
+                    ),
             );
-            const verification = verifyAppearance(character, (appearance) => {
-                const kennel = appearance.find(
-                    (item) =>
-                        item.Group === "ItemDevices" && item.Name === "Kennel",
-                );
-                return (
-                    kennel?.Property?.LockedBy === "SafewordPadlock" &&
-                    kennel?.Property?.RemoveTimer === undefined &&
-                    typeof kennel?.Property?.Password === "string" &&
-                    /^[A-Za-z0-9]{1,8}$/.test(kennel.Property.Password)
-                );
-            });
-            if (!verification.verified) {
-                throw new Error(
-                    `Kennel legacy lock migration was not verified: ${verification.status}`,
-                );
+            const kennel = observed.find(
+                (item) =>
+                    item.Group === "ItemDevices" && item.Name === "Kennel",
+            );
+            if (
+                kennel?.Property?.LockedBy !== "SafewordPadlock" ||
+                kennel.Property.RemoveTimer !== undefined ||
+                typeof kennel.Property.Password !== "string" ||
+                !/^[A-Za-z0-9]{1,8}$/.test(kennel.Property.Password)
+            ) {
+                throw new Error("Kennel legacy timer lock was not confirmed");
             }
             activeSession =
                 await this.mutationService?.getActiveKennelSession?.(
@@ -481,16 +576,22 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             if (wearingKennel) {
                 this.releasingCharacters.add(memberNumber);
                 try {
-                    await syncAppearanceMutation(
+                    const observed = await this.executeAppearanceAction(
                         character,
-                        () =>
-                            character.Appearance.RemoveItem(
-                                "ItemDevices" as any,
+                        "expired Kennel session release",
+                        (service, policy) =>
+                            service.remove(
+                                character,
+                                { group: "ItemDevices", asset: "Kennel" },
+                                policy,
                             ),
-                        50,
-                        this.stateSync,
-                        { throwOnSyncFailure: true },
+                        { releaseCause: "timer", preserveLockedItems: false },
                     );
+                    if (observed.some((item) => item.Group === "ItemDevices")) {
+                        throw new AppearanceConfirmationError(
+                            "Kennel device remained in the confirmed appearance",
+                        );
+                    }
                 } finally {
                     this.releasingCharacters.delete(memberNumber);
                 }
@@ -557,35 +658,55 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         const createdSession = persisted === true;
         try {
             if (!wearingKennel) {
-                await syncAppearanceMutation(
+                await this.executeAppearanceAction(
                     character,
-                    () => {
-                        const kennel = character.Appearance.AddItem(
-                            AssetGet("ItemDevices", "Kennel"),
-                        );
-                        kennel.SetCraft({
-                            Name: "Kennel",
-                            Description: `${character} is relaxing in their Kennel`,
-                        });
-                        // d: 0 = door open, p: 1 = padding enabled
-                        kennel.setProperty("TypeRecord", { d: 1, p: 1 });
-                    },
-                    50,
-                    this.stateSync,
-                    {
-                        throwOnSyncFailure: true,
-                        skipAuthorizationPreflight: true,
-                        requireFullWardrobeAccess: false,
-                    },
+                    "enter Kennel",
+                    (service, policy) =>
+                        service.add(
+                            character,
+                            { group: "ItemDevices", asset: "Kennel" },
+                            {
+                                ...policy,
+                                itemOptions: {
+                                    craft: {
+                                        name: "Kennel",
+                                        description: `${character} is relaxing in their Kennel`,
+                                    },
+                                    properties: {
+                                        typeRecord: { d: 1, p: 1 },
+                                    },
+                                },
+                            },
+                        ),
                 );
             } else if (createdSession) {
                 await this.stateSync?.(character);
             }
         } catch (error) {
+            if (error instanceof AppearanceConfirmationError) {
+                this.logger.error(
+                    "Kennel appearance dispatch remains unconfirmed; keeping the session for reconciliation",
+                    error,
+                    { memberNumber: character.MemberNumber },
+                );
+                throw error;
+            }
             if (createdSession) {
                 if (!wearingKennel && this.isWearingKennel(character)) {
-                    character.Appearance.RemoveItem("ItemDevices" as any);
-                    character.Appearance.MakeAppearanceBundle();
+                    await this.executeAppearanceAction(
+                        character,
+                        "rollback failed Kennel entry",
+                        (service, policy) =>
+                            service.remove(
+                                character,
+                                { group: "ItemDevices", asset: "Kennel" },
+                                policy,
+                            ),
+                        {
+                            preserveLockedItems: false,
+                            persistSnapshot: false,
+                        },
+                    );
                 }
                 await this.mutationService?.exitKennel(character.MemberNumber);
             }
@@ -767,38 +888,31 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             }
 
             try {
-                await syncAppearanceMutation(
+                const expectedTypeRecord = {
+                    ...(kennel.Property?.TypeRecord ?? {}),
+                };
+                const desiredTypeRecord = {
+                    ...expectedTypeRecord,
+                    d: 1,
+                    p: 1,
+                };
+                const confirmedAppearance = await this.executeAppearanceAction(
                     character,
-                    () => {
-                        const currentKennelData =
-                            character.Appearance.getItemData("ItemDevices");
-                        if (currentKennelData?.Name !== "Kennel") {
-                            return;
-                        }
-                        // getItemData returns raw data; InventoryGet returns
-                        // the API_AppearanceItem mutation wrapper.
-                        const currentKennel =
-                            character.Appearance.InventoryGet("ItemDevices");
-                        if (!currentKennel || currentKennel.Name !== "Kennel") {
-                            throw new ConnectionError(
-                                "Kennel appearance wrapper unavailable",
-                                {
-                                    memberNumber: character.MemberNumber,
-                                },
-                            );
-                        }
-                        currentKennel.setProperty("TypeRecord", {
-                            d: 1,
-                            p: 1,
-                        });
-                    },
-                    50,
-                    this.stateSync,
-                    { throwOnSyncFailure: true },
+                    "close Kennel door",
+                    (service, policy) =>
+                        service.updateExtendedProperties(
+                            character,
+                            { group: "ItemDevices", asset: "Kennel" },
+                            { TypeRecord: desiredTypeRecord },
+                            { TypeRecord: expectedTypeRecord },
+                            policy,
+                        ),
                 );
 
-                const verifiedKennel =
-                    character.Appearance.getItemData("ItemDevices");
+                const verifiedKennel = confirmedAppearance.find(
+                    (item) =>
+                        item.Group === "ItemDevices" && item.Name === "Kennel",
+                );
                 if (verifiedKennel?.Name !== "Kennel") {
                     this.logger.warn("Kennel door close verification aborted", {
                         memberNumber,
@@ -832,6 +946,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 });
                 return;
             } catch (error) {
+                if (error instanceof AppearanceConfirmationError) throw error;
                 lastError = error;
                 if (attempt === KENNEL_DOOR_CLOSE_MAX_ATTEMPTS) break;
                 this.logger.warn("Kennel door close retrying", {
@@ -885,18 +1000,18 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             this.markEscaped(character.MemberNumber);
         }
         if (kennel?.Name === "Kennel") {
-            await syncAppearanceMutation(
+            const observed = await this.executeAppearanceAction(
                 character,
-                () => {
-                    character.Appearance.RemoveItem("ItemDevices" as any);
-                },
-                50,
-                this.stateSync,
+                "free character from Kennel",
+                (service, policy) =>
+                    service.remove(
+                        character,
+                        { group: "ItemDevices", asset: "Kennel" },
+                        policy,
+                    ),
+                { releaseCause: "admin", preserveLockedItems: false },
             );
-            if (
-                character.Appearance.getItemData("ItemDevices")?.Name ===
-                "Kennel"
-            ) {
+            if (observed.some((item) => item.Group === "ItemDevices")) {
                 return;
             }
         }
