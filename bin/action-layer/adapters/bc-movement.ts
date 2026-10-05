@@ -11,6 +11,7 @@ import {
 interface BCMovementCharacter {
     readonly MemberNumber: number;
     readonly MapPos: { X: number; Y: number };
+    mapTeleport?(position: { X: number; Y: number }): void;
     readonly connection: MovementConnector;
 }
 
@@ -27,7 +28,7 @@ interface MovementConnector {
         listener: (...args: any[]) => void,
     ): void;
     moveOnMap(x: number, y: number): void;
-    teleportOnMap(x: number, y: number, memberNumber?: number): void;
+    teleportOnMap?(x: number, y: number, memberNumber?: number): void;
 }
 
 export class BCMovementActionAdapter implements MovementActionAdapter<BCMovementCharacter> {
@@ -62,20 +63,38 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
         destination: CharacterPosition,
         policy: MovementActionPolicy,
     ): Promise<ActionResult<CharacterPosition>> {
+        return this.executeMovement(character, destination, policy, false);
+    }
+
+    public teleport(
+        character: BCMovementCharacter,
+        destination: CharacterPosition,
+        policy: MovementActionPolicy,
+    ): Promise<ActionResult<CharacterPosition>> {
+        return this.executeMovement(character, destination, policy, true);
+    }
+
+    private executeMovement(
+        character: BCMovementCharacter,
+        destination: CharacterPosition,
+        policy: MovementActionPolicy,
+        teleport: boolean,
+    ): Promise<ActionResult<CharacterPosition>> {
         const startedAt = Date.now();
+        const actionId = teleport ? "movement.teleport" : "movement.move";
         const connector = character.connection;
         if (
             !connector ||
             typeof connector.on !== "function" ||
             typeof connector.off !== "function" ||
-            typeof connector.moveOnMap !== "function"
+            (!teleport && typeof connector.moveOnMap !== "function")
         ) {
             return Promise.resolve(
                 createActionResult(
                     "failed",
                     createActionMetadata(
                         policyContext(policy),
-                        "movement.move",
+                        actionId,
                         startedAt,
                     ),
                     {
@@ -89,15 +108,19 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
         const connectorOwnsCharacter =
             connector.Player?.MemberNumber === character.MemberNumber;
         if (
-            !connectorOwnsCharacter &&
-            typeof connector.teleportOnMap !== "function"
+            (teleport &&
+                !character.mapTeleport &&
+                typeof connector.teleportOnMap !== "function") ||
+            (!teleport &&
+                !connectorOwnsCharacter &&
+                typeof connector.teleportOnMap !== "function")
         ) {
             return Promise.resolve(
                 createActionResult(
                     "rejected",
                     createActionMetadata(
                         policyContext(policy),
-                        "movement.move",
+                        actionId,
                         startedAt,
                     ),
                     {
@@ -124,7 +147,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                     "already_satisfied",
                     createActionMetadata(
                         policyContext(policy),
-                        "movement.move",
+                        actionId,
                         startedAt,
                     ),
                     {
@@ -161,7 +184,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                         "completed",
                         createActionMetadata(
                             policyContext(policy),
-                            "movement.move",
+                            actionId,
                             startedAt,
                         ),
                         {
@@ -177,7 +200,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                         "failed",
                         createActionMetadata(
                             policyContext(policy),
-                            "movement.move",
+                            actionId,
                             startedAt,
                         ),
                         {
@@ -194,7 +217,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                         "cancelled",
                         createActionMetadata(
                             policyContext(policy),
-                            "movement.move",
+                            actionId,
                             startedAt,
                         ),
                         {
@@ -211,7 +234,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                         "timed_out",
                         createActionMetadata(
                             policyContext(policy),
-                            "movement.move",
+                            actionId,
                             startedAt,
                         ),
                         {
@@ -231,10 +254,25 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                 return;
             }
             try {
-                if (connectorOwnsCharacter) {
+                if (
+                    teleport &&
+                    connectorOwnsCharacter &&
+                    character.mapTeleport
+                ) {
+                    character.mapTeleport({
+                        X: destination.x,
+                        Y: destination.y,
+                    });
+                } else if (connector.teleportOnMap && teleport) {
+                    connector.teleportOnMap(
+                        destination.x,
+                        destination.y,
+                        character.MemberNumber,
+                    );
+                } else if (connectorOwnsCharacter) {
                     connector.moveOnMap(destination.x, destination.y);
                 } else {
-                    connector.teleportOnMap(
+                    connector.teleportOnMap!(
                         destination.x,
                         destination.y,
                         character.MemberNumber,
@@ -246,7 +284,7 @@ export class BCMovementActionAdapter implements MovementActionAdapter<BCMovement
                         "failed",
                         createActionMetadata(
                             policyContext(policy),
-                            "movement.move",
+                            actionId,
                             startedAt,
                         ),
                         {

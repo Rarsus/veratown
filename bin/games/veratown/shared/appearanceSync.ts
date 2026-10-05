@@ -31,7 +31,8 @@ const logger = createLogger("appearanceSync");
 const DEFAULT_SYNC_DELAY_MS = 50; // Minimum delay to avoid anti-cheat triggers
 const DEFAULT_SERVER_SYNC_TIMEOUT_MS = 2_000;
 let appearanceConfirmationService:
-    AppearanceActionService<API_Character> | undefined;
+    | AppearanceActionService<API_Character, readonly BC_AppearanceItem[]>
+    | undefined;
 
 export class AppearanceConfirmationError extends Error {
     public constructor(message: string) {
@@ -41,7 +42,9 @@ export class AppearanceConfirmationError extends Error {
 }
 
 export function registerAppearanceConfirmationService(
-    service: AppearanceActionService<API_Character> | undefined,
+    service:
+        | AppearanceActionService<API_Character, readonly BC_AppearanceItem[]>
+        | undefined,
 ): void {
     appearanceConfirmationService = service;
 }
@@ -71,7 +74,10 @@ const pendingAppearanceConfirmations = new WeakMap<
 let mutationSequence = 0;
 
 export interface ActionLayerAppearanceMutation {
-    readonly service: AppearanceActionService<API_Character>;
+    readonly service: AppearanceActionService<
+        API_Character,
+        readonly BC_AppearanceItem[]
+    >;
     readonly operation: "add" | "remove";
     readonly item: AppearanceItemIdentity;
     readonly policy: AppearanceMutationPolicy;
@@ -486,14 +492,19 @@ async function executeAppearanceMutation(
                         }
                         return false;
                     }
-                    const confirmedAppearance = Array.isArray(
-                        confirmation.observed,
-                    )
-                        ? (confirmation.observed as BC_AppearanceItem[])
-                        : character.Appearance.MakeAppearanceBundle();
+                    const confirmedAppearance = confirmation.observed;
+                    if (!confirmedAppearance) {
+                        context.verificationStatus = "mismatch";
+                        if (options?.throwOnSyncFailure) {
+                            throw new Error(
+                                "Appearance confirmation did not include an observed snapshot",
+                            );
+                        }
+                        return false;
+                    }
                     context.expectedAppearance =
                         filterValidAppearanceItems(confirmedAppearance);
-                    context.observedAppearance = confirmedAppearance;
+                    context.observedAppearance = [...confirmedAppearance];
                     context.verificationStatus = "confirmed";
                     await (
                         onSynchronized ??
@@ -523,11 +534,15 @@ async function executeAppearanceMutation(
                             );
                             return;
                         }
-                        context.observedAppearance = Array.isArray(
-                            confirmation.observed,
-                        )
-                            ? (confirmation.observed as BC_AppearanceItem[])
-                            : character.Appearance.MakeAppearanceBundle();
+                        if (!confirmation.observed) {
+                            context.verificationStatus = "mismatch";
+                            clearPendingAppearanceConfirmation(
+                                character,
+                                context,
+                            );
+                            return;
+                        }
+                        context.observedAppearance = [...confirmation.observed];
                         context.verificationStatus = "confirmed";
                         try {
                             await (
@@ -563,16 +578,19 @@ async function executeAppearanceMutation(
                     });
                 return true;
             }
-            const confirmedAppearance = Array.isArray(actionResult.observed)
-                ? (actionResult.observed as BC_AppearanceItem[])
-                : observed;
-            context.expectedAppearance = confirmedAppearance;
-            context.observedAppearance = confirmedAppearance;
-            context.verificationStatus =
-                actionResult.status === "completed" ||
-                actionResult.status === "already_satisfied"
-                    ? "confirmed"
-                    : "mismatch";
+            const confirmedAppearance = actionResult.observed ?? observed;
+            context.expectedAppearance = [...confirmedAppearance];
+            context.observedAppearance = [...confirmedAppearance];
+            const authoritativelyConfirmed =
+                actionResult.status === "completed" &&
+                actionResult.confirmationAuthority !== undefined &&
+                actionResult.observed !== undefined;
+            context.verificationStatus = authoritativelyConfirmed
+                ? "confirmed"
+                : actionResult.status === "completed" ||
+                    actionResult.status === "already_satisfied"
+                  ? "observed"
+                  : "mismatch";
             if (actionResult.status === "unconfirmed") {
                 context.verificationStatus = "timeout";
                 logger.warn(
@@ -589,6 +607,16 @@ async function executeAppearanceMutation(
                             "Action-layer appearance mutation was not confirmed",
                     );
                 }
+                return false;
+            }
+            if (
+                options.actionLayer.policy.requireServerConfirmation &&
+                !authoritativelyConfirmed
+            ) {
+                const reason =
+                    "Action-layer appearance result lacks authoritative confirmation";
+                context.verificationStatus = "timeout";
+                if (options?.throwOnSyncFailure) throw new Error(reason);
                 return false;
             }
             if (
@@ -774,24 +802,19 @@ async function waitForServerAppearanceSync(
             deadlineAt: Date.now() + timeoutMs,
         },
         timeoutMs,
-        (snapshot) =>
-            predicate?.(snapshot as readonly BC_AppearanceItem[]) ?? true,
+        (snapshot) => predicate?.(snapshot) ?? true,
     );
     if (
-        result.status !== "completed" &&
-        result.status !== "already_satisfied"
+        result.status !== "completed" ||
+        !result.confirmationAuthority ||
+        !result.observed
     ) {
         throw new AppearanceConfirmationError(
             result.reason ??
                 `Server appearance confirmation did not complete for ${character.MemberNumber}`,
         );
     }
-    if (!Array.isArray(result.observed)) {
-        throw new AppearanceConfirmationError(
-            `Server appearance confirmation did not return a snapshot for ${character.MemberNumber}`,
-        );
-    }
-    context.observedAppearance = result.observed as BC_AppearanceItem[];
+    context.observedAppearance = [...result.observed];
     context.verificationStatus = "confirmed";
 }
 

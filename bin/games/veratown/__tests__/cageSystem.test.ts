@@ -465,6 +465,97 @@ test("CageSystem does not retry crate removal while peer confirmation is unconfi
     );
 });
 
+test("CageSystem does not finalize expiry when the local cache lacks the crate without peer confirmation", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const created = createCharacter(251027);
+    const expiry = 100;
+    const appearanceService = {
+        ...createAppearanceActionService(),
+        confirmAppearance: async () => ({
+            status: "unconfirmed",
+            reason: "No peer room confirmation",
+            retryable: false,
+        }),
+    };
+    const system = new CageSystem(
+        created.connection as any,
+        mutations as any,
+        undefined,
+        timer,
+        true,
+        true,
+        undefined,
+        new ActionLayerRolloutController({ featureAppearanceEnabled: true }),
+        appearanceService as any,
+    );
+    (system as any).cagedCharacters.set(created.character.MemberNumber, {
+        character: created.character,
+        cageName: "Cage 1",
+        authoritativeExpiry: expiry,
+    });
+    const pending = (system as any).releaseWhenExpired(
+        created.character,
+        "Cage 1",
+    );
+
+    await timer.advance(expiry);
+    await pending;
+
+    assert.deepEqual(mutations.exits, []);
+    assert.equal(created.messages.length, 0);
+    assert.equal(
+        (system as any).cagedCharacters.has(created.character.MemberNumber),
+        true,
+    );
+});
+
+test("CageSystem finalizes an absent local crate only after peer confirms an empty device slot", async () => {
+    const timer = new FakeTimer();
+    const mutations = createMutationService();
+    const created = createCharacter(251028);
+    const expiry = 100;
+    const appearanceService = {
+        ...createAppearanceActionService(),
+        confirmAppearance: async () => ({
+            status: "completed",
+            confirmationAuthority: "room_character_sync",
+            observed: [],
+            retryable: false,
+        }),
+    };
+    const system = new CageSystem(
+        created.connection as any,
+        mutations as any,
+        undefined,
+        timer,
+        true,
+        true,
+        undefined,
+        new ActionLayerRolloutController({ featureAppearanceEnabled: true }),
+        appearanceService as any,
+    );
+    (system as any).cagedCharacters.set(created.character.MemberNumber, {
+        character: created.character,
+        cageName: "Cage 1",
+        authoritativeExpiry: expiry,
+    });
+    const pending = (system as any).releaseWhenExpired(
+        created.character,
+        "Cage 1",
+    );
+
+    await timer.advance(expiry);
+    await pending;
+
+    assert.deepEqual(mutations.exits, [created.character.MemberNumber]);
+    assert.equal(created.messages.length, 1);
+    assert.equal(
+        (system as any).cagedCharacters.has(created.character.MemberNumber),
+        false,
+    );
+});
+
 test("CageSystem does not report release when authoritative appearance retains the crate", async () => {
     const timer = new FakeTimer();
     const mutations = createMutationService();

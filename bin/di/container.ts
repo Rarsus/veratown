@@ -241,6 +241,7 @@ export const DIServiceKeys = {
     KIDNAPPERS_GAME_LIFECYCLE_SERVICE: "kidnappersGameLifecycleService",
     ACTION_LAYER_ROLLOUT: "actionLayerRollout",
     ACTION_LAYER_APPEARANCE_SERVICE: "actionLayerAppearanceService",
+    ACTION_LAYER_MOVEMENT_SERVICE: "actionLayerMovementService",
     ACTION_LAYER_INVENTORY_SERVICE: "actionLayerInventoryService",
     ACTION_LAYER_COMMUNICATION_SERVICE: "actionLayerCommunicationService",
     WORKFLOW_JOURNAL_STORAGE: "workflowJournalStorage",

@@ -97,7 +97,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         private readonly managedReleaseWorkersEnabled = true,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
-        private readonly appearanceService?: AppearanceActionService<API_Character>,
+        private readonly appearanceService?: AppearanceActionService<
+            API_Character,
+            readonly BC_AppearanceItem[]
+        >,
     ) {
         super(conn, "kennel", "Kennels");
         this.kennelTrigger = this.guardTileHandler(this.onCharacterEnterKennel);
@@ -110,9 +113,14 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         character: API_Character,
         reason: string,
         dispatch: (
-            service: AppearanceActionService<API_Character>,
+            service: AppearanceActionService<
+                API_Character,
+                readonly BC_AppearanceItem[]
+            >,
             policy: AppearanceMutationPolicy,
-        ) => Promise<ActionResult<AppearanceObservation>>,
+        ) => Promise<
+            ActionResult<AppearanceObservation, readonly BC_AppearanceItem[]>
+        >,
         options: {
             readonly releaseCause?: AppearanceMutationContext["releaseCause"];
             readonly preserveLockedItems?: boolean;
@@ -154,16 +162,15 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                             "Kennel appearance action remains unconfirmed",
                     );
                 }
-                observedAppearance = Array.isArray(confirmation.observed)
-                    ? (confirmation.observed as BC_AppearanceItem[])
+                observedAppearance = confirmation.observed
+                    ? [...confirmation.observed]
                     : undefined;
             } else if (
-                result.status === "completed" ||
-                result.status === "already_satisfied"
+                result.status === "completed" &&
+                result.confirmationAuthority &&
+                result.observed
             ) {
-                observedAppearance = Array.isArray(result.observed)
-                    ? (result.observed as BC_AppearanceItem[])
-                    : character.Appearance.MakeAppearanceBundle();
+                observedAppearance = [...result.observed];
             } else if (result.status === "unconfirmed") {
                 throw new AppearanceConfirmationError(
                     result.reason ?? "Kennel appearance action is unconfirmed",
@@ -201,6 +208,65 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         } finally {
             lease?.release();
         }
+    }
+
+    private async confirmKennelAbsent(
+        character: API_Character,
+        reason: string,
+        releaseCause: NonNullable<AppearanceMutationContext["releaseCause"]>,
+    ): Promise<boolean> {
+        if (!this.appearanceService?.confirmAppearance) return false;
+        const operationId = `kennel-confirm-absence:${character.MemberNumber}:${++this.appearanceActionSequence}`;
+        const confirmation = await this.appearanceService.confirmAppearance(
+            character,
+            {
+                operationId,
+                memberNumber: character.MemberNumber,
+                source: "release",
+                reason,
+                deadlineAt: Date.now() + 5_000,
+            },
+            5_000,
+            (appearance) =>
+                !appearance.some(
+                    (item) =>
+                        typeof item === "object" &&
+                        item !== null &&
+                        "Group" in item &&
+                        item.Group === "ItemDevices" &&
+                        "Name" in item &&
+                        item.Name === "Kennel",
+                ),
+        );
+        if (
+            confirmation.status !== "completed" ||
+            !confirmation.confirmationAuthority ||
+            !confirmation.observed
+        ) {
+            return false;
+        }
+        const observedAppearance = [...confirmation.observed];
+        if (
+            observedAppearance.some(
+                (item) =>
+                    item.Group === "ItemDevices" && item.Name === "Kennel",
+            )
+        ) {
+            return false;
+        }
+        const context: AppearanceMutationContext = {
+            operationId,
+            correlationId: `appearance:${operationId}`,
+            timestamp: Date.now(),
+            source: "release",
+            reason,
+            releaseCause,
+            expectedAppearance: [...observedAppearance],
+            observedAppearance: [...observedAppearance],
+            verificationStatus: "confirmed",
+        };
+        await this.stateSync?.(character, context, observedAppearance);
+        return true;
     }
 
     public registerTriggers(): void {
@@ -573,6 +639,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             activeSession?.expiresAt !== undefined &&
             activeSession.expiresAt <= Date.now()
         ) {
+            let deviceAbsenceConfirmed = false;
             if (wearingKennel) {
                 this.releasingCharacters.add(memberNumber);
                 try {
@@ -592,14 +659,18 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                             "Kennel device remained in the confirmed appearance",
                         );
                     }
+                    deviceAbsenceConfirmed = true;
                 } finally {
                     this.releasingCharacters.delete(memberNumber);
                 }
+            } else {
+                deviceAbsenceConfirmed = await this.confirmKennelAbsent(
+                    character,
+                    "confirm expired Kennel absence",
+                    "timer",
+                );
             }
-            if (
-                character.Appearance.getItemData("ItemDevices")?.Name !==
-                "Kennel"
-            ) {
+            if (deviceAbsenceConfirmed) {
                 this.markEscaped(memberNumber);
                 await this.mutationService?.exitKennel(memberNumber);
                 this.kennelStateCache.delete(memberNumber);
@@ -608,6 +679,12 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         }
 
         if (activeSession?.expiresAt !== undefined && !wearingKennel) {
+            const deviceAbsenceConfirmed = await this.confirmKennelAbsent(
+                character,
+                "reconcile Kennel session without a local device",
+                "external",
+            );
+            if (!deviceAbsenceConfirmed) return;
             this.markEscaped(memberNumber);
             await this.mutationService?.exitKennel(memberNumber);
             this.kennelStateCache.delete(memberNumber);
@@ -618,10 +695,16 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         // gone. This prevents a movement update from racing a device update.
         if (!inKennel && !wearingKennel) {
             if (activeSession) {
+                const deviceAbsenceConfirmed = await this.confirmKennelAbsent(
+                    character,
+                    "confirm Kennel absence after leaving the tile",
+                    "external",
+                );
+                if (!deviceAbsenceConfirmed) return;
                 const exited = await this.mutationService?.exitKennel(
                     character.MemberNumber,
                 );
-                if (exited) await this.stateSync?.(character);
+                if (exited) this.kennelStateCache.delete(memberNumber);
             }
             this.kennelStateCache.delete(memberNumber);
             return;
@@ -996,10 +1079,11 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             await this.mutationService?.getActiveKennelSession?.(
                 character.MemberNumber,
             );
-        if (kennel?.Name === "Kennel" || activeSession) {
+        const wearingKennel = kennel?.Name === "Kennel";
+        if (wearingKennel) {
             this.markEscaped(character.MemberNumber);
         }
-        if (kennel?.Name === "Kennel") {
+        if (wearingKennel) {
             const observed = await this.executeAppearanceAction(
                 character,
                 "free character from Kennel",
@@ -1014,13 +1098,20 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             if (observed.some((item) => item.Group === "ItemDevices")) {
                 return;
             }
+        } else if (activeSession) {
+            const deviceAbsenceConfirmed = await this.confirmKennelAbsent(
+                character,
+                "confirm Kennel absence before admin release",
+                "admin",
+            );
+            if (!deviceAbsenceConfirmed) return;
+            this.markEscaped(character.MemberNumber);
         }
-        if (activeSession || kennel?.Name === "Kennel") {
+        if (activeSession || wearingKennel) {
             const exited = await this.mutationService?.exitKennel(
                 character.MemberNumber,
             );
             if (exited) {
-                await this.stateSync?.(character);
                 this.logger.info("Kennel session exited", {
                     memberNumber: character.MemberNumber,
                 });

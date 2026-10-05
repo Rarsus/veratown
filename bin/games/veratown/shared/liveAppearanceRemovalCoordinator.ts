@@ -1,4 +1,4 @@
-import { API_Character } from "bc-bot";
+import { API_Character, BC_AppearanceItem } from "bc-bot";
 import {
     AppearanceConfirmationError,
     syncAppearanceMutation,
@@ -20,7 +20,10 @@ export interface LiveRemovalTarget {
 }
 
 export interface ActionLayerRemovalMigration {
-    readonly appearanceService: AppearanceActionService<API_Character>;
+    readonly appearanceService: AppearanceActionService<
+        API_Character,
+        readonly BC_AppearanceItem[]
+    >;
     readonly rollout: ActionLayerRolloutController;
     readonly workflowRecovery?: VeratownWorkflowRecovery;
 }

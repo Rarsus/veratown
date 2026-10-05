@@ -29,6 +29,7 @@ import {
     type ActionResult,
     type AppearanceActionService,
     type CommunicationActionService,
+    type MovementActionService,
 } from "../../action-layer";
 import { AbstractTileFeatureSystem } from "../shared/abstractTileFeatureSystem";
 import { VeratownLocationDoc } from "./veratownLocationStore";
@@ -390,6 +391,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
     private tiles: CatDogTile[] = [];
     private catDogNotificationSequence = 0;
     private catDogActionSequence = 0;
+    private catDogMovementSequence = 0;
     private readonly petTrigger: ReturnType<
         AbstractTileFeatureSystem["guardTileHandler"]
     >;
@@ -404,11 +406,16 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         private botConn?: API_Connector,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
-        private readonly appearanceService?: AppearanceActionService<API_Character>,
+        private readonly appearanceService?: AppearanceActionService<
+            API_Character,
+            readonly BC_AppearanceItem[]
+        >,
+        private readonly movementService?: MovementActionService<API_Character>,
     ) {
         super(conn, "catDog", "Cat/Dog tiles");
         this.characterActions = new CharacterActionExecutor({
             appearance: this.appearanceService,
+            movement: this.movementService,
         });
         this.logger?.info("[CatDogSystem] Initializing CatDogSystem");
         this.petTrigger = this.guardTileHandler(this.onCharacterStepOnPet);
@@ -732,6 +739,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         action: CatDogEmoteAction,
         petType: "cat" | "dog",
     ): Promise<void> {
+        let emoteSent = false;
         try {
             this.logger?.info(
                 `[CatDogSystem] performEmoteAction: botConn=${!!this.botConn}, text="${action.text}"`,
@@ -785,6 +793,7 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                     character,
                     action.text || `*A ${petType} nuzzles you adorably*`,
                 );
+                emoteSent = true;
 
                 await this.wait(500); // Let emote display before returning
 
@@ -811,17 +820,18 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                 "[CatDogSystem] Failed to perform emote action",
                 e as any,
             );
-            // Fallback: try sending emote anyway
-            try {
-                this.messageSender.emoteToCharacter(
-                    character,
-                    action.text || `*A ${petType} nuzzles you adorably*`,
-                );
-            } catch (fallbackErr) {
-                this.logger?.error(
-                    "[CatDogSystem] Fallback emote also failed",
-                    fallbackErr,
-                );
+            if (!emoteSent) {
+                try {
+                    this.messageSender.emoteToCharacter(
+                        character,
+                        action.text || `*A ${petType} nuzzles you adorably*`,
+                    );
+                } catch (fallbackErr) {
+                    this.logger?.error(
+                        "[CatDogSystem] Fallback emote also failed",
+                        fallbackErr,
+                    );
+                }
             }
         }
     }
@@ -831,39 +841,37 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
         x: number,
         y: number,
     ): Promise<void> {
-        try {
-            if (!botChar?.MapPos) {
-                this.logger?.warn(
-                    `[CatDogSystem] Cannot teleport: botChar.MapPos is ${botChar?.MapPos}`,
-                );
-                return;
-            }
-
-            this.logger?.info(
-                `[CatDogSystem] teleportBot: current (${botChar.MapPos.X}, ${botChar.MapPos.Y}) -> target (${x}, ${y})`,
+        if (!botChar?.MapPos) {
+            throw new Error(
+                "Cannot teleport narrator without an observed position",
             );
-
-            // Use the proper mapTeleport() method to actually move the character
-            if (typeof botChar.mapTeleport === "function") {
-                botChar.mapTeleport({ X: x, Y: y });
-                this.logger?.info(
-                    `[CatDogSystem] ✓ Bot teleported to (${x}, ${y})`,
-                );
-            } else {
-                this.logger?.warn(
-                    "[CatDogSystem] ⚠️  botChar.mapTeleport is not a function, attempting fallback",
-                );
-                // Fallback: directly modify MapPos (may not work)
-                botChar.MapPos.X = x;
-                botChar.MapPos.Y = y;
-                this.logger?.info(
-                    `[CatDogSystem] Fallback: set MapPos to (${x}, ${y})`,
-                );
-            }
-        } catch (e) {
-            this.logger?.warn(
-                `[CatDogSystem] Failed to teleport bot to (${x}, ${y})`,
-                e as any,
+        }
+        const context: ActionContext = {
+            operationId: `catdog-emote-teleport:${botChar.MemberNumber}:${++this.catDogMovementSequence}`,
+            memberNumber: botChar.MemberNumber,
+            source: "feature",
+            reason: "CatDog narrator positioning",
+            deadlineAt: Date.now() + 5_000,
+        };
+        const result = await this.characterActions.execute(
+            botChar,
+            {
+                type: "movement.teleport",
+                destination: { x, y },
+                options: {
+                    timeoutMs: 5_000,
+                    maxAttempts: 1,
+                    retryDelayMs: 0,
+                },
+            },
+            context,
+        );
+        if (
+            result.status !== "completed" &&
+            result.status !== "already_satisfied"
+        ) {
+            throw new Error(
+                result.reason ?? `Narrator teleport failed: ${result.status}`,
             );
         }
     }

@@ -60,7 +60,10 @@ export interface ReleaseWorkflowDependencies {
     readonly locationStore: VeratownLocationStore;
     readonly unifiedStore: UnifiedCharacterStore;
     readonly mutationService?: GameStateMutationService;
-    readonly appearanceService: AppearanceActionService<API_Character>;
+    readonly appearanceService: AppearanceActionService<
+        API_Character,
+        readonly BC_AppearanceItem[]
+    >;
 }
 
 export interface ReleaseCompatibleSystem {

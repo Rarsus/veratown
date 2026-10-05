@@ -249,7 +249,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
         private readonly managedReleaseWorkersEnabled = true,
         private readonly communicationService?: CommunicationActionService,
         private readonly rollout?: ActionLayerRolloutController,
-        private readonly appearanceService?: AppearanceActionService<API_Character>,
+        private readonly appearanceService?: AppearanceActionService<
+            API_Character,
+            readonly BC_AppearanceItem[]
+        >,
     ) {
         super(conn, "cage", "Containment cages");
         this.cageTrigger = this.guardTileHandler(this.onCharacterEnterCage);
@@ -330,16 +333,15 @@ export class CageSystem extends AbstractTileFeatureSystem {
                             "Cage appearance action remains unconfirmed",
                     );
                 }
-                observedAppearance = Array.isArray(confirmation.observed)
-                    ? (confirmation.observed as BC_AppearanceItem[])
+                observedAppearance = confirmation.observed
+                    ? [...confirmation.observed]
                     : undefined;
             } else if (
-                result.status === "completed" ||
-                result.status === "already_satisfied"
+                result.status === "completed" &&
+                result.confirmationAuthority &&
+                result.observed
             ) {
-                observedAppearance = Array.isArray(result.observed)
-                    ? (result.observed as BC_AppearanceItem[])
-                    : character.Appearance.MakeAppearanceBundle();
+                observedAppearance = [...result.observed];
             } else {
                 throw new Error(
                     result.reason ?? `Cage appearance action ${result.status}`,
@@ -382,6 +384,59 @@ export class CageSystem extends AbstractTileFeatureSystem {
         } finally {
             lease?.release();
         }
+    }
+
+    private async confirmEmptyDeviceSlot(
+        character: API_Character,
+        reason: string,
+    ): Promise<boolean> {
+        if (!this.appearanceService) return false;
+        const operationId = `cage-confirm-empty-slot:${character.MemberNumber}:${++this.cageAppearanceActionSequence}`;
+        const confirmation = await this.appearanceService.confirmAppearance(
+            character,
+            {
+                operationId,
+                memberNumber: character.MemberNumber,
+                source: "release",
+                reason,
+                deadlineAt: Date.now() + 5_000,
+            },
+            5_000,
+            (appearance) =>
+                !appearance.some(
+                    (item) =>
+                        typeof item === "object" &&
+                        item !== null &&
+                        "Group" in item &&
+                        item.Group === "ItemDevices",
+                ),
+        );
+        if (
+            confirmation.status !== "completed" ||
+            !confirmation.confirmationAuthority ||
+            !confirmation.observed
+        ) {
+            return false;
+        }
+        const observedAppearance = [...confirmation.observed];
+        if (observedAppearance.some((item) => item.Group === "ItemDevices")) {
+            return false;
+        }
+
+        const mutationContext: AppearanceMutationContext = {
+            operationId,
+            correlationId: `appearance:${operationId}`,
+            timestamp: Date.now(),
+            source: "release",
+            reason,
+            releaseCause: "timer",
+            expectedAppearance: [...observedAppearance],
+            observedAppearance: [...observedAppearance],
+            verificationStatus: "confirmed",
+        };
+        await wait(50);
+        await this.stateSync?.(character, mutationContext, observedAppearance);
+        return true;
     }
 
     public registerTriggers(): void {
@@ -953,7 +1008,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 authoritativeExpiryMs: cage.authoritativeExpiry,
                 detectedExpiryAtMs: now,
             });
-            let crateRemovalVerified = true;
+            let crateRemovalVerified = false;
             if (
                 character.Appearance.getItemData("ItemDevices")?.Name ===
                 "FuturisticCrate"
@@ -985,6 +1040,19 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     });
                 } finally {
                     this.releasingCharacters.delete(memberNumber);
+                }
+            } else {
+                try {
+                    crateRemovalVerified = await this.confirmEmptyDeviceSlot(
+                        character,
+                        "confirm cage release after local crate disappearance",
+                    );
+                } catch (error) {
+                    this.logger.error(
+                        "Cage release could not confirm the empty device slot",
+                        error,
+                        { memberNumber, cageName },
+                    );
                 }
             }
             if (!crateRemovalVerified) {

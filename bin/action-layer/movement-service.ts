@@ -40,6 +40,18 @@ export class MovementActionService<TRuntimeCharacter = unknown> {
         );
     }
 
+    public teleport(
+        character: TRuntimeCharacter,
+        destination: CharacterPosition,
+        policy: MovementActionPolicy,
+    ): Promise<ActionResult<CharacterPosition>> {
+        return this.scheduler.schedule(
+            policy.memberNumber,
+            policy.operationId,
+            () => this.adapter.teleport(character, destination, policy),
+        );
+    }
+
     public close(): void {
         this.scheduler.close();
     }

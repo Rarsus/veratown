@@ -110,6 +110,43 @@ function createTestAppearanceActionService() {
     };
 }
 
+function createPeerAppearanceActionService(
+    confirm: "confirmed" | "unconfirmed" = "confirmed",
+) {
+    const service = createTestAppearanceActionService();
+    return {
+        ...service,
+        confirmAppearance: async (
+            character: any,
+            _context: any,
+            _timeoutMs: number,
+            predicate: (appearance: readonly unknown[]) => boolean,
+        ) => {
+            const appearance = character.Appearance.MakeAppearanceBundle();
+            if (confirm !== "confirmed" || !predicate(appearance)) {
+                return {
+                    status: "unconfirmed",
+                    reason: "No peer room confirmation",
+                    retryable: false,
+                };
+            }
+            return {
+                status: "completed",
+                confirmationAuthority: "room_character_sync",
+                observed: appearance,
+                value: {
+                    items: appearance.map((item: any) => ({
+                        group: item.Group,
+                        asset: item.Name,
+                    })),
+                    hiddenLayers: [],
+                    observedAt: Date.now(),
+                },
+            };
+        },
+    };
+}
+
 class KennelSystem extends ProductionKennelSystem {
     public constructor(
         connection: any,
@@ -353,6 +390,11 @@ test("KennelSystem applies the device and records one session on tile entry", as
         mutations as any,
         undefined,
         async () => {},
+        true,
+        true,
+        undefined,
+        undefined,
+        createPeerAppearanceActionService(),
     );
 
     await system.reloadLocations([
@@ -387,6 +429,11 @@ test("KennelSystem logs and proceeds when item permission is denied", async () =
         mutations as any,
         undefined,
         async () => {},
+        true,
+        true,
+        undefined,
+        undefined,
+        createPeerAppearanceActionService(),
     );
 
     await system.reloadLocations([
@@ -796,6 +843,11 @@ test("KennelSystem finalizes an exit only after leaving and removing the device"
         mutations as any,
         undefined,
         async () => {},
+        true,
+        true,
+        undefined,
+        undefined,
+        createPeerAppearanceActionService(),
     );
 
     await system.reloadLocations([
@@ -836,6 +888,11 @@ test("KennelSystem closes a stale open session during reconnect recovery", async
         mutations as any,
         undefined,
         async () => {},
+        true,
+        true,
+        undefined,
+        undefined,
+        createPeerAppearanceActionService(),
     );
 
     await system.reloadLocations([
@@ -852,6 +909,31 @@ test("KennelSystem closes a stale open session during reconnect recovery", async
     ]);
 
     assert.deepEqual(mutations.exits, [13]);
+});
+
+test("KennelSystem does not close a session from local device absence without peer confirmation", async () => {
+    const { character } = createCharacter(130);
+    character.MapPos = { X: 1, Y: 1 };
+    const mutations = createMutationService({
+        enteredAt: Date.now() - 1000,
+        totalTime: 0,
+    });
+    const { connector } = createConnector([character]);
+    const system = new KennelSystem(
+        connector as any,
+        mutations as any,
+        undefined,
+        async () => {},
+        true,
+        true,
+        undefined,
+        undefined,
+        createPeerAppearanceActionService("unconfirmed"),
+    );
+
+    await system.reconcileCharacter(character);
+
+    assert.deepEqual(mutations.exits, []);
 });
 
 test("KennelSystem rolls back persistence when appearance mutation fails", async () => {

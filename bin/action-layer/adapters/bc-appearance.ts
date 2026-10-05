@@ -1,6 +1,8 @@
 import {
     createActionMetadata,
-    createActionResult,
+    createActionResult as createGenericActionResult,
+    type ActionMetadata,
+    type ActionStatus,
     type ActionContext,
     type ActionConfirmation,
     type ActionResult,
@@ -29,6 +31,26 @@ export interface BCAppearanceAdapterOptions {
     readonly now?: () => number;
     readonly confirmationTimeoutMs?: number;
     readonly observationConnectors?: readonly BCConnectorEvents[];
+}
+
+type BCAppearanceActionResult = ActionResult<
+    AppearanceObservation,
+    readonly BC_AppearanceItem[]
+>;
+type BCAppearanceActionConfirmation = ActionConfirmation<
+    AppearanceObservation,
+    readonly BC_AppearanceItem[]
+>;
+
+function createActionResult(
+    status: ActionStatus,
+    metadata: ActionMetadata,
+    options: Omit<BCAppearanceActionResult, "status" | "metadata"> = {},
+): BCAppearanceActionResult {
+    return createGenericActionResult<
+        AppearanceObservation,
+        readonly BC_AppearanceItem[]
+    >(status, metadata, options);
 }
 
 type BCProperty = Record<string, unknown>;
@@ -202,7 +224,7 @@ function blocked(
     actionId: string,
     reason: string,
     completedAt: number,
-): ActionResult<AppearanceObservation> {
+): BCAppearanceActionResult {
     return createActionResult(
         "blocked",
         createActionMetadata(context, actionId, completedAt, 1, completedAt),
@@ -404,11 +426,38 @@ function failedMutation(
     reason: string,
     failureKind: "transient" | "permanent",
     retryable: boolean,
-): ActionResult<AppearanceObservation> {
+): BCAppearanceActionResult {
     return createActionResult(
         "failed",
         createActionMetadata(context, actionId, startedAt, 1, Date.now()),
         { reason, failureKind, retryable },
+    );
+}
+
+function localNoOpResult(
+    context: ActionContext,
+    actionId: string,
+    startedAt: number,
+    completedAt: number,
+    appearance: readonly BC_AppearanceItem[],
+    requireServerConfirmation: boolean,
+): BCAppearanceActionResult {
+    const value = toObservation(appearance, completedAt);
+    if (requireServerConfirmation) {
+        return createActionResult(
+            "unconfirmed",
+            createActionMetadata(context, actionId, startedAt, 1, completedAt),
+            {
+                value,
+                reason: "Local appearance satisfies the action without authoritative server confirmation",
+                retryable: false,
+            },
+        );
+    }
+    return createActionResult(
+        "already_satisfied",
+        createActionMetadata(context, actionId, startedAt, 1, completedAt),
+        { value },
     );
 }
 
@@ -417,7 +466,10 @@ function failedMutation(
  * Confirmation remains an explicit connector concern; local state is never
  * treated as authoritative server confirmation by this adapter.
  */
-export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Character> {
+export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
+    API_Character,
+    readonly BC_AppearanceItem[]
+> {
     public readonly capabilities = {
         observesAppearance: true,
         addsItems: true,
@@ -719,7 +771,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         context: ActionContext,
         startedAt: number,
         acceptUpdate?: (items: readonly BC_AppearanceItem[]) => boolean,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const timeoutMs = Math.min(
             this.confirmationTimeoutMs,
             Math.max(1, policy.timeoutMs),
@@ -761,22 +813,21 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         const observed = character.Appearance.MakeAppearanceBundle();
         const localObservation = toObservation(observed, this.now());
         if (!policy.requireServerConfirmation) {
-            const confirmation: Promise<
-                ActionConfirmation<AppearanceObservation>
-            > = waiter.promise.then((result) =>
-                result.outcome === "accepted"
-                    ? {
-                          status: "confirmed",
-                          authority: result.authority,
-                          value: result.observation,
-                          observed: result.appearance,
-                      }
-                    : {
-                          status: "unconfirmed",
-                          value: localObservation,
-                          reason: result.reason,
-                      },
-            );
+            const confirmation: Promise<BCAppearanceActionConfirmation> =
+                waiter.promise.then((result) =>
+                    result.outcome === "accepted"
+                        ? {
+                              status: "confirmed",
+                              authority: result.authority,
+                              value: result.observation,
+                              observed: result.appearance,
+                          }
+                        : {
+                              status: "unconfirmed",
+                              value: localObservation,
+                              reason: result.reason,
+                          },
+                );
             return createActionResult(
                 "in_progress",
                 createActionMetadata(context, actionId, startedAt),
@@ -822,7 +873,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
     public observe(
         character: API_Character,
         context: ActionContext,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const observedAt = this.now();
         const bundle = character.Appearance.MakeAppearanceBundle();
         return Promise.resolve(
@@ -838,8 +889,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         character: API_Character,
         context: ActionContext,
         timeoutMs: number,
-        predicate: AppearanceSnapshotPredicate,
-    ): Promise<ActionResult<AppearanceObservation>> {
+        predicate: AppearanceSnapshotPredicate<readonly BC_AppearanceItem[]>,
+    ): Promise<BCAppearanceActionResult> {
         const startedAt = this.now();
         const waiter = this.waitForConfirmation(
             character,
@@ -884,12 +935,12 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         character: API_Character,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
         const execute = (
             before: readonly BC_AppearanceItem[],
-        ): Promise<ActionResult<AppearanceObservation>> => {
+        ): Promise<BCAppearanceActionResult> => {
             const plan = planAppearanceAdditions(before.map(toObservedItem), [
                 item,
             ]);
@@ -907,14 +958,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             }
             if (plan.status === "already_satisfied") {
                 return Promise.resolve(
-                    createActionResult(
-                        "already_satisfied",
-                        createActionMetadata(
-                            context,
-                            "appearance.add",
-                            completedAt,
-                        ),
-                        { value: toObservation(before, completedAt) },
+                    localNoOpResult(
+                        context,
+                        "appearance.add",
+                        startedAt,
+                        completedAt,
+                        before,
+                        policy.requireServerConfirmation === true,
                     ),
                 );
             }
@@ -961,12 +1011,12 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         character: API_Character,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
         const execute = (
             before: readonly BC_AppearanceItem[],
-        ): Promise<ActionResult<AppearanceObservation>> => {
+        ): Promise<BCAppearanceActionResult> => {
             const plan = planAppearanceRemovals(
                 before.map(toObservedItem),
                 [item],
@@ -986,14 +1036,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             }
             if (plan.status === "already_satisfied") {
                 return Promise.resolve(
-                    createActionResult(
-                        "already_satisfied",
-                        createActionMetadata(
-                            context,
-                            "appearance.remove",
-                            completedAt,
-                        ),
-                        { value: toObservation(before, completedAt) },
+                    localNoOpResult(
+                        context,
+                        "appearance.remove",
+                        startedAt,
+                        completedAt,
+                        before,
+                        policy.requireServerConfirmation === true,
                     ),
                 );
             }
@@ -1016,15 +1065,15 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
                 );
             }
             if (latestPlan.status === "already_satisfied") {
+                const completedAt = this.now();
                 return Promise.resolve(
-                    createActionResult(
-                        "already_satisfied",
-                        createActionMetadata(
-                            context,
-                            "appearance.remove",
-                            this.now(),
-                        ),
-                        { value: toObservation(latest, this.now()) },
+                    localNoOpResult(
+                        context,
+                        "appearance.remove",
+                        startedAt,
+                        completedAt,
+                        latest,
+                        policy.requireServerConfirmation === true,
                     ),
                 );
             }
@@ -1050,7 +1099,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         item: AppearanceItemIdentity,
         lock: AppearanceLockOptions,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
         const actionId = "appearance.lockExistingItem";
@@ -1073,10 +1122,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             matchesPropertySubset(propertyOf(currentItem), expectedLock) &&
             propertyOf(currentItem).RemoveTimer === undefined
         ) {
-            return createActionResult(
-                "already_satisfied",
-                createActionMetadata(context, actionId, startedAt),
-                { value: toObservation(before, startedAt) },
+            return localNoOpResult(
+                context,
+                actionId,
+                startedAt,
+                startedAt,
+                before,
+                policy.requireServerConfirmation === true,
             );
         }
 
@@ -1151,7 +1203,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         properties: ExtendedItemProperties,
         expectedProperties: ExtendedItemProperties | undefined,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
         const actionId = "appearance.updateExtendedProperties";
@@ -1210,10 +1262,14 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             );
         }
         if (matchesPropertySubset(currentProperties, properties)) {
-            return createActionResult(
-                "already_satisfied",
-                createActionMetadata(context, actionId, startedAt),
-                { value: toObservation(currentItems, this.now()) },
+            const completedAt = this.now();
+            return localNoOpResult(
+                context,
+                actionId,
+                startedAt,
+                completedAt,
+                currentItems,
+                policy.requireServerConfirmation === true,
             );
         }
 
@@ -1268,7 +1324,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         layers: readonly string[],
         hidden: boolean,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<BCAppearanceActionResult> {
         const startedAt = this.now();
         const context = contextForPolicy(policy, this.now);
         const before = character.Appearance.MakeAppearanceBundle();
@@ -1277,14 +1333,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
             (layer) => current.has(layer) === hidden,
         );
         if (alreadySatisfied) {
-            return createActionResult(
-                "already_satisfied",
-                createActionMetadata(
-                    context,
-                    "appearance.setHiddenLayers",
-                    startedAt,
-                ),
-                { value: toObservation(before, startedAt) },
+            return localNoOpResult(
+                context,
+                "appearance.setHiddenLayers",
+                startedAt,
+                startedAt,
+                before,
+                policy.requireServerConfirmation === true,
             );
         }
 
@@ -1347,22 +1402,21 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<API_Ch
         const observed = character.Appearance.MakeAppearanceBundle();
         const localObservation = toObservation(observed, this.now());
         if (!policy.requireServerConfirmation) {
-            const confirmation: Promise<
-                ActionConfirmation<AppearanceObservation>
-            > = waiter.promise.then((result) =>
-                result.outcome === "accepted"
-                    ? {
-                          status: "confirmed",
-                          authority: result.authority,
-                          value: result.observation,
-                          observed: result.appearance,
-                      }
-                    : {
-                          status: "unconfirmed",
-                          value: localObservation,
-                          reason: result.reason,
-                      },
-            );
+            const confirmation: Promise<BCAppearanceActionConfirmation> =
+                waiter.promise.then((result) =>
+                    result.outcome === "accepted"
+                        ? {
+                              status: "confirmed",
+                              authority: result.authority,
+                              value: result.observation,
+                              observed: result.appearance,
+                          }
+                        : {
+                              status: "unconfirmed",
+                              value: localObservation,
+                              reason: result.reason,
+                          },
+                );
             return createActionResult(
                 "in_progress",
                 createActionMetadata(

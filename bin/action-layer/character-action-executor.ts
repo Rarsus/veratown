@@ -157,7 +157,8 @@ export class CharacterActionExecutor<TRuntimeCharacter = unknown> {
                 }
                 return service.send(action.request, context);
             }
-            case "movement.move": {
+            case "movement.move":
+            case "movement.teleport": {
                 const service = this.services.movement;
                 if (!service) {
                     return Promise.resolve(
@@ -175,7 +176,9 @@ export class CharacterActionExecutor<TRuntimeCharacter = unknown> {
                     source: context.source,
                     reason: context.reason,
                 };
-                return service.move(character, action.destination, policy);
+                return action.type === "movement.move"
+                    ? service.move(character, action.destination, policy)
+                    : service.teleport(character, action.destination, policy);
             }
         }
     }

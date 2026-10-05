@@ -40,24 +40,24 @@ export interface ActionMetadata {
     readonly completedAt?: number;
 }
 
-export interface ActionResult<T> {
+export interface ActionResult<T, TObserved = unknown> {
     readonly status: ActionStatus;
     readonly metadata: ActionMetadata;
     readonly value?: T;
-    readonly observed?: unknown;
+    readonly observed?: TObserved;
     readonly reason?: string;
     readonly failureKind?: ActionFailureKind;
     readonly retryable?: boolean;
     readonly confirmationAuthority?: AppearanceConfirmationAuthority;
-    readonly confirmation?: Promise<ActionConfirmation<T>>;
+    readonly confirmation?: Promise<ActionConfirmation<T, TObserved>>;
 }
 
-export type ActionConfirmation<T> =
+export type ActionConfirmation<T, TObserved = unknown> =
     | {
           readonly status: "confirmed";
           readonly authority: AppearanceConfirmationAuthority;
           readonly value: T;
-          readonly observed?: unknown;
+          readonly observed?: TObserved;
       }
     | {
           readonly status: "unconfirmed";
@@ -134,8 +134,8 @@ export interface AppearanceObservation {
     readonly observedAt: number;
 }
 
-export type AppearanceSnapshotPredicate = (
-    appearance: readonly unknown[],
+export type AppearanceSnapshotPredicate<TSnapshot = readonly unknown[]> = (
+    appearance: TSnapshot,
 ) => boolean;
 
 export type ExtendedItemProperties = Readonly<Record<string, unknown>>;
@@ -222,32 +222,35 @@ export interface InventoryActionAdapter<TRuntimeCharacter = unknown> {
     ): Promise<ActionResult<InventoryTransferObservation>>;
 }
 
-export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
+export interface AppearanceActionAdapter<
+    TRuntimeCharacter = unknown,
+    TObserved = unknown,
+> {
     registerObservationConnectors?(connectors: readonly unknown[]): void;
 
     observe(
         character: TRuntimeCharacter,
         context: ActionContext,
-    ): Promise<ActionResult<AppearanceObservation>>;
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 
     add(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>>;
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 
     remove(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>>;
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 
     lockExistingItem?(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         lock: AppearanceLockOptions,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>>;
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 
     updateExtendedProperties(
         character: TRuntimeCharacter,
@@ -255,21 +258,21 @@ export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
         properties: ExtendedItemProperties,
         expectedProperties: ExtendedItemProperties | undefined,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>>;
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 
     setHiddenLayers(
         character: TRuntimeCharacter,
         layers: readonly string[],
         hidden: boolean,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>>;
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 
     confirmAppearance?(
         character: TRuntimeCharacter,
         context: ActionContext,
         timeoutMs: number,
-        predicate: AppearanceSnapshotPredicate,
-    ): Promise<ActionResult<AppearanceObservation>>;
+        predicate: AppearanceSnapshotPredicate<TObserved>,
+    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
 }
 
 export interface CharacterPosition {
@@ -284,6 +287,12 @@ export interface MovementActionAdapter<TRuntimeCharacter = unknown> {
     ): Promise<ActionResult<CharacterPosition>>;
 
     move(
+        character: TRuntimeCharacter,
+        destination: CharacterPosition,
+        policy: MovementActionPolicy,
+    ): Promise<ActionResult<CharacterPosition>>;
+
+    teleport(
         character: TRuntimeCharacter,
         destination: CharacterPosition,
         policy: MovementActionPolicy,
@@ -445,6 +454,11 @@ export type CharacterAction =
           readonly type: "movement.move";
           readonly destination: CharacterPosition;
           readonly options: MovementActionOptions;
+      }
+    | {
+          readonly type: "movement.teleport";
+          readonly destination: CharacterPosition;
+          readonly options: MovementActionOptions;
       };
 
 export function createActionMetadata(
@@ -464,11 +478,11 @@ export function createActionMetadata(
     };
 }
 
-export function createActionResult<T>(
+export function createActionResult<T, TObserved = unknown>(
     status: ActionStatus,
     metadata: ActionMetadata,
-    options: Omit<ActionResult<T>, "status" | "metadata"> = {},
-): ActionResult<T> {
+    options: Omit<ActionResult<T, TObserved>, "status" | "metadata"> = {},
+): ActionResult<T, TObserved> {
     return { status, metadata, ...options };
 }
 

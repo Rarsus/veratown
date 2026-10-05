@@ -415,6 +415,33 @@ test("plans from the current snapshot without waiting for another observation", 
     assert.equal(connector.listenerCount(), 0);
 });
 
+test("does not treat locally satisfied mutations as server-confirmed", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "ItemArms", Name: "Gloves" },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({ now: () => 100 });
+
+    const addResult = await adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        confirmedPolicy("cached-add-already-satisfied"),
+    );
+    const removeResult = await adapter.remove(
+        runtime as never,
+        { group: "ItemLegs", asset: "Rope" },
+        confirmedPolicy("cached-remove-already-satisfied"),
+    );
+
+    assert.equal(addResult.status, "unconfirmed");
+    assert.equal(removeResult.status, "unconfirmed");
+    assert.equal(addResult.confirmationAuthority, undefined);
+    assert.equal(removeResult.confirmationAuthority, undefined);
+    assert.equal(addResult.retryable, false);
+    assert.equal(removeResult.retryable, false);
+    assert.equal(connector.listenerCount(), 0);
+});
+
 test("dispatches immediately and returns pending confirmation when no echo arrives", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);

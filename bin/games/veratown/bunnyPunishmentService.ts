@@ -33,7 +33,10 @@ import type {
 import type { VeratownWorkflowRecovery } from "./shared/veratownWorkflowRecovery";
 
 export interface BunnyActionLayerMigration {
-    readonly appearanceService: AppearanceActionService<API_Character>;
+    readonly appearanceService: AppearanceActionService<
+        API_Character,
+        readonly BC_AppearanceItem[]
+    >;
     readonly rollout: ActionLayerRolloutController;
     readonly workflowRecovery?: VeratownWorkflowRecovery;
 }
@@ -401,6 +404,7 @@ export class BunnyPunishmentWorkflow {
                         },
                     );
                     let observed = result.observed;
+                    let confirmationAuthority = result.confirmationAuthority;
                     if (result.status === "in_progress") {
                         if (!result.confirmation) {
                             throw new Error(
@@ -415,10 +419,11 @@ export class BunnyPunishmentWorkflow {
                             );
                         }
                         observed = confirmation.observed;
+                        confirmationAuthority = confirmation.authority;
                     }
                     if (
+                        !confirmationAuthority ||
                         (result.status !== "completed" &&
-                            result.status !== "already_satisfied" &&
                             result.status !== "in_progress") ||
                         !Array.isArray(observed)
                     ) {
@@ -427,7 +432,7 @@ export class BunnyPunishmentWorkflow {
                                 `Bunny add lacked confirmed appearance for ${bunnyPieceKey(piece)}`,
                         );
                     }
-                    authoritativeAppearance = observed as BC_AppearanceItem[];
+                    authoritativeAppearance = [...observed];
                     configuredPieces.push(bunnyPieceKey(piece));
                     if (this.syncDelayMs > 0) {
                         await new Promise((resolve) =>
@@ -692,13 +697,11 @@ export class BunnyPunishmentWorkflow {
                     },
                 );
                 if (
-                    result.status === "completed" ||
-                    result.status === "already_satisfied"
+                    result.status === "completed" &&
+                    result.confirmationAuthority &&
+                    Array.isArray(result.observed)
                 ) {
-                    if (Array.isArray(result.observed)) {
-                        confirmedAppearance =
-                            result.observed as BC_AppearanceItem[];
-                    }
+                    confirmedAppearance = [...result.observed];
                     continue;
                 }
                 if (

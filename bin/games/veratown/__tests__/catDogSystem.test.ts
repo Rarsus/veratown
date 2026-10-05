@@ -262,6 +262,55 @@ test("CatDog does not bypass the action layer when appearance rollout is disable
     assert.deepEqual(sent, []);
 });
 
+test("CatDog narrator teleport delegates to the movement action service", async () => {
+    const requests: Array<{
+        character: unknown;
+        destination: { x: number; y: number };
+        policy: Record<string, unknown>;
+    }> = [];
+    const movementService = {
+        teleport: async (
+            target: unknown,
+            destination: { x: number; y: number },
+            policy: Record<string, unknown>,
+        ) => {
+            requests.push({ character: target, destination, policy });
+            return {
+                status: "completed",
+                metadata: {
+                    operationId: String(policy.operationId),
+                    actionId: "movement.teleport",
+                    memberNumber: Number(policy.memberNumber),
+                    attempt: 1,
+                    startedAt: Date.now(),
+                    completedAt: Date.now(),
+                },
+                value: destination,
+            };
+        },
+    };
+    const botCharacter = {
+        MemberNumber: 99,
+        MapPos: { X: 2, Y: 4 },
+    };
+    const system = new CatDogSystem(
+        connector(() => undefined),
+        { Player: botCharacter } as any,
+        undefined,
+        undefined,
+        undefined,
+        movementService as any,
+    );
+
+    await (system as any).teleportBot(botCharacter, 10, 12);
+
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].character, botCharacter);
+    assert.deepEqual(requests[0].destination, { x: 10, y: 12 });
+    assert.equal(requests[0].policy.reason, "CatDog narrator positioning");
+    assert.deepEqual(botCharacter.MapPos, { X: 2, Y: 4 });
+});
+
 test("CatDog discovers devices from current appearance data rather than stale wrappers", async () => {
     const appearance = recordingAppearanceService();
     const rollout = new ActionLayerRolloutController({

@@ -44,11 +44,17 @@ function contextFromPolicy(policy: AppearanceMutationPolicy): ActionContext {
  * This service owns admission and per-character serialization. The adapter
  * owns transport, server confirmation, and BC-specific state translation.
  */
-export class AppearanceActionService<TRuntimeCharacter = unknown> {
+export class AppearanceActionService<
+    TRuntimeCharacter = unknown,
+    TObserved = unknown,
+> {
     private readonly scheduler: ActionScheduler;
 
     public constructor(
-        private readonly adapter: AppearanceActionAdapter<TRuntimeCharacter>,
+        private readonly adapter: AppearanceActionAdapter<
+            TRuntimeCharacter,
+            TObserved
+        >,
         options: AppearanceActionServiceOptions = {},
     ) {
         this.scheduler = options.scheduler ?? new ActionScheduler();
@@ -61,7 +67,7 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
     public observe(
         character: TRuntimeCharacter,
         context: ActionContext,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         validateContext(context);
         return this.scheduler.schedule(
             context.memberNumber,
@@ -74,7 +80,7 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         const context = contextFromPolicy(policy);
         validateContext(context);
         return this.scheduler.schedule(
@@ -88,7 +94,7 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         const context = contextFromPolicy(policy);
         validateContext(context);
         return this.scheduler.schedule(
@@ -103,7 +109,7 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         item: AppearanceItemIdentity,
         lock: AppearanceLockOptions,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         const context = contextFromPolicy(policy);
         validateContext(context);
         if (!this.adapter.lockExistingItem) {
@@ -136,7 +142,7 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         properties: ExtendedItemProperties,
         expectedProperties: ExtendedItemProperties | undefined,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         const context = contextFromPolicy(policy);
         validateContext(context);
         return this.scheduler.schedule(
@@ -158,7 +164,7 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         layers: readonly string[],
         hidden: boolean,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation>> {
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         const context = contextFromPolicy(policy);
         validateContext(context);
         if (layers.some((layer) => !layer.trim())) {
@@ -176,8 +182,8 @@ export class AppearanceActionService<TRuntimeCharacter = unknown> {
         character: TRuntimeCharacter,
         context: ActionContext,
         timeoutMs: number,
-        predicate: AppearanceSnapshotPredicate,
-    ): Promise<ActionResult<AppearanceObservation>> {
+        predicate: AppearanceSnapshotPredicate<TObserved>,
+    ): Promise<ActionResult<AppearanceObservation, TObserved>> {
         validateContext(context);
         if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
             throw new Error("timeoutMs must be a positive integer");

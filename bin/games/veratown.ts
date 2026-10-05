@@ -18,6 +18,7 @@ import { Db } from "mongodb";
 import {
     API_Connector,
     API_Character,
+    BC_AppearanceItem,
     CommandParser,
     BC_Server_ChatRoomMessage,
 } from "bc-bot";
@@ -76,8 +77,10 @@ import {
     BCAppearanceActionAdapter,
     BCInventoryActionAdapter,
     BCCommunicationActionAdapter,
+    BCMovementActionAdapter,
     InventoryActionService,
     CommunicationActionService,
+    MovementActionService,
 } from "../action-layer";
 import { LocationEventSystem } from "./veratown/locationEventSystem";
 import {
@@ -324,7 +327,7 @@ export class Veratown {
             );
         }
         const appearanceActionService = this.container.get<
-            AppearanceActionService<API_Character>
+            AppearanceActionService<API_Character, readonly BC_AppearanceItem[]>
         >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE);
         appearanceActionService.registerObservationConnectors(
             appearanceObservationConnectors,
@@ -334,6 +337,12 @@ export class Veratown {
             this.container.register(
                 DIServiceKeys.ACTION_LAYER_INVENTORY_SERVICE,
                 new InventoryActionService(new BCInventoryActionAdapter()),
+            );
+        }
+        if (!this.container.has(DIServiceKeys.ACTION_LAYER_MOVEMENT_SERVICE)) {
+            this.container.register(
+                DIServiceKeys.ACTION_LAYER_MOVEMENT_SERVICE,
+                new MovementActionService(new BCMovementActionAdapter()),
             );
         }
         if (
@@ -634,7 +643,10 @@ export class Veratown {
                         DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
                     )
                         ? this.container.get<
-                              AppearanceActionService<API_Character>
+                              AppearanceActionService<
+                                  API_Character,
+                                  readonly BC_AppearanceItem[]
+                              >
                           >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
                         : undefined,
                 ),
@@ -679,7 +691,10 @@ export class Veratown {
                         DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
                     )
                         ? this.container.get<
-                              AppearanceActionService<API_Character>
+                              AppearanceActionService<
+                                  API_Character,
+                                  readonly BC_AppearanceItem[]
+                              >
                           >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
                         : undefined,
                 ),
@@ -915,8 +930,18 @@ export class Veratown {
                         DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
                     )
                         ? this.container.get<
-                              AppearanceActionService<API_Character>
+                              AppearanceActionService<
+                                  API_Character,
+                                  readonly BC_AppearanceItem[]
+                              >
                           >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
+                        : undefined,
+                    this.container.has(
+                        DIServiceKeys.ACTION_LAYER_MOVEMENT_SERVICE,
+                    )
+                        ? this.container.get<
+                              MovementActionService<API_Character>
+                          >(DIServiceKeys.ACTION_LAYER_MOVEMENT_SERVICE)
                         : undefined,
                 ),
         );
@@ -1014,7 +1039,10 @@ export class Veratown {
                         DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE,
                     )
                         ? this.container.get<
-                              AppearanceActionService<API_Character>
+                              AppearanceActionService<
+                                  API_Character,
+                                  readonly BC_AppearanceItem[]
+                              >
                           >(DIServiceKeys.ACTION_LAYER_APPEARANCE_SERVICE)
                         : undefined,
                 ),
