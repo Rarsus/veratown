@@ -1333,13 +1333,14 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             (layer) => current.has(layer) === hidden,
         );
         if (alreadySatisfied) {
-            return localNoOpResult(
-                context,
-                "appearance.setHiddenLayers",
-                startedAt,
-                startedAt,
-                before,
-                policy.requireServerConfirmation === true,
+            return createActionResult(
+                "already_satisfied",
+                createActionMetadata(
+                    context,
+                    "appearance.setHiddenLayers",
+                    startedAt,
+                ),
+                { value: toObservation(before, startedAt), retryable: false },
             );
         }
 

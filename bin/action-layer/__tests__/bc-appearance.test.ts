@@ -675,6 +675,29 @@ test("merges hidden layers and confirms the desired state from a peer sync", asy
     assert.equal(connector.listenerCount(), 0);
 });
 
+test("accepts an already-hidden local no-op without claiming server authority", async () => {
+    const connector = new FakeConnector();
+    const runtime = makeConnectedCharacter(connector, [
+        {
+            Group: "ItemScript",
+            Name: "Script",
+            Property: { Hide: ["BodyUpper", "ArmsLeft"] },
+        },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({ now: () => 100 });
+
+    const result = await adapter.setHiddenLayers(
+        runtime as never,
+        ["BodyUpper", "ArmsLeft"],
+        true,
+        confirmedPolicy("hidden-layers-already-satisfied"),
+    );
+
+    assert.equal(result.status, "already_satisfied");
+    assert.equal(result.confirmationAuthority, undefined);
+    assert.equal(connector.listenerCount(), 0);
+});
+
 test("does not confirm from an appearance packet before the character cache updates", async () => {
     const connector = new FakeConnector();
     const observer = new FakeConnector("observer", 12);
