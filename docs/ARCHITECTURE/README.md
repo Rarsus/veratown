@@ -7,6 +7,7 @@ This section contains the system design, architectural decisions, and design pat
 - **[Headless Action Layer](ACTION_LAYER_OVERVIEW.md)** - Layered action contracts, adapters, workflows, and migration status
 - **[Action-Layer Execution Plan](ACTION_LAYER_EXECUTION_PLAN.md)** - Current state, per-area next steps, gates, and one-cycle verification
 - **[Migrated Features Registry](MIGRATED_FEATURES.md)** - Feature ownership, rollout status, and evidence ledger
+- **[Bunny Release Observer Reconciliation](BUNNY_RELEASE_OBSERVER_RECONCILIATION_PLAYBOOK.md)** - Runbook for stale appearance cache, peer observation, and safe Bunny release recovery
 - **[Communication Actions](COMMUNICATION_ACTIONS.md)** - Communication delivery semantics and opt-in migration slice
 - **[Position Observation and Movement](POSITION_OBSERVATION_MOVEMENT.md)** - Position state ownership, reconnect epochs, and movement boundary
 - **[Map Trigger Lifecycle](MAP_TRIGGER_LIFECYCLE.md)** - Scoped trigger registration, cleanup handles, and room/map lifecycle
