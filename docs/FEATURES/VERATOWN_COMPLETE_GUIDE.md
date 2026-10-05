@@ -133,17 +133,19 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 **Flow**:
 
 1. Enter cage entry tile → Receive detailed consent notice
-2. Step onto cage → Auto-equipped with `FuturisticCrate` (locked with timer)
+2. Step onto cage → `FuturisticCrate` is action-dispatched with a Safeword lock
 3. Move around inside (or outside) → Cage timer continues
-4. Timer expires → Crate removed, release notice sent
+4. Persisted expiry is reached → Crate removal is action-dispatched; cage state
+   and release notice complete after same-room server confirmation
 
 **Details**:
 
 - **Cage 1**: 5 minute lock
 - **Cage 2**: 10 minute lock
 - **Cage 3**: Random 5-15 minute lock
-- **Lock**: `TimerPasswordPadlock` with password `"LOVEVERA"`
+- **Lock**: `SafewordPadlock`; duration is persisted separately from the lock
 - **Monitoring**: Info screen shows all cage occupants and remaining time
+- **Confirmation**: an unconfirmed removal is not blindly retried
 
 **Code**: `bin/games/veratown/cageSystem.ts`
 
@@ -153,15 +155,19 @@ Veratown+ uses **3 optional bot connections** to avoid conflicts and appearance 
 
 **Flow**:
 
-1. Step onto kennel → Equip `Kennel` device (door open)
-2. After 5 seconds → Door closes if still wearing
-3. Leave kennel tile → Door remains (no auto-unlock command yet)
+1. Step onto kennel → `Kennel` device is action-dispatched with the door open
+2. After 5 seconds → A confirmed property action closes the door if still worn
+3. `/bot kennel lock <character> <minutes>` applies a confirmed Safeword lock
+4. `/bot kennel escape` removes the device and finalizes the session after
+   confirmed server appearance
 
 **Details**:
 
-- **Not enforced**: Purely roleplay - players can equip/remove
-- **Door control**: Closes automatically after 5s, can be reopened manually
-- **Status**: No built-in commands yet for manual door control
+- **Lifecycle**: Kennel appearance actions require same-room server confirmation
+- **Door control**: Closes automatically after 5s; there is no manual door-open
+  command
+- **Commands**: `lock` is restricted to a higher-level sender; `escape` is
+  available to the character wearing the device
 
 **Code**: `bin/games/veratown/kennelSystem.ts`
 

@@ -1,10 +1,12 @@
 # Bunny punishment (Veratown park)
 
 When a character steps on one of the park's bunnies (`BUNNY_POSITIONS` in
-[`veratown.ts`](veratown.ts)), the bot punishes them by force-adding a random
-rope restraint "outfit" plus a wooden sign, then whispers an explanation.
-This file documents every setting that controls that punishment and how to
-change it. All settings live in `bin/games/veratown.ts`.
+`bin/games/veratown/veratownConfig.ts`), Bunny Park selects a restraint
+configuration, applies its pieces through `AppearanceActionService`, and
+reports success only after the appearance action is confirmed. The current
+configuration applies a Heavy Yoke and Heavy Spreader Metal; it does not add a
+WoodenSign. The feature workflow, durable artifact, expiry, and release remain
+owned by `BunnyPunishmentService`.
 
 ## Where a bunny can be stepped on
 
@@ -19,37 +21,46 @@ const BUNNY_POSITIONS: ChatRoomMapPos[] = [
 Add/remove `{ X, Y }` entries to change which map tiles count as "stepping
 on a bunny".
 
-## Rope color and craft text
+## Restraint color and craft text
 
 ```ts
 const BUNNY_ROPE_COLOR = "#FF69B4"; // bright pink
 const BUNNY_ROPE_CRAFT_DESCRIPTION = "Created by a Bunny hater";
 ```
 
-Every rope/restraint item added as part of a bunny punishment is forced to
+Every restraint item added as part of a bunny punishment is forced to
 `BUNNY_ROPE_COLOR` (any hex color string, e.g. `"#FF0000"` for red) and
 gets a crafted description of `BUNNY_ROPE_CRAFT_DESCRIPTION` (shown when the
-item is inspected in-game). Change either constant to change the look/flavor
-text of every bunny rope at once.
+item is inspected in-game). Change either constant to change the look or flavor
+text of every configured Bunny restraint.
 
 ## Restraint configurations
 
 ```ts
 const BUNNY_RESTRAINT_CONFIGS: BunnyRestraintConfig[] = [
     {
-        name: "Classic Boxtie",
+        name: "Heavy Yoke and Spreader",
         pieces: [
-            { group: "ItemArms", asset: "HempRope", extendedType: "BoxTie" },
-            { group: "ItemLegs", asset: "HempRope", extendedType: "Frogtie" },
+            {
+                group: "ItemArms",
+                asset: "HeavyYoke",
+                lockType: "SafewordPadlock",
+            },
+            {
+                group: "ItemFeet",
+                asset: "HeavySpreaderMetal",
+                extendedType: "Wide",
+                lockType: "SafewordPadlock",
+            },
         ],
     },
-    // ...more configs
 ];
 ```
 
-Each time someone steps on a bunny, **one config is picked at random** from
-`BUNNY_RESTRAINT_CONFIGS` and every `piece` in it is added to the character.
-A "piece" is:
+Each time someone steps on a bunny, one configuration is selected from
+`BUNNY_RESTRAINT_CONFIGS` and its pieces are added as separate appearance
+actions. The action adapter applies extended types, color, craft text, and
+Safeword locks from the typed item options. A "piece" is:
 
 - `group`: the BC item slot/group being filled (e.g. `"ItemArms"`,
   `"ItemLegs"`, `"ItemFeet"`, `"ItemPelvis"` (thighs/crotch), `"ItemTorso"`,
@@ -60,6 +71,8 @@ A "piece" is:
   tie style, for items that support it (e.g. `"BoxTie"`, `"Frogtie"`). Leave
   this out for items that don't have tie-type variants (feet/torso/neck
   ropes below don't).
+- `lockType` (optional): a consent lock type, currently `SafewordPadlock` or
+  `ExclusivePadlock`.
 
 ### Adding/removing/editing configurations
 
@@ -70,53 +83,30 @@ A "piece" is:
 - **Change the odds**: configs are picked with equal probability from the
   array; add the same config object twice (or more) to make it more likely
   to be picked.
-- **Change a body part's tie style**: edit the `extendedType` of a piece.
-- **Change difficulty**: all pieces are currently added with
-  `SetDifficulty(20)`; edit the call in `onCharacterStepOnBunny` in
-  `veratown.ts` to change this for all pieces.
+- **Change an asset or tie style**: edit a piece's `group`, `asset`, or
+  `extendedType` in `bin/games/veratown/veratownConfig.ts`.
+- **Change the lock**: edit that piece's `lockType`.
 
-### Available rope assets by body part
+### Current restraint pieces
 
-| Body part (`group`)          | `asset`           | `extendedType` options |
-| ---------------------------- | ----------------- | ---------------------- |
-| Arms (`ItemArms`)            | `HempRope`        | e.g. `"BoxTie"`        |
-| Legs (`ItemLegs`)            | `HempRope`        | e.g. `"Frogtie"`       |
-| Feet (`ItemFeet`)            | `HempRope`        | none                   |
-| Thighs/crotch (`ItemPelvis`) | `HempRope`        | none                   |
-| Torso (`ItemTorso`)          | `HempRopeHarness` | none                   |
-| Neck (`ItemNeck`)            | `NeckRope`        | none                   |
+| Body part (`group`) | `asset`              | `extendedType` | Lock              |
+| ------------------- | -------------------- | -------------- | ----------------- |
+| Arms (`ItemArms`)   | `HeavyYoke`          | none           | `SafewordPadlock` |
+| Feet (`ItemFeet`)   | `HeavySpreaderMetal` | `Wide`         | `SafewordPadlock` |
 
-These are just the rope-family assets used by the current configs above -
-any other asset name that exists for a given group in the game's asset data
-(`src/bcdata/female3DCG.js`) can also be used as a `piece.asset`.
+Other asset/group combinations can be added only when the target asset is
+valid for that BC group and passes the action adapter's permission checks.
 
-## Wooden sign
+## Action confirmation and persistence
 
-After the restraints are applied, a `WoodenSign` (`ItemMisc`) is also added
-with two lines of text. `WoodenSign` is a `text` extended item with a maximum
-of 12 characters per line and a dynamic after-draw hook, so both properties
-must be present for the sign to render and remain visible after synchronization:
+Every restraint add and release is dispatched through the shared appearance
+action service and requests server confirmation. Success requires an
+authoritative appearance snapshot received by the actor or a same-room peer
+connector; the confirmed snapshot is passed to the Bunny state synchronizer.
+If a dispatch is unconfirmed, Bunny does not blindly retry it or create/close
+the durable punishment artifact as though it succeeded.
 
-```ts
-sign.setProperty("Text", "I step on");
-sign.setProperty("Text2", "Bunnies");
-```
-
-The punishment verification checks the bundle for the sign and checks both
-render text properties, not just the item name. If synchronization removes or
-normalizes the sign, the punishment is rolled back and reported as a failure.
-
-## Retention and lifecycle diagnostics
-
-Successful punishment writes a durable `bunnyPunishmentArtifact` containing the
-member, operation ID, sign identity/text, application time, and the
-`explicit_cleanup_only` policy. Live appearance synchronization records
-before/after item diffs, including `ItemMisc/WoodenSign` removal, replacement,
-and visibility changes. Unexpected changes are marked degraded and include an
-`unknown_external_mutation` reason when no feature operation is available.
-
-Only an explicitly attributed cleanup (for example, release stripping the
-sign) may transition the artifact to `cleaned` and emits
-`bunny_sign_cleanup`. Other systems must not silently replace the `ItemMisc`
-slot; their next synchronization emits the structured bunny sign lifecycle
-event and preserves the before/after diagnostic evidence.
+The durable `bunnyPunishmentArtifact` tracks restraint pieces, operation ID,
+application/expiry, lock policy, and cleanup status. Room confirmation means
+the appearance propagated in the room; durable artifact/profile writes remain
+the responsibility of the Bunny workflow and persistence services.

@@ -21,8 +21,6 @@ import type {
 import { CommandSystemMessageFeatureSystem } from "../shared/commandSystemMessageFeatureSystem";
 import type { GameStateMutationService } from "../shared/gameStateMutationService";
 import type { UnifiedCharacterStore } from "../shared/unifiedCharacterStore";
-import { syncAppearanceMutation } from "./shared/appearanceSync";
-import { applyConsentPadlock } from "../shared/consentPadlock";
 import type { KennelSystem } from "./kennelSystem";
 import {
     KENNEL_DOOR_CLOSE_DELAY_MS,
@@ -36,9 +34,8 @@ import {
  * - `/bot kennel lock <character> <minutes>` - Lock a higher-level character in the kennel
  * - `/bot kennel escape` - Unlock the kennel device and leave
  *
- * Follows the architectural principle of command handlers delegating state
- * mutations through GameStateMutationService and appearance changes through
- * syncAppearanceMutation.
+ * Command handlers delegate containment state and appearance changes to
+ * GameStateMutationService and KennelSystem's action-layer operations.
  */
 export class KennelCommandController extends CommandSystemMessageFeatureSystem {
     public constructor(
@@ -200,24 +197,9 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
                     "Active kennel session is already timed or unavailable",
                 );
             }
-            await syncAppearanceMutation(
+            await this.kennelSystem.lockExistingKennel(
                 target,
-                () => {
-                    const kennel =
-                        target.Appearance.InventoryGet("ItemDevices");
-                    if (!kennel || kennel.Name !== "Kennel") {
-                        throw new Error(
-                            "Kennel device unavailable during lock",
-                        );
-                    }
-
-                    applyConsentPadlock(kennel as any, {
-                        memberNumber: sender.MemberNumber,
-                    });
-                },
-                50,
-                undefined,
-                { throwOnSyncFailure: true },
+                sender.MemberNumber,
             );
 
             this.logger.info("Kennel locked via command", {
@@ -268,33 +250,7 @@ export class KennelCommandController extends CommandSystemMessageFeatureSystem {
         try {
             this.kennelSystem.markEscaped(sender.MemberNumber);
 
-            // Remove the kennel device
-            await syncAppearanceMutation(
-                sender,
-                () => {
-                    const kennel =
-                        sender.Appearance.InventoryGet("ItemDevices");
-                    if (kennel?.Name === "Kennel") {
-                        sender.Appearance.RemoveItem("ItemDevices" as any);
-                    }
-                },
-                50,
-                undefined,
-                { throwOnSyncFailure: true },
-            );
-
-            // Close the kennel session if one exists
-            if (this.mutationService) {
-                const activeSession =
-                    await this.mutationService.getActiveKennelSession?.(
-                        sender.MemberNumber,
-                    );
-                if (activeSession) {
-                    await this.mutationService.exitKennel?.(
-                        sender.MemberNumber,
-                    );
-                }
-            }
+            await this.kennelSystem.freeCharacterIfKenneled(sender);
 
             this.logger.info("Character escaped kennel via command", {
                 memberNumber: sender.MemberNumber,

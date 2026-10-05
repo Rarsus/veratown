@@ -737,6 +737,29 @@ test("KennelSystem recovers a live Kennel device outside the tile", async () => 
     assert.deepEqual(mutations.entries, [11]);
 });
 
+test("KennelSystem applies a timed lock through the confirmed appearance action", async () => {
+    const created = createCharacter(24);
+    created.character.Appearance.AddItem({});
+    const { connector } = createConnector([created.character]);
+    const system = new KennelSystem(
+        connector as any,
+        undefined,
+        undefined,
+        async () => {},
+        true,
+        true,
+        undefined,
+        new ActionLayerRolloutController({ featureAppearanceEnabled: true }),
+    );
+
+    const appearance = await system.lockExistingKennel(created.character, 42);
+
+    assert.equal(created.device.Property.LockedBy, "SafewordPadlock");
+    assert.equal(created.device.Property.LockMemberNumber, 42);
+    assert.equal(typeof created.device.Property.Password, "string");
+    assert.equal(appearance[0].Property?.LockedBy, "SafewordPadlock");
+});
+
 test("KennelSystem releases an expired timed session during recovery", async () => {
     const created = createCharacter(23);
     created.character.MapPos = { X: 1, Y: 1 };

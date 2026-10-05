@@ -34,11 +34,13 @@ pose (`SetActivePose(["Kneel"])`) whenever the room is (re)created or
 `PARK` (a `MapRegion`) covers a rabbit sanctuary. Entering it
 (`onCharacterEnterPark`) whispers a warning not to step on the bunnies.
 Stepping on one of the three `BUNNY_POSITIONS` tiles
-(`onCharacterStepOnBunny`) whispers a punishment notice, adds a "I step on /
-Bunnies" `WoodenSign`, and applies one randomly chosen rope restraint
-"outfit" from `BUNNY_RESTRAINT_CONFIGS` (unlocked - just added items). See
-[`bin/games/bunny.md`](../bin/games/bunny.md) for the exhaustive
-add/remove/reconfigure guide for this feature specifically.
+(`onCharacterStepOnBunny`) whispers a punishment notice and applies the
+selected restraint configuration from `BUNNY_RESTRAINT_CONFIGS` in
+`veratownConfig.ts` (currently Heavy Yoke and Heavy Spreader Metal; no
+WoodenSign is added). Restraint add and release go through
+`AppearanceActionService` and require peer/server appearance confirmation
+before Bunny reports or persists success. See [`bunny.md`](../bunny.md) for
+configuration and lifecycle details.
 
 ### Futuristic Crate cages (1-3)
 
@@ -53,15 +55,16 @@ Flow:
    detailed in-character "containment protocol" consent/rules notice
    naming the specific cage and its estimated duration.
 2. Stepping onto the cage tile itself (`onCharacterEnterCage`) - after a
-   brief `wait(100)` re-check that they're still standing there - equips a
-   `FuturisticCrate` (`ItemDevices`), crafts it, configures its `TypeRecord`
-   (window size, etc) and `Mode: "Deny"`, then locks it with a
-   `TimerPasswordPadlock` (password `CRATE_LOCK_PASSWORD = "LOVEVERA"`,
-   `RemoveItem: true`, `ShowTimer: true`).
+   brief `wait(100)` re-check that they're still standing there - adds a
+   `FuturisticCrate` (`ItemDevices`) through `AppearanceActionService`, with
+   the configured craft, `TypeRecord`, `Mode: "Deny"`, and Safeword padlock.
+   Cage duration/expiry is persisted as containment state rather than inferred
+   from a local appearance cache.
 3. Tracks the occupant in `cagedCharacters: Map<memberNumber, { character, cageName }>`.
-4. Loops re-reading the crate's live `RemoveTimer` (`getCageLockExpiry()`)
-   every up-to-10s until it elapses (so an external timer extension/shortening
-   is respected), then removes the crate and whispers a release notice.
+4. Waits until the authoritative persisted expiry, then requests a typed crate
+   removal. It exits containment and whispers release only after a same-room
+   peer/server appearance sync confirms the device slot is empty. An
+   unconfirmed dispatch is not repeated blindly.
 
 `CAGE_INFORMATION_SCREEN` is a `MapRegion` where entering
 (`onCharacterViewCageInformation`) whispers current occupancy/remaining time
@@ -70,16 +73,20 @@ for all three cages (pruning any that are no longer actually locked first).
 ### Kennels
 
 Two `KENNEL_POSITIONS` tiles. Stepping on one (`onCharacterEnterKennel`)
-equips a `Kennel` with the door open (`TypeRecord: { d: 0, p: 1 }`), waits
-`KENNEL_DOOR_CLOSE_DELAY_MS` (5s), then closes the door (`d: 1`) if the
-character is still wearing it. The `KennelSystem` owns the complete lifecycle:
+adds a `Kennel` with the door open (`TypeRecord: { d: 0, p: 1 }`) through
+`AppearanceActionService`, waits `KENNEL_DOOR_CLOSE_DELAY_MS` (5s), then uses a
+confirmed extended-property action to close the door (`d: 1`) if the character
+is still wearing it. Removal and expiry release also use confirmed appearance
+actions. The `KennelSystem` owns the complete lifecycle:
 it observes both tile exit and `ItemDevices/Kennel` removal, and finalizes a
 session only after the character is outside the kennel and no longer wearing
 the device. The same reconciliation runs after location reload/reconnect,
 while `GameStateMutationService.exitKennel()` and `UnifiedCharacterStore`
 remain the single persistence, event, aggregate-time, and audit boundary.
-**Not locked** - the device is a roleplay prop, and administrative release
-still uses the shared transition.
+`/bot kennel lock <character> <minutes>` applies a timed Safeword lock when the
+sender's progression level is higher than the target's. `/bot kennel escape`
+lets the wearer remove the device. Both commands delegate appearance changes
+to confirmed `KennelSystem` actions; no door-open command is provided.
 
 ### Showers
 

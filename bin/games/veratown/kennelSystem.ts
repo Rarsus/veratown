@@ -1019,8 +1019,45 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             const exited = await this.mutationService?.exitKennel(
                 character.MemberNumber,
             );
-            if (exited) await this.stateSync?.(character);
+            if (exited) {
+                await this.stateSync?.(character);
+                this.logger.info("Kennel session exited", {
+                    memberNumber: character.MemberNumber,
+                });
+            }
         }
+    }
+
+    public async lockExistingKennel(
+        character: API_Character,
+        lockMemberNumber: number,
+    ): Promise<readonly BC_AppearanceItem[]> {
+        const appearance = await this.executeAppearanceAction(
+            character,
+            "apply timed Kennel lock",
+            (service, policy) =>
+                service.lockExistingItem(
+                    character,
+                    { group: "ItemDevices", asset: "Kennel" },
+                    {
+                        type: "SafewordPadlock",
+                        memberNumber: lockMemberNumber,
+                    },
+                    policy,
+                ),
+        );
+        const kennel = appearance.find(
+            (item) => item.Group === "ItemDevices" && item.Name === "Kennel",
+        );
+        if (
+            kennel?.Property?.LockedBy !== "SafewordPadlock" ||
+            typeof kennel.Property.Password !== "string"
+        ) {
+            throw new AppearanceConfirmationError(
+                "Timed Kennel lock was not present in the confirmed appearance",
+            );
+        }
+        return appearance;
     }
 
     /**

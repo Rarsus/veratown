@@ -245,7 +245,7 @@ export interface BunnyRestraintConfig {
 // The single universal punishment for stepping on a bunny.
 export const BUNNY_RESTRAINT_CONFIGS: BunnyRestraintConfig[] = [
     {
-        name: "Heavy Yoke and Neck Sign",
+        name: "Heavy Yoke and Spreader",
         pieces: [
             {
                 group: "ItemArms",

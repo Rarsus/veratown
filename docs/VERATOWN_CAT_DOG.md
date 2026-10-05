@@ -4,6 +4,13 @@ This document describes the database-backed `cat` and `dog` tile features in Ver
 These features are implemented by `bin/games/veratown/catDogSystem.ts` and are
 loaded and reloaded by the Veratown orchestrator.
 
+Bondage and vibrator appearance mutations use the shared
+`AppearanceActionService` with server confirmation required. The BC adapter
+accepts a matching server-originated appearance sync observed by the actor or a
+same-room secondary bot connector. The confirmed snapshot, not an optimistic
+local mutation, is the evidence used to report the action as complete. Room
+propagation is not itself proof that the durable profile write has completed.
+
 ## How It Works
 
 A `cat` or `dog` location places a tile at the location's `x` and `y` coordinates.
@@ -155,6 +162,11 @@ Items are configured per-piece with optional extended types and colors.
 - `color`: Default color for all pieces (hex code, default: "#8B4513")
 - `craftDescription`: Craft description for the items (default: "Pet bondage")
 
+Each configured piece is added as a separate appearance action with its
+extended type, difficulty, color, craft description, and action policy. The
+action path is fail-closed: a disabled rollout, missing service, blocked item,
+or unconfirmed server result does not fall back to `Appearance.AddItem()`.
+
 **Example:**
 
 ```json
@@ -205,6 +217,12 @@ The character receives a whisper like:
 ```
 *The cat cuddles you and by mistake triggers your device... to increase in intensity dramatically*
 ```
+
+If no supported vibration control is equipped, CatDog returns quietly and
+sends no notification. When a control is found, its supported extended
+properties are changed through the appearance action service; notification
+text is selected from the confirmed outcome and is not sent for an unconfirmed
+mutation as though it succeeded.
 
 **Requirements for vibrator escalation:**
 
