@@ -1,7 +1,7 @@
 ---
 title: "Veratown Action-Layer Migration Handoff"
 date: "2026-10-05"
-status: "Appearance paths migrated; documentation and issue review complete; validation passed; sync pending"
+status: "Complete; pushed to main as aa6ff90"
 ---
 
 # Veratown Action-Layer Migration Handoff
@@ -13,8 +13,8 @@ migration and its documentation/issue closeout.
 
 - Branch: `main`
 - Last synced commit before this closeout: `055d6c6`
-- Local closeout changes include the Kennel command action routing, its
-  regression test, the Bunny config label, and maintained documentation.
+- Closeout commit: `aa6ff90` (`refactor(veratown): complete appearance action
+closeout`), pushed to `origin/main`.
 - Earlier synced milestones: `7956417` (Bunny/CatDog action routing) and
   `aed4f69` (Cage action routing and `lockExistingItem`).
 
