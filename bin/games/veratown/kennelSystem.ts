@@ -673,7 +673,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                                         description: `${character} is relaxing in their Kennel`,
                                     },
                                     properties: {
-                                        typeRecord: { d: 1, p: 1 },
+                                        typeRecord: { d: 0, p: 1 },
                                     },
                                 },
                             },
