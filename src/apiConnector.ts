@@ -248,6 +248,24 @@ function appearancePacketDiagnostic(
     };
 }
 
+export function appearanceRoomSyncDiagnostics(
+    connectionId: string,
+    response: Pick<
+        ServerChatRoomSyncMessage,
+        "Character" | "SourceMemberNumber"
+    >,
+): AppearancePacketDiagnostic[] {
+    return response.Character.map((character) =>
+        appearancePacketDiagnostic(
+            connectionId,
+            "inbound",
+            character.MemberNumber,
+            character.Appearance,
+            response.SourceMemberNumber,
+        ),
+    );
+}
+
 function appearanceItemUpdateDiagnostic(
     connectionId: string,
     direction: AppearanceItemUpdateDiagnostic["direction"],
@@ -636,6 +654,12 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
             this._chatRoom = new API_Chatroom(chatRoom, this, this._player!);
         } else {
             this._chatRoom.update(chatRoom);
+        }
+        for (const diagnostic of appearanceRoomSyncDiagnostics(
+            this.connectionId,
+            resp,
+        )) {
+            this.emit("AppearanceSyncReceived", diagnostic);
         }
         const roomData = { ...resp };
         // @ts-expect-error not part of RoomDefinition

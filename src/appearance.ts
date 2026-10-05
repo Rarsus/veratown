@@ -391,6 +391,16 @@ export class AppearanceType {
         this.data[idx] = item;
     }
 
+    public reconcileItemData(item: BC_AppearanceItem): void {
+        this.data = [
+            ...this.data.filter((current) => current.Group !== item.Group),
+            structuredClone(item),
+        ];
+        this._items = this.data.map(
+            (current) => new API_AppearanceItem(this.character, current),
+        );
+    }
+
     public allItems(): API_AppearanceItem[] {
         return this._items;
     }

@@ -76,6 +76,19 @@ export function calculateBunnyOffenceDuration(offenceNumber: number): {
     };
 }
 
+function bunnyPiecePresent(
+    appearance: readonly BC_AppearanceItem[],
+    piece: string,
+): boolean {
+    const separator = piece.indexOf("/");
+    if (separator < 1) return false;
+    const group = piece.slice(0, separator);
+    const asset = piece.slice(separator + 1);
+    return appearance.some(
+        (item) => item.Group === group && item.Name === asset,
+    );
+}
+
 export function validateBunnyRestraintConfig(
     config: BunnyRestraintConfig,
 ): string[] {
@@ -671,14 +684,23 @@ export class BunnyPunishmentWorkflow {
                 "Bunny release requires the appearance action service",
             );
         }
-        let confirmedAppearance = character.Appearance.MakeAppearanceBundle();
-        let verified = false;
+        let releaseArtifact = artifact;
+        const confirmedPieces = new Set(
+            (artifact.releaseConfirmedPieces ?? []).filter((piece) =>
+                artifact.restraintPieces.includes(piece),
+            ),
+        );
+        let verified = artifact.restraintPieces.every((piece) =>
+            confirmedPieces.has(piece),
+        );
         for (let attempt = 0; attempt < BUNNY_RELEASE_MAX_ATTEMPTS; attempt++) {
             let retryableFailure = false;
+            let terminalFailure = false;
             for (const [
                 pieceIndex,
                 piece,
             ] of artifact.restraintPieces.entries()) {
+                if (confirmedPieces.has(piece)) continue;
                 const [group, asset] = piece.split("/");
                 const result = await appearanceService.remove(
                     character,
@@ -697,11 +719,152 @@ export class BunnyPunishmentWorkflow {
                     },
                 );
                 if (
-                    result.status === "completed" &&
+                    (result.status === "completed" ||
+                        result.status === "already_satisfied") &&
                     result.confirmationAuthority &&
                     Array.isArray(result.observed)
                 ) {
-                    confirmedAppearance = [...result.observed];
+                    const observedAppearance = [...result.observed];
+                    if (bunnyPiecePresent(observedAppearance, piece)) {
+                        terminalFailure = true;
+                        this.logger.warn(
+                            "Bunny release confirmation still contains the target restraint",
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId,
+                                piece,
+                            },
+                        );
+                        break;
+                    }
+
+                    const nextConfirmedPieces = new Set(confirmedPieces);
+                    for (const confirmedPiece of nextConfirmedPieces) {
+                        if (
+                            bunnyPiecePresent(
+                                observedAppearance,
+                                confirmedPiece,
+                            )
+                        ) {
+                            nextConfirmedPieces.delete(confirmedPiece);
+                        }
+                    }
+                    nextConfirmedPieces.add(piece);
+                    if (!this.stateSync) {
+                        if (
+                            workflowState &&
+                            this.actionLayer?.workflowRecovery
+                        ) {
+                            await this.actionLayer.workflowRecovery.fail(
+                                workflowState,
+                            );
+                        }
+                        this.logger.error(
+                            "Bunny release cannot persist the confirmed appearance projection",
+                            undefined,
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId,
+                            },
+                        );
+                        return;
+                    }
+
+                    const releaseContext: AppearanceMutationContext = {
+                        operationId,
+                        correlationId: `appearance:${operationId}`,
+                        timestamp: Date.now(),
+                        source: "bunny",
+                        reason: "bunny_punishment_released",
+                        releaseCause: "timer",
+                        expectedAppearance: observedAppearance,
+                        observedAppearance,
+                        verificationStatus: "confirmed",
+                    };
+                    try {
+                        await this.stateSync(
+                            character,
+                            releaseContext,
+                            observedAppearance,
+                        );
+                    } catch (error) {
+                        if (
+                            workflowState &&
+                            this.actionLayer?.workflowRecovery
+                        ) {
+                            await this.actionLayer.workflowRecovery.fail(
+                                workflowState,
+                            );
+                        }
+                        this.logger.error(
+                            "Failed to persist peer-confirmed Bunny release appearance",
+                            error,
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId,
+                                piece,
+                            },
+                        );
+                        return;
+                    }
+
+                    if (!this.repository.updateArtifact) {
+                        if (
+                            workflowState &&
+                            this.actionLayer?.workflowRecovery
+                        ) {
+                            await this.actionLayer.workflowRecovery.fail(
+                                workflowState,
+                            );
+                        }
+                        this.logger.error(
+                            "Bunny release cannot persist per-piece confirmation progress",
+                            undefined,
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId,
+                                piece,
+                            },
+                        );
+                        return;
+                    }
+                    const progressedArtifact: BunnyPunishmentArtifact = {
+                        ...releaseArtifact,
+                        artifactVersion: releaseArtifact.artifactVersion + 1,
+                        releaseConfirmedPieces: artifact.restraintPieces.filter(
+                            (candidate) => nextConfirmedPieces.has(candidate),
+                        ),
+                    };
+                    try {
+                        await this.repository.updateArtifact(
+                            progressedArtifact,
+                            releaseArtifact.artifactVersion,
+                        );
+                    } catch (error) {
+                        if (
+                            workflowState &&
+                            this.actionLayer?.workflowRecovery
+                        ) {
+                            await this.actionLayer.workflowRecovery.fail(
+                                workflowState,
+                            );
+                        }
+                        this.logger.error(
+                            "Failed to persist Bunny release confirmation progress",
+                            error,
+                            {
+                                memberNumber: character.MemberNumber,
+                                operationId,
+                                piece,
+                            },
+                        );
+                        throw error;
+                    }
+                    releaseArtifact = progressedArtifact;
+                    confirmedPieces.clear();
+                    for (const confirmedPiece of nextConfirmedPieces) {
+                        confirmedPieces.add(confirmedPiece);
+                    }
                     continue;
                 }
                 if (
@@ -712,8 +875,6 @@ export class BunnyPunishmentWorkflow {
                     retryableFailure = true;
                     break;
                 }
-                retryableFailure = false;
-                verified = false;
                 if (result.status === "unconfirmed") {
                     if (workflowState && this.actionLayer?.workflowRecovery) {
                         await this.actionLayer.workflowRecovery.fail(
@@ -721,7 +882,7 @@ export class BunnyPunishmentWorkflow {
                         );
                     }
                     this.logger.warn(
-                        "Bunny release dispatched but remains unconfirmed; refusing to retry",
+                        "Bunny release remains unconfirmed; keeping the artifact active",
                         {
                             memberNumber: character.MemberNumber,
                             operationId,
@@ -731,40 +892,15 @@ export class BunnyPunishmentWorkflow {
                     );
                     return;
                 }
+                terminalFailure = true;
                 break;
             }
             if (retryableFailure) continue;
-            const releaseContext: AppearanceMutationContext = {
-                operationId,
-                correlationId: `appearance:${operationId}`,
-                timestamp: Date.now(),
-                source: "bunny",
-                reason: "bunny_punishment_released",
-                releaseCause: "timer",
-                expectedAppearance: [...confirmedAppearance],
-                observedAppearance: [...confirmedAppearance],
-                verificationStatus: "confirmed",
-            };
-            try {
-                await this.stateSync?.(
-                    character,
-                    releaseContext,
-                    confirmedAppearance,
-                );
-            } catch (error) {
-                this.logger.error(
-                    "Failed to persist peer-confirmed Bunny release appearance",
-                    error,
-                    { memberNumber: character.MemberNumber, operationId },
-                );
-            }
-            verified = artifact.restraintPieces.every((piece) => {
-                const [group, asset] = piece.split("/");
-                return !confirmedAppearance.some(
-                    (item) => item.Group === group && item.Name === asset,
-                );
-            });
-            break;
+            if (terminalFailure) break;
+            verified = artifact.restraintPieces.every((piece) =>
+                confirmedPieces.has(piece),
+            );
+            if (verified) break;
         }
         if (!verified) {
             if (workflowState && this.actionLayer?.workflowRecovery) {
@@ -785,23 +921,28 @@ export class BunnyPunishmentWorkflow {
                 await this.actionLayer.workflowRecovery.resume(workflowState);
         }
         const closedArtifact = {
-            ...artifact,
+            ...releaseArtifact,
             status,
             cleanedAt: Date.now(),
             cleanupReason: status,
+            artifactVersion: releaseArtifact.artifactVersion + 1,
         };
-        if (this.repository.updateArtifact) {
-            try {
-                await this.repository.updateArtifact(
-                    closedArtifact,
-                    artifact.artifactVersion,
-                );
-            } catch (error) {
-                if (workflowState && this.actionLayer?.workflowRecovery) {
-                    await this.actionLayer.workflowRecovery.fail(workflowState);
-                }
-                throw error;
+        if (!this.repository.updateArtifact) {
+            if (workflowState && this.actionLayer?.workflowRecovery) {
+                await this.actionLayer.workflowRecovery.fail(workflowState);
             }
+            throw new Error("Bunny release requires durable artifact updates");
+        }
+        try {
+            await this.repository.updateArtifact(
+                closedArtifact,
+                releaseArtifact.artifactVersion,
+            );
+        } catch (error) {
+            if (workflowState && this.actionLayer?.workflowRecovery) {
+                await this.actionLayer.workflowRecovery.fail(workflowState);
+            }
+            throw error;
         }
         if (workflowState && this.actionLayer?.workflowRecovery) {
             await this.actionLayer.workflowRecovery.complete(workflowState);

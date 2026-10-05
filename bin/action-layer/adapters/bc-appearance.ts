@@ -26,6 +26,7 @@ import {
 } from "../appearance-confirmation";
 import { AssetGet, getExtendedAssetDef } from "bc-bot";
 import type { API_Character, BC_AppearanceItem } from "bc-bot";
+import { createLogger } from "../../logging";
 
 export interface BCAppearanceAdapterOptions {
     readonly now?: () => number;
@@ -84,6 +85,7 @@ interface ConnectorEpochState {
 interface ConfirmationWaiter {
     readonly promise: Promise<ConfirmationWaitResult>;
     readonly cancel: () => void;
+    readonly observerConnectionIds: readonly string[];
 }
 
 type ConfirmationWaitResult =
@@ -92,6 +94,8 @@ type ConfirmationWaitResult =
           readonly observation: AppearanceObservation;
           readonly authority: AppearanceConfirmationAuthority;
           readonly appearance: readonly BC_AppearanceItem[];
+          readonly observerConnectionId: string;
+          readonly sourceMemberNumber: number;
       }
     | { readonly outcome: "timed_out"; readonly reason: string }
     | { readonly outcome: "disconnected"; readonly reason: string }
@@ -487,6 +491,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         object,
         ConnectorEpochState
     >();
+    private readonly logger = createLogger("BCAppearanceActionAdapter");
 
     public constructor(options: BCAppearanceAdapterOptions = {}) {
         this.now = options.now ?? Date.now;
@@ -528,6 +533,18 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         return connector;
     }
 
+    private observersFor(character: API_Character): BCConnectorEvents[] {
+        const connector = this.connectorFor(character);
+        const roomName = connector?.chatRoom?.Name;
+        if (!connector || roomName === undefined) return [];
+        return [...this.observationConnectors].filter(
+            (observer) =>
+                observer !== connector &&
+                observer.chatRoom?.Name === roomName &&
+                (observer.isConnected?.() ?? true),
+        );
+    }
+
     private epochFor(connector: BCConnectorEvents): number {
         const key = connector as object;
         const connectionId = connector.connectionId;
@@ -561,6 +578,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         timeoutMs: number,
         acceptUpdate?: (items: readonly BC_AppearanceItem[]) => boolean,
         acceptSnapshot?: (items: readonly BC_AppearanceItem[]) => boolean,
+        snapshotOnly = false,
+        diagnostics = false,
     ): ConfirmationWaiter {
         const connector = this.connectorFor(character);
         if (!connector) {
@@ -570,17 +589,16 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                     reason: "BC connector events are unavailable",
                 }),
                 cancel: () => undefined,
+                observerConnectionIds: [],
             };
         }
 
         const epoch = this.epochFor(connector);
         const actorMemberNumber = connector.Player?.MemberNumber;
         const roomName = connector.chatRoom?.Name;
-        const observers = [...this.observationConnectors].filter(
-            (observer) =>
-                observer !== connector &&
-                roomName !== undefined &&
-                observer.chatRoom?.Name === roomName,
+        const observers = this.observersFor(character);
+        const observerConnectionIds = observers.map(
+            (observer) => observer.connectionId ?? "unknown",
         );
         const key: AppearanceConfirmationKey = {
             operationId,
@@ -630,8 +648,29 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             items: readonly BC_AppearanceItem[],
             observedAt: number,
             authority: AppearanceConfirmationAuthority,
+            observerConnectionId: string,
+            sourceMemberNumber: number,
         ): void => {
-            if (observedAt < startedAt) return;
+            if (observedAt < startedAt) {
+                if (diagnostics) {
+                    this.logger.info(
+                        "Appearance peer packet rejected as stale",
+                        {
+                            operationId,
+                            action,
+                            memberNumber: character.MemberNumber,
+                            observerConnectionId,
+                            roomName,
+                            eventType: authority,
+                            sourceMemberNumber,
+                            packetTimestamp: observedAt,
+                            startedAt,
+                            predicateAccepted: false,
+                        },
+                    );
+                }
+                return;
+            }
             const containsTarget = target
                 ? items.some(
                       (item) =>
@@ -647,6 +686,24 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                       : action === "remove"
                         ? !containsTarget
                         : containsTarget && acceptUpdate?.(items) === true;
+            if (diagnostics) {
+                this.logger.info("Appearance peer confirmation evaluated", {
+                    operationId,
+                    action,
+                    memberNumber: character.MemberNumber,
+                    targetGroup: target?.group,
+                    targetAsset: target?.asset,
+                    actorConnectionId: connector.connectionId,
+                    observerConnectionId,
+                    roomName,
+                    eventType: authority,
+                    sourceMemberNumber,
+                    packetTimestamp: observedAt,
+                    targetPresent: containsTarget,
+                    predicateAccepted: accepted,
+                    authority,
+                });
+            }
             if (!accepted) return;
             const outcome = this.confirmationRegistry.confirm({
                 ...key,
@@ -658,6 +715,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                     observation: toObservation(items, observedAt),
                     authority,
                     appearance: [...items],
+                    observerConnectionId,
+                    sourceMemberNumber,
                 });
             }
         };
@@ -665,6 +724,9 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         for (const observer of observers) {
             const onItemUpdate = (diagnostic: any): void => {
                 if (
+                    snapshotOnly ||
+                    observer.chatRoom?.Name !== roomName ||
+                    observer.isConnected?.() === false ||
                     actorMemberNumber === undefined ||
                     diagnostic?.direction !== "inbound" ||
                     diagnostic.sourceMemberNumber !== actorMemberNumber ||
@@ -689,6 +751,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                         ? diagnostic.timestamp
                         : this.now(),
                     "room_item_broadcast",
+                    observer.connectionId ?? "unknown",
+                    diagnostic.sourceMemberNumber,
                 );
             };
             itemUpdateListeners.set(observer, onItemUpdate);
@@ -696,6 +760,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
 
             const onAppearanceSync = (diagnostic: any): void => {
                 if (
+                    observer.chatRoom?.Name !== roomName ||
+                    observer.isConnected?.() === false ||
                     actorMemberNumber === undefined ||
                     diagnostic?.direction !== "inbound" ||
                     diagnostic.sourceMemberNumber !== actorMemberNumber ||
@@ -710,6 +776,8 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                         ? diagnostic.timestamp
                         : this.now(),
                     "room_character_sync",
+                    observer.connectionId ?? "unknown",
+                    diagnostic.sourceMemberNumber,
                 );
             };
             appearanceSyncListeners.set(observer, onAppearanceSync);
@@ -759,7 +827,204 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                     outcome: "unavailable",
                     reason: "Appearance confirmation cancelled",
                 }),
+            observerConnectionIds,
         };
+    }
+
+    private async dispatchAbsentRemoval(
+        character: API_Character,
+        item: AppearanceItemIdentity,
+        policy: AppearanceMutationPolicy,
+        context: ActionContext,
+        startedAt: number,
+    ): Promise<BCAppearanceActionResult> {
+        const actionId = "appearance.remove";
+        const totalTimeoutMs = Math.min(
+            this.confirmationTimeoutMs,
+            Math.max(1, policy.timeoutMs),
+        );
+        const localAppearance = character.Appearance.MakeAppearanceBundle();
+        const localObservation = toObservation(localAppearance, this.now());
+        const observers = this.observersFor(character);
+
+        if (observers.length === 0) {
+            this.logger.warn(
+                "Appearance removal deferred without a peer observer",
+                {
+                    operationId: policy.operationId,
+                    memberNumber: character.MemberNumber,
+                    targetGroup: item.group,
+                    targetAsset: item.asset,
+                    path: "noop",
+                    mutation: "not_dispatched",
+                    observerCount: 0,
+                },
+            );
+            return createActionResult(
+                "unconfirmed",
+                createActionMetadata(context, actionId, startedAt),
+                {
+                    value: localObservation,
+                    reason: "No connected same-room observer is available for authoritative removal confirmation",
+                    retryable: false,
+                },
+            );
+        }
+
+        const wallStartedAt = Date.now();
+        const preflightTimeoutMs = Math.max(1, Math.floor(totalTimeoutMs / 2));
+        const preflightWaiter = this.waitForConfirmation(
+            character,
+            undefined,
+            `${policy.operationId}:peer-preflight`,
+            "confirm",
+            startedAt,
+            preflightTimeoutMs,
+            undefined,
+            () => true,
+            true,
+            true,
+        );
+        this.logger.info("Appearance removal preflight started", {
+            operationId: policy.operationId,
+            memberNumber: character.MemberNumber,
+            actorConnectionId: this.connectorFor(character)?.connectionId,
+            roomName: this.connectorFor(character)?.chatRoom?.Name,
+            observerCount: observers.length,
+            observerConnectionIds: observers.map(
+                (observer) => observer.connectionId ?? "unknown",
+            ),
+            targetGroup: item.group,
+            targetAsset: item.asset,
+            path: "noop",
+        });
+        const preflight = await preflightWaiter.promise;
+        if (preflight.outcome !== "accepted") {
+            return createActionResult(
+                "unconfirmed",
+                createActionMetadata(context, actionId, startedAt),
+                {
+                    value: localObservation,
+                    reason: `No fresh same-room peer appearance snapshot: ${preflight.reason}`,
+                    retryable: false,
+                },
+            );
+        }
+        const roomName = this.connectorFor(character)?.chatRoom?.Name;
+        if (roomName === undefined) {
+            return createActionResult(
+                "unconfirmed",
+                createActionMetadata(context, actionId, startedAt),
+                {
+                    value: localObservation,
+                    reason: "Actor room became unavailable during appearance reconciliation",
+                    retryable: false,
+                },
+            );
+        }
+        const peerAppearance = preflight.appearance;
+        const peerObservedAt = preflight.observation.observedAt;
+
+        const peerGroupItem = peerAppearance.find(
+            (candidate) => candidate.Group === item.group,
+        );
+        this.logger.info("Appearance removal peer snapshot evaluated", {
+            operationId: policy.operationId,
+            memberNumber: character.MemberNumber,
+            actorConnectionId: this.connectorFor(character)?.connectionId,
+            observerConnectionId: preflight.observerConnectionId,
+            observerCount: observers.length,
+            roomName,
+            eventType: preflight.authority,
+            sourceMemberNumber: preflight.sourceMemberNumber,
+            packetTimestamp: peerObservedAt,
+            targetGroup: item.group,
+            targetAsset: item.asset,
+            localTargetPresent: false,
+            peerSlotAsset: peerGroupItem?.Name,
+            peerTargetPresent: peerGroupItem?.Name === item.asset,
+            path: peerGroupItem ? "reconcile" : "noop",
+        });
+
+        if (!peerGroupItem) {
+            return createActionResult(
+                "already_satisfied",
+                createActionMetadata(
+                    context,
+                    actionId,
+                    startedAt,
+                    1,
+                    peerObservedAt,
+                ),
+                {
+                    value: toObservation(peerAppearance, peerObservedAt),
+                    observed: peerAppearance,
+                    retryable: false,
+                    confirmationAuthority: preflight.authority,
+                },
+            );
+        }
+        if (peerGroupItem.Name !== item.asset) {
+            return createActionResult(
+                "blocked",
+                createActionMetadata(
+                    context,
+                    actionId,
+                    startedAt,
+                    1,
+                    this.now(),
+                ),
+                {
+                    reason: `Peer appearance has a different item in ${item.group}; refusing group-scoped removal`,
+                    failureKind: "blocked",
+                    retryable: false,
+                },
+            );
+        }
+
+        const peerRemovalPlan = planAppearanceRemovals(
+            [toObservedItem(peerGroupItem)],
+            [item],
+            policy.preserveLockedItems !== false,
+        );
+        if (peerRemovalPlan.status === "blocked") {
+            return blocked(
+                context,
+                actionId,
+                peerRemovalPlan.conflicts[0]?.reason ??
+                    "Peer appearance removal is blocked",
+                this.now(),
+            );
+        }
+        if (
+            typeof (character.Appearance as any).reconcileItemData !==
+            "function"
+        ) {
+            return createActionResult(
+                "unconfirmed",
+                createActionMetadata(context, actionId, startedAt),
+                {
+                    value: localObservation,
+                    reason: "Appearance adapter cannot safely rebase the peer-confirmed target slot",
+                    retryable: false,
+                },
+            );
+        }
+
+        character.Appearance.reconcileItemData(peerGroupItem);
+        const remainingTimeoutMs = Math.max(
+            1,
+            totalTimeoutMs - (Date.now() - wallStartedAt),
+        );
+        return this.dispatchMutation(
+            character,
+            item,
+            { ...policy, timeoutMs: remainingTimeoutMs },
+            "remove",
+            () => character.Appearance.RemoveItem(item.group as never),
+            { ...context, deadlineAt: Date.now() + remainingTimeoutMs },
+            startedAt,
+        );
     }
 
     private async dispatchMutation(
@@ -784,6 +1049,9 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             startedAt,
             timeoutMs,
             acceptUpdate,
+            undefined,
+            false,
+            action === "remove" && policy.requireServerConfirmation === true,
         );
         const actionId =
             action === "update"
@@ -792,7 +1060,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
 
         try {
             apply();
-            if (action !== "update") {
+            if (action === "add") {
                 character.Appearance.flushUpdates();
                 if (policy.requireServerConfirmation) {
                     character.sendAppearanceUpdate();
@@ -1022,6 +1290,30 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                 [item],
                 policy.preserveLockedItems !== false,
             );
+            if (policy.requireServerConfirmation) {
+                const localTarget = before.find(
+                    (candidate) =>
+                        candidate.Group === item.group &&
+                        candidate.Name === item.asset,
+                );
+                this.logger.info("Appearance removal plan evaluated", {
+                    operationId: policy.operationId,
+                    memberNumber: character.MemberNumber,
+                    action: "remove",
+                    targetGroup: item.group,
+                    targetAsset: item.asset,
+                    localTargetPresent: localTarget !== undefined,
+                    localLockState: localTarget
+                        ? lockStateOf(localTarget)
+                        : "absent",
+                    path:
+                        plan.status === "blocked"
+                            ? "blocked"
+                            : plan.status === "already_satisfied"
+                              ? "noop"
+                              : "dispatched",
+                });
+            }
             const completedAt = this.now();
             if (plan.status === "blocked") {
                 return Promise.resolve(
@@ -1035,6 +1327,15 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                 );
             }
             if (plan.status === "already_satisfied") {
+                if (policy.requireServerConfirmation) {
+                    return this.dispatchAbsentRemoval(
+                        character,
+                        item,
+                        policy,
+                        context,
+                        startedAt,
+                    );
+                }
                 return Promise.resolve(
                     localNoOpResult(
                         context,
@@ -1042,7 +1343,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                         startedAt,
                         completedAt,
                         before,
-                        policy.requireServerConfirmation === true,
+                        false,
                     ),
                 );
             }
@@ -1065,6 +1366,15 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                 );
             }
             if (latestPlan.status === "already_satisfied") {
+                if (policy.requireServerConfirmation) {
+                    return this.dispatchAbsentRemoval(
+                        character,
+                        item,
+                        policy,
+                        context,
+                        startedAt,
+                    );
+                }
                 const completedAt = this.now();
                 return Promise.resolve(
                     localNoOpResult(
@@ -1073,7 +1383,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                         startedAt,
                         completedAt,
                         latest,
-                        policy.requireServerConfirmation === true,
+                        false,
                     ),
                 );
             }

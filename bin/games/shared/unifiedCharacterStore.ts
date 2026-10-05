@@ -2688,6 +2688,7 @@ export class UnifiedCharacterStore {
             artifactVersion: artifact.artifactVersion,
         };
         const startedAt = Date.now();
+        const updatedAt = Math.max(startedAt, artifact.appliedAt);
         this.logger.debug("Bunny artifact store stage started", {
             ...stageContext,
             stage: "getProfile",
@@ -2724,9 +2725,9 @@ export class UnifiedCharacterStore {
         const result = await this.profiles.updateOne(filter, {
             $set: {
                 "veratown.bunnyPunishmentArtifact": artifact,
-                "veratown.updatedAt": artifact.appliedAt,
-                updatedAt: artifact.appliedAt,
-                lastAccessedAt: artifact.appliedAt,
+                "veratown.updatedAt": updatedAt,
+                updatedAt,
+                lastAccessedAt: updatedAt,
                 lastAccessedBy: "veratown",
             },
             $inc: {

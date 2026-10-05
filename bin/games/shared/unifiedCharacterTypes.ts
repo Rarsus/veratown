@@ -230,6 +230,7 @@ export interface BunnyPunishmentArtifact {
     operationId: string;
     appliedAt: number;
     restraintPieces: string[];
+    releaseConfirmedPieces?: string[];
     offenceNumber: number;
     durationMs: number;
     expiresAt: number;

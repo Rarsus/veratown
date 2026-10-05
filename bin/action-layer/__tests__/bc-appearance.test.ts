@@ -57,6 +57,13 @@ function makeCharacter(initial: FakeItem[] = []) {
                 const index = items.findIndex((item) => item.Group === group);
                 if (index >= 0) items.splice(index, 1);
             },
+            reconcileItemData: (item: FakeItem) => {
+                const index = items.findIndex(
+                    (candidate) => candidate.Group === item.Group,
+                );
+                if (index >= 0) items[index] = structuredClone(item);
+                else items.push(structuredClone(item));
+            },
         },
         items,
         events,
@@ -420,6 +427,10 @@ test("does not treat locally satisfied mutations as server-confirmed", async () 
     const runtime = makeConnectedCharacter(connector, [
         { Group: "ItemArms", Name: "Gloves" },
     ]);
+    let removeUpdates = 0;
+    (runtime as any).sendItemUpdate = () => {
+        removeUpdates += 1;
+    };
     const adapter = new BCAppearanceActionAdapter({ now: () => 100 });
 
     const addResult = await adapter.add(
@@ -439,7 +450,206 @@ test("does not treat locally satisfied mutations as server-confirmed", async () 
     assert.equal(removeResult.confirmationAuthority, undefined);
     assert.equal(addResult.retryable, false);
     assert.equal(removeResult.retryable, false);
+    assert.equal(removeUpdates, 0);
     assert.equal(connector.listenerCount(), 0);
+});
+
+test("confirms an already-absent removal from a fresh peer snapshot", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const observer = new FakeConnector("observer", 12);
+    const runtime = makeConnectedCharacter(connector);
+    let removeUpdates = 0;
+    (runtime as any).sendItemUpdate = () => {
+        removeUpdates += 1;
+    };
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 200,
+        observationConnectors: [observer],
+    });
+
+    const pending = adapter.remove(
+        runtime as never,
+        { group: "ItemFeet", asset: "HeavySpreaderMetal" },
+        confirmedPolicy("confirm-absent-spreader"),
+    );
+    emitPeerAppearanceSync(observer, connector.Player.MemberNumber, {
+        ...makeCharacter(),
+        MemberNumber: 11,
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "already_satisfied");
+    assert.equal(result.confirmationAuthority, "room_character_sync");
+    assert.deepEqual(result.observed, []);
+    assert.equal(removeUpdates, 0);
+    assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
+});
+
+test("does not remove a peer replacement from a locally absent group", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const observer = new FakeConnector("observer", 12);
+    const runtime = makeConnectedCharacter(connector);
+    let removeUpdates = 0;
+    (runtime as any).sendItemUpdate = () => {
+        removeUpdates += 1;
+    };
+    const replacement = {
+        ...makeCharacter([{ Group: "ItemFeet", Name: "ReplacementBoots" }]),
+        MemberNumber: 11,
+    };
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+        observationConnectors: [observer],
+    });
+
+    const pending = adapter.remove(
+        runtime as never,
+        { group: "ItemFeet", asset: "HeavySpreaderMetal" },
+        confirmedPolicy("protect-replacement-boots"),
+    );
+    emitPeerAppearanceSync(
+        observer,
+        connector.Player.MemberNumber,
+        replacement,
+    );
+
+    const result = await pending;
+    assert.equal(result.status, "blocked");
+    assert.equal(removeUpdates, 0);
+    assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
+});
+
+test("keeps a dispatched removal unconfirmed when no peer responds", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "ItemFeet", Name: "HeavySpreaderMetal" },
+    ]);
+    let removeUpdates = 0;
+    runtime.Appearance.RemoveItem = (group: string) => {
+        const index = runtime.items.findIndex((item) => item.Group === group);
+        if (index >= 0) runtime.items.splice(index, 1);
+        removeUpdates += 1;
+    };
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 20,
+    });
+
+    const result = await adapter.remove(
+        runtime as never,
+        { group: "ItemFeet", asset: "HeavySpreaderMetal" },
+        confirmedPolicy("remove-spreader-without-peer"),
+    );
+
+    assert.equal(result.status, "unconfirmed");
+    assert.equal(result.confirmationAuthority, undefined);
+    assert.equal(removeUpdates, 1);
+    assert.deepEqual(runtime.items, []);
+    assert.equal(connector.listenerCount(), 0);
+});
+
+test("reconciles a locally absent removal with a group-scoped peer-confirmed update", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const observer = new FakeConnector("observer", 12);
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "Cloth", Name: "PlayerDress" },
+    ]);
+    const observedRuntime = makeConnectedCharacter(observer, [
+        { Group: "Cloth", Name: "PlayerDress" },
+        { Group: "ItemFeet", Name: "HeavySpreaderMetal" },
+    ]);
+    observer.setCharacter(11, observedRuntime);
+    const sentUpdates: Array<{ Group: string }> = [];
+    (runtime as any).sendItemUpdate = (update: { Group: string }) => {
+        sentUpdates.push(update);
+    };
+    runtime.Appearance.RemoveItem = (group: string) => {
+        const index = runtime.items.findIndex((item) => item.Group === group);
+        if (index >= 0) runtime.items.splice(index, 1);
+        (runtime as any).sendItemUpdate({ Group: group } as never);
+    };
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        confirmationTimeoutMs: 200,
+        observationConnectors: [observer],
+    });
+    const pending = adapter.remove(
+        runtime as never,
+        { group: "ItemFeet", asset: "HeavySpreaderMetal" },
+        {
+            ...confirmedPolicy("reconcile-absent-spreader"),
+            timeoutMs: 200,
+        },
+    );
+
+    observer.emit("AppearanceSyncReceived", {
+        direction: "inbound",
+        memberNumber: 11,
+        sourceMemberNumber: connector.Player.MemberNumber,
+        timestamp: 99,
+        appearance: observedRuntime.Appearance.MakeAppearanceBundle(),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(sentUpdates, []);
+
+    observer.emit("AppearanceItemUpdateReceived", {
+        direction: "inbound",
+        sourceMemberNumber: connector.Player.MemberNumber,
+        targetMemberNumber: 11,
+        group: "ItemFeet",
+        action: "remove",
+        timestamp: 100,
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(sentUpdates, []);
+
+    emitPeerAppearanceSync(
+        observer,
+        connector.Player.MemberNumber,
+        observedRuntime,
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(sentUpdates, [{ Group: "ItemFeet" }]);
+    assert.equal(runtime.events.includes("appearance"), false);
+    let settled = false;
+    void pending.then(() => {
+        settled = true;
+    });
+    observer.emit("AppearanceItemUpdateReceived", {
+        direction: "inbound",
+        sourceMemberNumber: connector.Player.MemberNumber,
+        targetMemberNumber: 11,
+        group: "ItemFeet",
+        action: "remove",
+        timestamp: 101,
+    });
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.equal(settled, false);
+
+    observedRuntime.items.splice(
+        observedRuntime.items.findIndex((item) => item.Group === "ItemFeet"),
+        1,
+    );
+    observer.emit("AppearanceItemUpdateReceived", {
+        direction: "inbound",
+        sourceMemberNumber: connector.Player.MemberNumber,
+        targetMemberNumber: 11,
+        group: "ItemFeet",
+        action: "remove",
+        timestamp: 102,
+    });
+
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, "room_item_broadcast");
+    assert.deepEqual(result.observed, [
+        { Group: "Cloth", Name: "PlayerDress" },
+    ]);
+    assert.deepEqual(runtime.items, [{ Group: "Cloth", Name: "PlayerDress" }]);
 });
 
 test("dispatches immediately and returns pending confirmation when no echo arrives", async () => {

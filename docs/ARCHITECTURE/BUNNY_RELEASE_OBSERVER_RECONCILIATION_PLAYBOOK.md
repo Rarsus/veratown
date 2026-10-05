@@ -2,8 +2,8 @@
 title: "Bunny Release Observer Reconciliation Playbook"
 subtitle: "Investigating stale local appearance and peer confirmation failures"
 date: "October 5, 2026"
-version: "1.0"
-status: "Investigation confirmed; adapter reconciliation and controlled requalification pending"
+version: "1.1"
+status: "Code remediation implemented; controlled-room qualification pending"
 ---
 
 # Bunny Release Observer Reconciliation Playbook
@@ -50,10 +50,41 @@ for this operation, the Yoke was peer/server-confirmed by a registered
 same-room observer. The available logs do not identify which observer or which
 packet type supplied that confirmation.
 
-The Spreader did not use an observer. The adapter's already-satisfied removal
-branch returns before installing observer listeners. This is the primary
-confirmed defect: a stale or divergent local cache can short-circuit the
-authoritative reconciliation path.
+At the time of the incident, the Spreader's already-satisfied removal branch
+returned before installing observer listeners. A stale or divergent local
+cache could therefore short-circuit authoritative reconciliation. The adapter
+now performs a fresh peer preflight for confirmation-required removals and
+does not dispatch when no eligible observer or full snapshot is available.
+
+## Implementation Status
+
+Phases A-C are implemented. Confirmation-required removals now require a fresh,
+source-attributed full-character snapshot from a connected same-room observer.
+If the peer reports the target absent, the action returns authoritative
+`already_satisfied`. If the peer reports the exact target present, the adapter
+rebases only that item slot, applies the normal lock policy, sends BC's
+group-scoped item removal, and requires a second peer confirmation. A different
+asset in the slot, a missing observer, a stale snapshot, or an unconfirmed
+mutation cannot complete the action.
+
+`ChatRoomSync` now emits one appearance diagnostic per character after the room
+cache is refreshed. Diagnostics preserve each character's `MemberNumber` and
+the packet's `SourceMemberNumber`. The adapter does not infer that the source is
+the target or the requesting observer; it accepts a snapshot for reconciliation
+only when the source member matches the actor. A live qualification must still
+establish whether full-room snapshots in the target room meet that correlation
+rule.
+
+Bunny release persists `releaseConfirmedPieces` with optimistic artifact
+versions, after the peer-observed appearance projection is stored. Recovery
+skips those pieces and retries only the remainder. It closes the artifact only
+after every expected piece is confirmed absent and the final artifact update
+succeeds. Adapter, workflow, full-room mapping, and Mongo checkpoint tests pass.
+
+Phase D remains pending. No dedicated private test character and room with two
+confirmed bot connectors were available in this execution, and the unresolved
+production account must not be mutated. Do not declare production qualification
+or the live Bunny incident resolved until Phase D and the exit criteria pass.
 
 ## Identity and Room Semantics
 
@@ -66,8 +97,8 @@ The relevant incoming packet shapes differ:
 
 - `ChatRoomSync` is a full room snapshot whose `Character` property is an array
   of character records. `API_Connector.onChatRoomSync` refreshes the room cache
-  from it but does not currently emit appearance-observation diagnostics for
-  each member.
+  and then emits one appearance diagnostic per character, keyed by
+  `MemberNumber`; the packet's `SourceMemberNumber` is forwarded unchanged.
 - `ChatRoomSyncCharacter` and `ChatRoomSyncSingle` carry one full character
   record. The connector emits `AppearanceSyncReceived` with that character's
   full appearance and source member number.
@@ -113,10 +144,9 @@ matching records for:
 - application dispatch and confirmed snapshot;
 - expiry detection;
 - each restraint's release attempt/result, in artifact order;
-- observer count and observer identity/room (to be added before the next live
-  run);
-- confirmation authority and packet kind (to be added before the next live
-  run); and
+- observer count and observer connection IDs/room;
+- confirmation authority, packet kind, source member, target presence, and
+  predicate decision; and
 - workflow journal transition and artifact cleanup.
 
 Keep passwords and full appearance payloads out of retained evidence. Log only
@@ -177,7 +207,7 @@ the target is present in an old or unrelated snapshot.
 
 ## Implementation Plan
 
-### Phase A: Add decision diagnostics
+### Phase A: Add decision diagnostics (implemented)
 
 Add structured, redacted logs at the adapter boundary for:
 
@@ -191,22 +221,23 @@ Add structured, redacted logs at the adapter boundary for:
 
 Do not log the complete appearance bundle or lock passwords.
 
-### Phase B: Fix local no-op reconciliation
+### Phase B: Fix local no-op reconciliation (implemented)
 
 For removal policies with `requireServerConfirmation: true`, an already-absent
-local item must not immediately produce a terminal result. Use a fresh,
-source-correlated peer snapshot to decide whether the item is actually absent.
-If a peer reports it present, reconcile and dispatch the item removal without
-mutating unrelated slots, then await a fresh peer confirmation that it is gone.
-If a peer confirms it absent, return `already_satisfied` with explicit authority
-and the observed snapshot. If no fresh snapshot is available, return
-`unconfirmed` and keep the Bunny artifact active.
+local item does not immediately produce a terminal result. The adapter installs
+a temporary waiter and requires a fresh full-character snapshot from a
+source-correlated same-room peer. If the peer reports the exact target present,
+the adapter rebases only that group, applies the ordinary lock plan, dispatches
+the item removal, and waits for a second authoritative absence. If a peer
+confirms the target absent, it returns `already_satisfied` with explicit
+authority and the observed snapshot. If no fresh snapshot is available, it
+returns `unconfirmed` without dispatching a removal.
 
 Implement this in the appearance adapter/action contract, not as a Bunny-only
 exception; other confirmation-required release callers need the same
 source-cache reconciliation rule. Keep Bunny's `requireServerConfirmation: true`.
 
-### Phase C: Make release resumable per item
+### Phase C: Make release resumable per item (implemented)
 
 Record which restraint identities are authoritatively absent. On recovery,
 reconcile only the remaining items instead of restarting at the first artifact
@@ -214,7 +245,7 @@ piece. Do not mark the artifact expired or clear `currentRestraints` until all
 expected restraint items are authoritatively absent and the projection is
 persisted. Preserve idempotency by operation ID.
 
-### Phase D: Qualify in a controlled room
+### Phase D: Qualify in a controlled room (pending)
 
 1. Use one dedicated test character and private test room with at least two bot
    connectors confirmed in that exact room.

@@ -140,3 +140,40 @@ test("Bunny punishment projection rolls back when event persistence fails", asyn
         0,
     );
 });
+
+test("Bunny release checkpoints persist with optimistic artifact versions", async (t) => {
+    if (!client) {
+        t.skip(
+            `MongoDB integration unavailable: ${setupError?.message ?? "setup failed"}`,
+        );
+        return;
+    }
+    const db = requireClient().db("bunny_release_checkpoint");
+    const store = new UnifiedCharacterStore(db, new EventBus());
+    const artifact = createArtifact(903, "bunny-release-checkpoint");
+
+    await store.getProfile(artifact.memberNumber);
+    await store.recordBunnyPunishmentArtifact(artifact, 0);
+
+    const progress: BunnyPunishmentArtifact = {
+        ...artifact,
+        artifactVersion: 2,
+        releaseConfirmedPieces: ["ItemArms/HeavyYoke"],
+    };
+    await store.recordBunnyPunishmentArtifact(progress, 1);
+
+    const profile = await store.getProfile(artifact.memberNumber);
+    assert.deepEqual(
+        profile.veratown.bunnyPunishmentArtifact?.releaseConfirmedPieces,
+        ["ItemArms/HeavyYoke"],
+    );
+    assert.equal(profile.veratown.bunnyPunishmentArtifact?.artifactVersion, 2);
+    await assert.rejects(
+        () =>
+            store.recordBunnyPunishmentArtifact(
+                { ...progress, artifactVersion: 3 },
+                1,
+            ),
+        /Bunny punishment artifact version conflict/,
+    );
+});
