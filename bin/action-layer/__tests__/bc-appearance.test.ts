@@ -392,6 +392,35 @@ test("removes a typed bunny restraint with incomplete lock metadata", async () =
     assert.deepEqual(runtime.items, []);
 });
 
+test("removes a typed Bunny restraint when release omits the extended type", async () => {
+    const runtime = makeCharacter([
+        {
+            Group: "ItemFeet",
+            Name: "HeavySpreaderMetal",
+            Property: {
+                TypeRecord: { typed: 1 },
+                LockedBy: "SafewordPadlock",
+                LockSet: true,
+            },
+        },
+    ]);
+    const adapter = new BCAppearanceActionAdapter({ now: () => 250 });
+
+    const result = await adapter.remove(
+        runtime as never,
+        { group: "ItemFeet", asset: "HeavySpreaderMetal" },
+        {
+            ...makePolicy("remove-bunny-spreader-without-type", null),
+            preserveLockedItems: false,
+        },
+    );
+
+    assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, undefined);
+    assert.deepEqual(result.observed, []);
+    assert.deepEqual(runtime.items, []);
+});
+
 test("does not replace an occupied group during add", async () => {
     const runtime = makeCharacter([
         { Group: "ItemArms", Name: "ExistingGloves" },

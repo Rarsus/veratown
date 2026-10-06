@@ -27,6 +27,18 @@ function identityKey(item: AppearanceItemIdentity): string {
     return `${item.group}\u0000${item.asset}\u0000${item.extendedType ?? ""}`;
 }
 
+function matchesRequestedIdentity(
+    current: AppearanceItemIdentity,
+    requested: AppearanceItemIdentity,
+): boolean {
+    return (
+        current.group === requested.group &&
+        current.asset === requested.asset &&
+        (requested.extendedType === undefined ||
+            current.extendedType === requested.extendedType)
+    );
+}
+
 function assertIdentity(item: AppearanceItemIdentity): void {
     if (!item.group.trim()) throw new Error("Appearance group is required");
     if (!item.asset.trim()) throw new Error("Appearance asset is required");
@@ -56,9 +68,6 @@ export function planAppearanceAdditions(
     current: readonly ObservedAppearanceItem[],
     requested: readonly AppearanceItemIdentity[],
 ): AppearanceMutationPlan {
-    const currentByIdentity = new Map(
-        current.map((item) => [identityKey(item), item]),
-    );
     const currentByGroup = new Map(current.map((item) => [item.group, item]));
     const additions: AppearanceItemIdentity[] = [];
     const alreadySatisfied: AppearanceItemIdentity[] = [];
@@ -71,12 +80,13 @@ export function planAppearanceAdditions(
         if (seen.has(key)) continue;
         seen.add(key);
 
-        if (currentByIdentity.has(key)) {
+        const currentItem = currentByGroup.get(target.group);
+        if (currentItem && matchesRequestedIdentity(currentItem, target)) {
             alreadySatisfied.push(target);
             continue;
         }
 
-        const conflictingItem = currentByGroup.get(target.group);
+        const conflictingItem = currentItem;
         if (!conflictingItem) {
             additions.push(target);
             continue;
@@ -114,7 +124,9 @@ export function planAppearanceRemovals(
         if (seen.has(key)) continue;
         seen.add(key);
 
-        const currentItem = currentByIdentity.get(key);
+        const currentItem = current.find((candidate) =>
+            matchesRequestedIdentity(candidate, target),
+        );
         if (!currentItem) {
             alreadySatisfied.push(target);
             continue;

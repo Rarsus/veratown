@@ -93,6 +93,28 @@ test("allows explicit removal of protected items when preservation is disabled",
     assert.deepEqual(plan.removals, [item("Locked", "ItemArms", "locked")]);
 });
 
+test("treats an omitted extended type as a wildcard for the same asset", () => {
+    const current: ObservedAppearanceItem[] = [
+        {
+            group: "ItemFeet",
+            asset: "HeavySpreaderMetal",
+            extendedType: "Wide",
+            lockState: "locked",
+        },
+    ];
+    const target = { group: "ItemFeet", asset: "HeavySpreaderMetal" };
+
+    const preserved = planAppearanceRemovals(current, [target]);
+    const explicitRelease = planAppearanceRemovals(current, [target], false);
+    const addAgain = planAppearanceAdditions(current, [target]);
+
+    assert.equal(preserved.status, "blocked");
+    assert.deepEqual(preserved.conflicts[0]?.conflictingItem, current[0]);
+    assert.equal(explicitRelease.status, "ready");
+    assert.deepEqual(explicitRelease.removals, current);
+    assert.equal(addAgain.status, "already_satisfied");
+});
+
 test("deduplicates repeated requests and rejects incomplete identities", () => {
     const plan = planAppearanceAdditions(
         [],

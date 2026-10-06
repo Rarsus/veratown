@@ -2,8 +2,8 @@
 title: "Bunny Release Observer Reconciliation Playbook"
 subtitle: "Investigating stale local appearance and peer confirmation failures"
 date: "October 5, 2026"
-version: "1.3"
-status: "Local-dispatch appearance default implemented; controlled-room qualification pending"
+version: "1.4"
+status: "Local-dispatch default and typed-release matching implemented; controlled-room qualification pending"
 ---
 
 # Bunny Release Observer Reconciliation Playbook
@@ -40,6 +40,20 @@ operation `bunny-261575-1791202147682-1`.
   the Bunny artifact remained active with both restraints projected.
 - A previous expired Bunny operation for member `261407` also persisted as a
   failed release workflow, showing recurrence.
+
+The October 6 follow-up used member `262186` and operation
+`bunny-262186-1791275769429-1`. Railway logged the Feet restraint as
+`localTargetPresent=true`, `localLockState=locked`, but `path=noop`; the release
+request identified `ItemFeet/HeavySpreaderMetal` without an `extendedType`,
+while the equipped item was the typed `Wide` variant. The planner compared the
+missing type as an exact identity and incorrectly classified the restraint as
+already absent. The log came from deployment `d825140`, which was removed during
+rollout of `651660a`.
+
+The planner now treats an omitted `extendedType` as a wildcard for the same
+group/asset; an explicit type still requires an exact variant match. This lets
+the Bunny release's group/asset identity remove the typed Spreader without
+replacing or restoring any other slot.
 
 The release loop processes the artifact pieces in order. It continues only
 after a `completed` result with confirmation authority and an observed snapshot.
