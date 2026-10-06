@@ -176,13 +176,17 @@ test("dispatches an empty-group add without claiming server confirmation", async
     const result = await adapter.add(
         runtime as never,
         { group: "ItemArms", asset: "Gloves" },
-        makePolicy("add-gloves"),
+        {
+            ...makePolicy("add-gloves"),
+            requireServerConfirmation: false,
+        },
     );
 
     assert.equal(result.status, "in_progress");
     assert.deepEqual(result.value?.items, [
         { group: "ItemArms", asset: "Gloves" },
     ]);
+    assert.deepEqual(runtime.events, ["items"]);
     assert.equal(adapter.capabilities.confirmsAuthoritatively, true);
 });
 

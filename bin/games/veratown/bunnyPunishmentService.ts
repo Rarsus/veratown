@@ -349,8 +349,8 @@ export class BunnyPunishmentWorkflow {
         const configuredPieces: string[] = [];
         const mutationErrors: string[] = [];
         let permissionDenied = false;
-        let mutationConfirmed = false;
-        let authoritativeAppearance:
+        let mutationSucceeded = false;
+        let appliedAppearance:
             AppearanceMutationContext["observedAppearance"] | undefined;
         const lease = this.actionLayer?.rollout.begin(
             "bunny-restraints",
@@ -395,7 +395,7 @@ export class BunnyPunishmentWorkflow {
                             maxAttempts: 1,
                             retryDelayMs: 0,
                             preserveLockedItems: true,
-                            requireServerConfirmation: true,
+                            requireServerConfirmation: false,
                             itemOptions: {
                                 color: BUNNY_ROPE_COLOR,
                                 craft: {
@@ -416,36 +416,23 @@ export class BunnyPunishmentWorkflow {
                             },
                         },
                     );
-                    let observed = result.observed;
-                    let confirmationAuthority = result.confirmationAuthority;
-                    if (result.status === "in_progress") {
-                        if (!result.confirmation) {
-                            throw new Error(
-                                "Bunny restraint dispatch is pending without a confirmation outcome",
-                            );
-                        }
-                        const confirmation = await result.confirmation;
-                        if (confirmation.status !== "confirmed") {
-                            throw new Error(
-                                confirmation.reason ||
-                                    `unconfirmed add ${bunnyPieceKey(piece)}`,
-                            );
-                        }
-                        observed = confirmation.observed;
-                        confirmationAuthority = confirmation.authority;
-                    }
                     if (
-                        !confirmationAuthority ||
-                        (result.status !== "completed" &&
-                            result.status !== "in_progress") ||
-                        !Array.isArray(observed)
+                        result.status !== "completed" &&
+                        result.status !== "in_progress"
                     ) {
                         throw new Error(
                             result.reason ??
-                                `Bunny add lacked confirmed appearance for ${bunnyPieceKey(piece)}`,
+                                `Bunny add was not dispatched for ${bunnyPieceKey(piece)}`,
                         );
                     }
-                    authoritativeAppearance = [...observed];
+                    const localAppearance =
+                        character.Appearance.MakeAppearanceBundle();
+                    if (!hasBunnyRestraint(localAppearance, piece)) {
+                        throw new Error(
+                            `Bunny add did not update the local appearance for ${bunnyPieceKey(piece)}`,
+                        );
+                    }
+                    appliedAppearance = [...localAppearance];
                     configuredPieces.push(bunnyPieceKey(piece));
                     if (this.syncDelayMs > 0) {
                         await new Promise((resolve) =>
@@ -464,29 +451,32 @@ export class BunnyPunishmentWorkflow {
                     }
                 }
             }
-            mutationConfirmed =
+            mutationSucceeded =
                 configuredPieces.length === punishmentConfig.pieces.length &&
-                mutationErrors.length === 0;
-            if (authoritativeAppearance) {
+                mutationErrors.length === 0 &&
+                punishmentConfig.pieces.every((piece) =>
+                    hasBunnyRestraint(appliedAppearance ?? [], piece),
+                );
+            if (appliedAppearance) {
                 const mutationContext: AppearanceMutationContext = {
                     operationId,
                     correlationId: `appearance:${operationId}`,
                     timestamp: Date.now(),
                     source: "bunny",
                     reason: "bunny_punishment_applied",
-                    expectedAppearance: [...authoritativeAppearance],
-                    observedAppearance: [...authoritativeAppearance],
-                    verificationStatus: "confirmed",
+                    expectedAppearance: [...appliedAppearance],
+                    observedAppearance: [...appliedAppearance],
+                    verificationStatus: "observed",
                 };
                 try {
                     await this.stateSync?.(
                         character,
                         mutationContext,
-                        authoritativeAppearance,
+                        appliedAppearance,
                     );
                 } catch (error) {
                     this.logger.error(
-                        "Failed to persist peer-confirmed Bunny appearance",
+                        "Failed to persist locally applied Bunny appearance",
                         error,
                         { memberNumber: character.MemberNumber, operationId },
                     );
@@ -524,12 +514,13 @@ export class BunnyPunishmentWorkflow {
                 (candidate) =>
                     candidate.group === group && candidate.asset === asset,
             );
-            const appliedAppearance =
-                authoritativeAppearance ??
+            const finalAppearance =
+                appliedAppearance ??
                 character.Appearance.MakeAppearanceBundle();
+            if (blockedPieceKeys.has(piece)) return false;
             return configuredPiece
-                ? hasBunnyRestraint(appliedAppearance, configuredPiece)
-                : appliedAppearance.some(
+                ? hasBunnyRestraint(finalAppearance, configuredPiece)
+                : finalAppearance.some(
                       (item) => item.Group === group && item.Name === asset,
                   );
         });
@@ -537,7 +528,7 @@ export class BunnyPunishmentWorkflow {
             (piece) =>
                 !appliedPieces.includes(piece) && !blockedPieceKeys.has(piece),
         );
-        const complete = mutationConfirmed && failedPieces.length === 0;
+        const complete = mutationSucceeded && failedPieces.length === 0;
         const failureReason = complete
             ? undefined
             : (mutationError ??

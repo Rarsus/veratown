@@ -24,6 +24,13 @@ export function bunnyPieceKey(piece: { group: string; asset: string }): string {
     return `${piece.group}/${piece.asset}`;
 }
 
+function hasOwnerLock(item: BunnyAppearanceItem): boolean {
+    const property = item.Property as Record<string, unknown> | undefined;
+    return [property?.Lock, property?.LockedBy].some(
+        (lock) => lock === "OwnerPadlock" || lock === "OwnerTimerPadlock",
+    );
+}
+
 /**
  * Decide which groups can be filled without replacing anything already worn.
  * This function has no character or mutation dependency so the decision can
@@ -45,6 +52,8 @@ export function planBunnyPunishment(
         const current = currentByGroup.get(piece.group);
         if (!current) {
             missingPieces.push(piece);
+        } else if (hasOwnerLock(current)) {
+            blockedPieces.push(piece);
         } else if (
             current.Name === piece.asset &&
             (!("lockType" in piece) ||

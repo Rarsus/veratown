@@ -2,8 +2,8 @@
 title: "Bunny Release Observer Reconciliation Playbook"
 subtitle: "Investigating stale local appearance and peer confirmation failures"
 date: "October 5, 2026"
-version: "1.1"
-status: "Code remediation implemented; controlled-room qualification pending"
+version: "1.2"
+status: "Release reconciliation implemented; dispatch-based Bunny application enabled; controlled-room qualification pending"
 ---
 
 # Bunny Release Observer Reconciliation Playbook
@@ -66,6 +66,20 @@ rebases only that item slot, applies the normal lock policy, sends BC's
 group-scoped item removal, and requires a second peer confirmation. A different
 asset in the slot, a missing observer, a stale snapshot, or an unconfirmed
 mutation cannot complete the action.
+
+Bunny application no longer waits for per-item peer confirmation. Before any
+add, the local appearance planner skips a restraint slot already occupied by
+an `OwnerPadlock` or `OwnerTimerPadlock`; the skipped item is not added to the
+punishment artifact. Eligible restraints are sent as group-scoped item updates,
+and a successful dispatch plus the resulting local appearance is treated as
+applied. The projection is recorded with `verificationStatus: observed`, not
+peer-confirmed. This avoids sending a full appearance bundle after every piece
+and prevents one application's stale bundle from overwriting another slot.
+
+This policy requires the pre-application local appearance to accurately reflect
+protected slots. If that baseline is stale or unavailable, the owner-lock skip
+cannot be guaranteed; controlled-room qualification must include an owner-locked
+pre-existing restraint.
 
 `ChatRoomSync` now emits one appearance diagnostic per character after the room
 cache is refreshed. Diagnostics preserve each character's `MemberNumber` and
@@ -141,7 +155,8 @@ Search Railway runtime logs using a bounded time window around the operation and
 filter on both the member number and operation ID. Retain the unfiltered
 matching records for:
 
-- application dispatch and confirmed snapshot;
+- per-piece application dispatch and local post-add projection (peer
+  confirmation is not required for each add);
 - expiry detection;
 - each restraint's release attempt/result, in artifact order;
 - observer count and observer connection IDs/room;
@@ -249,15 +264,20 @@ persisted. Preserve idempotency by operation ID.
 
 1. Use one dedicated test character and private test room with at least two bot
    connectors confirmed in that exact room.
-2. Capture baseline appearance and verify the Bunny apply result has both
-   restraint keys and peer authority.
-3. Let expiry occur without manual removal. Capture the per-item source,
+2. Capture the pre-application local appearance. Include an existing item with
+   `OwnerPadlock` and repeat with `OwnerTimerPadlock`; verify the restraint for
+   that occupied slot is skipped and omitted from the artifact.
+3. Verify each eligible Bunny item is dispatched as a group-scoped update, both
+   requested items remain in the post-application local appearance, and no
+   full-bundle update is sent between pieces. Peer authority is not an
+   application gate.
+4. Let expiry occur without manual removal. Capture the per-item source,
    dispatch/no-op path, event type, observer identity, and authority.
-4. Verify the spreader is removed visually and in the peer snapshot, then verify
+5. Verify the spreader is removed visually and in the peer snapshot, then verify
    the durable artifact is terminal and `currentRestraints` is empty.
-5. Repeat with the test source cache deliberately missing one target while the
+6. Repeat with the test source cache deliberately missing one target while the
    peer snapshot still contains it.
-6. Repeat without a peer observer and verify the artifact remains active and
+7. Repeat without a peer observer and verify the artifact remains active and
    release is reported pending rather than completed.
 
 Do not use a production player, clear the existing `261575` artifact by hand, or

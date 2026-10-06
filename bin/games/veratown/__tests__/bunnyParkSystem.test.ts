@@ -5,7 +5,6 @@ import {
     CommunicationActionService,
 } from "../../../action-layer";
 import type {
-    ActionConfirmation,
     ActionContext,
     ActionResult,
     CommunicationActionAdapter,
@@ -244,8 +243,14 @@ function createMessageConnection(character: any) {
 }
 
 function createTestBunnyActionLayer() {
+    const addPolicies: any[] = [];
     const appearanceService = {
         add: async (character: any, item: any, policy: any) => {
+            addPolicies.push({
+                group: item.group,
+                asset: item.asset,
+                requireServerConfirmation: policy.requireServerConfirmation,
+            });
             const wrapper = character.Appearance.AddItem({
                 Group: item.group,
                 Name: item.asset,
@@ -286,17 +291,36 @@ function createTestBunnyActionLayer() {
                 });
             }
             const observed = character.Appearance.MakeAppearanceBundle();
+            const metadata = {
+                operationId: policy.operationId,
+                actionId: "appearance.add",
+                memberNumber: policy.memberNumber,
+                attempt: 1,
+                startedAt: Date.now(),
+                completedAt: Date.now(),
+            };
+            if (policy.requireServerConfirmation !== true) {
+                return {
+                    status: "in_progress",
+                    metadata,
+                    value: {
+                        items: observed.map((candidate: any) => ({
+                            group: candidate.Group,
+                            asset: candidate.Name,
+                        })),
+                        hiddenLayers: [],
+                        observedAt: Date.now(),
+                    },
+                    confirmation: Promise.resolve({
+                        status: "unconfirmed",
+                        reason: "peer observation intentionally unavailable",
+                    }),
+                };
+            }
             return {
                 status: "completed",
                 confirmationAuthority: "room_character_sync",
-                metadata: {
-                    operationId: policy.operationId,
-                    actionId: "appearance.add",
-                    memberNumber: policy.memberNumber,
-                    attempt: 1,
-                    startedAt: Date.now(),
-                    completedAt: Date.now(),
-                },
+                metadata,
                 observed,
                 value: {
                     items: observed.map((candidate: any) => ({
@@ -376,6 +400,7 @@ function createTestBunnyActionLayer() {
     };
     return {
         appearanceService: appearanceService as any,
+        addPolicies,
         rollout: new ActionLayerRolloutController({
             bunnyRestraintsEnabled: true,
         }),
@@ -420,6 +445,7 @@ function createBunnySystem(
         allowStaticFallbacks,
         managedReleaseWorkersEnabled,
     );
+    (system as any).testActionLayer = actionLayer;
     (system as any).applyPunishment = (character: any, config: any) =>
         punishmentService.punish(character, config);
     return system;
@@ -1166,18 +1192,12 @@ test("active Bunny artifacts prevent a second restraint application", async () =
     );
 });
 
-test("Bunny punishment does not persist an artifact for an unconfirmed action", async () => {
+test("Bunny punishment trusts dispatched item updates without peer observations", async () => {
     const created = createCharacter(23);
     let recordedArtifact: unknown;
-    let dispatched = 0;
-    let resolveConfirmation!: (
-        confirmation: ActionConfirmation<AppearanceObservation>,
-    ) => void;
-    const confirmation = new Promise<ActionConfirmation<AppearanceObservation>>(
-        (resolve) => {
-            resolveConfirmation = resolve;
-        },
-    );
+    let mutationContext: any;
+    let persistedAppearance: readonly any[] | undefined;
+    const actionLayer = createTestBunnyActionLayer();
     const service = trackBunnyService(
         new BunnyPunishmentService(
             createMessageConnection(created.character) as any,
@@ -1190,55 +1210,100 @@ test("Bunny punishment does not persist an artifact for an unconfirmed action", 
                 incrementCount: async () => {},
                 recordAudit: async () => {},
             },
-            undefined,
+            async (_character, context, observedAppearance) => {
+                mutationContext = context;
+                persistedAppearance = observedAppearance;
+            },
             deterministicRandom(0),
             0,
             undefined,
             undefined,
-            {
-                appearanceService: {
-                    add: async () => {
-                        dispatched += 1;
-                        return {
-                            status: "in_progress",
-                            value: {
-                                items: [],
-                                hiddenLayers: [],
-                                observedAt: 1,
-                            },
-                            confirmation,
-                        };
-                    },
-                },
-                rollout: {
-                    begin: () => ({
-                        path: "action",
-                        release: () => {},
-                    }),
-                },
-            } as any,
+            actionLayer as any,
         ),
     );
 
-    const pending = service.punish(
+    const result = await service.punish(
         created.character,
         BUNNY_RESTRAINT_CONFIGS[0],
     );
-    for (let attempt = 0; attempt < 10 && dispatched === 0; attempt += 1) {
-        await Promise.resolve();
+
+    assert.equal(result.success, true);
+    assert.equal(result.status, "completed");
+    assert.equal(result.finalVerification, true);
+    assert.equal((recordedArtifact as any)?.status, "active");
+    assert.equal(mutationContext?.verificationStatus, "observed");
+    assert.deepEqual(
+        actionLayer.addPolicies.map(
+            ({ group, asset, requireServerConfirmation }) => ({
+                group,
+                asset,
+                requireServerConfirmation,
+            }),
+        ),
+        BUNNY_RESTRAINT_CONFIGS[0].pieces.map((piece) => ({
+            group: piece.group,
+            asset: piece.asset,
+            requireServerConfirmation: false,
+        })),
+    );
+    assert.deepEqual(
+        persistedAppearance?.map((item) => `${item.Group}/${item.Name}`),
+        ["ItemArms/HeavyYoke", "ItemFeet/HeavySpreaderMetal"],
+    );
+});
+
+test("Bunny punishment skips OwnerPadlock and OwnerTimerPadlock slots by default", async () => {
+    for (const ownerLock of ["OwnerPadlock", "OwnerTimerPadlock"]) {
+        const created = createCharacter(24, {
+            initialAppearance: [
+                {
+                    Group: "ItemArms",
+                    Name: "HeavyYoke",
+                    Property: {
+                        Lock: ownerLock,
+                        LockedBy: 145,
+                        LockMemberNumber: 145,
+                        LockSet: true,
+                    },
+                },
+            ],
+        });
+        let recordedArtifact: any;
+        const system = createBunnySystem(
+            createMessageConnection(created.character) as any,
+            async () => {},
+            deterministicRandom(0),
+            0,
+            async (artifact) => {
+                recordedArtifact = artifact;
+            },
+        );
+
+        const result = await (system as any).applyPunishment(
+            created.character,
+            BUNNY_RESTRAINT_CONFIGS[0],
+        );
+
+        assert.equal(result.success, true, ownerLock);
+        assert.deepEqual(result.appliedPieces, ["ItemFeet/HeavySpreaderMetal"]);
+        assert.equal(
+            created.added.includes("ItemArms/HeavyYoke"),
+            false,
+            ownerLock,
+        );
+        assert.deepEqual(recordedArtifact.restraintPieces, [
+            "ItemFeet/HeavySpreaderMetal",
+        ]);
+        const retainedYoke = created
+            .appearance()
+            .find((item: any) => item.Group === "ItemArms");
+        assert.equal(retainedYoke?.Property?.Lock, ownerLock);
+        assert.ok(
+            (system as any).testActionLayer.addPolicies.every(
+                (policy: any) => policy.requireServerConfirmation === false,
+            ),
+        );
     }
-
-    assert.equal(dispatched, 1);
-    assert.equal(recordedArtifact, undefined);
-    resolveConfirmation({
-        status: "unconfirmed",
-        reason: "no peer room confirmation",
-    });
-
-    const result = await pending;
-    assert.equal(result.success, false);
-    assert.equal(dispatched, 1);
-    assert.equal(recordedArtifact, undefined);
 });
 
 test("configured bunny locations trigger appearance and persistence updates", async () => {
