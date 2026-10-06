@@ -80,6 +80,7 @@ export interface ActionExecutionPolicy {
     readonly retryDelayMs: number;
     readonly preserveLockedItems?: boolean;
     readonly requireServerConfirmation?: boolean;
+    readonly observeServerConfirmation?: boolean;
 }
 
 export interface AppearanceItemIdentity {

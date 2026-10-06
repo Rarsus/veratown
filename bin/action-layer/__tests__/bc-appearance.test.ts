@@ -681,6 +681,31 @@ test("dispatches immediately and returns pending confirmation when no echo arriv
     assert.equal(connector.listenerCount(), 0);
 });
 
+test("dispatches without registering peer listeners when observation is disabled", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const observer = new FakeConnector("observer", 12);
+    const runtime = makeConnectedCharacter(connector);
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        observationConnectors: [observer],
+    });
+
+    const result = await adapter.add(
+        runtime as never,
+        { group: "ItemArms", asset: "Gloves" },
+        {
+            ...makePolicy("unobserved-add"),
+            observeServerConfirmation: false,
+        },
+    );
+
+    assert.equal(result.status, "in_progress");
+    assert.equal(result.confirmation, undefined);
+    assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
+    assert.deepEqual(runtime.events, ["items"]);
+});
+
 test("accepts a source-attributed peer appearance sync and cleans up listeners", async () => {
     const connector = new FakeConnector();
     const runtime = makeConnectedCharacter(connector);

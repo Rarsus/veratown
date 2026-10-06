@@ -67,14 +67,16 @@ group-scoped item removal, and requires a second peer confirmation. A different
 asset in the slot, a missing observer, a stale snapshot, or an unconfirmed
 mutation cannot complete the action.
 
-Bunny application no longer waits for per-item peer confirmation. Before any
-add, the local appearance planner skips a restraint slot already occupied by
-an `OwnerPadlock` or `OwnerTimerPadlock`; the skipped item is not added to the
-punishment artifact. Eligible restraints are sent as group-scoped item updates,
-and a successful dispatch plus the resulting local appearance is treated as
-applied. The projection is recorded with `verificationStatus: observed`, not
-peer-confirmed. This avoids sending a full appearance bundle after every piece
-and prevents one application's stale bundle from overwriting another slot.
+Bunny application neither waits for nor subscribes to per-item peer
+confirmation. Before any add, the local appearance planner skips a restraint
+slot already occupied by an `OwnerPadlock` or `OwnerTimerPadlock`; the skipped
+item is not added to the punishment artifact. Eligible restraints are sent as
+group-scoped item updates, and a successful dispatch plus the resulting local
+appearance is treated as applied. The projection is recorded with
+`verificationStatus: observed`, not peer-confirmed. This avoids sending a full
+appearance bundle after every piece and prevents one application's stale bundle
+from overwriting another slot. Release operations still require fresh peer
+confirmation before clearing durable state.
 
 This policy requires the pre-application local appearance to accurately reflect
 protected slots. If that baseline is stale or unavailable, the owner-lock skip
@@ -268,9 +270,9 @@ persisted. Preserve idempotency by operation ID.
    `OwnerPadlock` and repeat with `OwnerTimerPadlock`; verify the restraint for
    that occupied slot is skipped and omitted from the artifact.
 3. Verify each eligible Bunny item is dispatched as a group-scoped update, both
-   requested items remain in the post-application local appearance, and no
-   full-bundle update is sent between pieces. Peer authority is not an
-   application gate.
+   requested items remain in the post-application local appearance, no peer
+   confirmation listeners are installed for the add, and no full-bundle update
+   is sent between pieces. Peer authority is not an application gate.
 4. Let expiry occur without manual removal. Capture the per-item source,
    dispatch/no-op path, event type, observer identity, and authority.
 5. Verify the spreader is removed visually and in the peer snapshot, then verify

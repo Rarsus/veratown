@@ -250,6 +250,7 @@ function createTestBunnyActionLayer() {
                 group: item.group,
                 asset: item.asset,
                 requireServerConfirmation: policy.requireServerConfirmation,
+                observeServerConfirmation: policy.observeServerConfirmation,
             });
             const wrapper = character.Appearance.AddItem({
                 Group: item.group,
@@ -1234,16 +1235,23 @@ test("Bunny punishment trusts dispatched item updates without peer observations"
     assert.equal(mutationContext?.verificationStatus, "observed");
     assert.deepEqual(
         actionLayer.addPolicies.map(
-            ({ group, asset, requireServerConfirmation }) => ({
+            ({
                 group,
                 asset,
                 requireServerConfirmation,
+                observeServerConfirmation,
+            }) => ({
+                group,
+                asset,
+                requireServerConfirmation,
+                observeServerConfirmation,
             }),
         ),
         BUNNY_RESTRAINT_CONFIGS[0].pieces.map((piece) => ({
             group: piece.group,
             asset: piece.asset,
             requireServerConfirmation: false,
+            observeServerConfirmation: false,
         })),
     );
     assert.deepEqual(

@@ -396,6 +396,7 @@ export class BunnyPunishmentWorkflow {
                             retryDelayMs: 0,
                             preserveLockedItems: true,
                             requireServerConfirmation: false,
+                            observeServerConfirmation: false,
                             itemOptions: {
                                 color: BUNNY_ROPE_COLOR,
                                 craft: {

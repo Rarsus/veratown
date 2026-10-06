@@ -1041,18 +1041,24 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             this.confirmationTimeoutMs,
             Math.max(1, policy.timeoutMs),
         );
-        const waiter = this.waitForConfirmation(
-            character,
-            item,
-            policy.operationId,
-            action,
-            startedAt,
-            timeoutMs,
-            acceptUpdate,
-            undefined,
-            false,
-            action === "remove" && policy.requireServerConfirmation === true,
-        );
+        const shouldObserve =
+            policy.requireServerConfirmation === true ||
+            policy.observeServerConfirmation !== false;
+        const waiter = shouldObserve
+            ? this.waitForConfirmation(
+                  character,
+                  item,
+                  policy.operationId,
+                  action,
+                  startedAt,
+                  timeoutMs,
+                  acceptUpdate,
+                  undefined,
+                  false,
+                  action === "remove" &&
+                      policy.requireServerConfirmation === true,
+              )
+            : undefined;
         const actionId =
             action === "update"
                 ? "appearance.updateExtendedProperties"
@@ -1067,7 +1073,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                 }
             }
         } catch (error) {
-            waiter.cancel();
+            waiter?.cancel();
             return failedMutation(
                 context,
                 actionId,
@@ -1081,6 +1087,17 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         const observed = character.Appearance.MakeAppearanceBundle();
         const localObservation = toObservation(observed, this.now());
         if (!policy.requireServerConfirmation) {
+            if (!waiter) {
+                return createActionResult(
+                    "in_progress",
+                    createActionMetadata(context, actionId, startedAt),
+                    {
+                        value: localObservation,
+                        reason: "Local BC appearance mutation dispatched; server observation disabled by policy",
+                        retryable: false,
+                    },
+                );
+            }
             const confirmation: Promise<BCAppearanceActionConfirmation> =
                 waiter.promise.then((result) =>
                     result.outcome === "accepted"
@@ -1108,6 +1125,17 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             );
         }
 
+        if (!waiter) {
+            return createActionResult(
+                "unconfirmed",
+                createActionMetadata(context, actionId, startedAt),
+                {
+                    value: localObservation,
+                    reason: "Required server confirmation waiter is unavailable",
+                    retryable: false,
+                },
+            );
+        }
         const confirmationResult = await waiter.promise;
         if (confirmationResult.outcome === "accepted") {
             return createActionResult(
