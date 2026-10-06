@@ -935,7 +935,6 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                         maxAttempts: 1,
                         retryDelayMs: 0,
                         preserveLockedItems: true,
-                        requireServerConfirmation: true,
                         itemOptions: {
                             difficulty: action.difficulty,
                             color: piece.color ?? action.color,
@@ -1029,7 +1028,6 @@ export class CatDogSystem extends AbstractTileFeatureSystem {
                                 timeoutMs,
                                 maxAttempts: 1,
                                 retryDelayMs: 0,
-                                requireServerConfirmation: true,
                             },
                         },
                         {

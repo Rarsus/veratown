@@ -659,11 +659,12 @@ async function executeAppearanceMutation(
         const shouldVerifyAppliedItems =
             options?.verifyAppliedItems !== false &&
             changedItemGroups.length + removedItemGroups.length > 0;
-        const shouldAwaitServerSync =
-            options?.awaitServerSync === true || shouldVerifyAppliedItems;
+        const shouldAwaitServerSync = options?.awaitServerSync === true;
         const serverSyncPredicate =
             options?.serverSyncPredicate ??
             (shouldVerifyAppliedItems ? appliedItemsPredicate : undefined);
+        context.observedAppearance = [...validExpectedAppearance];
+        context.verificationStatus = "observed";
 
         // AddItem() and RemoveItem() queue incremental item updates. A full
         // bundle is opt-in because sending it after every item mutation can

@@ -190,7 +190,6 @@ test("CatDog standard vibrator updates use the appearance contract and notify on
                 timeoutMs: 5_000,
                 maxAttempts: 1,
                 retryDelayMs: 0,
-                requireServerConfirmation: true,
                 operationId:
                     "catdog-test:41:vibrator:ItemVulva:VibratingEgg:vibrator-mode",
                 memberNumber: 41,
@@ -500,7 +499,6 @@ test("CatDog updates all vibration modules in one guarded appearance action", as
                 timeoutMs: 5_000,
                 maxAttempts: 1,
                 retryDelayMs: 0,
-                requireServerConfirmation: true,
                 operationId:
                     "catdog-test:44:vibrator:ItemVulva:InflatableVibratingPanties:modules-i",
                 memberNumber: 44,
@@ -596,7 +594,6 @@ test("CatDog bondage uses the shared appearance action when rollout is enabled",
                 maxAttempts: 1,
                 retryDelayMs: 0,
                 preserveLockedItems: true,
-                requireServerConfirmation: true,
                 itemOptions: {
                     difficulty: 18,
                     color: "Blue",

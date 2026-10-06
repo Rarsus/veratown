@@ -189,7 +189,6 @@ export class Casino implements GamePlugin {
                 timeoutMs: 5_000,
                 maxAttempts: 1,
                 retryDelayMs: 0,
-                requireServerConfirmation: true,
             },
         );
         if (

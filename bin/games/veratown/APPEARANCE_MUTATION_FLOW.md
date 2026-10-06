@@ -145,14 +145,13 @@ await syncAppearanceMutation(
     {
         source: "veratown",
         reason: "bondage_applied",
-        sendFullAppearanceUpdate: true,
-        awaitServerSync: true,
     },
 );
 ```
 
-The server predicate normally verifies that the required item or group exists
-with the expected applied properties.
+The local appearance mutation is dispatched through BC's item update path and
+the resulting local projection is persisted with status `observed`. A full
+appearance bundle and peer wait are not part of the default add path.
 
 ### Remove operation
 
@@ -171,15 +170,14 @@ await syncAppearanceMutation(
         reason: "bondage_removed",
         releaseCause: "timer",
         cleanupAllowed: true,
-        sendFullAppearanceUpdate: true,
-        awaitServerSync: true,
     },
 );
 ```
 
-The removal predicate normally verifies that the target group or item is no
-longer present. Persistence occurs only through the observed synchronized
-projection when that projection is available.
+The group-scoped removal is dispatched and the resulting local projection is
+persisted with status `observed`. Set `awaitServerSync: true` only for a workflow
+that explicitly requires peer confirmation; it is not the default for feature
+appearance actions.
 
 ## Bunny Punishment State Machine
 

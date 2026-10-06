@@ -1250,8 +1250,8 @@ test("Bunny punishment trusts dispatched item updates without peer observations"
         BUNNY_RESTRAINT_CONFIGS[0].pieces.map((piece) => ({
             group: piece.group,
             asset: piece.asset,
-            requireServerConfirmation: false,
-            observeServerConfirmation: false,
+            requireServerConfirmation: undefined,
+            observeServerConfirmation: undefined,
         })),
     );
     assert.deepEqual(
@@ -1308,7 +1308,9 @@ test("Bunny punishment skips OwnerPadlock and OwnerTimerPadlock slots by default
         assert.equal(retainedYoke?.Property?.Lock, ownerLock);
         assert.ok(
             (system as any).testActionLayer.addPolicies.every(
-                (policy: any) => policy.requireServerConfirmation === false,
+                (policy: any) =>
+                    policy.requireServerConfirmation === undefined &&
+                    policy.observeServerConfirmation === undefined,
             ),
         );
     }

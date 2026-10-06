@@ -693,20 +693,19 @@ async function initializeVeratownGame(
                     timeoutMs: 5_000,
                     maxAttempts: 1,
                     retryDelayMs: 0,
-                    requireServerConfirmation: true,
                 },
             );
             if (
                 appearanceResult.status === "completed" ||
                 appearanceResult.status === "already_satisfied"
             ) {
-                logger.info("Confirmed hidden appearance for user2 narrator", {
+                logger.info("Applied hidden appearance for user2 narrator", {
                     memberNumber,
                     hiddenLayers: VERATOWN_HIDDEN_APPEARANCE_LAYERS.length,
                 });
             } else {
                 logger.warn(
-                    "Could not confirm hidden appearance for user2 narrator",
+                    "Could not apply hidden appearance for user2 narrator",
                     {
                         memberNumber,
                         status: appearanceResult.status,

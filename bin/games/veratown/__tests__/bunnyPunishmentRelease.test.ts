@@ -73,17 +73,16 @@ function actionResult(
 ) {
     return {
         status,
-        confirmationAuthority:
-            status === "unconfirmed" ? undefined : "room_character_sync",
         observed,
         reason: status === "unconfirmed" ? "observer unavailable" : undefined,
     };
 }
 
-test("Bunny release checkpoints confirmed pieces and resumes at the remaining restraint", async () => {
+test("Bunny release checkpoints locally completed pieces and resumes at the remaining restraint", async () => {
     const initial = createArtifact();
     const persistence = createRepository(initial);
     const calls: string[] = [];
+    const policies: Array<Record<string, unknown>> = [];
     const results = [
         actionResult("completed", [
             { Group: "ItemFeet", Name: "HeavySpreaderMetal" },
@@ -111,8 +110,10 @@ test("Bunny release checkpoints confirmed pieces and resumes at the remaining re
                 remove: async (
                     _character: unknown,
                     item: { group: string; asset: string },
+                    policy: Record<string, unknown>,
                 ) => {
                     calls.push(`${item.group}/${item.asset}`);
+                    policies.push(policy);
                     const result = results.shift();
                     if (!result)
                         throw new Error("Unexpected Bunny release attempt");
@@ -130,7 +131,7 @@ test("Bunny release checkpoints confirmed pieces and resumes at the remaining re
         "ItemFeet/HeavySpreaderMetal",
     ]);
     assert.equal(persistence.getArtifact().status, "active");
-    assert.deepEqual(persistence.getArtifact().releaseConfirmedPieces, [
+    assert.deepEqual(persistence.getArtifact().releaseCompletedPieces, [
         "ItemArms/HeavyYoke",
     ]);
     assert.equal(persistence.getArtifact().artifactVersion, 2);
@@ -144,10 +145,16 @@ test("Bunny release checkpoints confirmed pieces and resumes at the remaining re
         "ItemFeet/HeavySpreaderMetal",
     ]);
     assert.equal(persistence.getArtifact().status, "expired");
-    assert.deepEqual(persistence.getArtifact().releaseConfirmedPieces, [
+    assert.deepEqual(persistence.getArtifact().releaseCompletedPieces, [
         "ItemArms/HeavyYoke",
         "ItemFeet/HeavySpreaderMetal",
     ]);
+    assert.equal(
+        policies.every(
+            (policy) => policy.requireServerConfirmation === undefined,
+        ),
+        true,
+    );
     assert.equal(persistence.getArtifact().artifactVersion, 4);
     assert.deepEqual(
         persistence.updates.map((update) => update.expectedArtifactVersion),
@@ -180,7 +187,7 @@ test("Bunny release does not checkpoint or close when durable appearance project
 
     assert.equal(persistence.getArtifact().status, "active");
     assert.equal(persistence.getArtifact().artifactVersion, 1);
-    assert.equal(persistence.getArtifact().releaseConfirmedPieces, undefined);
+    assert.equal(persistence.getArtifact().releaseCompletedPieces, undefined);
     assert.equal(persistence.updates.length, 0);
     await workflow.shutdown();
 });

@@ -2,8 +2,8 @@
 title: "Bunny Release Observer Reconciliation Playbook"
 subtitle: "Investigating stale local appearance and peer confirmation failures"
 date: "October 5, 2026"
-version: "1.2"
-status: "Release reconciliation implemented; dispatch-based Bunny application enabled; controlled-room qualification pending"
+version: "1.3"
+status: "Local-dispatch appearance default implemented; controlled-room qualification pending"
 ---
 
 # Bunny Release Observer Reconciliation Playbook
@@ -18,8 +18,7 @@ questions that must not be conflated:
 1. What does the actor's local appearance cache contain?
 2. What does a fresh server-originated snapshot show to another bot in the same
    room?
-3. Did the release action actually dispatch and receive authoritative
-   confirmation?
+3. Did the action dispatch, and was peer observation explicitly requested?
 
 Do not treat the local cache, a successful packet dispatch, or an observer being
 configured as proof that the release completed.
@@ -51,21 +50,19 @@ same-room observer. The available logs do not identify which observer or which
 packet type supplied that confirmation.
 
 At the time of the incident, the Spreader's already-satisfied removal branch
-returned before installing observer listeners. A stale or divergent local
-cache could therefore short-circuit authoritative reconciliation. The adapter
-now performs a fresh peer preflight for confirmation-required removals and
-does not dispatch when no eligible observer or full snapshot is available.
+returned before installing observer listeners, while the Bunny workflow
+required peer confirmation for each piece. A stale or divergent local cache
+could therefore stop release before it reached the Spreader. Peer observation
+is now opt-in for appearance actions; the default is local dispatch and local
+state evaluation.
 
 ## Implementation Status
 
-Phases A-C are implemented. Confirmation-required removals now require a fresh,
-source-attributed full-character snapshot from a connected same-room observer.
-If the peer reports the target absent, the action returns authoritative
-`already_satisfied`. If the peer reports the exact target present, the adapter
-rebases only that item slot, applies the normal lock policy, sends BC's
-group-scoped item removal, and requires a second peer confirmation. A different
-asset in the slot, a missing observer, a stale snapshot, or an unconfirmed
-mutation cannot complete the action.
+Appearance actions now default to group-scoped dispatch and a local observed
+snapshot. They do not install peer listeners or wait for server confirmation
+unless a caller explicitly opts in. Add/remove completion means the mutation
+was dispatched and the local appearance reflects the requested result; it is
+not represented as peer-confirmed authority.
 
 Bunny application neither waits for nor subscribes to per-item peer
 confirmation. Before any add, the local appearance planner skips a restraint
@@ -75,8 +72,10 @@ group-scoped item updates, and a successful dispatch plus the resulting local
 appearance is treated as applied. The projection is recorded with
 `verificationStatus: observed`, not peer-confirmed. This avoids sending a full
 appearance bundle after every piece and prevents one application's stale bundle
-from overwriting another slot. Release operations still require fresh peer
-confirmation before clearing durable state.
+from overwriting another slot. Bunny release likewise advances from each
+locally completed removal and persists the local projection before closing the
+artifact. Explicit `confirmAppearance` calls remain available for features that
+choose to require a peer observation.
 
 This policy requires the pre-application local appearance to accurately reflect
 protected slots. If that baseline is stale or unavailable, the owner-lock skip
@@ -91,11 +90,12 @@ only when the source member matches the actor. A live qualification must still
 establish whether full-room snapshots in the target room meet that correlation
 rule.
 
-Bunny release persists `releaseConfirmedPieces` with optimistic artifact
-versions, after the peer-observed appearance projection is stored. Recovery
-skips those pieces and retries only the remainder. It closes the artifact only
-after every expected piece is confirmed absent and the final artifact update
-succeeds. Adapter, workflow, full-room mapping, and Mongo checkpoint tests pass.
+Bunny release persists `releaseCompletedPieces` with optimistic artifact
+versions, after the local appearance projection is stored. Recovery skips those
+pieces and retries only the remainder. It closes the artifact only after every
+expected piece is locally absent and the final artifact update succeeds. Older
+artifacts with `releaseConfirmedPieces` remain readable. Adapter, workflow,
+full-room mapping, and Mongo checkpoint tests pass.
 
 Phase D remains pending. No dedicated private test character and room with two
 confirmed bot connectors were available in this execution, and the unresolved
@@ -199,28 +199,27 @@ refresh. BC has no targeted per-character refresh request in this connector;
 joining/rejoining produces a room sync but disrupts that connector's presence.
 Use that only in a dedicated test room with explicit operator approval.
 
+the room sync. A bulk sync must not satisfy a release predicate merely because
+
 ## Deterministic Reproduction Matrix
 
-Add adapter-level tests before another live run:
+The default action contract is local dispatch; peer observation is a separate
+opt-in behavior:
 
-| Actor snapshot | Fresh peer snapshot                 | Expected action result                                                                                    |
-| -------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Item present   | Item removed after dispatch         | `completed`, peer authority, full observed snapshot                                                       |
-| Item absent    | Item absent                         | `already_satisfied` only after a fresh authoritative peer snapshot confirms absence                       |
-| Item absent    | Item present                        | Reconcile the source/cache safely, dispatch a removal once, then require a second confirmation of absence |
-| Item present   | No eligible observer or no response | `unconfirmed`; durable artifact remains active                                                            |
-| Item absent    | Peer unavailable/disconnected       | No local-cache success; leave release pending                                                             |
+| Local pre-state                                 | Action           | Expected default result                                            |
+| ----------------------------------------------- | ---------------- | ------------------------------------------------------------------ |
+| Target slot empty                               | Add restraint    | Group-scoped dispatch; `completed`; local snapshot contains target |
+| Exact target already present                    | Add restraint    | `already_satisfied`; no dispatch                                   |
+| OwnerPadlock or OwnerTimerPadlock occupies slot | Add restraint    | Skip target; preserve lock and omit restraint from artifact        |
+| Target item present                             | Remove restraint | Group-scoped dispatch; `completed`; local snapshot omits target    |
+| Target item absent                              | Remove restraint | `already_satisfied`; no dispatch                                   |
+| Mutation cannot be dispatched                   | Add/remove       | `failed`; do not record the piece as completed                     |
 
-For the third case, do not send a full appearance bundle copied from a stale
-source cache: that could remove unrelated items. Define a narrow adapter-owned
-reconciliation operation that preserves unrelated appearance and honors the
-same lock/permission classification as ordinary removal.
-
-Also test that a newly observed `ChatRoomSync.Character[]` snapshot can be
-correlated to the target by `MemberNumber`, and document whether its
-`SourceMemberNumber` represents the target actor or the observer that requested
-the room sync. A bulk sync must not satisfy a release predicate merely because
-the target is present in an old or unrelated snapshot.
+Add tests for explicit `observeServerConfirmation: true` separately. Those tests
+should verify source/room correlation and timeout behavior without changing the
+default completion contract. Continue checking BC packet and visual outcomes in a
+controlled room as diagnostic evidence, not as a gate that blocks local action
+completion.
 
 ## Implementation Plan
 
@@ -240,32 +239,27 @@ Do not log the complete appearance bundle or lock passwords.
 
 ### Phase B: Fix local no-op reconciliation (implemented)
 
-For removal policies with `requireServerConfirmation: true`, an already-absent
-local item does not immediately produce a terminal result. The adapter installs
-a temporary waiter and requires a fresh full-character snapshot from a
-source-correlated same-room peer. If the peer reports the exact target present,
-the adapter rebases only that group, applies the ordinary lock plan, dispatches
-the item removal, and waits for a second authoritative absence. If a peer
-confirms the target absent, it returns `already_satisfied` with explicit
-authority and the observed snapshot. If no fresh snapshot is available, it
-returns `unconfirmed` without dispatching a removal.
+By default, an already-absent local item returns `already_satisfied` with the
+local snapshot; a present item is removed through BC's group-scoped item update
+and returns `completed` with the resulting local snapshot. No peer waiter is
+installed. Callers may explicitly set `requireServerConfirmation: true` when a
+fresh source-correlated peer snapshot is required; in that opt-in mode the
+adapter retains its preflight, reconciliation, and confirmation behavior.
 
-Implement this in the appearance adapter/action contract, not as a Bunny-only
-exception; other confirmation-required release callers need the same
-source-cache reconciliation rule. Keep Bunny's `requireServerConfirmation: true`.
+This local-dispatch default is shared by appearance-action callers. Inventory
+confirmation is a separate policy and is unchanged.
 
 ### Phase C: Make release resumable per item (implemented)
 
-Record which restraint identities are authoritatively absent. On recovery,
+Record which restraint identities are locally absent after a completed removal. On recovery,
 reconcile only the remaining items instead of restarting at the first artifact
 piece. Do not mark the artifact expired or clear `currentRestraints` until all
-expected restraint items are authoritatively absent and the projection is
-persisted. Preserve idempotency by operation ID.
+expected restraint items are absent from the locally observed appearance and
+the projection is persisted. Preserve idempotency by operation ID.
 
 ### Phase D: Qualify in a controlled room (pending)
 
-1. Use one dedicated test character and private test room with at least two bot
-   connectors confirmed in that exact room.
+1. Use one dedicated test character and private test room.
 2. Capture the pre-application local appearance. Include an existing item with
    `OwnerPadlock` and repeat with `OwnerTimerPadlock`; verify the restraint for
    that occupied slot is skipped and omitted from the artifact.
@@ -273,14 +267,12 @@ persisted. Preserve idempotency by operation ID.
    requested items remain in the post-application local appearance, no peer
    confirmation listeners are installed for the add, and no full-bundle update
    is sent between pieces. Peer authority is not an application gate.
-4. Let expiry occur without manual removal. Capture the per-item source,
-   dispatch/no-op path, event type, observer identity, and authority.
-5. Verify the spreader is removed visually and in the peer snapshot, then verify
-   the durable artifact is terminal and `currentRestraints` is empty.
-6. Repeat with the test source cache deliberately missing one target while the
-   peer snapshot still contains it.
-7. Repeat without a peer observer and verify the artifact remains active and
-   release is reported pending rather than completed.
+4. Let expiry occur without manual removal. Verify each local item removal,
+   per-piece checkpoint, terminal artifact, and empty `currentRestraints`.
+5. Record the visible room result and any peer packet diagnostics separately;
+   neither is required for local release completion.
+6. Exercise explicit peer-observation opt-in independently and verify it stays
+   pending when no eligible observer responds.
 
 Do not use a production player, clear the existing `261575` artifact by hand, or
 change rollout flags to make the test pass. Obtain explicit authorization before
@@ -289,14 +281,15 @@ any live mutation or infrastructure change.
 ## Exit Criteria
 
 - All deterministic cases in the matrix pass.
-- Both same-room observation packet paths are covered or unsupported paths are
-  explicitly rejected.
-- A no-op release cannot close durable state from the source cache alone.
+- Default add/remove operations complete from local dispatch and local state
+  without peer listeners.
+- Explicit peer-observation mode remains available and is tested independently.
+- Owner-locked slots are skipped and preserved before application.
 - Partial release resumes at the remaining item without retrying confirmed
   removals or duplicating application.
 - The controlled-room run leaves no active artifact or restraint projection.
-- Railway and Mongo evidence are correlated by operation ID and retained with
-  redacted observer/packet diagnostics.
+- Mongo state and optional Railway/peer diagnostics are correlated by operation
+  ID and retained without complete appearance payloads or passwords.
 
 Until these criteria pass, classify the Bunny release as **blocked/pending
 reconciliation**, not successfully expired.

@@ -4,10 +4,7 @@ import { isClothing } from "../../../../src/assetHelpers";
 import { ReleaseSystem } from "../veratownReleaseSystem";
 import { LiveCharacterStateSync } from "../liveCharacterStateSync";
 import { LiveAppearanceRemovalCoordinator } from "../shared";
-import {
-    AppearanceConfirmationError,
-    registerAppearanceConfirmationService,
-} from "../shared/appearanceSync";
+import { registerAppearanceConfirmationService } from "../shared/appearanceSync";
 import { ActionLayerRolloutController } from "../../../action-layer";
 import {
     InMemoryWorkflowJournalStorage,
@@ -412,7 +409,7 @@ test("live removal retries a partial mutation and is idempotent after success", 
     assert.deepEqual(appearance, []);
 });
 
-test("live removal does not retry after room confirmation is unavailable", async () => {
+test("live removal completes once from local state without peer confirmation", async () => {
     registerAppearanceConfirmationService(undefined);
     let appearance: any[] = [
         { Group: "ItemArms", Name: "UnconfirmedCuffs", Property: {} },
@@ -431,13 +428,10 @@ test("live removal does not retry after room confirmation is unavailable", async
     };
     const coordinator = new LiveAppearanceRemovalCoordinator(3);
 
-    await assert.rejects(
-        coordinator.remove(character, "release-146-unconfirmed", {
-            group: "ItemArms",
-            name: "UnconfirmedCuffs",
-        }),
-        AppearanceConfirmationError,
-    );
+    await coordinator.remove(character, "release-146-local-completion", {
+        group: "ItemArms",
+        name: "UnconfirmedCuffs",
+    });
 
     assert.equal(removeCalls, 1);
     assert.deepEqual(appearance, []);

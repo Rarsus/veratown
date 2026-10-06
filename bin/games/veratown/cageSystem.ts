@@ -293,7 +293,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 maxAttempts: 1,
                 retryDelayMs: 0,
                 preserveLockedItems: action.operation !== "remove",
-                requireServerConfirmation: true,
                 ...(action.itemOptions === undefined
                     ? {}
                     : { itemOptions: action.itemOptions }),
@@ -336,9 +335,10 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 observedAppearance = confirmation.observed
                     ? [...confirmation.observed]
                     : undefined;
+            } else if (result.status === "completed" && result.observed) {
+                observedAppearance = [...result.observed];
             } else if (
-                result.status === "completed" &&
-                result.confirmationAuthority &&
+                result.status === "already_satisfied" &&
                 result.observed
             ) {
                 observedAppearance = [...result.observed];
@@ -373,7 +373,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     : { releaseCause: options.releaseCause }),
                 expectedAppearance: [...observedAppearance],
                 observedAppearance: [...observedAppearance],
-                verificationStatus: "confirmed",
+                verificationStatus: result.confirmationAuthority
+                    ? "confirmed"
+                    : "observed",
             };
             await this.stateSync?.(
                 character,
@@ -392,33 +394,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
     ): Promise<boolean> {
         if (!this.appearanceService) return false;
         const operationId = `cage-confirm-empty-slot:${character.MemberNumber}:${++this.cageAppearanceActionSequence}`;
-        const confirmation = await this.appearanceService.confirmAppearance(
-            character,
-            {
-                operationId,
-                memberNumber: character.MemberNumber,
-                source: "release",
-                reason,
-                deadlineAt: Date.now() + 5_000,
-            },
-            5_000,
-            (appearance) =>
-                !appearance.some(
-                    (item) =>
-                        typeof item === "object" &&
-                        item !== null &&
-                        "Group" in item &&
-                        item.Group === "ItemDevices",
-                ),
-        );
-        if (
-            confirmation.status !== "completed" ||
-            !confirmation.confirmationAuthority ||
-            !confirmation.observed
-        ) {
-            return false;
-        }
-        const observedAppearance = [...confirmation.observed];
+        const observedAppearance = character.Appearance.MakeAppearanceBundle();
         if (observedAppearance.some((item) => item.Group === "ItemDevices")) {
             return false;
         }
@@ -432,7 +408,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
             releaseCause: "timer",
             expectedAppearance: [...observedAppearance],
             observedAppearance: [...observedAppearance],
-            verificationStatus: "confirmed",
+            verificationStatus: "observed",
         };
         await wait(50);
         await this.stateSync?.(character, mutationContext, observedAppearance);

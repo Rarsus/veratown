@@ -146,7 +146,6 @@ export class LiveAppearanceRemovalCoordinator {
                                 maxAttempts: 1,
                                 retryDelayMs: 0,
                                 preserveLockedItems: true,
-                                requireServerConfirmation: true,
                                 cleanupAllowed:
                                     target.group === "ItemMisc" &&
                                     target.name === "WoodenSign",

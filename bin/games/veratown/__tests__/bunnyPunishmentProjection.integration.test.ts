@@ -158,13 +158,13 @@ test("Bunny release checkpoints persist with optimistic artifact versions", asyn
     const progress: BunnyPunishmentArtifact = {
         ...artifact,
         artifactVersion: 2,
-        releaseConfirmedPieces: ["ItemArms/HeavyYoke"],
+        releaseCompletedPieces: ["ItemArms/HeavyYoke"],
     };
     await store.recordBunnyPunishmentArtifact(progress, 1);
 
     const profile = await store.getProfile(artifact.memberNumber);
     assert.deepEqual(
-        profile.veratown.bunnyPunishmentArtifact?.releaseConfirmedPieces,
+        profile.veratown.bunnyPunishmentArtifact?.releaseCompletedPieces,
         ["ItemArms/HeavyYoke"],
     );
     assert.equal(profile.veratown.bunnyPunishmentArtifact?.artifactVersion, 2);

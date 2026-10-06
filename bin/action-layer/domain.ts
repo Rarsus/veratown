@@ -79,7 +79,9 @@ export interface ActionExecutionPolicy {
     readonly maxAttempts: number;
     readonly retryDelayMs: number;
     readonly preserveLockedItems?: boolean;
+    /** Require a fresh server-originated observation before completing. */
     readonly requireServerConfirmation?: boolean;
+    /** Collect optional peer confirmation without making it a completion gate. */
     readonly observeServerConfirmation?: boolean;
 }
 

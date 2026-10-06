@@ -149,7 +149,6 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 maxAttempts: 1,
                 retryDelayMs: 0,
                 preserveLockedItems: options.preserveLockedItems ?? true,
-                requireServerConfirmation: true,
             };
             const result = await dispatch(this.appearanceService, policy);
             let observedAppearance: readonly BC_AppearanceItem[] | undefined;
@@ -165,9 +164,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                 observedAppearance = confirmation.observed
                     ? [...confirmation.observed]
                     : undefined;
+            } else if (result.status === "completed" && result.observed) {
+                observedAppearance = [...result.observed];
             } else if (
-                result.status === "completed" &&
-                result.confirmationAuthority &&
+                result.status === "already_satisfied" &&
                 result.observed
             ) {
                 observedAppearance = [...result.observed];
@@ -200,7 +200,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                         : { releaseCause: options.releaseCause }),
                     expectedAppearance: [...observedAppearance],
                     observedAppearance: [...observedAppearance],
-                    verificationStatus: "confirmed",
+                    verificationStatus: result.confirmationAuthority
+                        ? "confirmed"
+                        : "observed",
                 };
                 await this.stateSync?.(character, context, observedAppearance);
             }
@@ -215,37 +217,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         reason: string,
         releaseCause: NonNullable<AppearanceMutationContext["releaseCause"]>,
     ): Promise<boolean> {
-        if (!this.appearanceService?.confirmAppearance) return false;
+        if (!this.appearanceService) return false;
         const operationId = `kennel-confirm-absence:${character.MemberNumber}:${++this.appearanceActionSequence}`;
-        const confirmation = await this.appearanceService.confirmAppearance(
-            character,
-            {
-                operationId,
-                memberNumber: character.MemberNumber,
-                source: "release",
-                reason,
-                deadlineAt: Date.now() + 5_000,
-            },
-            5_000,
-            (appearance) =>
-                !appearance.some(
-                    (item) =>
-                        typeof item === "object" &&
-                        item !== null &&
-                        "Group" in item &&
-                        item.Group === "ItemDevices" &&
-                        "Name" in item &&
-                        item.Name === "Kennel",
-                ),
-        );
-        if (
-            confirmation.status !== "completed" ||
-            !confirmation.confirmationAuthority ||
-            !confirmation.observed
-        ) {
-            return false;
-        }
-        const observedAppearance = [...confirmation.observed];
+        const observedAppearance = character.Appearance.MakeAppearanceBundle();
         if (
             observedAppearance.some(
                 (item) =>
@@ -263,7 +237,7 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             releaseCause,
             expectedAppearance: [...observedAppearance],
             observedAppearance: [...observedAppearance],
-            verificationStatus: "confirmed",
+            verificationStatus: "observed",
         };
         await this.stateSync?.(character, context, observedAppearance);
         return true;

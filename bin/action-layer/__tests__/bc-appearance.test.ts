@@ -70,8 +70,11 @@ function makeCharacter(initial: FakeItem[] = []) {
     };
 }
 
-function makePolicy(operationId: string) {
-    return {
+function makePolicy(
+    operationId: string,
+    observeServerConfirmation: boolean | null = true,
+) {
+    const policy = {
         operationId,
         memberNumber: 11,
         source: "feature" as const,
@@ -80,6 +83,9 @@ function makePolicy(operationId: string) {
         maxAttempts: 1,
         retryDelayMs: 0,
     };
+    return observeServerConfirmation === null
+        ? policy
+        : { ...policy, observeServerConfirmation };
 }
 
 class FakeConnector {
@@ -681,7 +687,7 @@ test("dispatches immediately and returns pending confirmation when no echo arriv
     assert.equal(connector.listenerCount(), 0);
 });
 
-test("dispatches without registering peer listeners when observation is disabled", async () => {
+test("completes add locally without observing peers by default", async () => {
     const connector = new FakeConnector("actor", 99);
     const observer = new FakeConnector("observer", 12);
     const runtime = makeConnectedCharacter(connector);
@@ -693,17 +699,51 @@ test("dispatches without registering peer listeners when observation is disabled
     const result = await adapter.add(
         runtime as never,
         { group: "ItemArms", asset: "Gloves" },
-        {
-            ...makePolicy("unobserved-add"),
-            observeServerConfirmation: false,
-        },
+        makePolicy("default-local-add", null),
     );
 
-    assert.equal(result.status, "in_progress");
+    assert.equal(result.status, "completed");
     assert.equal(result.confirmation, undefined);
+    assert.equal(result.confirmationAuthority, undefined);
+    assert.deepEqual(result.observed, [{ Group: "ItemArms", Name: "Gloves" }]);
     assert.equal(connector.listenerCount(), 0);
     assert.equal(observer.listenerCount(), 0);
     assert.deepEqual(runtime.events, ["items"]);
+});
+
+test("completes removal locally without observing peers by default", async () => {
+    const connector = new FakeConnector("actor", 99);
+    const observer = new FakeConnector("observer", 12);
+    const runtime = makeConnectedCharacter(connector, [
+        { Group: "ItemFeet", Name: "HeavySpreaderMetal" },
+    ]);
+    const sentUpdates: Array<{ Group: string }> = [];
+    (runtime as any).sendItemUpdate = (update: { Group: string }) => {
+        sentUpdates.push(update);
+    };
+    runtime.Appearance.RemoveItem = (group: string) => {
+        const index = runtime.items.findIndex((item) => item.Group === group);
+        if (index >= 0) runtime.items.splice(index, 1);
+        (runtime as any).sendItemUpdate({ Group: group });
+    };
+    const adapter = new BCAppearanceActionAdapter({
+        now: () => 100,
+        observationConnectors: [observer],
+    });
+
+    const result = await adapter.remove(
+        runtime as never,
+        { group: "ItemFeet", asset: "HeavySpreaderMetal" },
+        makePolicy("default-local-remove", null),
+    );
+
+    assert.equal(result.status, "completed");
+    assert.equal(result.confirmationAuthority, undefined);
+    assert.deepEqual(result.observed, []);
+    assert.deepEqual(sentUpdates, [{ Group: "ItemFeet" }]);
+    assert.equal(connector.listenerCount(), 0);
+    assert.equal(observer.listenerCount(), 0);
+    assert.equal(runtime.events.includes("appearance"), false);
 });
 
 test("accepts a source-attributed peer appearance sync and cleans up listeners", async () => {

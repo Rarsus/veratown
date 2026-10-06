@@ -453,6 +453,7 @@ function localNoOpResult(
             createActionMetadata(context, actionId, startedAt, 1, completedAt),
             {
                 value,
+                observed: appearance,
                 reason: "Local appearance satisfies the action without authoritative server confirmation",
                 retryable: false,
             },
@@ -461,7 +462,7 @@ function localNoOpResult(
     return createActionResult(
         "already_satisfied",
         createActionMetadata(context, actionId, startedAt, 1, completedAt),
-        { value },
+        { value, observed: appearance },
     );
 }
 
@@ -545,6 +546,15 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         );
     }
 
+    private shouldObserveServerConfirmation(
+        policy: AppearanceMutationPolicy,
+    ): boolean {
+        return (
+            policy.requireServerConfirmation === true ||
+            policy.observeServerConfirmation === true
+        );
+    }
+
     private epochFor(connector: BCConnectorEvents): number {
         const key = connector as object;
         const connectionId = connector.connectionId;
@@ -582,7 +592,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         diagnostics = false,
     ): ConfirmationWaiter {
         const connector = this.connectorFor(character);
-        if (!connector) {
+        if (!connector)
             return {
                 promise: Promise.resolve({
                     outcome: "unavailable",
@@ -591,7 +601,6 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                 cancel: () => undefined,
                 observerConnectionIds: [],
             };
-        }
 
         const epoch = this.epochFor(connector);
         const actorMemberNumber = connector.Player?.MemberNumber;
@@ -1041,9 +1050,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             this.confirmationTimeoutMs,
             Math.max(1, policy.timeoutMs),
         );
-        const shouldObserve =
-            policy.requireServerConfirmation === true ||
-            policy.observeServerConfirmation !== false;
+        const shouldObserve = this.shouldObserveServerConfirmation(policy);
         const waiter = shouldObserve
             ? this.waitForConfirmation(
                   character,
@@ -1089,11 +1096,17 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         if (!policy.requireServerConfirmation) {
             if (!waiter) {
                 return createActionResult(
-                    "in_progress",
-                    createActionMetadata(context, actionId, startedAt),
+                    "completed",
+                    createActionMetadata(
+                        context,
+                        actionId,
+                        startedAt,
+                        1,
+                        this.now(),
+                    ),
                     {
                         value: localObservation,
-                        reason: "Local BC appearance mutation dispatched; server observation disabled by policy",
+                        observed,
                         retryable: false,
                     },
                 );
@@ -1678,7 +1691,11 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                     "appearance.setHiddenLayers",
                     startedAt,
                 ),
-                { value: toObservation(before, startedAt), retryable: false },
+                {
+                    value: toObservation(before, startedAt),
+                    observed: before,
+                    retryable: false,
+                },
             );
         }
 
@@ -1702,15 +1719,17 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             this.confirmationTimeoutMs,
             Math.max(1, policy.timeoutMs),
         );
-        const waiter = this.waitForConfirmation(
-            character,
-            { group: "ItemScript", asset: "Script" },
-            policy.operationId,
-            "update",
-            startedAt,
-            timeoutMs,
-            matchesDesired,
-        );
+        const waiter = this.shouldObserveServerConfirmation(policy)
+            ? this.waitForConfirmation(
+                  character,
+                  { group: "ItemScript", asset: "Script" },
+                  policy.operationId,
+                  "update",
+                  startedAt,
+                  timeoutMs,
+                  matchesDesired,
+              )
+            : undefined;
 
         try {
             let scriptItem = character.Appearance.InventoryGet("ItemScript");
@@ -1727,7 +1746,7 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             character.Appearance.flushUpdates();
             character.sendAppearanceUpdate();
         } catch (error) {
-            waiter.cancel();
+            waiter?.cancel();
             return failedMutation(
                 context,
                 "appearance.setHiddenLayers",
@@ -1741,6 +1760,23 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         const observed = character.Appearance.MakeAppearanceBundle();
         const localObservation = toObservation(observed, this.now());
         if (!policy.requireServerConfirmation) {
+            if (!waiter) {
+                return createActionResult(
+                    "completed",
+                    createActionMetadata(
+                        context,
+                        "appearance.setHiddenLayers",
+                        startedAt,
+                        1,
+                        this.now(),
+                    ),
+                    {
+                        value: localObservation,
+                        observed,
+                        retryable: false,
+                    },
+                );
+            }
             const confirmation: Promise<BCAppearanceActionConfirmation> =
                 waiter.promise.then((result) =>
                     result.outcome === "accepted"
@@ -1772,6 +1808,21 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
             );
         }
 
+        if (!waiter) {
+            return createActionResult(
+                "unconfirmed",
+                createActionMetadata(
+                    context,
+                    "appearance.setHiddenLayers",
+                    startedAt,
+                ),
+                {
+                    value: localObservation,
+                    reason: "Required server confirmation waiter is unavailable",
+                    retryable: false,
+                },
+            );
+        }
         const confirmationResult = await waiter.promise;
         if (confirmationResult.outcome === "accepted") {
             return createActionResult(

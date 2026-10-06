@@ -912,7 +912,7 @@ test("KennelSystem closes a stale open session during reconnect recovery", async
     assert.deepEqual(mutations.exits, [13]);
 });
 
-test("KennelSystem does not close a session from local device absence without peer confirmation", async () => {
+test("KennelSystem closes a session from local device absence without peer confirmation", async () => {
     const { character } = createCharacter(130);
     character.MapPos = { X: 1, Y: 1 };
     const mutations = createMutationService({
@@ -934,7 +934,7 @@ test("KennelSystem does not close a session from local device absence without pe
 
     await system.reconcileCharacter(character);
 
-    assert.deepEqual(mutations.exits, []);
+    assert.deepEqual(mutations.exits, [130]);
 });
 
 test("KennelSystem rolls back persistence when appearance mutation fails", async () => {

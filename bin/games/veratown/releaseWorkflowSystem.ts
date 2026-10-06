@@ -421,7 +421,6 @@ export class ReleaseWorkflowSystem
                     maxAttempts: 1,
                     retryDelayMs: 0,
                     preserveLockedItems: false,
-                    requireServerConfirmation: true,
                 },
             );
             const success =
@@ -480,22 +479,18 @@ export class ReleaseWorkflowSystem
                     maxAttempts: 1,
                     retryDelayMs: 0,
                     preserveLockedItems: false,
-                    requireServerConfirmation: true,
                 },
             );
             if (
                 result.status !== "completed" &&
                 result.status !== "already_satisfied"
             ) {
-                this.logger.warn(
-                    "Cooldown clothing removal was not confirmed",
-                    {
-                        memberNumber: character.MemberNumber,
-                        group: item.Group,
-                        name: item.Name,
-                        reason: result.reason,
-                    },
-                );
+                this.logger.warn("Cooldown clothing removal did not complete", {
+                    memberNumber: character.MemberNumber,
+                    group: item.Group,
+                    name: item.Name,
+                    reason: result.reason,
+                });
             }
         }
     }
