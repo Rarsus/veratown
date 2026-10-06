@@ -91,8 +91,13 @@ export interface AppearanceItemIdentity {
     readonly extendedType?: string;
 }
 
+export const MAX_TIMER_PASSWORD_LOCK_DURATION_MS = 4 * 60 * 60 * 1000;
+
 export type AppearanceLockType =
-    "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
+    | "SafewordPadlock"
+    | "TimerPasswordPadlock"
+    | "ExclusivePadlock"
+    | "PasswordPadlock";
 
 export interface AppearanceLockOptions {
     readonly type: AppearanceLockType;
@@ -100,6 +105,7 @@ export interface AppearanceLockOptions {
     readonly password?: string;
     readonly hint?: string;
     readonly showTimer?: boolean;
+    readonly removeTimer?: number;
 }
 
 export interface AppearanceItemMutationOptions {

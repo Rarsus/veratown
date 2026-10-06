@@ -21,6 +21,7 @@ import {
 import type { BunnyPunishmentArtifact } from "../shared/unifiedCharacterTypes";
 import type { EventBus, GameEventListener } from "../shared/eventBus";
 import { resolveConsentPadlockType } from "../shared/consentPadlock";
+import { boundedTimerPasswordRemoveTime } from "../shared/timerPasswordLock";
 import type {
     BunnyPunishmentAuditDetails,
     BunnyPunishmentRepository,
@@ -328,6 +329,21 @@ export class BunnyPunishmentWorkflow {
             };
         }
         const punishmentConfig = { ...config, pieces: applicablePieces };
+        const calculatedDuration = calculateBunnyOffenceDuration(
+            (persistedState?.punishmentCount ?? 0) + 1,
+        );
+        const requestedDurationMs = this.debugUnlockDurationMs
+            ? this.debugUnlockDurationMs
+            : calculatedDuration.durationMs;
+        const appliedAt = Date.now();
+        const expiresAt = boundedTimerPasswordRemoveTime(
+            appliedAt + requestedDurationMs,
+            appliedAt,
+        );
+        const duration = {
+            ...calculatedDuration,
+            durationMs: expiresAt - appliedAt,
+        };
 
         let workflowState:
             Awaited<ReturnType<VeratownWorkflowRecovery["start"]>> | undefined;
@@ -410,6 +426,7 @@ export class BunnyPunishmentWorkflow {
                                                   this.conn.Player
                                                       ?.MemberNumber ??
                                                   character.MemberNumber,
+                                              removeTimer: expiresAt,
                                           },
                                       }),
                             },
@@ -554,15 +571,6 @@ export class BunnyPunishmentWorkflow {
             return result;
         }
 
-        const calculatedDuration = calculateBunnyOffenceDuration(
-            (persistedState?.punishmentCount ?? 0) + 1,
-        );
-        const duration = this.debugUnlockDurationMs
-            ? {
-                  ...calculatedDuration,
-                  durationMs: this.debugUnlockDurationMs,
-              }
-            : calculatedDuration;
         if (workflowState && this.actionLayer?.workflowRecovery) {
             workflowState = await this.actionLayer.workflowRecovery.advance(
                 workflowState,
@@ -574,11 +582,11 @@ export class BunnyPunishmentWorkflow {
         const artifact: BunnyPunishmentArtifact = {
             memberNumber: character.MemberNumber,
             operationId,
-            appliedAt: Date.now(),
+            appliedAt,
             restraintPieces: appliedPieces,
             offenceNumber: duration.offenceNumber,
             durationMs: duration.durationMs,
-            expiresAt: Date.now() + duration.durationMs,
+            expiresAt,
             lockType: resolveConsentPadlockType({
                 consentTrigger: "safeword",
             }),

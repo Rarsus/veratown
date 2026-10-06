@@ -789,7 +789,7 @@ export class CageSystem extends AbstractTileFeatureSystem {
                 `to the facility's Futuristic Crate containment units; standing still for any length of time ` +
                 `while inside the cage area will be interpreted as consent to containment. ` +
                 `\n2:  Once containment is initiated, a Futuristic Crate will be fitted and secured with a ` +
-                `SafewordPadlock; the bot will release the crate when the persisted containment period ` +
+                `TimerPasswordPadlock; the bot will release the crate when the persisted containment period ` +
                 `ends, and the player retains an emergency self-release path. ` +
                 `\n3: The crate's internal systems, including restraints, vibration module, and comfort padding, are ` +
                 `regularly inspected and are not expected to cause harm, but prolonged stillness, ` +
@@ -890,8 +890,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
                                 mode: "Deny",
                             },
                             lock: {
-                                type: "SafewordPadlock",
+                                type: "TimerPasswordPadlock",
                                 memberNumber: character.MemberNumber,
+                                removeTimer: authoritativeExpiry,
                             },
                         },
                     },
@@ -1262,8 +1263,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
                                 mode: "Deny",
                             },
                             lock: {
-                                type: "SafewordPadlock",
+                                type: "TimerPasswordPadlock",
                                 memberNumber: character.MemberNumber,
+                                removeTimer: authoritativeExpiry,
                             },
                         },
                     },
@@ -1275,9 +1277,6 @@ export class CageSystem extends AbstractTileFeatureSystem {
                     recoveredAtMs: this.timer.now(),
                 });
             } else if (
-                readLegacyRemoveTimer(
-                    character.Appearance.getItemData("ItemDevices"),
-                ).removeTimer !== undefined &&
                 typeof character.Appearance.InventoryGet === "function"
             ) {
                 const observedAppearance =
@@ -1290,8 +1289,9 @@ export class CageSystem extends AbstractTileFeatureSystem {
                                 asset: "FuturisticCrate",
                             },
                             lock: {
-                                type: "SafewordPadlock",
+                                type: "TimerPasswordPadlock",
                                 memberNumber: character.MemberNumber,
+                                removeTimer: authoritativeExpiry,
                             },
                         },
                         "cage legacy lock migration",
@@ -1302,8 +1302,11 @@ export class CageSystem extends AbstractTileFeatureSystem {
                         item.Name === "FuturisticCrate",
                 );
                 if (
-                    crate?.Property?.LockedBy !== "SafewordPadlock" ||
-                    crate.Property.RemoveTimer !== undefined ||
+                    crate?.Property?.LockedBy !== "TimerPasswordPadlock" ||
+                    typeof crate.Property.RemoveTimer !== "number" ||
+                    crate.Property.RemoveTimer <= this.timer.now() ||
+                    crate.Property.RemoveTimer >
+                        this.timer.now() + 4 * 60 * 60 * 1000 ||
                     typeof crate.Property.Password !== "string" ||
                     !/^[A-Za-z0-9]{1,8}$/.test(crate.Property.Password)
                 ) {

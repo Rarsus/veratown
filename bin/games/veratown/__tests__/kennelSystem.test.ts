@@ -64,7 +64,14 @@ function createTestAppearanceActionService() {
             item.lock(lock.type, lock.memberNumber, {
                 Password: lock.password ?? "test-password",
                 RemoveItem: true,
-                RemoveOnUnlock: true,
+                ...(lock.type === "TimerPasswordPadlock"
+                    ? {
+                          RemoveTimer:
+                              lock.removeTimer ??
+                              Date.now() + 4 * 60 * 60 * 1000,
+                          ShowTimer: true,
+                      }
+                    : { RemoveOnUnlock: true }),
                 LockSet: true,
             });
         }
@@ -102,10 +109,19 @@ function createTestAppearanceActionService() {
             item.lock(lock.type, lock.memberNumber, {
                 Password: lock.password ?? "test-password",
                 RemoveItem: true,
-                RemoveOnUnlock: true,
+                ...(lock.type === "TimerPasswordPadlock"
+                    ? {
+                          RemoveTimer:
+                              lock.removeTimer ??
+                              Date.now() + 4 * 60 * 60 * 1000,
+                          ShowTimer: true,
+                      }
+                    : { RemoveOnUnlock: true }),
                 LockSet: true,
             });
-            delete item.getData().Property.RemoveTimer;
+            if (lock.type !== "TimerPasswordPadlock") {
+                delete item.getData().Property.RemoveTimer;
+            }
             return makeResult(character, policy);
         },
     };
@@ -802,10 +818,14 @@ test("KennelSystem applies a timed lock through the confirmed appearance action"
 
     const appearance = await system.lockExistingKennel(created.character, 42);
 
-    assert.equal(created.device.Property.LockedBy, "SafewordPadlock");
+    assert.equal(created.device.Property.LockedBy, "TimerPasswordPadlock");
+    assert.ok(created.device.Property.RemoveTimer > Date.now());
+    assert.ok(
+        created.device.Property.RemoveTimer <= Date.now() + 4 * 60 * 60 * 1000,
+    );
     assert.equal(created.device.Property.LockMemberNumber, 42);
     assert.equal(typeof created.device.Property.Password, "string");
-    assert.equal(appearance[0].Property?.LockedBy, "SafewordPadlock");
+    assert.equal(appearance[0].Property?.LockedBy, "TimerPasswordPadlock");
 });
 
 test("KennelSystem releases an expired timed session during recovery", async () => {

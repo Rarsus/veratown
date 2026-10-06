@@ -1,10 +1,14 @@
 import { generatePassword } from "../../utils";
+import { boundedTimerPasswordRemoveTime } from "./timerPasswordLock";
 
 export type ConsentTrigger =
     "safeword" | "explicit-consent" | "admin" | "unknown";
 
 export type ConsentPadlockType =
-    "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
+    | "SafewordPadlock"
+    | "TimerPasswordPadlock"
+    | "ExclusivePadlock"
+    | "PasswordPadlock";
 
 export interface ConsentPadlockOptions {
     memberNumber: number;
@@ -13,10 +17,12 @@ export interface ConsentPadlockOptions {
     password?: string;
     hint?: string;
     showTimer?: boolean;
+    removeTimer?: number;
 }
 
 const CONSENT_PADLOCK_TYPES = new Set<ConsentPadlockType>([
     "SafewordPadlock",
+    "TimerPasswordPadlock",
     "ExclusivePadlock",
     "PasswordPadlock",
 ]);
@@ -28,8 +34,13 @@ const CONSENT_PADLOCK_TYPES = new Set<ConsentPadlockType>([
 export function resolveConsentPadlockType(
     options: Pick<ConsentPadlockOptions, "consentTrigger" | "lockType"> = {},
 ): ConsentPadlockType {
-    if (options.lockType) return options.lockType;
-    return "SafewordPadlock";
+    if (
+        options.lockType === undefined ||
+        options.lockType === "SafewordPadlock"
+    ) {
+        return "TimerPasswordPadlock";
+    }
+    return options.lockType;
 }
 
 export function applyConsentPadlock(
@@ -46,10 +57,14 @@ export function applyConsentPadlock(
         Password: options.password ?? generatePassword(),
         ...(options.hint === undefined ? {} : { Hint: options.hint }),
         RemoveItem: true,
-        ...(lockType === "SafewordPadlock" ? { RemoveOnUnlock: true } : {}),
         LockSet: true,
-        ...(lockType === "SafewordPadlock"
-            ? {}
+        ...(lockType === "TimerPasswordPadlock"
+            ? {
+                  RemoveTimer: boundedTimerPasswordRemoveTime(
+                      options.removeTimer,
+                  ),
+                  ShowTimer: options.showTimer ?? true,
+              }
             : { ShowTimer: options.showTimer ?? false }),
     };
     const runtimeItem = item as any;
@@ -68,10 +83,16 @@ export function applyConsentPadlock(
         property.Password = lockProperty.Password;
         property.RemoveItem = true;
         property.LockSet = true;
-        if (lockType === "SafewordPadlock") property.RemoveOnUnlock = true;
+        if (lockType === "TimerPasswordPadlock") {
+            property.RemoveTimer = lockProperty.RemoveTimer;
+            property.ShowTimer = lockProperty.ShowTimer;
+            delete property.RemoveOnUnlock;
+        }
         if (options.hint !== undefined) property.Hint = options.hint;
         delete property.Lock;
-        delete property.RemoveTimer;
+        if (lockType !== "TimerPasswordPadlock") {
+            delete property.RemoveTimer;
+        }
     }
 
     return lockType;

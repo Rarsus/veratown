@@ -62,7 +62,7 @@ const PILLORY_REPEAT_LOCK_MS = 4 * 60 * 60 * 1000;
 export interface RepeatPilloryLock {
     memberNumber: number;
     expiresAt: number;
-    lockType: "SafewordPadlock";
+    lockType: "TimerPasswordPadlock";
     status: "active" | "expired" | "safeword-released";
 }
 
@@ -73,7 +73,7 @@ export function createRepeatPilloryLock(
     return {
         memberNumber,
         expiresAt,
-        lockType: "SafewordPadlock",
+        lockType: "TimerPasswordPadlock",
         status: "active",
     };
 }
@@ -1380,7 +1380,7 @@ Game Overview
             applyConsentPadlock(pillory, {
                 memberNumber: this.conn.Player.MemberNumber,
                 consentTrigger: "safeword",
-                showTimer: false,
+                removeTimer: expiresAt,
             });
             this.armRepeatPilloryTimer(memberNumber, expiresAt);
             this.pilloriedUntilNextDraw.delete(memberNumber);

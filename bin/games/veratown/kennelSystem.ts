@@ -587,7 +587,11 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     service.lockExistingItem(
                         character,
                         { group: "ItemDevices", asset: "Kennel" },
-                        { type: "SafewordPadlock", memberNumber },
+                        {
+                            type: "TimerPasswordPadlock",
+                            memberNumber,
+                            removeTimer: legacyExpiry,
+                        },
                         policy,
                     ),
             );
@@ -596,8 +600,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     item.Group === "ItemDevices" && item.Name === "Kennel",
             );
             if (
-                kennel?.Property?.LockedBy !== "SafewordPadlock" ||
-                kennel.Property.RemoveTimer !== undefined ||
+                kennel?.Property?.LockedBy !== "TimerPasswordPadlock" ||
+                typeof kennel.Property.RemoveTimer !== "number" ||
+                kennel.Property.RemoveTimer <= Date.now() ||
+                kennel.Property.RemoveTimer > Date.now() + 4 * 60 * 60 * 1000 ||
                 typeof kennel.Property.Password !== "string" ||
                 !/^[A-Za-z0-9]{1,8}$/.test(kennel.Property.Password)
             ) {
@@ -1097,6 +1103,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
         character: API_Character,
         lockMemberNumber: number,
     ): Promise<readonly BC_AppearanceItem[]> {
+        const session = await this.mutationService?.getActiveKennelSession?.(
+            character.MemberNumber,
+        );
         const appearance = await this.executeAppearanceAction(
             character,
             "apply timed Kennel lock",
@@ -1105,8 +1114,9 @@ export class KennelSystem extends AbstractTileFeatureSystem {
                     character,
                     { group: "ItemDevices", asset: "Kennel" },
                     {
-                        type: "SafewordPadlock",
+                        type: "TimerPasswordPadlock",
                         memberNumber: lockMemberNumber,
+                        removeTimer: session?.expiresAt,
                     },
                     policy,
                 ),
@@ -1115,7 +1125,10 @@ export class KennelSystem extends AbstractTileFeatureSystem {
             (item) => item.Group === "ItemDevices" && item.Name === "Kennel",
         );
         if (
-            kennel?.Property?.LockedBy !== "SafewordPadlock" ||
+            kennel?.Property?.LockedBy !== "TimerPasswordPadlock" ||
+            typeof kennel.Property.RemoveTimer !== "number" ||
+            kennel.Property.RemoveTimer <= Date.now() ||
+            kennel.Property.RemoveTimer > Date.now() + 4 * 60 * 60 * 1000 ||
             typeof kennel.Property.Password !== "string"
         ) {
             throw new AppearanceConfirmationError(

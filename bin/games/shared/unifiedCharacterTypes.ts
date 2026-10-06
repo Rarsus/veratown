@@ -108,7 +108,11 @@ export interface KennelSession {
     totalTime: number;
     detailedBy?: number;
     expiresAt?: number;
-    lockType?: "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
+    lockType?:
+        | "SafewordPadlock"
+        | "TimerPasswordPadlock"
+        | "ExclusivePadlock"
+        | "PasswordPadlock";
 }
 
 export interface CurrentRestraint {
@@ -235,7 +239,11 @@ export interface BunnyPunishmentArtifact {
     offenceNumber: number;
     durationMs: number;
     expiresAt: number;
-    lockType: "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
+    lockType:
+        | "SafewordPadlock"
+        | "TimerPasswordPadlock"
+        | "ExclusivePadlock"
+        | "PasswordPadlock";
     consentTrigger: "safeword" | "explicit-consent" | "admin" | "unknown";
     artifactVersion: number;
     cleanupPolicy: "explicit_cleanup_only";

@@ -233,7 +233,7 @@ export interface BunnyRestraintPiece {
     // "BoxTie", "Frogtie"). Leave undefined for items that don't have one.
     extendedType?: string;
     // Optional lock applied after the item is equipped.
-    lockType?: "SafewordPadlock" | "ExclusivePadlock";
+    lockType?: "TimerPasswordPadlock" | "ExclusivePadlock";
 }
 
 // A full restraint "outfit": a named set of pieces applied together.
@@ -250,13 +250,13 @@ export const BUNNY_RESTRAINT_CONFIGS: BunnyRestraintConfig[] = [
             {
                 group: "ItemArms",
                 asset: "HeavyYoke",
-                lockType: "SafewordPadlock",
+                lockType: "TimerPasswordPadlock",
             },
             {
                 group: "ItemFeet",
                 asset: "HeavySpreaderMetal",
                 extendedType: "Wide",
-                lockType: "SafewordPadlock",
+                lockType: "TimerPasswordPadlock",
             },
         ],
     },

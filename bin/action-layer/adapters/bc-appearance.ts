@@ -1,6 +1,7 @@
 import {
     createActionMetadata,
     createActionResult as createGenericActionResult,
+    MAX_TIMER_PASSWORD_LOCK_DURATION_MS,
     type ActionMetadata,
     type ActionStatus,
     type ActionContext,
@@ -378,10 +379,46 @@ function configureAddedItem(
     if (lock) configureItemLock(item, lock);
 }
 
+function timerPasswordRemoveTime(
+    lock: AppearanceLockOptions,
+    now = Date.now(),
+): number | undefined {
+    if (lock.type !== "TimerPasswordPadlock") return undefined;
+    const requested =
+        lock.removeTimer ?? now + MAX_TIMER_PASSWORD_LOCK_DURATION_MS;
+    if (!Number.isFinite(requested) || requested <= now) {
+        throw new Error("TimerPasswordPadlock requires a future removeTimer");
+    }
+    return Math.min(requested, now + MAX_TIMER_PASSWORD_LOCK_DURATION_MS);
+}
+
+function timerPasswordLockMatches(
+    property: Record<string, unknown>,
+    lock: AppearanceLockOptions,
+): boolean {
+    const removeTimer = property.RemoveTimer;
+    if (lock.type !== "TimerPasswordPadlock") {
+        return removeTimer === undefined;
+    }
+    const now = Date.now();
+    if (
+        typeof removeTimer !== "number" ||
+        removeTimer <= now ||
+        removeTimer > now + MAX_TIMER_PASSWORD_LOCK_DURATION_MS
+    ) {
+        return false;
+    }
+    return (
+        lock.removeTimer === undefined ||
+        removeTimer === timerPasswordRemoveTime(lock, now)
+    );
+}
+
 function configureItemLock(item: any, lock: AppearanceLockOptions): void {
     if (typeof item.lock !== "function") {
         throw new Error("BC appearance item does not support locking");
     }
+    const removeTimer = timerPasswordRemoveTime(lock);
     const password = lock.password ?? generatePassword();
     item.lock(lock.type, lock.memberNumber, {
         Password: password,
@@ -389,7 +426,15 @@ function configureItemLock(item: any, lock: AppearanceLockOptions): void {
         RemoveItem: true,
         ...(lock.type === "SafewordPadlock"
             ? { RemoveOnUnlock: true }
-            : { ShowTimer: lock.showTimer ?? false }),
+            : {
+                  ShowTimer:
+                      lock.type === "TimerPasswordPadlock"
+                          ? (lock.showTimer ?? true)
+                          : (lock.showTimer ?? false),
+                  ...(removeTimer === undefined
+                      ? {}
+                      : { RemoveTimer: removeTimer }),
+              }),
         LockSet: true,
     });
 }
@@ -397,6 +442,7 @@ function configureItemLock(item: any, lock: AppearanceLockOptions): void {
 function expectedLockProperties(
     lock: AppearanceLockOptions,
 ): Record<string, unknown> {
+    const removeTimer = timerPasswordRemoveTime(lock);
     return {
         LockedBy: lock.type,
         LockMemberNumber: lock.memberNumber,
@@ -404,7 +450,15 @@ function expectedLockProperties(
         RemoveItem: true,
         ...(lock.type === "SafewordPadlock"
             ? { RemoveOnUnlock: true }
-            : { ShowTimer: lock.showTimer ?? false }),
+            : {
+                  ShowTimer:
+                      lock.type === "TimerPasswordPadlock"
+                          ? (lock.showTimer ?? true)
+                          : (lock.showTimer ?? false),
+                  ...(removeTimer === undefined
+                      ? {}
+                      : { RemoveTimer: removeTimer }),
+              }),
         ...(lock.password === undefined ? {} : { Password: lock.password }),
         ...(lock.hint === undefined ? {} : { Hint: lock.hint }),
     };
@@ -1469,9 +1523,13 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
         }
 
         const expectedLock = expectedLockProperties(lock);
+        const timerMatches = timerPasswordLockMatches(
+            propertyOf(currentItem),
+            lock,
+        );
         if (
             matchesPropertySubset(propertyOf(currentItem), expectedLock) &&
-            propertyOf(currentItem).RemoveTimer === undefined
+            timerMatches
         ) {
             return localNoOpResult(
                 context,
@@ -1522,7 +1580,10 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                 }
                 configureItemLock(currentRuntimeItem, lock);
                 const updatedItem = currentRuntimeItem.getData?.();
-                if (updatedItem?.Property) {
+                if (
+                    updatedItem?.Property &&
+                    lock.type !== "TimerPasswordPadlock"
+                ) {
                     delete (updatedItem.Property as Record<string, unknown>)
                         .RemoveTimer;
                 }
@@ -1542,7 +1603,11 @@ export class BCAppearanceActionAdapter implements AppearanceActionAdapter<
                         propertyOf(observedItem),
                         expectedLock,
                     ) &&
-                    propertyOf(observedItem).RemoveTimer === undefined
+                    (lock.type === "TimerPasswordPadlock"
+                        ? typeof propertyOf(observedItem).RemoveTimer ===
+                              "number" &&
+                          propertyOf(observedItem).RemoveTimer! > Date.now()
+                        : propertyOf(observedItem).RemoveTimer === undefined)
                 );
             },
         );

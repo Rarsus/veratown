@@ -21,19 +21,23 @@ function createItem() {
     return item;
 }
 
-test("consent resolver defaults to SafewordPadlock", () => {
-    assert.equal(resolveConsentPadlockType(), "SafewordPadlock");
+test("consent resolver defaults Safeword requests to TimerPasswordPadlock", () => {
+    assert.equal(resolveConsentPadlockType(), "TimerPasswordPadlock");
     assert.equal(
         resolveConsentPadlockType({ consentTrigger: "unknown" }),
-        "SafewordPadlock",
+        "TimerPasswordPadlock",
     );
     assert.equal(
         resolveConsentPadlockType({ consentTrigger: "admin" }),
-        "SafewordPadlock",
+        "TimerPasswordPadlock",
+    );
+    assert.equal(
+        resolveConsentPadlockType({ lockType: "SafewordPadlock" }),
+        "TimerPasswordPadlock",
     );
 });
 
-test("consent helper removes timer authority and preserves lock flags", () => {
+test("consent helper applies a visible timer password lock by default", () => {
     const item = createItem();
 
     const lockType = applyConsentPadlock(item, {
@@ -41,11 +45,15 @@ test("consent helper removes timer authority and preserves lock flags", () => {
         consentTrigger: "safeword",
     });
 
-    assert.equal(lockType, "SafewordPadlock");
-    assert.equal(item.lockType, "SafewordPadlock");
-    assert.equal(item.Property.RemoveTimer, undefined);
+    assert.equal(lockType, "TimerPasswordPadlock");
+    assert.equal(item.lockType, "TimerPasswordPadlock");
+    assert.ok(Number(item.Property.RemoveTimer) > Date.now());
+    assert.ok(
+        Number(item.Property.RemoveTimer) <= Date.now() + 4 * 60 * 60 * 1000,
+    );
+    assert.equal(item.Property.ShowTimer, true);
     assert.equal(item.Property.RemoveItem, true);
-    assert.equal(item.Property.RemoveOnUnlock, true);
+    assert.equal(item.Property.RemoveOnUnlock, undefined);
     assert.equal(item.Property.LockSet, true);
     assert.match(String(item.Property.Password), /^[A-Z]{8}$/);
 });
@@ -71,7 +79,7 @@ test("consent helper rejects unsupported runtime lock types", () => {
         () =>
             applyConsentPadlock(createItem(), {
                 memberNumber: 42,
-                lockType: "TimerPasswordPadlock" as never,
+                lockType: "NotALock" as never,
             }),
         /Unsupported consent padlock type/,
     );

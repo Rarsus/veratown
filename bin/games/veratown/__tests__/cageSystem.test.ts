@@ -226,7 +226,12 @@ function createAppearanceActionService() {
             crate.lock(options.lock.type, options.lock.memberNumber, {
                 Password: options.lock.password ?? "test-password",
                 RemoveItem: true,
-                RemoveOnUnlock: true,
+                ...(options.lock.type === "TimerPasswordPadlock"
+                    ? {
+                          RemoveTimer: options.lock.removeTimer,
+                          ShowTimer: true,
+                      }
+                    : { RemoveOnUnlock: true }),
                 LockSet: true,
             });
         }
@@ -251,10 +256,14 @@ function createAppearanceActionService() {
             crate.lock(lock.type, lock.memberNumber, {
                 Password: lock.password ?? "test-password",
                 RemoveItem: true,
-                RemoveOnUnlock: true,
+                ...(lock.type === "TimerPasswordPadlock"
+                    ? { RemoveTimer: lock.removeTimer, ShowTimer: true }
+                    : { RemoveOnUnlock: true }),
                 LockSet: true,
             });
-            delete crate.Property.RemoveTimer;
+            if (lock.type !== "TimerPasswordPadlock") {
+                delete crate.Property.RemoveTimer;
+            }
             return makeResult(character, policy);
         },
     };
@@ -673,12 +682,12 @@ test("CageSystem restores a missing crate from persisted containment state", asy
     assert.equal(
         character.character.Appearance.getItemData("ItemDevices")?.Property
             ?.RemoveTimer,
-        undefined,
+        300_000,
     );
     assert.equal(
         character.character.Appearance.getItemData("ItemDevices")?.Property
             ?.LockedBy,
-        "SafewordPadlock",
+        "TimerPasswordPadlock",
     );
 });
 

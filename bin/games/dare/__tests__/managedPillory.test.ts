@@ -3,17 +3,17 @@ import * as assert from "node:assert/strict";
 import { applyConsentPadlock } from "../../shared/consentPadlock";
 import { createRepeatPilloryLock } from "../../dare";
 
-test("repeat pillory state is bot-managed and uses SafewordPadlock", () => {
+test("repeat pillory state uses a four-hour TimerPasswordPadlock", () => {
     const expiresAt = Date.now() + 4 * 60 * 60 * 1000;
     assert.deepEqual(createRepeatPilloryLock(42, expiresAt), {
         memberNumber: 42,
         expiresAt,
-        lockType: "SafewordPadlock",
+        lockType: "TimerPasswordPadlock",
         status: "active",
     });
 });
 
-test("Dare consent lock does not write a Bondage Club timer", () => {
+test("Dare consent lock writes a bounded timer-password expiry", () => {
     let appliedLockType: string | undefined;
     const data = {
         Property: { RemoveTimer: Date.now() + 1_000 },
@@ -31,6 +31,7 @@ test("Dare consent lock does not write a Bondage Club timer", () => {
         consentTrigger: "safeword",
     });
 
-    assert.equal(appliedLockType, "SafewordPadlock");
-    assert.equal("RemoveTimer" in data.Property, false);
+    assert.equal(appliedLockType, "TimerPasswordPadlock");
+    assert.ok(data.Property.RemoveTimer > Date.now());
+    assert.ok(data.Property.RemoveTimer <= Date.now() + 4 * 60 * 60 * 1000);
 });

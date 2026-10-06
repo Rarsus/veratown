@@ -1,11 +1,14 @@
 {
     "folders": [
         {
-            "path": "..",
+            "path": ".."
         },
         {
-            "path": "../../Bondage-College",
+            "path": "../../Bondage-College"
         },
+        {
+            "path": "../../veratown-prototype"
+        }
     ],
     "settings": {},
 }
