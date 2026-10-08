@@ -65,7 +65,7 @@ export interface RoomDefinition {
 const GAMEVERSION = "R132";
 const LZSTRING_MAGIC = "╬";
 
-export const ServerChatMessageMaxLength = 2000; // from bc-server
+const ServerChatMessageMaxLength = 2000; // from bc-server
 
 export function normalizeWhisperContent(message: string): string {
     return message.replaceAll("(", "[").replaceAll(")", "]");
@@ -77,45 +77,6 @@ export function formatWhisperContent(
 ): string {
     const content = normalizeWhisperContent(message);
     return acrossMap ? `(${content})` : content;
-}
-
-export function splitMessageIntoChunks(
-    message: string,
-    maxLength = ServerChatMessageMaxLength,
-): string[] {
-    if (!Number.isInteger(maxLength) || maxLength < 1) {
-        throw new Error("maxLength must be a positive integer");
-    }
-    if (message.length === 0) return [""];
-
-    const chunks: string[] = [];
-    let current = "";
-    const lines = message.match(/[^\n]*\n|[^\n]+$/g) ?? [message];
-
-    for (const line of lines) {
-        let remaining = line;
-        if (remaining.length > maxLength) {
-            if (current) chunks.push(current);
-            current = "";
-            while (remaining.length > maxLength) {
-                const newlineIndex = remaining.lastIndexOf("\n", maxLength - 1);
-                const splitIndex =
-                    newlineIndex >= 0 ? newlineIndex + 1 : maxLength;
-                chunks.push(remaining.slice(0, splitIndex));
-                remaining = remaining.slice(splitIndex);
-            }
-        }
-
-        if (current.length + remaining.length > maxLength) {
-            if (current) chunks.push(current);
-            current = remaining;
-        } else {
-            current += remaining;
-        }
-    }
-
-    if (current) chunks.push(current);
-    return chunks.length > 0 ? chunks : [""];
 }
 
 class PromiseResolve<T> {
@@ -207,7 +168,6 @@ export interface AppearanceItemUpdateDiagnostic {
     connectionId: string;
     direction: "outbound" | "inbound";
     requestId?: string;
-    sourceMemberNumber?: number;
     targetMemberNumber: number;
     group: string;
     name?: string;
@@ -248,30 +208,11 @@ function appearancePacketDiagnostic(
     };
 }
 
-export function appearanceRoomSyncDiagnostics(
-    connectionId: string,
-    response: Pick<
-        ServerChatRoomSyncMessage,
-        "Character" | "SourceMemberNumber"
-    >,
-): AppearancePacketDiagnostic[] {
-    return response.Character.map((character) =>
-        appearancePacketDiagnostic(
-            connectionId,
-            "inbound",
-            character.MemberNumber,
-            character.Appearance,
-            response.SourceMemberNumber,
-        ),
-    );
-}
-
 function appearanceItemUpdateDiagnostic(
     connectionId: string,
     direction: AppearanceItemUpdateDiagnostic["direction"],
     update: ServerCharacterItemUpdate,
     requestId?: string,
-    sourceMemberNumber?: number,
 ): AppearanceItemUpdateDiagnostic {
     const property = (update.Property ?? {}) as Record<string, unknown>;
     const hasName = typeof update.Name === "string" && update.Name.length > 0;
@@ -282,7 +223,6 @@ function appearanceItemUpdateDiagnostic(
         connectionId,
         direction,
         ...(requestId === undefined ? {} : { requestId }),
-        ...(sourceMemberNumber === undefined ? {} : { sourceMemberNumber }),
         targetMemberNumber: update.Target,
         group: update.Group,
         ...(hasName ? { name: update.Name } : {}),
@@ -435,32 +375,19 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         target?: number,
         dict?: Record<string, any>[],
     ): void {
-        let outgoingMessages: string[];
         if (type === "Whisper") {
-            const acrossMap = this.chatRoom?.usesMaps() ?? false;
-            const maxContentLength =
-                ServerChatMessageMaxLength - (acrossMap ? 2 : 0);
-            outgoingMessages = splitMessageIntoChunks(
-                msg,
-                maxContentLength,
-            ).map((chunk) => formatWhisperContent(chunk, acrossMap));
-        } else {
-            if (msg.length > ServerChatMessageMaxLength) {
-                console.error("Message too long, truncating");
-                msg = msg.substring(0, ServerChatMessageMaxLength);
-            }
-            outgoingMessages = [msg];
+            msg = formatWhisperContent(msg, this.chatRoom?.usesMaps() ?? false);
         }
 
-        for (const content of outgoingMessages) {
-            const payload = { Type: type, Content: content } as Record<
-                string,
-                any
-            >;
-            if (target) payload.Target = target;
-            if (dict) payload.Dictionary = dict;
-            this.wrappedSock.emit("ChatRoomChat", payload);
+        if (msg.length > ServerChatMessageMaxLength) {
+            console.error("Message too long, truncating");
+            msg = msg.substring(0, ServerChatMessageMaxLength);
         }
+
+        const payload = { Type: type, Content: msg } as Record<string, any>;
+        if (target) payload.Target = target;
+        if (dict) payload.Dictionary = dict;
+        this.wrappedSock.emit("ChatRoomChat", payload);
     }
 
     public reply(orig: BC_Server_ChatRoomMessage, reply: string): void {
@@ -655,12 +582,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
         } else {
             this._chatRoom.update(chatRoom);
         }
-        for (const diagnostic of appearanceRoomSyncDiagnostics(
-            this.connectionId,
-            resp,
-        )) {
-            this.emit("AppearanceSyncReceived", diagnostic);
-        }
         const roomData = { ...resp };
         // @ts-expect-error not part of RoomDefinition
         delete roomData.Character;
@@ -850,16 +771,6 @@ export class API_Connector extends EventEmitter<ConnectorEvents> {
     private onChatRoomSyncItem = (update: ServerChatRoomSyncItemResponse) => {
         // console.log("Chat room sync item", update);
         this._chatRoom?.characterItemUpdate(update.Item);
-        this.emit(
-            "AppearanceItemUpdateReceived",
-            appearanceItemUpdateDiagnostic(
-                this.connectionId,
-                "inbound",
-                update.Item,
-                undefined,
-                update.Source,
-            ),
-        );
         if (update.Item.Target === this._player!.MemberNumber) {
             const payload = {
                 AssetFamily: "Female3DCG",

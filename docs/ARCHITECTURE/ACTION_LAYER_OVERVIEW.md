@@ -1,9 +1,9 @@
 ---
 title: "Headless Bondage Club Action Layer"
 subtitle: "Comprehensive plan for domain actions, adapters, and workflow orchestration"
-date: "October 5, 2026"
-version: "1.28"
-status: "Foundation, promoted Bunny restraint ownership, and enabled Veratown appearance action paths; broader feature qualification and late-track performance remain pending"
+date: "September 27, 2026"
+version: "1.27"
+status: "Foundation plus promoted production Bunny restraint ownership; broader migration and late-track performance remain pending"
 ---
 
 # Headless Bondage Club Action Layer
@@ -33,16 +33,12 @@ dependency surface.
 
 This document describes both the target architecture and the current delivery
 state. The completed work spans the isolated package at `bin/action-layer/`
-and slices for Bunny restraint application, release target removal,
-communication notifications, position observation, map-trigger lifecycle, Door
-map interaction, and Veratown Bunny/Cage/Kennel/CatDog appearance mutations.
-The Veratown runtime enables the Bunny restraint and feature-appearance routes;
-release removal and communication notifications remain separately controlled.
-These appearance routes fail closed rather than invoking a direct mutation
-fallback. They do not constitute broad feature-family migration. Bunny has
-completed local, durable, atomicity, and one bounded live apply/expiry
-validation cycle; Cage, Kennel, and CatDog have local coverage but no
-post-migration controlled-room qualification recorded here.
+and narrow pilot slices for Bunny restraint application, release target
+removal, communication notifications, position observation, map-trigger
+lifecycle, and Door map interaction. No broad feature-family migration has
+occurred. Appearance and communication rollout switches remain disabled by
+default. Bunny has completed local, durable, atomicity, and one bounded live
+apply/expiry validation cycle; operational qualification remains open.
 
 The executable next-step order, per-area gates, and one-cycle verification
 command are maintained in
@@ -65,16 +61,11 @@ The controlled real-room restart, rollback, and canary rehearsal is defined in
   strict TypeScript and formatting checks passing after each validated slice.
 - Generated BC typed and modular definitions are translated only at the BC
   adapter boundary, including copy-chain resolution.
-- Bunny restraint application, Cage/Kennel mutations and commands, and CatDog
-  bondage/vibrator mutations dispatch through `AppearanceActionService` and
-  require authoritative appearance confirmation. The Bunny-restraint and
-  feature-appearance routes are enabled in Veratown; release removal remains
-  disabled and independently controlled. These feature actions do not use
-  direct-mutation fallback paths.
+- Bunny restraint application and selected release removal have action paths,
+  rollout leases, and rollback routing. Bunny restraint ownership is enabled in
+  Railway production; release removal remains disabled and legacy-owned.
 - The Bunny workflow dispatches restraint application through the action layer
-  and requires server-confirmed appearance before recording success. A matching
-  server sync can be observed through a secondary connector in the same room.
-  It is wired to
+  and records authoritative item observation asynchronously. It is wired to
   the production Mongo workflow journal. Startup restores journal records and
   active artifacts; shutdown disposes workflow timers and subscriptions.
 - A restarted production Bunny cycle is complete: deployment
@@ -91,9 +82,7 @@ The controlled real-room restart, rollback, and canary rehearsal is defined in
   and canary are recorded as passing, and the accepted rollback evidence is
   tracked in #243. The full performance suite has moved to the late track;
   bounded performance qualification remains open for the broader cutover.
-  Cage, Kennel, and CatDog still need controlled-room qualification. The Bunny
-  restraint and feature-appearance switches are enabled; release removal
-  remains disabled.
+  Only the Bunny restraint switch is enabled; release removal remains disabled.
 - Communication action design, IST/SOLL UML diagrams, and the three-scope state
   management model are documented in
   [COMMUNICATION_ACTIONS.md](COMMUNICATION_ACTIONS.md). The implementation is
@@ -118,20 +107,18 @@ The controlled real-room restart, rollback, and canary rehearsal is defined in
 
 ### Actual status rule
 
-The action layer has enabled action paths and a controlled-production Bunny
-restraint slice, but no broad Veratown feature-family migration. “Implemented”
-means the code path and focused evidence exist; “enabled” means a runtime
-switch selects it for new operations; “qualified” requires controlled-room
-connector evidence; and “production migrated” also requires recovery, rollback,
-performance, and an accepted go/no-go record.
+The action layer currently has pilots, not production-migrated feature
+families. “Implemented” means the code path and focused evidence exist;
+“enabled” means a runtime switch selects it for new operations; “qualified”
+requires controlled-room connector evidence; and “production migrated” also
+requires recovery, rollback, performance, and an accepted go/no-go record.
 
 ### Migration status answer
 
-**Bunny restraint appearance mutations are action-layer-owned; Bunny as a
-feature is not fully migrated.** The narrow restraint operation is promoted in
-Railway production through `action_layer_bunny_restraints_enabled=true` and
-requires authoritative appearance confirmation. Release removal and remaining
-release workflow responsibilities remain independently controlled.
+**Bunny is not fully migrated to the new method.** The narrow restraint
+application operation is now promoted and action-layer-owned in Railway production through
+`action_layer_bunny_restraints_enabled=true`. Release removal and remaining
+workflow responsibilities remain legacy-owned or independently controlled.
 
 `BunnyPunishmentWorkflow` now owns configuration selection and validation,
 active-artifact decisions, versioned workflow stages, punishment persistence,
@@ -148,7 +135,7 @@ closed.
 ### Bunny first-feature evaluation
 
 Bunny is the correct first feature for the new system. Its bounded restraint
-operation has a clear action contract, authoritative peer/server confirmation,
+operation has a clear action contract, asynchronous authoritative observation,
 one-owner rollout lease, durable workflow journal, transaction-aware projection, expiry
 cleanup, and a compatibility facade for existing callers. The manually
 validated checks also confirm that duplicate projection retries do not
@@ -262,10 +249,8 @@ cutover still depends on the late-track performance and capacity decision.
       projection and authoritative expiry cleanup. Controlled-room
       reconnect/restart evidence remains open.
 - [ ] Movement dispatch/teleport adapter and authoritative arrival contract.
-- [x] Inventory-specific contracts, in-memory and BC adapters, and the
-      opt-in Roulette wheel-add canary with local lifecycle/failure tests.
-- [ ] Controlled-room inventory canary qualification; BC transfers and general
-      room-admin permission actions remain unsupported.
+- [ ] Inventory and permission adapters with explicit authorization and
+      confirmation contracts.
 - [ ] Family-wide communication, map-trigger, map-object, and Door migration.
 - [ ] Live restart/reconnect rehearsal for the production journal and Bunny
       artifact recovery. The Mongo journal is active in production, while the
@@ -648,10 +633,8 @@ return:
 - map object updates and full map replacement; tile, enter-region, and
   leave-region trigger lifecycle is implemented for the `LocationMonitorSystem`
   pilot but is not yet a family-wide migration;
-- cross-member BC inventory transfer, stacks beyond one item per equipped slot,
-  room-admin mutation, and asset properties beyond the adapter's safe metadata
-  allowlist. `BCInventoryActionAdapter` is self-owner-only and separately
-  confirms slot changes from inbound BC state;
+- inventory semantics beyond identity observation, including inventory
+  ownership, permission, and asset-specific property inspection;
 - `CommandParser`, room serialization, and other command or room bootstrap
   concerns, which are integration boundaries rather than action primitives.
 

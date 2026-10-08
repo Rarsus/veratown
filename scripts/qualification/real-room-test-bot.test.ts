@@ -51,7 +51,6 @@ const movementEnvironment = {
     BC_TEST_SCENARIO: MOVEMENT_PATH_SCENARIO,
     BC_TEST_ALLOW_MOVEMENT: "true",
     BC_TEST_MOVEMENT_CONFIRM_ROOM: "Ropeybot Qualification",
-    BC_TEST_MOVEMENT_START_POSITION: "0,0",
     BC_TEST_MOVEMENT_MIN_STEPS: "2",
     BC_TEST_MOVEMENT_MAX_STEPS: "3",
 };
@@ -380,12 +379,14 @@ test("movement-path requires explicit test-room movement consent", () => {
             }),
         /BC_TEST_ALLOW_MOVEMENT must equal true/,
     );
-    const liveMovement = parseRealRoomTestConfig({
-        ...movementEnvironment,
-        BC_TEST_ENV: "live",
-    });
-    assert.equal(liveMovement.enabled, true);
-    assert.equal(liveMovement.environment, "live");
+    assert.throws(
+        () =>
+            parseRealRoomTestConfig({
+                ...movementEnvironment,
+                BC_TEST_ENV: "live",
+            }),
+        /movement-path requires BC_TEST_ENV=test/,
+    );
 });
 
 test("bunny-step rejects a staging position inside the park", () => {
@@ -663,10 +664,6 @@ test("movement-path derives an accessible route from the live room map", async (
     assert.equal(evidence.scenario, MOVEMENT_PATH_SCENARIO);
     assert.equal(evidence.map.source, "live-room-map");
     assert.equal(evidence.authoritativeObservations, true);
-    assert.equal(
-        evidence.startPositionSource,
-        "configured-visual-confirmation",
-    );
     assert.equal(evidence.route.length, 4);
     assert.deepEqual(evidence.route, [
         { X: 0, Y: 0 },

@@ -34,7 +34,6 @@ export const RELEASE_MONITOR_SCENARIO = "release-monitor";
 export const RELEASE_TEST_SCENARIO = "release-test";
 export const MOVEMENT_PATH_SCENARIO = "movement-path";
 export const BUNNY_RELEASE_MAX_WAIT_MS = MAX_TIMEOUT_MS;
-const MOVEMENT_STEP_DELAY_MS = 1_000;
 const RELEASE_TEST_FIXTURES = new Set([
     "ItemArms/HeavyYoke",
     "ItemFeet/HeavySpreaderMetal",
@@ -64,7 +63,6 @@ export interface ReleaseTestScenarioConfig {
 export interface MovementPathScenarioConfig {
     allowMovement: true;
     confirmationRoom: string;
-    startPosition: MapPosition;
     minSteps: number;
     maxSteps: number;
     targetPosition?: MapPosition;
@@ -350,7 +348,7 @@ export interface MovementPathQualificationEvidence {
     operationIds: string[];
     startedAt: string;
     finishedAt: string;
-    environment: "live" | "test";
+    environment: "test";
     room: string;
     accountRole: "dedicated-test-account";
     memberNumber: number;
@@ -362,7 +360,6 @@ export interface MovementPathQualificationEvidence {
         walkableTileCount: number;
     };
     startPosition: MapPosition;
-    startPositionSource: "configured-visual-confirmation";
     targetPosition: MapPosition;
     route: MapPosition[];
     movements: Array<{
@@ -551,6 +548,11 @@ export function parseRealRoomTestConfig(
 
     if (scenario === DEFAULT_SCENARIO) return baseConfig;
     if (scenario === MOVEMENT_PATH_SCENARIO) {
+        if (environmentName !== "test") {
+            throw new QualificationError(
+                "movement-path requires BC_TEST_ENV=test",
+            );
+        }
         if (environment.BC_TEST_ALLOW_MOVEMENT !== "true") {
             throw new QualificationError(
                 "BC_TEST_ALLOW_MOVEMENT must equal true for movement-path",
@@ -577,9 +579,6 @@ export function parseRealRoomTestConfig(
                 "BC_TEST_MOVEMENT_MAX_STEPS must be between the minimum and 1600",
             );
         }
-        const startValue =
-            requiredValue(environment, "BC_TEST_MOVEMENT_START_POSITION") ??
-            "19,17";
         const targetValue = requiredValue(
             environment,
             "BC_TEST_MOVEMENT_TARGET_POSITION",
@@ -589,10 +588,6 @@ export function parseRealRoomTestConfig(
             movementPath: {
                 allowMovement: true,
                 confirmationRoom: baseConfig.room,
-                startPosition: parseCoordinatePair(
-                    startValue,
-                    "BC_TEST_MOVEMENT_START_POSITION",
-                ),
                 minSteps,
                 maxSteps,
                 targetPosition: targetValue
@@ -1820,10 +1815,7 @@ async function runMovementPathScenario(
     const blockedPositions = (connector.chatRoom?.characters ?? [])
         .filter((character) => character.MemberNumber !== ownMemberNumber)
         .map((character) => character.MapPos);
-    const startPosition = { ...movementPath.startPosition };
-    logger.info("Movement start accepted from configured visual confirmation", {
-        position: `${startPosition.X},${startPosition.Y}`,
-    });
+    const startPosition = { ...connector.Player.MapPos };
     const route = findMovementRoute(mapData, startPosition, {
         minSteps: movementPath.minSteps,
         maxSteps: movementPath.maxSteps,
@@ -1856,11 +1848,6 @@ async function runMovementPathScenario(
         } finally {
             waiter.dispose();
         }
-        if (index < route.route.length - 1) {
-            await new Promise<void>((resolve) =>
-                setTimeout(resolve, MOVEMENT_STEP_DELAY_MS),
-            );
-        }
     }
 
     const finalPosition = movements.at(-1)?.observedPosition ?? startPosition;
@@ -1877,11 +1864,10 @@ async function runMovementPathScenario(
         operationIds,
         startedAt: startedAt.toISOString(),
         finishedAt: new Date().toISOString(),
-        environment: config.environment,
+        environment: "test",
         room: config.room,
         accountRole: "dedicated-test-account",
         memberNumber: ownMemberNumber,
-        startPositionSource: "configured-visual-confirmation",
         map: {
             source: "live-room-map",
             width: 40,

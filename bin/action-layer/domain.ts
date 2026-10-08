@@ -11,7 +11,6 @@ export type ActionStatus =
     | "already_satisfied"
     | "cancelled"
     | "in_progress"
-    | "unconfirmed"
     | "blocked"
     | "rejected"
     | "timed_out"
@@ -28,9 +27,6 @@ export type ActionFailureKind =
 export type ActionSource =
     "bunny" | "release" | "feature" | "admin" | "external" | "system";
 
-export type AppearanceConfirmationAuthority =
-    "room_item_broadcast" | "room_character_sync";
-
 export interface ActionMetadata {
     readonly operationId: string;
     readonly actionId: string;
@@ -40,30 +36,15 @@ export interface ActionMetadata {
     readonly completedAt?: number;
 }
 
-export interface ActionResult<T, TObserved = unknown> {
+export interface ActionResult<T> {
     readonly status: ActionStatus;
     readonly metadata: ActionMetadata;
     readonly value?: T;
-    readonly observed?: TObserved;
+    readonly observed?: unknown;
     readonly reason?: string;
     readonly failureKind?: ActionFailureKind;
     readonly retryable?: boolean;
-    readonly confirmationAuthority?: AppearanceConfirmationAuthority;
-    readonly confirmation?: Promise<ActionConfirmation<T, TObserved>>;
 }
-
-export type ActionConfirmation<T, TObserved = unknown> =
-    | {
-          readonly status: "confirmed";
-          readonly authority: AppearanceConfirmationAuthority;
-          readonly value: T;
-          readonly observed?: TObserved;
-      }
-    | {
-          readonly status: "unconfirmed";
-          readonly value?: T;
-          readonly reason: string;
-      };
 
 export interface ActionContext {
     readonly operationId: string;
@@ -79,10 +60,7 @@ export interface ActionExecutionPolicy {
     readonly maxAttempts: number;
     readonly retryDelayMs: number;
     readonly preserveLockedItems?: boolean;
-    /** Require a fresh server-originated observation before completing. */
     readonly requireServerConfirmation?: boolean;
-    /** Collect optional peer confirmation without making it a completion gate. */
-    readonly observeServerConfirmation?: boolean;
 }
 
 export interface AppearanceItemIdentity {
@@ -91,35 +69,22 @@ export interface AppearanceItemIdentity {
     readonly extendedType?: string;
 }
 
-export const MAX_TIMER_PASSWORD_LOCK_DURATION_MS = 4 * 60 * 60 * 1000;
-
 export type AppearanceLockType =
-    | "SafewordPadlock"
-    | "TimerPasswordPadlock"
-    | "ExclusivePadlock"
-    | "PasswordPadlock";
-
-export interface AppearanceLockOptions {
-    readonly type: AppearanceLockType;
-    readonly memberNumber: number;
-    readonly password?: string;
-    readonly hint?: string;
-    readonly showTimer?: boolean;
-    readonly removeTimer?: number;
-}
+    "SafewordPadlock" | "ExclusivePadlock" | "PasswordPadlock";
 
 export interface AppearanceItemMutationOptions {
     readonly color?: string;
-    readonly difficulty?: number;
-    readonly properties?: {
-        readonly typeRecord?: Readonly<Record<string, number>>;
-        readonly mode?: string;
-    };
     readonly craft?: {
         readonly name: string;
         readonly description: string;
     };
-    readonly lock?: AppearanceLockOptions;
+    readonly lock?: {
+        readonly type: AppearanceLockType;
+        readonly memberNumber: number;
+        readonly password?: string;
+        readonly hint?: string;
+        readonly showTimer?: boolean;
+    };
 }
 
 export type AppearanceLockMode = "none" | "safeword" | "exclusive" | "password";
@@ -135,153 +100,31 @@ export interface AppearanceMutationPolicy extends ActionExecutionPolicy {
     readonly lockMode?: AppearanceLockMode;
     readonly itemOptions?: AppearanceItemMutationOptions;
     readonly cleanupAllowed?: boolean;
+    readonly requireFreshObservation?: boolean;
 }
 
 export interface AppearanceObservation {
     readonly items: readonly AppearanceItemIdentity[];
-    readonly hiddenLayers: readonly string[];
     readonly observedAt: number;
 }
 
-export type AppearanceSnapshotPredicate<TSnapshot = readonly unknown[]> = (
-    appearance: TSnapshot,
-) => boolean;
-
-export type ExtendedItemProperties = Readonly<Record<string, unknown>>;
-
-export interface InventoryItemIdentity {
-    readonly group: string;
-    readonly asset: string;
-    readonly extendedType?: string;
-}
-
-export interface InventoryItem {
-    readonly identity: InventoryItemIdentity;
-    readonly ownerMemberNumber: number;
-    readonly quantity: number;
-    readonly metadata?: Readonly<Record<string, unknown>>;
-}
-
-export interface InventoryObservation {
-    readonly ownerMemberNumber: number;
-    readonly roomName: string;
-    readonly observedAt: number;
-    readonly authority: "authoritative" | "local_cache";
-    readonly connectionEpoch: number;
-    readonly items: readonly InventoryItem[];
-}
-
-export interface InventoryPermissionDecision {
-    readonly actorMemberNumber: number;
-    readonly ownerMemberNumber: number;
-    readonly roomName: string;
-    readonly decision: "allow" | "deny";
-    readonly reason?: string;
-}
-
-export interface InventoryActionContext extends ActionContext {
-    readonly actorMemberNumber: number;
-    readonly ownerMemberNumber: number;
-    readonly roomName: string;
-    readonly permission?: InventoryPermissionDecision;
-    readonly maxObservationAgeMs?: number;
-    readonly requireServerConfirmation?: boolean;
-}
-
-export interface InventoryMutationPolicy
-    extends InventoryActionContext, ActionExecutionPolicy {
-    readonly expectedQuantity?: number;
-    readonly expectedObservation?: InventoryObservation;
-}
-
-export interface InventoryTransferPolicy extends InventoryMutationPolicy {
-    readonly recipientMemberNumber: number;
-}
-
-export interface InventoryTransferObservation {
-    readonly source: InventoryObservation;
-    readonly recipient: InventoryObservation;
-}
-
-export interface InventoryActionAdapter<TRuntimeCharacter = unknown> {
-    observe(
-        character: TRuntimeCharacter,
-        context: InventoryActionContext,
-    ): Promise<ActionResult<InventoryObservation>>;
-
-    add(
-        character: TRuntimeCharacter,
-        item: InventoryItem,
-        policy: InventoryMutationPolicy,
-    ): Promise<ActionResult<InventoryObservation>>;
-
-    remove(
-        character: TRuntimeCharacter,
-        identity: InventoryItemIdentity,
-        quantity: number,
-        policy: InventoryMutationPolicy,
-    ): Promise<ActionResult<InventoryObservation>>;
-
-    transfer(
-        source: TRuntimeCharacter,
-        recipient: TRuntimeCharacter,
-        identity: InventoryItemIdentity,
-        quantity: number,
-        policy: InventoryTransferPolicy,
-    ): Promise<ActionResult<InventoryTransferObservation>>;
-}
-
-export interface AppearanceActionAdapter<
-    TRuntimeCharacter = unknown,
-    TObserved = unknown,
-> {
-    registerObservationConnectors?(connectors: readonly unknown[]): void;
-
+export interface AppearanceActionAdapter<TRuntimeCharacter = unknown> {
     observe(
         character: TRuntimeCharacter,
         context: ActionContext,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
+    ): Promise<ActionResult<AppearanceObservation>>;
 
     add(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
+    ): Promise<ActionResult<AppearanceObservation>>;
 
     remove(
         character: TRuntimeCharacter,
         item: AppearanceItemIdentity,
         policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
-
-    lockExistingItem?(
-        character: TRuntimeCharacter,
-        item: AppearanceItemIdentity,
-        lock: AppearanceLockOptions,
-        policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
-
-    updateExtendedProperties(
-        character: TRuntimeCharacter,
-        item: AppearanceItemIdentity,
-        properties: ExtendedItemProperties,
-        expectedProperties: ExtendedItemProperties | undefined,
-        policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
-
-    setHiddenLayers(
-        character: TRuntimeCharacter,
-        layers: readonly string[],
-        hidden: boolean,
-        policy: AppearanceMutationPolicy,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
-
-    confirmAppearance?(
-        character: TRuntimeCharacter,
-        context: ActionContext,
-        timeoutMs: number,
-        predicate: AppearanceSnapshotPredicate<TObserved>,
-    ): Promise<ActionResult<AppearanceObservation, TObserved>>;
+    ): Promise<ActionResult<AppearanceObservation>>;
 }
 
 export interface CharacterPosition {
@@ -296,12 +139,6 @@ export interface MovementActionAdapter<TRuntimeCharacter = unknown> {
     ): Promise<ActionResult<CharacterPosition>>;
 
     move(
-        character: TRuntimeCharacter,
-        destination: CharacterPosition,
-        policy: MovementActionPolicy,
-    ): Promise<ActionResult<CharacterPosition>>;
-
-    teleport(
         character: TRuntimeCharacter,
         destination: CharacterPosition,
         policy: MovementActionPolicy,
@@ -421,55 +258,6 @@ export interface MapActionAdapter extends MapObjectActionAdapter {
     ): Promise<ActionResult<unknown>>;
 }
 
-export type AppearanceActionOptions = Omit<
-    AppearanceMutationPolicy,
-    "operationId" | "memberNumber" | "source" | "reason"
->;
-
-export type MovementActionOptions = Omit<
-    MovementActionPolicy,
-    "operationId" | "memberNumber" | "source" | "reason"
->;
-
-export type CharacterAction =
-    | {
-          readonly type: "appearance.add";
-          readonly item: AppearanceItemIdentity;
-          readonly options: AppearanceActionOptions;
-      }
-    | {
-          readonly type: "appearance.remove";
-          readonly item: AppearanceItemIdentity;
-          readonly options: AppearanceActionOptions;
-      }
-    | {
-          readonly type: "appearance.update_extended_properties";
-          readonly item: AppearanceItemIdentity;
-          readonly properties: ExtendedItemProperties;
-          readonly expectedProperties?: ExtendedItemProperties;
-          readonly options: AppearanceActionOptions;
-      }
-    | {
-          readonly type: "appearance.set_hidden_layers";
-          readonly layers: readonly string[];
-          readonly hidden: boolean;
-          readonly options: AppearanceActionOptions;
-      }
-    | {
-          readonly type: "communication.send";
-          readonly request: MessageRequest;
-      }
-    | {
-          readonly type: "movement.move";
-          readonly destination: CharacterPosition;
-          readonly options: MovementActionOptions;
-      }
-    | {
-          readonly type: "movement.teleport";
-          readonly destination: CharacterPosition;
-          readonly options: MovementActionOptions;
-      };
-
 export function createActionMetadata(
     context: ActionContext,
     actionId: string,
@@ -487,11 +275,11 @@ export function createActionMetadata(
     };
 }
 
-export function createActionResult<T, TObserved = unknown>(
+export function createActionResult<T>(
     status: ActionStatus,
     metadata: ActionMetadata,
-    options: Omit<ActionResult<T, TObserved>, "status" | "metadata"> = {},
-): ActionResult<T, TObserved> {
+    options: Omit<ActionResult<T>, "status" | "metadata"> = {},
+): ActionResult<T> {
     return { status, metadata, ...options };
 }
 

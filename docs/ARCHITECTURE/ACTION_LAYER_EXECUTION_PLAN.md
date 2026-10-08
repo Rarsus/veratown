@@ -1,9 +1,9 @@
 ---
 title: "Action-Layer Execution Plan"
 subtitle: "Current state, next gates, and one-cycle verification plan"
-date: "October 1, 2026"
-version: "1.7"
-status: "Inventory contract and canary implemented; operational qualification and broader migration remain pending"
+date: "September 27, 2026"
+version: "1.6"
+status: "Pilot slices implemented; operational qualification and broader migration remain pending"
 ---
 
 # Action-Layer Execution Plan
@@ -42,7 +42,7 @@ go/no-go and rollback evidence.
 | Map trigger lifecycle      | `MapTriggerRegistry` and BC adapter are qualified through LocationMonitorSystem.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Active pilot                                                     | Migrate another caller only after lifecycle and rollback evidence.                                                    |
 | Door management            | Keypad and auto-open triggers use scoped registry handles; object mutations use `BCMapObjectActionAdapter`; policy and timers remain workflow-owned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Active pilot; no rollout switch                                  | Controlled-room reconnect/rollback evidence and authoritative object-state decision.                                  |
 | Movement and teleport      | Movement contract, BC adapter, lifecycle tests, and two bounded callers exist. Teleport remains deliberately outside the action layer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Movement bounded; teleport legacy                                | Controlled-room arrival/reconnect/room-replacement evidence and explicit movement rollout control.                    |
-| Inventory and permissions  | Inventory-specific contracts, in-memory adapter, BC adapter, lifecycle tests, and a Roulette wheel-add canary exist. BC mutations are restricted to the owner, one item per slot, and authoritative confirmation; transfer is rejected by BC.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Legacy; `action_layer_inventory_enabled=false`                   | Run the controlled-room matrix and accept a no-go/go record before enabling the canary.                               |
+| Inventory and permissions  | No action-layer production ownership is claimed. Existing BC callers remain in feature systems.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Legacy                                                           | Define separate contracts and authorization/confirmation boundaries.                                                  |
 
 ## One-cycle pilot verification
 
@@ -61,8 +61,7 @@ node --import tsx --test --test-concurrency=1 \
   bin/games/veratown/__tests__/veratownReleaseSystem.test.ts \
   bin/games/veratown/__tests__/bunnyPunishmentProjection.integration.test.ts \
   bin/games/__tests__/unit/keypadDoorSystemRefactored.test.ts \
-  bin/games/__tests__/integration/keypadDoorSystem.integration.test.ts \
-  bin/games/casino/__tests__/rouletteInventory.integration.test.ts && \
+  bin/games/__tests__/integration/keypadDoorSystem.integration.test.ts && \
 pnpm types && \
 pnpm exec prettier --check \
   bin/action-layer \
@@ -307,30 +306,20 @@ one-cycle command, controlled-room lifecycle evidence, and rollback evidence.
 
 ### 8. Movement, inventory, and permission families
 
-The inventory contract and adapter slice is implemented, but it is not a
-production promotion. The Roulette wheel-add canary remains disabled until its
-controlled-room evidence is retained. General permissions and movement/teleport
-remain separate design and qualification work.
+These are not migration-ready production slices. Their next step is design and
+contract work, not moving direct BC calls behind a generic adapter.
 
-1. Inventory: keep its observation, ownership, quantity, permission, mutation,
-   and transfer semantics independent of appearance mutation. The in-memory
-   adapter supports quantity-safe add/remove/transfer; the BC adapter currently
-   supports self-owned, one-per-slot add/remove and rejects transfers.
-2. Inventory canary: `RouletteGame` selects the action or legacy path before
-   dispatch. An uncertain action result does not fall back to a concurrent
-   legacy mutation; the switch remains off until live success, denial, timeout,
-   reconnect, duplicate, and rollback evidence is accepted. The uncertain-state
-   guard is process-local; restart recovery still needs live qualification.
-   The current NO-GO decision is recorded in
-   [ACTION_LAYER_INVENTORY_PROMOTION_RECORD_2026-10-01.md](ACTION_LAYER_INVENTORY_PROMOTION_RECORD_2026-10-01.md).
-3. Permissions: define room scope, authorization, target identity, confirmation,
-   and rollback independently; do not reuse appearance mutation assumptions.
-4. Movement/teleport: complete the arrival contract described above first.
+1. Inventory: define observation, ownership, permission, and mutation semantics
+   separately; add an in-memory contract double and failure behavior.
+2. Permissions: define room scope, authorization, target identity, confirmation,
+   and rollback; do not reuse appearance mutation semantics.
+3. Movement/teleport: complete the arrival contract described above first.
+4. For each family, select one low-risk caller and produce a vertical slice
+   before counting any direct-call reduction as migration progress.
 
 **Gate:** contract tests, adapter tests, failure injection, lifecycle behavior,
 rollback ownership, and a caller-specific integration test exist before any
-default runtime path changes. The inventory code has local contract, adapter,
-and caller tests; controlled-room evidence is still missing.
+default runtime path changes.
 
 ## Overall action plan
 

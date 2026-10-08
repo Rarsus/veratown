@@ -6,7 +6,6 @@ import { BCMovementActionAdapter } from "../adapters/bc-movement";
 type TestCharacter = {
     MemberNumber: number;
     MapPos: { X: number; Y: number };
-    mapTeleport?: (position: { X: number; Y: number }) => void;
     connection: EventEmitter & {
         Player: { MemberNumber: number };
         moveOnMap(x: number, y: number): void;
@@ -64,47 +63,6 @@ test("movement completes only after authoritative map confirmation", async () =>
 
     assert.equal(result.status, "completed");
     assert.deepEqual(result.value, { x: 9, y: 10 });
-});
-
-test("teleport dispatches through the character API and awaits authoritative arrival", async () => {
-    const connection = new EventEmitter();
-    const runtime = movementCharacter(connection);
-    let dispatched: { X: number; Y: number } | undefined;
-    runtime.mapTeleport = (position) => {
-        dispatched = position;
-        queueMicrotask(() =>
-            connection.emit(
-                "MapPositionObserved",
-                runtime.MemberNumber,
-                position,
-                1,
-            ),
-        );
-    };
-
-    const result = await new BCMovementActionAdapter().teleport(
-        runtime,
-        { x: 9, y: 10 },
-        policy,
-    );
-
-    assert.deepEqual(dispatched, { X: 9, Y: 10 });
-    assert.equal(result.status, "completed");
-    assert.deepEqual(result.value, { x: 9, y: 10 });
-});
-
-test("teleport does not claim arrival when BC does not report a position update", async () => {
-    const runtime = movementCharacter(new EventEmitter());
-    runtime.mapTeleport = () => {};
-
-    const result = await new BCMovementActionAdapter().teleport(
-        runtime,
-        { x: 9, y: 10 },
-        { ...policy, timeoutMs: 1 },
-    );
-
-    assert.equal(result.status, "timed_out");
-    assert.equal(result.retryable, true);
 });
 
 test("movement reports connector loss instead of claiming completion", async () => {
