@@ -7,17 +7,11 @@ import {
     recordBotPositionPersistence,
     stopSupervisingBotConnections,
     superviseBotConnections,
-    normalizeRoomDefinition,
     validateBotAccountConfiguration,
 } from "./botConnections";
 import { ValidationError } from "./errors";
 import { ConfigFile } from "./config";
-import {
-    API_Connector,
-    formatWhisperContent,
-    normalizeWhisperContent,
-    splitMessageIntoChunks,
-} from "bc-bot";
+import { formatWhisperContent, normalizeWhisperContent } from "bc-bot";
 import { waitForConnectionStability } from "./botConnections";
 
 function config(overrides: Partial<ConfigFile>): ConfigFile {
@@ -34,39 +28,6 @@ function config(overrides: Partial<ConfigFile>): ConfigFile {
         ...overrides,
     };
 }
-
-test("database room settings are normalized to the BC create contract", () => {
-    const room = normalizeRoomDefinition({
-        Name: "veratown park",
-        Description: "Veratown Park",
-        Background: "PartyBasement",
-        Private: true,
-        Locked: false,
-        Space: "X",
-        Limit: 20,
-        Language: "EN",
-        Admin: [250927],
-    } as ConfigFile["room"]);
-
-    assert.deepEqual(
-        {
-            Access: room.Access,
-            Visibility: room.Visibility,
-            Game: room.Game,
-            Ban: room.Ban,
-            BlockCategory: room.BlockCategory,
-        },
-        {
-            Access: ["Admin", "Whitelist"],
-            Visibility: ["Admin", "Whitelist"],
-            Game: "",
-            Ban: [],
-            BlockCategory: [],
-        },
-    );
-    assert.equal("Private" in room, false);
-    assert.equal("Locked" in room, false);
-});
 
 test("Veratown selects main, shower, and casino roles", () => {
     assert.deepEqual(
@@ -126,51 +87,6 @@ test("map whispers use a transport wrapper around clean content", () => {
     assert.equal(content, "(Position: [12, 34])");
     assert.equal(content.slice(1, -1).includes("("), false);
     assert.equal(content.slice(1, -1).includes(")"), false);
-});
-
-test("long messages split at line breaks without losing content", () => {
-    const firstLine = "a".repeat(1200);
-    const secondLine = "b".repeat(1200);
-    const message = `${firstLine}\n${secondLine}\nDone`;
-    const chunks = splitMessageIntoChunks(message, 2000);
-
-    assert.deepEqual(chunks, [`${firstLine}\n`, `${secondLine}\nDone`]);
-    assert.equal(chunks.join(""), message);
-    assert.ok(chunks.every((chunk) => chunk.length <= 2000));
-});
-
-test("long single lines split at the limit when no line break fits", () => {
-    const chunks = splitMessageIntoChunks("abcdefghij", 4);
-
-    assert.deepEqual(chunks, ["abcd", "efgh", "ij"]);
-});
-
-test("connector emits long map whispers as wrapped targeted chunks", () => {
-    const emitted: Array<Record<string, any>> = [];
-    const connector = Object.create(API_Connector.prototype) as API_Connector;
-    Object.assign(connector as any, {
-        _chatRoom: { usesMaps: () => true },
-        wrappedSock: {
-            emit: (event: string, payload: Record<string, any>) => {
-                assert.equal(event, "ChatRoomChat");
-                emitted.push(payload);
-            },
-        },
-    });
-    const message = `${"a".repeat(1997)}\nmore`;
-
-    connector.SendMessage("Whisper", message, 123);
-
-    assert.equal(emitted.length, 2);
-    assert.ok(emitted.every((packet) => packet.Type === "Whisper"));
-    assert.ok(emitted.every((packet) => packet.Target === 123));
-    assert.ok(emitted.every((packet) => packet.Content.length <= 2000));
-    assert.ok(emitted.every((packet) => packet.Content.startsWith("(")));
-    assert.ok(emitted.every((packet) => packet.Content.endsWith(")")));
-    assert.equal(
-        emitted.map((packet) => packet.Content.slice(1, -1)).join(""),
-        normalizeWhisperContent(message),
-    );
 });
 
 test("connection readiness waits for the connector event instead of polling", async () => {
@@ -233,7 +149,8 @@ test("recovery restores each Veratown role once after duplicate lifecycle events
     casino.emit("Disconnected");
     casino.emit("Connected");
 
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
 
     assert.deepEqual(main.moves, [{ X: 10, Y: 8 }]);
     assert.deepEqual(shower.moves, [{ X: 9, Y: 24 }]);
@@ -263,7 +180,7 @@ test("recovery failure leaves only the affected role unavailable", async () => {
     superviseBotConnections(connections as never, config({}));
     main.emit("Disconnected");
     main.emit("Connected");
-    await new Promise((resolve) => setTimeout(resolve, 6500));
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     assert.deepEqual(
         getBotRecoveryStatuses(connections as never).map(
@@ -294,7 +211,7 @@ test("recovery retries a transient map-position failure", async () => {
     superviseBotConnections(connections as never, config({}));
     main.emit("Disconnected");
     main.emit("Connected");
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
     assert.deepEqual(main.moves, [
         { X: 10, Y: 8 },
@@ -314,25 +231,33 @@ test("recovery uses the successful reposition command when room observation is s
     superviseBotConnections(connections as never, config({}));
     main.emit("Disconnected");
     main.emit("Connected");
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     const status = getBotRecoveryStatuses(connections as never)[0];
     assert.equal(status.state, "connected");
+    assert.equal(status.position?.state, "command-dispatched");
     stopSupervisingBotConnections(connections as never);
 });
 
-test("recovery retries when map movement fails", async () => {
-    const main = createRecoveryConnection(new Error("movement unavailable"));
+test("recovery verifies a position reached after MapPositionTimeout", async () => {
+    const timeout = Object.assign(
+        new Error("movement acknowledgement delayed"),
+        {
+            name: "MapPositionTimeout",
+        },
+    );
+    const main = createRecoveryConnection(timeout, true, true);
     const connections = { main };
 
     superviseBotConnections(connections as never, config({}));
     main.emit("Disconnected");
     main.emit("Connected");
-    await new Promise((resolve) => setTimeout(resolve, 6500));
+    await new Promise((resolve) => setImmediate(resolve));
 
     const status = getBotRecoveryStatuses(connections as never)[0];
-    assert.equal(status.state, "failed");
-    assert.equal(status.recoveryAttempts, 3);
+    assert.equal(status.state, "connected");
+    assert.equal(status.position?.state, "verified-after-timeout");
+    assert.deepEqual(status.position?.observedPosition, { X: 10, Y: 8 });
     stopSupervisingBotConnections(connections as never);
 });
 
@@ -361,7 +286,7 @@ test("recovery diagnostics include persisted self-position metadata", () => {
     stopSupervisingBotConnections(connections as never);
 });
 
-test("recovery accepts the move command when the observed room is stale", async () => {
+test("recovery remains degraded when the observed room is stale", async () => {
     const main = createRecoveryConnection(undefined, true, false, "stale-room");
     const connections = { main };
 
@@ -371,11 +296,12 @@ test("recovery accepts the move command when the observed room is stale", async 
     );
     main.emit("Disconnected");
     main.emit("Connected");
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     const status = getBotRecoveryStatuses(connections as never)[0];
-    assert.equal(status.state, "connected");
-    assert.deepEqual(main.moves, [{ X: 10, Y: 8 }]);
+    assert.equal(status.state, "failed");
+    assert.equal(status.position?.state, "room-not-ready");
+    assert.equal(status.position?.roomName, "stale-room");
     stopSupervisingBotConnections(connections as never);
 });
 
@@ -452,7 +378,7 @@ function createRecoveryConnection(
                 listener();
             }
         },
-        moveOnMap: (X: number, Y: number) => {
+        moveOnMapAndWait: async (X: number, Y: number) => {
             moves.push({ X, Y });
             if (Array.isArray(error)) {
                 const nextError = error.shift();

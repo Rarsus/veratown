@@ -1,4 +1,4 @@
-import { API_Connector, RoomDefinition } from "bc-bot";
+import { API_Connector } from "bc-bot";
 import { Db, MongoClient } from "mongodb";
 import { ConfigFile } from "./config";
 import {
@@ -12,46 +12,14 @@ import {
 } from "./games/veratown/veratownConfig";
 import { createLogger } from "./logging";
 import { asAppError, ValidationError } from "./errors";
-import {
-    normalizeVeratownRoomKey,
-    VeratownRoomStore,
-} from "./games/veratown/roomStore";
-import { VeratownMapStore } from "./games/veratown/mapStore";
-import { StartupProgress } from "./startupProgress";
 
 export interface BotConnections extends VeratownConnections {
     secondary?: API_Connector;
-    roomKeys?: Record<string, string>;
 }
 
 export interface DatabaseConnection {
     db: Db;
     close(): Promise<void>;
-}
-
-export function normalizeRoomDefinition(room: RoomDefinition): RoomDefinition {
-    const access =
-        room.Access ??
-        (room.Locked
-            ? ["Admin"]
-            : room.Private
-              ? ["Admin", "Whitelist"]
-              : ["All"]);
-    const visibility =
-        room.Visibility ?? (room.Private ? ["Admin", "Whitelist"] : ["All"]);
-    const { Private: _private, Locked: _locked, ...modernRoom } = room;
-
-    return {
-        ...modernRoom,
-        Admin: modernRoom.Admin ?? [],
-        Ban: modernRoom.Ban ?? [],
-        Access: access,
-        Visibility: visibility,
-        BlockCategory: modernRoom.BlockCategory ?? [],
-        Game: modernRoom.Game ?? "",
-        Language: modernRoom.Language ?? "EN",
-        Space: modernRoom.Space ?? "X",
-    };
 }
 
 export type BotRecoveryState =
@@ -74,7 +42,7 @@ export interface BotMapPositionObservation {
     roomName?: string;
     mapReady: boolean;
     observedAt: Date;
-    source: "chatRoom.findMember" | "Player.MapPos" | "reposition-command";
+    source: "chatRoom.findMember" | "Player.MapPos";
 }
 
 export interface BotRecoveryStatus {
@@ -151,12 +119,7 @@ export async function verifyBotMapPosition(
 
         const backoffMs =
             attempt + 1 < maxAttempts
-                ? POSITION_VERIFICATION_BACKOFF_MS[
-                      Math.min(
-                          attempt + 1,
-                          POSITION_VERIFICATION_BACKOFF_MS.length - 1,
-                      )
-                  ]
+                ? POSITION_VERIFICATION_BACKOFF_MS[attempt + 1]
                 : undefined;
         if (backoffMs !== undefined) {
             await new Promise((resolve) => setTimeout(resolve, backoffMs));
@@ -190,7 +153,6 @@ function superviseBotConnection(
         status.lastFailure = undefined;
 
         try {
-            await waitForConnectionStability(connection);
             let lastError: unknown;
             for (let retry = 0; retry < RECOVERY_BACKOFF_MS.length; retry++) {
                 if (stopped || currentEpoch !== epoch) return;
@@ -209,14 +171,70 @@ function superviseBotConnection(
                 });
                 try {
                     if (position) {
-                        connection.moveOnMap(position.X, position.Y);
-                        logger.info("Bot map position command dispatched", {
+                        let movementError: unknown;
+                        try {
+                            await connection.moveOnMapAndWait(
+                                position.X,
+                                position.Y,
+                            );
+                        } catch (error) {
+                            movementError = error;
+                        }
+                        const movementTimedOut =
+                            movementError instanceof Error &&
+                            movementError.name === "MapPositionTimeout";
+                        const observation = await verifyBotMapPosition(
+                            connection,
+                            position,
+                            config.room?.Name,
+                            movementTimedOut
+                                ? POSITION_VERIFICATION_BACKOFF_MS.length
+                                : 1,
+                        );
+                        if (
+                            observation.state === "verified" &&
+                            movementTimedOut
+                        ) {
+                            observation.state = "verified-after-timeout";
+                        }
+                        if (!movementError || movementTimedOut) {
+                            // The reposition command is authoritative. The
+                            // room snapshot can lag or report a stale default
+                            // position during reconnect; retain that mismatch
+                            // as diagnostics without blocking recovery.
+                            if (
+                                observation.state !== "verified-after-timeout"
+                            ) {
+                                observation.state = movementTimedOut
+                                    ? "verified-after-timeout"
+                                    : observation.state === "verified"
+                                      ? "verified"
+                                      : "command-dispatched";
+                            }
+                        }
+                        status.position = observation;
+                        logger.info("Bot map position verification", {
                             role,
                             epoch: currentEpoch,
                             attempt,
-                            expectedPosition: position,
-                            roomName: connection.chatRoom?.Name,
+                            movementTimedOut,
+                            movementError:
+                                movementError instanceof Error
+                                    ? movementError.name
+                                    : undefined,
+                            ...observation,
                         });
+                        if (movementError && !movementTimedOut) {
+                            throw movementError;
+                        }
+                        if (
+                            observation.state === "room-not-ready" ||
+                            observation.state === "map-not-ready"
+                        ) {
+                            throw new Error(
+                                `Bot room/map is not ready for reposition (${observation.state})`,
+                            );
+                        }
                     }
                     if (stopped || currentEpoch !== epoch) return;
 
@@ -348,12 +366,7 @@ export function superviseBotConnections(
     config: ConfigFile,
 ): void {
     for (const [role, connection] of Object.entries(connections)) {
-        if (
-            connection &&
-            typeof (connection as API_Connector).isConnected === "function"
-        ) {
-            superviseBotConnection(role, connection as API_Connector, config);
-        }
+        if (connection) superviseBotConnection(role, connection, config);
     }
 }
 
@@ -363,18 +376,11 @@ export function getBotRecoveryStatuses(
 ): BotRecoveryStatus[] {
     if (!connections) return [];
     return Object.entries(connections).flatMap(([role, connection]) => {
-        if (
-            !connection ||
-            typeof (connection as API_Connector).isConnected !== "function"
-        )
-            return [];
-        const botConnection = connection as API_Connector;
+        if (!connection) return [];
         return [
-            recoveryStatuses.get(botConnection) ?? {
+            recoveryStatuses.get(connection) ?? {
                 role,
-                state: botConnection.isConnected()
-                    ? "connected"
-                    : "disconnected",
+                state: connection.isConnected() ? "connected" : "disconnected",
                 recoveryAttempts: 0,
                 recoveryEpoch: 0,
             },
@@ -441,58 +447,16 @@ async function connectBotAccount(
     config: ConfigFile,
     user: string,
     password: string,
-    room?: import("bc-bot").RoomDefinition,
-    startup?: StartupProgress,
-    role = "bot",
+    joinRoom: boolean,
 ): Promise<API_Connector> {
-    const connect = async () => {
-        const connection = new API_Connector(
-            serverUrl,
-            user,
-            password,
-            config.env,
-        );
-        if (room) {
-            await connection.joinOrCreateRoom(room);
-        }
+    const connection = new API_Connector(serverUrl, user, password, config.env);
+    if (joinRoom) await connection.joinOrCreateRoom(config.room);
 
-        // Wait for connection to stabilize before returning
-        // This prevents connection flapping when multiple bots join in quick succession
-        await waitForConnectionStability(connection);
-        return connection;
-    };
-    return startup
-        ? startup.phase(`bot.${role}`, connect, { warnAfterMs: 17_000 })
-        : connect();
-}
+    // Wait for connection to stabilize before returning
+    // This prevents connection flapping when multiple bots join in quick succession
+    await waitForConnectionStability(connection);
 
-async function loadRoomDefinition(
-    roomStore: VeratownRoomStore,
-    roomKey: string,
-    fallbackRoom: RoomDefinition,
-    database: DatabaseConnection,
-    logger: ReturnType<typeof createLogger>,
-): Promise<RoomDefinition> {
-    const stored = await roomStore.load(roomKey, fallbackRoom);
-    if (!stored) return normalizeRoomDefinition(fallbackRoom);
-
-    const mapStore = new VeratownMapStore(database.db, roomKey);
-    const storedMap = await mapStore.load();
-    const legacyMap = stored.room.MapData;
-    if (!storedMap && legacyMap) {
-        await mapStore.save(legacyMap, stored.updatedBy);
-        logger.warn("Migrated embedded room map to veratownMap", { roomKey });
-    }
-
-    const { MapData: _legacyMapData, ...roomSettings } = stored.room;
-    if (legacyMap) {
-        await roomStore.save(roomKey, stored.room, stored.updatedBy);
-        logger.info("Removed embedded room map after migration", { roomKey });
-    }
-    const mapData = storedMap ?? legacyMap;
-    return normalizeRoomDefinition(
-        mapData ? { ...roomSettings, MapData: mapData } : roomSettings,
-    );
+    return connection;
 }
 
 /**
@@ -675,8 +639,6 @@ export function getBotAccountRoles(
         addAccount("shower", config.user2);
         if (config.user3 && config.password3)
             addAccount("casino", config.user3);
-        if (config.user4 && config.password4)
-            addAccount("secondRoom", config.user4);
     }
 
     return roles;
@@ -709,32 +671,17 @@ export async function createBotConnections(
     serverUrl: string,
     config: ConfigFile,
     database?: DatabaseConnection,
-    startup?: StartupProgress,
 ): Promise<BotConnections> {
     const logger = createLogger("BotConnections");
     validateBotAccountConfiguration(config);
-    const roomStore = database ? new VeratownRoomStore(database.db) : undefined;
-    const roomProfile = (bot: "main" | "user2" | "user3" | "user4") =>
-        config.rooms?.find((profile) => profile.bot === bot);
-    const mainProfile = roomProfile("main");
-    const mainRoom = roomStore
-        ? await loadRoomDefinition(
-              roomStore,
-              "main",
-              mainProfile?.room ?? config.room,
-              database!,
-              logger,
-          )
-        : normalizeRoomDefinition(mainProfile?.room ?? config.room);
+
     logger.info("Creating main bot connection");
     const main = await connectBotAccount(
         serverUrl,
         config,
         config.user,
         config.password,
-        mainRoom,
-        startup,
-        "main",
+        true,
     );
     logger.info("Main connection established", {
         bot: main.Player.Name,
@@ -761,9 +708,7 @@ export async function createBotConnections(
             config,
             config.user2,
             config.password2,
-            undefined,
-            startup,
-            "secondary",
+            false,
         );
         logger.info("Secondary connection established", {
             bot: connections.secondary.Player.Name,
@@ -782,9 +727,7 @@ export async function createBotConnections(
             config,
             config.user2,
             config.password2,
-            mainRoom,
-            startup,
-            "shower",
+            true,
         );
         logger.info("Shower connection established", {
             bot: connections.shower.Player.Name,
@@ -809,59 +752,20 @@ export async function createBotConnections(
                 config,
                 config.user3,
                 config.password3,
-                mainRoom,
-                startup,
-                "casino",
+                true,
             );
             logger.info("Casino connection established", {
                 bot: connections.casino.Player.Name,
                 memberId: connections.casino.Player.MemberNumber,
             });
             ensureBotIsRoomAdmin(main, connections.casino);
+            connections.casino.moveOnMap(
+                GAME_MISTRESS_POSITION.X,
+                GAME_MISTRESS_POSITION.Y,
+            );
         }
     } else {
         logger.info("No user3/password3 configured - casino feature disabled");
-    }
-
-    const secondProfile = config.rooms?.find(
-        (profile) => profile.bot === "user4" && profile.key !== "main",
-    );
-    const roomKeys: Record<string, string> = { main: "main" };
-    if (secondProfile && config.user4 && config.password4) {
-        const secondRoomKey = normalizeVeratownRoomKey(secondProfile.key);
-        if (!database) {
-            logger.warn("MongoDB not configured - second room disabled");
-        } else {
-            const secondRoom = await loadRoomDefinition(
-                roomStore!,
-                secondRoomKey,
-                secondProfile.room ?? config.room,
-                database,
-                logger,
-            );
-            if (!secondRoom) {
-                throw new Error(
-                    `Room profile ${secondRoomKey} requires a room definition on first use`,
-                );
-            }
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            connections.secondRoom = await connectBotAccount(
-                serverUrl,
-                config,
-                config.user4,
-                config.password4,
-                secondRoom,
-                startup,
-                "secondRoom",
-            );
-            roomKeys.secondRoom = secondRoomKey;
-            logger.info("Second room connection established", {
-                roomKey: secondRoomKey,
-                room: connections.secondRoom.chatRoom?.Name,
-                bot: connections.secondRoom.Player.Name,
-                memberId: connections.secondRoom.Player.MemberNumber,
-            });
-        }
     }
 
     logger.info("All bot roles active", {
@@ -869,10 +773,8 @@ export async function createBotConnections(
         shower: connections.shower?.Player.Name ?? "main (fallback)",
         casino: connections.casino?.Player.Name ?? "disabled",
         secondary: connections.secondary?.Player.Name,
-        secondRoom: connections.secondRoom?.Player.Name ?? "disabled",
     });
 
-    connections.roomKeys = roomKeys;
     superviseBotConnections(connections, config);
     return connections;
 }
@@ -890,7 +792,6 @@ export async function closeBotConnections(
         connections.shower,
         connections.casino,
         connections.secondary,
-        connections.secondRoom,
     ] as any);
     for (const connection of uniqueConnections) {
         if (connection) {
